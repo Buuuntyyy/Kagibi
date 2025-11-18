@@ -59,6 +59,7 @@ Local : Dossier /uploads dans le projet (pour le développement).
 Cloud : AWS S3 ou Google Cloud Storage (pour la production).
 
 ## Structure du workspace (visual studio code)
+```
 mon-drive/
 ├── frontend/          # Vue 3
 │   ├── public/
@@ -89,3 +90,4 @@ mon-drive/
 ├── docker-compose.yml # Pour les services (PostgreSQL, Redis, etc.)
 ├── .gitignore
 └── README.md
+```
