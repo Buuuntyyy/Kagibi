@@ -2,31 +2,30 @@
 
 ## Frontend
 Vue3 :
-
-Authentification (inscription/connexion, JWT).
-Upload/téléchargement de fichiers.
-Gestion des dossiers (création, suppression, renommage).
-Affichage des fichiers (liste, grille, prévisualisation).
-Partage de fichiers (liens publics, permissions).
-Recherche de fichiers.
+Authentification (inscription/connexion, JWT).  
+Upload/téléchargement de fichiers.  
+Gestion des dossiers (création, suppression, renommage).  
+Affichage des fichiers (liste, grille, prévisualisation).  
+Partage de fichiers (liens publics, permissions).  
+Recherche de fichiers.  
 
 ### Architecture
-Framework : Vue 3 (Composition API).
-Router : Vue Router pour la navigation.
-State Management : Pinia (remplace Vuex).
-UI Components : PrimeVue, Quasar, ou Vuetify.
-HTTP Client : Axios pour les requêtes API.
-Authentification : Vueuse pour gérer les tokens JWT.
-Build Tool : Vite (plus rapide que Webpack).
+Framework : Vue 3 (Composition API).  
+Router : Vue Router pour la navigation.  
+State Management : Pinia (remplace Vuex).  
+UI Components : PrimeVue, Quasar, ou Vuetify.  
+HTTP Client : Axios pour les requêtes API.  
+Authentification : Vueuse pour gérer les tokens JWT.  
+Build Tool : Vite (plus rapide que Webpack).  
 Tests : Vitest ou Jest.
 
 ## Backend
-Golang :
-API REST pour gérer les fichiers et dossiers.
-Stockage des fichiers (local ou cloud : S3, Google Cloud Storage).
-Gestion des utilisateurs et authentification (JWT, OAuth).
-Logique de partage et permissions.
-Base de données pour les métadonnées (PostgreSQL, MongoDB).
+Golang :  
+API REST pour gérer les fichiers et dossiers.  
+Stockage des fichiers (local ou cloud : S3, Google Cloud Storage).  
+Gestion des utilisateurs et authentification (JWT, OAuth).  
+Logique de partage et permissions.  
+Base de données pour les métadonnées (PostgreSQL, MongoDB).  
 
 ### Architecture
 Framework Web : Gin ou Fiber (inspiré d’Express).
