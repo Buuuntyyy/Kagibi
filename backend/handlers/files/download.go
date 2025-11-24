@@ -2,7 +2,10 @@
 package files
 
 import (
+	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -11,25 +14,37 @@ import (
 )
 
 func DownloadFileHandler(c *gin.Context, db *bun.DB) {
-	fileID, err := strconv.ParseInt(c.Param("fileID"), 10, 64)
+	userID := c.GetInt64("userID")
+	fileIDStr := c.Param("fileID")
+	fileID, err := strconv.ParseInt(fileIDStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID de fichier invalide"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file ID"})
 		return
 	}
 
-	userID := c.GetInt64("userID")
 	file, err := pkg.GetFile(db, fileID, userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Fichier non trouvé"})
+		// Log l'erreur pour le débogage côté serveur
+		log.Printf("Error getting file from DB. FileID: %d, UserID: %d, Error: %v", fileID, userID, err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "File not found or permission denied"})
 		return
 	}
 
-	// Vérifie que l'utilisateur est propriétaire du fichier
-	if file.UserID != userID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Accès interdit"})
+	// Construit le chemin physique vers le fichier dans le dossier "uploads"
+	filePath := filepath.Join("uploads", file.Name)
+
+	// Vérifie si le fichier existe physiquement avant de tenter de le servir
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		log.Printf("File not found on disk. Path: %s", filePath)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "File record exists but file is missing from disk"})
 		return
 	}
 
-	// Envoie le fichier
-	c.File(file.Path)
+	// Définit les en-têtes pour forcer le téléchargement
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Transfer-Encoding", "binary")
+	c.Header("Content-Disposition", "attachment; filename=\""+file.Name+"\"")
+	c.Header("Content-Type", "application/octet-stream")
+
+	c.File(filePath)
 }

@@ -15,12 +15,12 @@
     </div>
     <div class="list-area">
       <!-- Folders -->
-      <div v-for="folder in fileStore.folders" :key="folder.id" class="list-item folder-item" @click="openFolder(folder.Name)">
+      <div v-for="folder in fileStore.folders" :key="folder.ID" class="list-item folder-item" @click="openFolder(folder.Name)">
         <span class="icon">📁</span>
         <span class="name">{{ folder.Name }}</span>
       </div>
       <!-- Files -->
-      <div v-for="file in fileStore.files" :key="file.id" class="list-item file-item" :class="{ selected: selectedFile && selectedFile.id === file.id }" @click="selectFile(file)">
+      <div v-for="file in fileStore.files" :key="file.ID" class="list-item file-item" :class="{ selected: selectedFile && selectedFile.ID === file.ID }" @click="selectFile(file)" @dblclick="downloadFile(file)">
         <span class="icon">📄</span>
         <span class="name">{{ file.Name }}</span>
       </div>
@@ -37,7 +37,7 @@ const selectedFile = ref(null)
 const fileInput = ref(null)
 
 const selectFile = (file) => {
-  if (selectedFile.value && selectedFile.value.id === file.id) {
+  if (selectedFile.value && selectedFile.value.ID === file.ID) {
     selectedFile.value = null // Deselect if clicking the same file
   } else {
     selectedFile.value = file
@@ -55,8 +55,12 @@ const goUp = () => {
 
 const downloadSelectedFile = () => {
   if (selectedFile.value) {
-    fileStore.downloadFile(selectedFile.value.id, selectedFile.value.name)
+    downloadFile(selectedFile.value);
   }
+}
+
+const downloadFile = (file) => {
+  fileStore.downloadFile(file.ID, file.Name);
 }
 
 const triggerFileInput = () => {
@@ -134,6 +138,7 @@ const createNewFolder = () => {
   cursor: pointer;
   border-radius: 4px;
   transition: background-color 0.2s;
+  user-select: none;
 }
 
 .list-item:hover {
