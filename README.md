@@ -92,6 +92,116 @@ volumes:
 Lancer le docker avec : docker-compose up -d (dans le répertoire du fichier docker-compose.yaml
 
 ### Base de données
+#### Installation de Bun (équivalent prisma, mais pour Go)
+Dans le dossier backend:
+```
+go get -u github.com/uptrace/bun
+go get -u github.com/uptrace/bun/dialect/pgdialect
+go get -u github.com/uptrace/bun/driver/pgdriver
+
+```
+Créer le dossier /backend/internal puis créer la connexion postgresql
+```
+// internal/database.go
+package internal
+
+import (
+	"database/sql"
+	"github.com/uptrace/bun"
+	"github.com/uptrace/bun/dialect/pgdialect"
+	"github.com/uptrace/bun/driver/pgdriver"
+)
+
+func NewDB() *bun.DB {
+	// Remplace les valeurs par celles de ton docker-compose ou de ta configuration locale
+	dsn := "postgres://user:password@localhost:5432/mon_drive?sslmode=disable"
+
+	// Ouvre la connexion SQL
+	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
+
+	// Crée une instance Bun
+	db := bun.NewDB(sqldb, pgdialect.New())
+
+	return db
+}
+```
+Créer le fichier /backend/internal/models.go et configurer la structure de la bdd
+```
+// internal/models.go
+package internal
+
+import "time"
+
+type User struct {
+	ID        int64     `bun:"id,pk,autoincrement"`
+	Name      string    `bun:"name,notnull"`
+	Email     string    `bun:"email,unique,notnull"`
+	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	UpdatedAt time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
+}
+
+type File struct {
+	ID        int64     `bun:"id,pk,autoincrement"`
+	Name      string    `bun:"name,notnull"`
+	Path      string    `bun:"path,notnull"`
+	Size      int64     `bun:"size,notnull"`
+	UserID    int64     `bun:"user_id,notnull"`
+	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+}
+```
+Bun ne gère pas les migrations automatiquement comme GORM, mais tu peux utiliser son API pour créer les tables. Crée le fichier /backend/internal/migrate.go :
+```
+// internal/migrate.go
+package internal
+
+import (
+	"context"
+	"fmt"
+)
+
+func Migrate(db *bun.DB) error {
+	ctx := context.Background()
+
+	// Crée les tables si elles n'existent pas
+	models := []interface{}{(*User)(nil), (*File)(nil)}
+
+	for _, model := range models {
+		_, err := db.NewSelect().Model(model).Exec(ctx)
+		if err != nil {
+			_, err = db.NewCreateTable().Model(model).IfNotExists().Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to create table: %w", err)
+			}
+			fmt.Printf("Table created: %T\n", model)
+		}
+	}
+
+	return nil
+}
+```
+Pour effectuer les migrations, il faut ajouter le code suivant dans main.go:
+```
+// main.go
+package main
+
+import (
+	"log"
+	"ton-projet/backend/internal"
+)
+
+func main() {
+	db := internal.NewDB()
+
+	// Exécute les migrations
+	err := internal.Migrate(db)
+	if err != nil {
+		log.Fatalf("Failed to migrate: %v", err)
+	}
+
+	log.Println("Migrations executed successfully!")
+}
+```
+
 Schémas :  
 ```
 users (id, email, password_hash, created_at).  
