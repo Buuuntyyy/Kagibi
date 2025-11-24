@@ -1,13 +1,22 @@
 package main
 
 import (
+	"github.com/joho/godotenv"
+	"safercloud/backend/middleware"
 	"github.com/gin-gonic/gin"
 	"safercloud/backend/pkg"
 	"log"
 	"net/http"
+	"safercloud/backend/handlers/auth"
+	"safercloud/backend/handlers/files"
 )
 
 func main() {
+	// Charge les variables d'environnement
+	if err := godotenv.Load(); err != nil {
+		log.Fatal("Erreur lors du chargement du fichier .env")
+	}
+	// Initialise la connexion à la base de données
 	db := pkg.NewDB()
 
 	// Exécute les migrations
@@ -18,8 +27,25 @@ func main() {
 
 	log.Println("Migrations executed successfully!")
 
+
 	// Crée une instance de Gin (equivalent à Express.js en Node.js)
 	router := gin.Default()
+
+	// ROUTES PUBLIQUES (Non protégées par l'authentification)
+	publicRoutes := router.Group("/api")
+	{
+		publicRoutes.POST("/register", auth.RegisterHandler(db))
+		publicRoutes.POST("/login", auth.LoginHandler(db))
+	}
+
+	// ROUTES PROTÉGÉES (Protégées par l'authentification JWT)
+	protectedRoutes := router.Group("/api")
+	protectedRoutes.Use(middleware.AuthMiddleware())
+	{
+		protectedRoutes.GET("/users", pkg.ListUsersHandler(db))
+		protectedRoutes.POST("/upload", pkg.UploadHandler(db))
+		protectedRoutes.GET("/files", pkg.ListFilesHandler(db))
+	}
 
 	// Définis une route GET
 	router.GET("/", func(c *gin.Context) {
@@ -44,6 +70,16 @@ func main() {
 		}
 
 		c.JSON(http.StatusCreated, user)
+	})
+
+	router.POST("/files", func(c *gin.Context) {
+		var file pkg.File
+		if err := c.ShouldBindJSON(&file); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		// TODO: persist the file using pkg (e.g., pkg.CreateFile) if implemented
+		c.JSON(http.StatusCreated, file)
 	})
 
 	// Route pour lister les utilisateurs

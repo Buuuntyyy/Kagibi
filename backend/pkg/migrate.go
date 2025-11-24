@@ -11,7 +11,7 @@ func Migrate(db *bun.DB) error {
 	ctx := context.Background()
 
 	// Crée les tables si elles n'existent pas
-	models := []interface{}{(*User)(nil), (*File)(nil)}
+	models := []interface{}{(*User)(nil), (*File)(nil), (*Folder)(nil)}
 
 	for _, model := range models {
 		_, err := db.NewSelect().Model(model).Exec(ctx)

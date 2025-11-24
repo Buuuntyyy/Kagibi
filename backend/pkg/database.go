@@ -2,11 +2,12 @@
 package pkg
 
 import (
+	"context"
 	"database/sql"
+
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
-	"context"
 )
 
 func NewDB() *bun.DB {
@@ -29,8 +30,45 @@ func ListUsers(db *bun.DB) ([]User, error) {
 	return users, err
 }
 
+func FindUserByEmail(db *bun.DB, email string) (*User, error) {
+	ctx := context.Background()
+	var user User
+	err := db.NewSelect().Model(&user).Where("email = ?", email).Scan(ctx)
+	return &user, err
+}
+
 func CreateUser(db *bun.DB, user *User) error {
 	ctx := context.Background()
 	_, err := db.NewInsert().Model(user).Exec(ctx)
+	return err
+}
+
+func CreateFile(db *bun.DB, file *File) error {
+	ctx := context.Background()
+	_, err := db.NewInsert().Model(file).Exec(ctx)
+	return err
+}
+
+// Lister les fichier d'un utilisateur
+func ListItemsByUser(db *bun.DB, userID int64, path string) ([]File, []Folder, error) {
+	ctx := context.Background()
+	var files []File
+	var folders []Folder
+	err := db.NewSelect().Model(&files).Where("user_id = ? AND path LIKE ?", userID, path).Scan(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	err = db.NewSelect().Model(&folders).Where("user_id = ? and path LIKE ?", userID, path).Scan(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return files, folders, err
+}
+
+// supprimer un fichier
+func DeleteFile(db *bun.DB, fileID int64, userID int64) error {
+	ctx := context.Background()
+	_, err := db.NewDelete().Model((*File)(nil)).Where("id = ? AND user_id = ?", fileID, userID).Exec(ctx)
 	return err
 }
