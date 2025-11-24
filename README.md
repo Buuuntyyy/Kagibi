@@ -1,5 +1,36 @@
 # SaferCloud
 
+## Déploiement
+### Pré-requis:
+- Docker
+
+### Démarche:
+#### Docker
+Déployer la base de données (postgresql) et le cache (redis)
+```
+docker-compose up -d
+```
+#### Backend
+Démarrage du serveur Go
+```
+cd backend
+go mod tidy
+go run main.go
+```
+
+#### Frontend
+Démarrage du serveur frontend
+```
+cd frontend
+npm install
+npm run dev
+```
+
+### Utilisation
+1. Créer un utilisateur afin d'accéder aux routes protégées
+2. Importer des fichiers
+3. Créer des répertoires
+
 ## Frontend
 Vue3 :
 Authentification (inscription/connexion, JWT).  
