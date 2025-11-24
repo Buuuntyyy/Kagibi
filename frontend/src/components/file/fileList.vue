@@ -1,22 +1,23 @@
 <template>
+  <h2 class="dashboard-title">Dashboard</h2>
   <div class="file-list-container">
-    <div class="path-banner">
-      <span>Chemin : {{ fileStore.currentPath }}</span>
-      <button @click="goUp" :disabled="fileStore.currentPath === '/'">Dossier parent</button>
-    </div>
     <div class="toolbar">
       <div class="toolbar-left">
-        <h2 class="dashboard-title">Dashboard</h2>
         <button @click="triggerFileInput" class="btn-add-file">Ajouter un fichier</button>
+        <button @click="createNewFolder" class="btn-add-file">Créer un dossier</button>
         <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" />
       </div>
       <button v-if="selectedFile" @click="downloadSelectedFile" class="btn-download">Télécharger</button>
     </div>
+    <div class="path-banner">
+      <span>Chemin : {{ fileStore.currentPath }}</span>
+      <button @click="goUp" :disabled="fileStore.currentPath === '/'">Dossier parent</button>
+    </div>
     <div class="list-area">
       <!-- Folders -->
-      <div v-for="folder in fileStore.folders" :key="folder.id" class="list-item folder-item" @click="openFolder(folder.name)">
+      <div v-for="folder in fileStore.folders" :key="folder.id" class="list-item folder-item" @click="openFolder(folder.Name)">
         <span class="icon">📁</span>
-        <span class="name">{{ folder.name }}</span>
+        <span class="name">{{ folder.Name }}</span>
       </div>
       <!-- Files -->
       <div v-for="file in fileStore.files" :key="file.id" class="list-item file-item" :class="{ selected: selectedFile && selectedFile.id === file.id }" @click="selectFile(file)">
@@ -68,6 +69,13 @@ const handleFileUpload = (event) => {
     fileStore.uploadFile(file)
   }
 }
+
+const createNewFolder = () => {
+  const folderName = prompt("Entrez le nom du nouveau dossier :")
+  if (folderName) {
+    fileStore.createFolder(folderName)
+  }
+}
 </script>
 
 <style scoped>
@@ -109,6 +117,7 @@ const handleFileUpload = (event) => {
 .dashboard-title {
   margin: 0;
   font-size: 1.5rem;
+  text-align: left;
 }
 
 .list-area {

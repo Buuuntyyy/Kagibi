@@ -69,6 +69,17 @@ export const useFileStore = defineStore('files', {
       } catch (error) {
         console.error('Error uploading file:', error)
       }
+    },
+    async createFolder(folderName) {
+      try {
+        await api.post('/folders/create', {
+          name: folderName,
+          path: this.currentPath,
+        })
+        this.fetchItems(this.currentPath)
+      } catch (error) {
+        console.error('Error creating folder:', error)
+      }
     }
   },
 })

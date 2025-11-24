@@ -49,6 +49,12 @@ func CreateFile(db *bun.DB, file *File) error {
 	return err
 }
 
+func CreateFolderDB(db *bun.DB, folder *Folder) error {
+	ctx := context.Background()
+	_, err := db.NewInsert().Model(folder).Exec(ctx)
+	return err
+}
+
 // Lister les fichier d'un utilisateur
 func ListItemsByUser(db *bun.DB, userID int64, path string) ([]File, []Folder, error) {
 	ctx := context.Background()

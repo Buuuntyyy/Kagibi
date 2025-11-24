@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"safercloud/backend/handlers/auth"
 	"safercloud/backend/handlers/files"
+	"safercloud/backend/handlers/folders"
 	"safercloud/backend/handlers/users"
 	"safercloud/backend/middleware"
 	"safercloud/backend/pkg"
@@ -60,6 +61,12 @@ func main() {
 			fileRoutes.DELETE("/file/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db) })
 			fileRoutes.DELETE("/folder/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db) })
 			fileRoutes.GET("/download/:fileID", func(c *gin.Context) { files.DownloadFileHandler(c, db) })
+		}
+
+		// ROUTES DOSSIERS
+		folderRoutes := protectedRoutes.Group("/folders")
+		{
+			folderRoutes.POST("/create", func(c *gin.Context) { folders.CreateHandler(c, db) })
 		}
 	}	
 
