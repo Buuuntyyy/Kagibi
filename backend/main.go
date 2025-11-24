@@ -2,17 +2,16 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/buuuntyyy/safercloud/backend/pkg"
-	"context"
+	"safercloud/backend/pkg"
 	"log"
 	"net/http"
 )
 
 func main() {
-	db := internal.NewDB()
+	db := pkg.NewDB()
 
 	// Exécute les migrations
-	err := internal.Migrate(db)
+	err := pkg.Migrate(db)
 	if err != nil {
 		log.Fatalf("Failed to migrate: %v", err)
 	}
@@ -31,26 +30,25 @@ func main() {
 
 	// Route POST avec un paramètre JSON
 	router.POST("/users", func(c *gin.Context) {
-		var user struct {
-			Name  string `json:"name" binding:"required"`
-			Email string `json:"email" binding:"required"`
-		}
-
-		// Parse le JSON de la requête
+		var user pkg.User  // <-- Utilise le modèle pkg.User
 		if err := c.ShouldBindJSON(&user); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		// Retourne une réponse
-		c.JSON(http.StatusCreated, gin.H{
-			"user": user,
-		})
+		// Appelle CreateUser avec le bon modèle
+		err := pkg.CreateUser(db, &user)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusCreated, user)
 	})
 
 	// Route pour lister les utilisateurs
 	router.GET("/users", func(c *gin.Context) {
-		users, err := internal.ListUsers(db)
+		users, err := pkg.ListUsers(db)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

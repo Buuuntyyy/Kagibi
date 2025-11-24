@@ -4,6 +4,7 @@ package pkg
 import (
 	"context"
 	"fmt"
+	"github.com/uptrace/bun"
 )
 
 func Migrate(db *bun.DB) error {

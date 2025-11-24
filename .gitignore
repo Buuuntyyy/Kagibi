@@ -1,2 +1,2 @@
-db_data/
-redis-data/
+db_data/*
+redis-data/*
