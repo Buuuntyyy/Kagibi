@@ -54,11 +54,11 @@ func ListItemsByUser(db *bun.DB, userID int64, path string) ([]File, []Folder, e
 	ctx := context.Background()
 	var files []File
 	var folders []Folder
-	err := db.NewSelect().Model(&files).Where("user_id = ? AND path LIKE ?", userID, path).Scan(ctx)
+	err := db.NewSelect().Model(&files).Where("user_id = ? AND path = ?", userID, path).Scan(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	err = db.NewSelect().Model(&folders).Where("user_id = ? and path LIKE ?", userID, path).Scan(ctx)
+	err = db.NewSelect().Model(&folders).Where("user_id = ? and path = ?", userID, path).Scan(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

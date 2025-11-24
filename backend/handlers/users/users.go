@@ -17,3 +17,4 @@ func ListUsersHandler(c *gin.Context, db *bun.DB) {
 	}
 	c.JSON(http.StatusOK, users)
 }
+

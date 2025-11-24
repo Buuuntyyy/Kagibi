@@ -12,29 +12,40 @@ import (
 
 var validate = validator.New()
 
+type RegisterRequest struct {
+	Name     string `json:"name" validate:"required"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=8"`
+}
+
 func RegisterHandler(c *gin.Context, db *bun.DB) {
-	var user pkg.User
-	if err := c.ShouldBindJSON(&user); err != nil {
+	var req RegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Valide les données
-	if err := validate.Struct(user); err != nil {
+	if err := validate.Struct(req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Hache le mot de passe
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.PasswordHash), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Impossible de hasher le mot de passe"})
 		return
 	}
-	user.PasswordHash = string(hashedPassword)
+
+	user := &pkg.User{
+		Name:         req.Name,
+		Email:        req.Email,
+		PasswordHash: string(hashedPassword),
+	}
 
 	// Crée l'utilisateur
-	if err := pkg.CreateUser(db, &user); err != nil {
+	if err := pkg.CreateUser(db, user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

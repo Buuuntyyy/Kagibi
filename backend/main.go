@@ -1,22 +1,19 @@
 package main
 
 import (
-	"github.com/joho/godotenv"
-	"safercloud/backend/middleware"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"safercloud/backend/pkg"
 	"log"
 	"net/http"
 	"safercloud/backend/handlers/auth"
-	"safercloud/backend/handlers/users"
 	"safercloud/backend/handlers/files"
+	"safercloud/backend/handlers/users"
+	"safercloud/backend/middleware"
+	"safercloud/backend/pkg"
 )
 
 func main() {
-	// Charge les variables d'environnement
-	if err := godotenv.Load(); err != nil {
-		log.Fatal("Erreur lors du chargement du fichier .env")
-	}
+
 	// Initialise la connexion à la base de données
 	db := pkg.NewDB()
 
@@ -28,9 +25,16 @@ func main() {
 
 	log.Println("Migrations executed successfully!")
 
-
 	// Crée une instance de Gin (equivalent à Express.js en Node.js)
 	router := gin.Default()
+
+	// Configure et utilise le middleware CORS
+	config := cors.DefaultConfig()
+	config.AllowOrigins = []string{"http://localhost:5173"} // Remplacez par l'URL de votre frontend si nécessaire
+	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
+	router.Use(cors.New(config))
+
 	router.Use(middleware.SecureHeaders())
 	router.Use(middleware.RateLimiter())
 
@@ -47,16 +51,16 @@ func main() {
 	{
 		// ROUTES UTILISATEURS
 		protectedRoutes.GET("/users", func(c *gin.Context) { users.ListUsersHandler(c, db) })
-	}
 
-	// ROUTES FICHIERS
-	fileRoutes := protectedRoutes.Group("/files")
-	{
-		fileRoutes.POST("/upload", func(c *gin.Context) { files.UploadHandler(c, db) })
-		fileRoutes.GET("/", func(c *gin.Context) { files.ListFilesHandler(c, db) })
-		fileRoutes.DELETE("/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db) })
-		fileRoutes.DELETE("/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db) })
-		fileRoutes.GET("/download/:fileID", func(c *gin.Context) { files.DownloadFileHandler(c, db) })
+		// ROUTES FICHIERS
+		fileRoutes := protectedRoutes.Group("/files")
+		{
+			fileRoutes.POST("/upload", func(c *gin.Context) { files.UploadHandler(c, db) })
+			fileRoutes.GET("/list/*path", func(c *gin.Context) { files.ListFilesHandler(c, db) })
+			fileRoutes.DELETE("/file/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db) })
+			fileRoutes.DELETE("/folder/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db) })
+			fileRoutes.GET("/download/:fileID", func(c *gin.Context) { files.DownloadFileHandler(c, db) })
+		}
 	}	
 
 	// Définis une route GET
@@ -64,44 +68,6 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Hello, Gin!",
 		})
-	})
-
-	// Route POST avec un paramètre JSON
-	router.POST("/users", func(c *gin.Context) {
-		var user pkg.User  // <-- Utilise le modèle pkg.User
-		if err := c.ShouldBindJSON(&user); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		// Appelle CreateUser avec le bon modèle
-		err := pkg.CreateUser(db, &user)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.JSON(http.StatusCreated, user)
-	})
-
-	router.POST("/files", func(c *gin.Context) {
-		var file pkg.File
-		if err := c.ShouldBindJSON(&file); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		// TODO: persist the file using pkg (e.g., pkg.CreateFile) if implemented
-		c.JSON(http.StatusCreated, file)
-	})
-
-	// Route pour lister les utilisateurs
-	router.GET("/users", func(c *gin.Context) {
-		users, err := pkg.ListUsers(db)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, users)
 	})
 
 	// Démarre le serveur sur le port 8080

@@ -36,9 +36,9 @@ func LoginHandler(c *gin.Context, db *bun.DB) {
 
 	// Génère un token JWT
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"userID": user.ID,
-		"email":  user.Email,
-		"exp":    time.Now().Add(time.Hour * 24).Unix(),
+		"user_id": user.ID, // Utiliser "user_id" pour être cohérent
+		"email":   user.Email,
+		"exp":     time.Now().Add(time.Hour * 24).Unix(),
 	})
 
 	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))

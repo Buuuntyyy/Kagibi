@@ -44,9 +44,15 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
-			// Stocker les informations de l'utilisateur dans le contexte
-			c.Set("userID", int64(claims["user_id"].(float64)))
-			c.Set("email", claims["email"].(string))
+			// Vérifier si user_id existe avant de l'utiliser
+			if userID, ok := claims["user_id"]; ok {
+				c.Set("userID", int64(userID.(float64)))
+				c.Set("email", claims["email"].(string))
+			} else {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token: user_id missing"})
+				c.Abort()
+				return
+			}
 		} else {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
 			c.Abort()
