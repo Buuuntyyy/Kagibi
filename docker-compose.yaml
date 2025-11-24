@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:14-alpine
+    restart: always
+    shm_size: 128mb
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: mydb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db_data:/var/lib/postgresql/data/
+
+  redis-db:
+    image: redis:alpine  # Utilise l'image Redis (version légère)
+    restart: always
+    ports:
+      - "6379:6379"      # Port Redis standard
+    volumes:
+      - ./redis-data:/data # Persistance des données Redis
