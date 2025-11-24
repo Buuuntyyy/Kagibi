@@ -23,6 +23,7 @@ const logout = () => {
 
 <style scoped>
 nav {
+  height: 5vh;
   display: flex;
   justify-content: space-between;
   align-items: center;

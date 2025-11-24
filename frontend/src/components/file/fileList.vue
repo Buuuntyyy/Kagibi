@@ -1,7 +1,14 @@
 <template>
   <div class="file-list-container">
+    <div class="path-banner">
+      <span>Chemin : {{ fileStore.currentPath }}</span>
+      <button @click="goUp" :disabled="fileStore.currentPath === '/'">Dossier parent</button>
+    </div>
     <div class="toolbar">
-      <button class="btn-add-file">Ajouter un fichier</button>
+      <div class="toolbar-left">
+        <h2 class="dashboard-title">Dashboard</h2>
+        <button class="btn-add-file">Ajouter un fichier</button>
+      </div>
       <button v-if="selectedFile" @click="downloadSelectedFile" class="btn-download">Télécharger</button>
     </div>
     <div class="list-area">
@@ -39,6 +46,10 @@ const openFolder = (folderName) => {
   fileStore.navigateTo(folderName)
 }
 
+const goUp = () => {
+  fileStore.navigateUp()
+}
+
 const downloadSelectedFile = () => {
   if (selectedFile.value) {
     fileStore.downloadFile(selectedFile.value.id, selectedFile.value.name)
@@ -50,20 +61,48 @@ const downloadSelectedFile = () => {
 .file-list-container {
   border: 1px solid #ccc;
   border-radius: 8px;
-  padding: 1rem;
   background-color: #f9f9f9;
+  height: 60vh;
+  width: 80vw;
+  display: flex;
+  flex-direction: column;
+}
+
+.path-banner {
+  padding: 0.5rem 1rem;
+  background-color: #e9ecef;
+  border-bottom: 1px solid #ccc;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
 }
 
 .toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 1rem;
+  padding: 1rem;
   border-bottom: 1px solid #eee;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dashboard-title {
+  margin: 0;
+  font-size: 1.5rem;
 }
 
 .list-area {
   margin-top: 1rem;
+  overflow-y: auto;
+  flex-grow: 1;
+  padding: 0 1rem;
 }
 
 .list-item {
@@ -104,5 +143,15 @@ button {
 .btn-download {
   background-color: #2ecc71;
   color: white;
+}
+
+.path-banner button {
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+}
+
+.path-banner button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
 }
 </style>

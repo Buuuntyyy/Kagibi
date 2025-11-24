@@ -11,6 +11,9 @@ import Navbar from './components/layout/navbar.vue'
 
 <style>
 .content {
-  padding-top: 60px; /* Hauteur approximative de la navbar */
+  padding-top: 60px; /* Hauteur de la navbar */
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
 }
 </style>
