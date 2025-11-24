@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"safercloud/backend/handlers/auth"
+	"safercloud/backend/handlers/users"
 	"safercloud/backend/handlers/files"
 )
 
@@ -30,22 +31,33 @@ func main() {
 
 	// Crée une instance de Gin (equivalent à Express.js en Node.js)
 	router := gin.Default()
+	router.Use(middleware.SecureHeaders())
+	router.Use(middleware.RateLimiter())
 
 	// ROUTES PUBLIQUES (Non protégées par l'authentification)
-	publicRoutes := router.Group("/api")
+	publicRoutes := router.Group("/api/v1")
 	{
-		publicRoutes.POST("/register", auth.RegisterHandler(db))
-		publicRoutes.POST("/login", auth.LoginHandler(db))
+		publicRoutes.POST("/auth/register", func(c *gin.Context) { auth.RegisterHandler(c, db) })
+		publicRoutes.POST("/auth/login", func(c *gin.Context) { auth.LoginHandler(c, db) })
 	}
 
 	// ROUTES PROTÉGÉES (Protégées par l'authentification JWT)
-	protectedRoutes := router.Group("/api")
+	protectedRoutes := router.Group("/api/v1")
 	protectedRoutes.Use(middleware.AuthMiddleware())
 	{
-		protectedRoutes.GET("/users", pkg.ListUsersHandler(db))
-		protectedRoutes.POST("/upload", pkg.UploadHandler(db))
-		protectedRoutes.GET("/files", pkg.ListFilesHandler(db))
+		// ROUTES UTILISATEURS
+		protectedRoutes.GET("/users", func(c *gin.Context) { users.ListUsersHandler(c, db) })
 	}
+
+	// ROUTES FICHIERS
+	fileRoutes := protectedRoutes.Group("/files")
+	{
+		fileRoutes.POST("/upload", func(c *gin.Context) { files.UploadHandler(c, db) })
+		fileRoutes.GET("/", func(c *gin.Context) { files.ListFilesHandler(c, db) })
+		fileRoutes.DELETE("/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db) })
+		fileRoutes.DELETE("/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db) })
+		fileRoutes.GET("/download/:fileID", func(c *gin.Context) { files.DownloadFileHandler(c, db) })
+	}	
 
 	// Définis une route GET
 	router.GET("/", func(c *gin.Context) {

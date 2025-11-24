@@ -24,5 +24,9 @@ func Migrate(db *bun.DB) error {
 		}
 	}
 
-	return nil
+	_, err := db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_files_user_id ON files(user_id);
+		CREATE INDEX IF NOT EXISTS idx_folders_user_id ON folders(user_id);
+	`)
+	return err
 }

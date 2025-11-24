@@ -72,3 +72,17 @@ func DeleteFile(db *bun.DB, fileID int64, userID int64) error {
 	_, err := db.NewDelete().Model((*File)(nil)).Where("id = ? AND user_id = ?", fileID, userID).Exec(ctx)
 	return err
 }
+
+func DeleteFolder(db *bun.DB, folderID int64, userID int64) error {
+	ctx := context.Background()
+	_, err := db.NewDelete().Model((*Folder)(nil)).Where("id = ? AND user_id = ?", folderID, userID).Exec(ctx)
+	return err
+}
+
+// Trouver un fichier par son ID
+func GetFile(db *bun.DB, fileID int64, userID int64) (*File, error) {
+	ctx := context.Background()
+	var file File
+	err := db.NewSelect().Model(&file).Where("id = ? AND user_id = ?", fileID, userID).Scan(ctx)
+	return &file, err
+}
