@@ -51,6 +51,24 @@ export const useFileStore = defineStore('files', {
       } catch (error) {
         console.error('Error downloading file:', error)
       }
+    },
+    async uploadFile(file) {
+      try {
+        const formData = new FormData()
+        formData.append('files', file)
+        formData.append('path', this.currentPath)
+
+        await api.post('/files/upload', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+
+        // Rafraîchir la liste des fichiers après l'upload
+        this.fetchItems(this.currentPath)
+      } catch (error) {
+        console.error('Error uploading file:', error)
+      }
     }
   },
 })

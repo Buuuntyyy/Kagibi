@@ -1,2 +1,4 @@
 db_data/*
 redis-data/*
+
+backend/uploads/*

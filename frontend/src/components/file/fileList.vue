@@ -7,7 +7,8 @@
     <div class="toolbar">
       <div class="toolbar-left">
         <h2 class="dashboard-title">Dashboard</h2>
-        <button class="btn-add-file">Ajouter un fichier</button>
+        <button @click="triggerFileInput" class="btn-add-file">Ajouter un fichier</button>
+        <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" />
       </div>
       <button v-if="selectedFile" @click="downloadSelectedFile" class="btn-download">Télécharger</button>
     </div>
@@ -20,7 +21,7 @@
       <!-- Files -->
       <div v-for="file in fileStore.files" :key="file.id" class="list-item file-item" :class="{ selected: selectedFile && selectedFile.id === file.id }" @click="selectFile(file)">
         <span class="icon">📄</span>
-        <span class="name">{{ file.name }}</span>
+        <span class="name">{{ file.Name }}</span>
       </div>
     </div>
   </div>
@@ -32,6 +33,7 @@ import { useFileStore } from '../../stores/files'
 
 const fileStore = useFileStore()
 const selectedFile = ref(null)
+const fileInput = ref(null)
 
 const selectFile = (file) => {
   if (selectedFile.value && selectedFile.value.id === file.id) {
@@ -53,6 +55,17 @@ const goUp = () => {
 const downloadSelectedFile = () => {
   if (selectedFile.value) {
     fileStore.downloadFile(selectedFile.value.id, selectedFile.value.name)
+  }
+}
+
+const triggerFileInput = () => {
+  fileInput.value.click()
+}
+
+const handleFileUpload = (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    fileStore.uploadFile(file)
   }
 }
 </script>

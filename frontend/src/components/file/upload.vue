@@ -1,7 +1,8 @@
 <template>
   <input type="file" @change="handleFileChange" />
   <button @click="uploadFile" :disabled="!file">Upload</button>
-  <p v-if="error">{{ error }}</p>
+  <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+    <p v-if="successMessage" class="success">{{ successMessage }}</p>
 </template>
 
 <script setup>
