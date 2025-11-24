@@ -1,22 +1,16 @@
 <template>
   <div>
-    <h2>File Browser</h2>
-    <p>Current Path: {{ fileStore.currentPath }}</p>
-    <button @click="goUp" :disabled="fileStore.currentPath === '/'">Go Up</button>
-    <ul>
-      <li v-for="folder in fileStore.folders" :key="folder.id" @click="openFolder(folder.name)">
-        [D] {{ folder.name }}
-      </li>
-      <li v-for="file in fileStore.files" :key="file.id">
-        [F] {{ file.name }}
-      </li>
-    </ul>
+    <h2>Explorateur de fichiers</h2>
+    <p>Chemin actuel : {{ fileStore.currentPath }}</p>
+    <button @click="goUp" :disabled="fileStore.currentPath === '/'">Dossier parent</button>
+    <file-list />
   </div>
 </template>
 
 <script setup>
 import { onMounted } from 'vue'
 import { useFileStore } from '../stores/files'
+import FileList from './file/fileList.vue'
 
 const fileStore = useFileStore()
 
@@ -24,25 +18,23 @@ onMounted(() => {
   fileStore.fetchItems('/')
 })
 
-function openFolder(folderName) {
-  fileStore.navigateTo(folderName)
-}
-
 function goUp() {
   fileStore.navigateUp()
 }
 </script>
 
 <style scoped>
-ul {
-  list-style-type: none;
-  padding: 0;
-}
-li {
-  cursor: pointer;
-  padding: 5px;
-}
-li:hover {
+button {
+  margin-bottom: 1rem;
+  padding: 0.5rem 1rem;
   background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 </style>

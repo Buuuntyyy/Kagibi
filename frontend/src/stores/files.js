@@ -33,6 +33,24 @@ export const useFileStore = defineStore('files', {
         parts.pop()
         const newPath = '/' + parts.join('/')
         this.fetchItems(newPath)
+    },
+    async downloadFile(fileId, fileName) {
+      try {
+        const response = await api.get(`/files/download/${fileId}`, {
+          responseType: 'blob', // Important pour recevoir le fichier
+        })
+
+        // Créer un lien temporaire pour déclencher le téléchargement
+        const url = window.URL.createObjectURL(new Blob([response.data]))
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', fileName) // Nom du fichier
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      } catch (error) {
+        console.error('Error downloading file:', error)
+      }
     }
   },
 })
