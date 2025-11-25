@@ -10,10 +10,11 @@ export const useFileStore = defineStore('files', {
   actions: {
     async fetchItems(path) {
       try {
-        const response = await api.get(`/files/list${path}`)
+        const safePath = path.startsWith('/') ? path : `/${path}`
+        const response = await api.get(`/files/list${safePath}`)
         this.files = response.data.files || []
         this.folders = response.data.folders || []
-        this.currentPath = path
+        this.currentPath = safePath
       } catch (error) {
         console.error('Error fetching items:', error)
       }
@@ -55,7 +56,7 @@ export const useFileStore = defineStore('files', {
     async uploadFile(file) {
       try {
         const formData = new FormData()
-        formData.append('files', file)
+        formData.append('file', file)
         formData.append('path', this.currentPath)
 
         await api.post('/files/upload', formData, {
@@ -80,6 +81,14 @@ export const useFileStore = defineStore('files', {
       } catch (error) {
         console.error('Error creating folder:', error)
       }
+    },
+    async deleteFiles(fileIDs) {
+    try {
+      await api.post('/files/bulk-delete', { file_ids: fileIDs })
+      this.fetchItems(this.currentPath)
+    } catch (error) {
+      console.error('Error deleting items:', error)
     }
+  }
   },
 })

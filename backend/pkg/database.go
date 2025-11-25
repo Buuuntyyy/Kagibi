@@ -66,19 +66,51 @@ func CreateFolderDB(db *bun.DB, folder *Folder) error {
 
 // Lister les fichier d'un utilisateur
 func ListItemsByUser(db *bun.DB, userID int64, path string) ([]File, []Folder, error) {
-	ctx := context.Background()
-	var files []File
-	var folders []Folder
-	err := db.NewSelect().Model(&files).Where("user_id = ? AND path = ?", userID, path).Scan(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	err = db.NewSelect().Model(&folders).Where("user_id = ? and path = ?", userID, path).Scan(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
+    ctx := context.Background()
+    var files []File
+    var folders []Folder
+    var err error
 
-	return files, folders, err
+    if path == "/" {
+        // Pour la racine : on cherche les chemins qui commencent par '/' mais qui n'ont pas de deuxième '/'.
+        // Ex: '/test' (OK), '/image.jpg' (OK), mais pas '/test/doc.pdf' (NON)
+        err = db.NewSelect().Model(&files).
+            Where("user_id = ?", userID).
+            Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
+            Scan(ctx)
+        if err != nil {
+            return nil, nil, err
+        }
+
+        err = db.NewSelect().Model(&folders).
+            Where("user_id = ?", userID).
+            Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
+            Scan(ctx)
+        if err != nil {
+            return nil, nil, err
+        }
+    } else {
+        // Pour un sous-dossier (ex: /test) : on cherche les chemins qui commencent par '/test/'
+        // mais qui n'ont pas de '/' supplémentaire après.
+        searchPrefix := path + "/"
+        err = db.NewSelect().Model(&files).
+            Where("user_id = ?", userID).
+            Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
+            Scan(ctx)
+        if err != nil {
+            return nil, nil, err
+        }
+
+        err = db.NewSelect().Model(&folders).
+            Where("user_id = ?", userID).
+            Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
+            Scan(ctx)
+        if err != nil {
+            return nil, nil, err
+        }
+    }
+
+    return files, folders, nil
 }
 
 // supprimer un fichier

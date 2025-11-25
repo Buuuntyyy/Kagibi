@@ -15,7 +15,9 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	userID := c.GetInt64("userID")
+	userIDStr := c.GetString("user_id")
+	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+
 	if err := pkg.DeleteFile(db, fileID, userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -31,7 +33,9 @@ func DeleteFolderHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	userID := c.GetInt64("userID")
+	userIDStr := c.GetString("user_id")
+	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+
 	if err := pkg.DeleteFolder(db, folderID, userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -7,7 +7,14 @@
         <button @click="createNewFolder" class="btn-add-file">Créer un dossier</button>
         <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" />
       </div>
-      <button v-if="selectedFile" @click="downloadSelectedFile" class="btn-download">Télécharger</button>
+      <div class="toolbar-right">
+        <button @click="downloadSelectedFiles" :disabled="selectedFiles.length === 0" class="btn-download">
+          Télécharger
+        </button>
+        <button @click="deleteSelectedItems" :disabled="selectedFiles.length === 0" class="btn-delete">
+          Supprimer
+        </button>
+      </div>
     </div>
     <div class="path-banner">
       <span @click="goUp" class="back-arrow" :class="{ 'disabled': fileStore.currentPath === '/' }">←</span>
@@ -20,9 +27,12 @@
         <span class="name">{{ folder.Name }}</span>
       </div>
       <!-- Files -->
-      <div v-for="file in fileStore.files" :key="file.ID" class="list-item file-item" :class="{ selected: selectedFile && selectedFile.ID === file.ID }" @click="selectFile(file)" @dblclick="downloadFile(file)">
+      <div v-for="file in fileStore.files" :key="file.ID" 
+          class="list-item"
+          :class="{ selected: isSelected(file) }"
+          @click="selectFile(file, $event)">
         <span class="icon">📄</span>
-        <span class="name">{{ file.Name }}</span>
+        <span>{{ file.Name }}</span>
       </div>
     </div>
   </div>
@@ -33,31 +43,62 @@ import { ref } from 'vue'
 import { useFileStore } from '../../stores/files'
 
 const fileStore = useFileStore()
-const selectedFile = ref(null)
+const selectedFiles = ref([])
 const fileInput = ref(null)
 
 const selectFile = (file) => {
-  if (selectedFile.value && selectedFile.value.ID === file.ID) {
-    selectedFile.value = null // Deselect if clicking the same file
-  } else {
-    selectedFile.value = file
+  const isSelected = selectedFiles.value.some(f => f.ID === file.ID);
+  if (!event.ctrlKey && !event.metaKey) { // si ctrl ou cmd n'est pas enfoncé
+    selectedFiles.value = isSelected ? [] : [file]; // Select only this file
+  } else { // si ctrl ou cmd est enfoncé
+    if (isSelected) {
+      selectedFiles.value = selectedFiles.value.filter(f => f.ID !== file.ID); // Deselect file
+    } else {
+      selectedFiles.value.push(file); // Add to selection
+    }
   }
 }
 
+// Helper pour vérifier si un item est sélectionné (utile pour le template)
+const isSelected = (file) => {
+  return selectedFiles.value.some(f => f.ID === file.ID);
+}
+
 const openFolder = (folderName) => {
-  selectedFile.value = null // Deselect file when navigating
+  selectedFiles.value = [] // Deselect file when navigating
   fileStore.navigateTo(folderName)
 }
 
 const goUp = () => {
   if (fileStore.currentPath !== '/') {
+    selectedFiles.value = [] // Deselect file when navigating up
     fileStore.navigateUp()
   }
 }
 
-const downloadSelectedFile = () => {
-  if (selectedFile.value) {
-    downloadFile(selectedFile.value);
+const downloadSelectedFiles = () => {
+  if (selectedFiles.value.length === 0) return;
+
+  if (selectedFiles.value.length === 1) {
+    const file = selectedFiles.value[0];
+    fileStore.downloadFile(file.ID, file.Name);
+  } else {
+    // Logic for downloading multiple files, e.g., zipping them first
+    alert("Le téléchargement de plusieurs fichiers en une fois (ex: zip) n'est pas encore implémenté. Les fichiers seront téléchargés individuellement.");
+    selectedFiles.value.forEach(file => {
+      fileStore.downloadFile(file.ID, file.Name);
+    });
+  }
+}
+
+const deleteSelectedItems = async () => {
+  if (selectedFiles.value.length === 0) return;
+
+  const confirmDelete = confirm(`Êtes-vous sûr de vouloir supprimer les ${selectedFiles.value.length} élément(s) sélectionné(s) ?`);
+  if (confirmDelete) {
+    const fileIDs = selectedFiles.value.map(file => file.ID);
+    await fileStore.deleteFiles(fileIDs);
+    selectedFiles.value = [] // Clear selection after deletion
   }
 }
 

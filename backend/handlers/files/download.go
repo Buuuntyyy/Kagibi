@@ -8,13 +8,16 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"safercloud/backend/pkg"
+
+	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
 
 func DownloadFileHandler(c *gin.Context, db *bun.DB) {
-	userID := c.GetInt64("userID")
+	userIDStr := c.GetString("user_id")
+	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+
 	fileIDStr := c.Param("fileID")
 	fileID, err := strconv.ParseInt(fileIDStr, 10, 64)
 	if err != nil {
@@ -31,7 +34,8 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	// Construit le chemin physique vers le fichier dans le dossier "uploads"
-	filePath := filepath.Join("uploads", file.Name)
+	// Utilise le chemin stocké en base de données (file.Path) et l'ID utilisateur
+	filePath := filepath.Join("uploads", userIDStr, file.Path)
 
 	// Vérifie si le fichier existe physiquement avant de tenter de le servir
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
