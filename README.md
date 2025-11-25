@@ -1,4 +1,6 @@
 # SaferCloud
+## Suivi de projet
+[Notion du projet: ](https://www.notion.so/2b673e3ff6e7801eb452d59a23b1eae3?source=copy_link)
 
 ## Déploiement
 ### Pré-requis:
