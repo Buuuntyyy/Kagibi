@@ -32,10 +32,9 @@ const router = useRouter()
 const submit = async () => {
   error.value = ''
   try {
-    await authStore.register(username.value, email.value, password.value)
-    const success = await authStore.login(email.value, password.value)
+    const success = await authStore.login({email: email.value, password: password.value})
     if (success) {
-      router.push('/dashboard')
+      router.push({ name: 'Dashboard' })
     } else {
       error.value = 'Erreur lors de la connexion automatique après inscription.'
     }

@@ -37,6 +37,15 @@ func FindUserByEmail(db *bun.DB, email string) (*User, error) {
 	return &user, err
 }
 
+func FindUserByID(db *bun.DB, userID int64) (*User, error) {
+	var user User
+	err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 func CreateUser(db *bun.DB, user *User) error {
 	ctx := context.Background()
 	_, err := db.NewInsert().Model(user).Exec(ctx)

@@ -7,6 +7,9 @@
 
 <script setup>
 import Navbar from './components/layout/navbar.vue'
+import { useThemeStore } from './stores/theme'
+
+const themeStore = useThemeStore()
 </script>
 
 <style>

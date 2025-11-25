@@ -1,18 +1,20 @@
 package auth
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
-	"os"
 	"safercloud/backend/pkg"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/go-redis/redis/v8"
 	"github.com/uptrace/bun"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func LoginHandler(c *gin.Context, db *bun.DB) {
+func LoginHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 	var credentials struct {
 		Email    string `json:"email" binding:"required,email"`
 		Password string `json:"password" binding:"required,min=8"`
@@ -34,18 +36,20 @@ func LoginHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// Génère un token JWT
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"user_id": user.ID, // Utiliser "user_id" pour être cohérent
-		"email":   user.Email,
-		"exp":     time.Now().Add(time.Hour * 24).Unix(),
-	})
+	sessionIDBytes := make([]byte, 32)
+	if _, err := rand.Read(sessionIDBytes); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Impossible de créer la session"})
+		return
+	}
+	sessionID := hex.EncodeToString(sessionIDBytes)
 
-	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	err = redisClient.Set(context.Background(), sessionID, user.ID, time.Hour*24).Err()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Impossible de générer le token"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Impossible de créer la session"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": tokenString})
+	c.SetCookie("session_id", sessionID, 3600*24, "/", "localhost", true, true)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Connexion réussie"})
 }

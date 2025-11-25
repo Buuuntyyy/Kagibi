@@ -26,9 +26,9 @@ const router = useRouter()
 
 const login = async () => {
   error.value = ''
-  const success = await authStore.login(email.value, password.value)
+  const success = await authStore.login({email: email.value, password: password.value})
   if (success) {
-    router.push('/dashboard')
+    router.push({ name: 'Dashboard' })
   } else {
     error.value = 'Identifiants invalides'
   }

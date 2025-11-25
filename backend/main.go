@@ -1,16 +1,21 @@
 package main
 
 import (
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
+	"context"
 	"log"
 	"net/http"
+	"os"
 	"safercloud/backend/handlers/auth"
 	"safercloud/backend/handlers/files"
 	"safercloud/backend/handlers/folders"
 	"safercloud/backend/handlers/users"
 	"safercloud/backend/middleware"
 	"safercloud/backend/pkg"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
+	"time"
 )
 
 func main() {
@@ -34,24 +39,44 @@ func main() {
 	config.AllowOrigins = []string{"http://localhost:5173"} // Remplacez par l'URL de votre frontend si nécessaire
 	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
+	config.ExposeHeaders = []string{"Content-Length"}
+	config.AllowCredentials = true
+	config.MaxAge = 12 * time.Hour
 	router.Use(cors.New(config))
 
 	router.Use(middleware.SecureHeaders())
 	router.Use(middleware.RateLimiter())
 
+	redisAddr := os.Getenv("REDIS_URL")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: redisAddr,
+	})
+	
+	if _, err := redisClient.Ping(context.Background()).Result(); err != nil {
+        log.Fatalf("Impossible de se connecter à Redis: %v", err)
+    }
+	
+	api := router.Group("/api/v1")
 	// ROUTES PUBLIQUES (Non protégées par l'authentification)
-	publicRoutes := router.Group("/api/v1")
+	publicRoutes := api.Group("/auth")
 	{
-		publicRoutes.POST("/auth/register", func(c *gin.Context) { auth.RegisterHandler(c, db) })
-		publicRoutes.POST("/auth/login", func(c *gin.Context) { auth.LoginHandler(c, db) })
+		publicRoutes.POST("/register", func(c *gin.Context) { auth.RegisterHandler(c, db) })
+		publicRoutes.POST("/login", func(c *gin.Context) { auth.LoginHandler(c, db, redisClient) })
 	}
 
 	// ROUTES PROTÉGÉES (Protégées par l'authentification JWT)
-	protectedRoutes := router.Group("/api/v1")
-	protectedRoutes.Use(middleware.AuthMiddleware())
+	protectedRoutes := api.Group("/")
+	protectedRoutes.Use(middleware.AuthMiddleware(redisClient))
 	{
+		protectedRoutes.POST("/auth/logout", func(c *gin.Context) { auth.LogoutHandler(c, redisClient) })
+
+		userRoutes := protectedRoutes.Group("/users")
 		// ROUTES UTILISATEURS
-		protectedRoutes.GET("/users", func(c *gin.Context) { users.ListUsersHandler(c, db) })
+		userRoutes.GET("/", func(c *gin.Context) { users.ListUsersHandler(c, db) })
+		userRoutes.GET("/me", func(c *gin.Context) { users.MeHandler(c, db) })
 
 		// ROUTES FICHIERS
 		fileRoutes := protectedRoutes.Group("/files")

@@ -10,8 +10,8 @@
       <button v-if="selectedFile" @click="downloadSelectedFile" class="btn-download">Télécharger</button>
     </div>
     <div class="path-banner">
-      <span>Chemin : {{ fileStore.currentPath }}</span>
-      <button @click="goUp" :disabled="fileStore.currentPath === '/'">Dossier parent</button>
+      <span @click="goUp" class="back-arrow" :class="{ 'disabled': fileStore.currentPath === '/' }">←</span>
+      <span>{{ fileStore.currentPath }}</span>
     </div>
     <div class="list-area">
       <!-- Folders -->
@@ -50,7 +50,9 @@ const openFolder = (folderName) => {
 }
 
 const goUp = () => {
-  fileStore.navigateUp()
+  if (fileStore.currentPath !== '/') {
+    fileStore.navigateUp()
+  }
 }
 
 const downloadSelectedFile = () => {
@@ -86,7 +88,7 @@ const createNewFolder = () => {
 .file-list-container {
   border: 1px solid #ccc;
   border-radius: 8px;
-  background-color: #f9f9f9;
+  background-color: var(--background-color);
   height: 60vh;
   width: 80vw;
   display: flex;
@@ -95,13 +97,38 @@ const createNewFolder = () => {
 
 .path-banner {
   padding: 0.5rem 1rem;
-  background-color: #e9ecef;
+  background-color: var(--background-color);
   border-bottom: 1px solid #ccc;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
+  gap: 1rem;
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
+}
+
+.back-arrow {
+  cursor: pointer;
+  font-size: 1.5rem;
+  font-weight: bold;
+  padding: 0.2rem 0.8rem;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  background-color: #f0f0f0;
+  transition: background-color 0.2s;
+  line-height: 1;
+}
+
+.back-arrow:not(.disabled):hover {
+  background-color: var(--hover-background-color);
+}
+
+.back-arrow.disabled {
+  color: #ccc;
+  cursor: not-allowed;
+  background-color: var(--background-color);
+  border-color: #eee;
 }
 
 .toolbar {
@@ -142,7 +169,7 @@ const createNewFolder = () => {
 }
 
 .list-item:hover {
-  background-color: #e9e9e9;
+  background-color: var(--hover-background-color);
 }
 
 .list-item .icon {
@@ -163,17 +190,17 @@ button {
 }
 
 .btn-add-file {
-  background-color: #3498db;
+  background-color: var(--primary-color);
   color: white;
 }
 
 .btn-download {
-  background-color: #2ecc71;
+  background-color: var(--primary-color);
   color: white;
 }
 
 .path-banner button {
-    background-color: #f0f0f0;
+    background-color: var(--background-color);
     border: 1px solid #ccc;
 }
 
