@@ -8,6 +8,7 @@ type User struct {
 	Name      string    `bun:"name,notnull"`
 	Email     string    `bun:"email,unique,notnull"`
 	PasswordHash string `bun:"password_hash,notnull"`
+	Salt	  string    `bun:"salt,notnull" json:"salt"`
 	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 }

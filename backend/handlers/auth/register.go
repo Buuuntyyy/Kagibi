@@ -16,6 +16,7 @@ type RegisterRequest struct {
 	Name     string `json:"name" validate:"required"`
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=8"`
+	Salt string `json:"salt" validate:"required"`
 }
 
 func RegisterHandler(c *gin.Context, db *bun.DB) {
@@ -42,6 +43,7 @@ func RegisterHandler(c *gin.Context, db *bun.DB) {
 		Name:         req.Name,
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
+		Salt :         req.Salt,
 	}
 
 	// Crée l'utilisateur

@@ -51,5 +51,13 @@ func LoginHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 
 	c.SetCookie("session_id", sessionID, 3600*24, "/", "localhost", true, true)
 
-	c.JSON(http.StatusOK, gin.H{"message": "Connexion réussie"})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Connexion réussie",
+		"user": gin.H{
+			"id":    user.ID,
+			"name":  user.Name,
+			"email": user.Email,
+		},
+		"salt": user.Salt,
+	})
 }

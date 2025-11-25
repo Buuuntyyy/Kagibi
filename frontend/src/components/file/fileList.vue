@@ -33,19 +33,24 @@
           @click="selectFile(file, $event)"
           @dblclick="downloadFile(file)">
         <span class="icon">📄</span>
-        <span>{{ file.Name }}</span>
+        <span class="name">{{ file.Name }}</span>
+        <span class="size">{{ formatSize(file.Size) }}</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useFileStore } from '../../stores/files'
 
 const fileStore = useFileStore()
 const selectedFiles = ref([])
 const fileInput = ref(null)
+
+onMounted(() => {
+  fileStore.fetchItems('/')
+})
 
 const selectFile = (file) => {
   const isSelected = selectedFiles.value.some(f => f.ID === file.ID);
@@ -104,25 +109,34 @@ const deleteSelectedItems = async () => {
 }
 
 const downloadFile = (file) => {
-  fileStore.downloadFile(file.ID, file.Name);
+  fileStore.downloadFile(file.ID, file.Name, file.MimeType);
 }
 
 const triggerFileInput = () => {
   fileInput.value.click()
 }
 
-const handleFileUpload = (event) => {
+const handleFileUpload = async (event) => {
   const file = event.target.files[0]
   if (file) {
-    fileStore.uploadFile(file)
+    await fileStore.uploadFile(file)
+    event.target.value = '' // Reset file input
   }
 }
 
-const createNewFolder = () => {
+const createNewFolder = async () => {
   const folderName = prompt("Entrez le nom du nouveau dossier :")
   if (folderName) {
-    fileStore.createFolder(folderName)
+    await fileStore.createFolder(folderName)
   }
+}
+
+const formatSize = (bytes) => {
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+  const k = 1024
+  if (bytes === 0) return '0 Byte'
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 </script>
 
@@ -216,6 +230,13 @@ const createNewFolder = () => {
 
 .list-item .icon {
   margin-right: 0.5rem;
+}
+.name {
+  flex-grow: 1;
+}
+.size {
+  color: #666;
+  font-size: 0.9em;
 }
 
 .list-item.selected {
