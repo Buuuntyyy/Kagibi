@@ -30,7 +30,8 @@
       <div v-for="file in fileStore.files" :key="file.ID" 
           class="list-item"
           :class="{ selected: isSelected(file) }"
-          @click="selectFile(file, $event)">
+          @click="selectFile(file, $event)"
+          @dblclick="downloadFile(file)">
         <span class="icon">📄</span>
         <span>{{ file.Name }}</span>
       </div>
