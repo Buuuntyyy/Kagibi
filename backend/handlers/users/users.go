@@ -4,17 +4,27 @@ package users
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"safercloud/backend/pkg"
+
+	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
 
 func ListUsersHandler(c *gin.Context, db *bun.DB) {
 	users, err := pkg.ListUsers(db)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la récupération des utilisateurs"})
 		return
 	}
-	c.JSON(http.StatusOK, users)
-}
 
+	var safeUsers []gin.H
+	for _, u := range users {
+		safeUsers = append(safeUsers, gin.H{
+			"id":    u.ID,
+			"name":  u.Name,
+			"email": u.Email,
+		})
+	}
+
+	c.JSON(http.StatusOK, safeUsers)
+}

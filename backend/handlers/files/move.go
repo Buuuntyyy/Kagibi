@@ -6,8 +6,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"log"
 
 	"safercloud/backend/pkg"
+	"safercloud/backend/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -108,8 +110,20 @@ func MoveHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	// 3. Move on disk
-	oldDiskPath := filepath.Join("uploads", userIDStr, oldPath)
-	newDiskPath := filepath.Join("uploads", userIDStr, newPath)
+	userRoot := filepath.Join("uploads", userIDStr)
+	oldDiskPath, err := utils.SecureJoin(userRoot, oldPath)
+	if err != nil {
+		log.Printf("Security Alert: Path traversal in move (source): %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chemin source invalide"})
+		return
+	}
+	
+	newDiskPath, err := utils.SecureJoin(userRoot, newPath)
+	if err != nil {
+		log.Printf("Security Alert: Path traversal in move (dest): %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chemin destination invalide"})
+		return
+	}
 
 	// Ensure parent directory of new path exists
 	newDir := filepath.Dir(newDiskPath)

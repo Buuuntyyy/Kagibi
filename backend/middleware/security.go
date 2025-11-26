@@ -1,11 +1,12 @@
 package middleware
 
 import (
+	"net/http"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/ulule/limiter/v3"
 	"github.com/ulule/limiter/v3/drivers/store/memory"
-	"net/http"
-	"time"
 )
 
 func SecureHeaders() gin.HandlerFunc {
@@ -13,7 +14,8 @@ func SecureHeaders() gin.HandlerFunc {
 		c.Header("X-Content-Type-Options", "nosniff")
 		c.Header("X-Frame-Options", "DENY")
 		c.Header("X-XSS-Protection", "1; mode=block")
-		c.Header("Content-Security-Policy", "default-src 'self'")
+		// CSP ajustée pour Vue.js et les blobs (téléchargement)
+		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws:;")
 		c.Next()
 	}
 }
