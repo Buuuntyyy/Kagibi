@@ -6,7 +6,10 @@
         {{ themeStore.theme === 'light' ? '🌙' : '☀️' }}
       </button>
       <router-link v-if="!authStore.isAuthenticated" to="/login">Connexion / Inscription</router-link>
-      <a v-else @click="logout" href="#">Se déconnecter</a>
+      <template v-else>
+        <router-link to="/account">Mon Compte</router-link>
+        <a @click="logout" href="#">Se déconnecter</a>
+      </template>
     </div>
   </nav>
 </template>

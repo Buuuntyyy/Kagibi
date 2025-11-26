@@ -1,5 +1,7 @@
 <template>
-  <h2 class="dashboard-title">Dashboard</h2>
+  <div class="dashboard-header">
+    <h2 class="dashboard-title">Dashboard</h2>
+  </div>
   <div class="file-list-container"
        @dragover.prevent="onDragOver"
        @dragleave.prevent="onDragLeave"
@@ -94,8 +96,12 @@
 
 <script setup>
 import { onMounted, ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useFileStore } from '../../stores/files'
+import { useAuthStore } from '../../stores/auth'
 
+const router = useRouter()
+const authStore = useAuthStore()
 const fileStore = useFileStore()
 const selectedFiles = ref([])
 const fileInput = ref(null)
@@ -379,6 +385,44 @@ const onDropOnParent = async (event) => {
   margin: 0;
   font-size: 1.5rem;
   text-align: left;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  width: 80vw; /* Match file-list-container width */
+}
+
+.header-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.btn-header {
+  background-color: white;
+  border: 1px solid #ccc;
+  color: #333;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.btn-header:hover {
+  background-color: #f0f0f0;
+}
+
+.btn-logout {
+  color: #dc3545;
+  border-color: #dc3545;
+}
+
+.btn-logout:hover {
+  background-color: #dc3545;
+  color: white;
 }
 
 .list-area {
