@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import api from '../api'
 import { useAuthStore } from './auth'
 import { encryptFile, decryptFile } from '../utils/crypto'
+import { encryptChunkWorker, decryptChunkedFileWorker, CHUNK_SIZE } from '../utils/crypto'
 
 export const useFileStore = defineStore('files', {
   state: () => ({
@@ -37,39 +38,29 @@ export const useFileStore = defineStore('files', {
         const newPath = '/' + parts.join('/')
         this.fetchItems(newPath)
     },
-    async downloadFile(fileId, fileName) {
-      const authStore = useAuthStore()
-      if (!authStore.masterKey) {
-        console.error('Cipher key not available. Cannot download file.')
-        return
-      }
+    async downloadFile(fileId, fileName, mimeType='application/octet-stream') {
+      const authStore = useAuthStore();
+      if (!authStore.masterKey) return;
+
       try {
-        // Téléchargement du blob chiffré depuis le serveur
-        const response = await api.get(`/files/download/${fileId}`, {
-          responseType: 'blob', // Important pour recevoir le fichier
-        })
-
-        const decryptedBlob = await decryptFile(response.data, authStore.masterKey, MimeType);
-
-        const url = window.URL.createObjectURL(decryptedBlob)
-        const link = document.createElement('a')
-        link.href = url;
-        link.setAttribute('download', fileName) // Nom du fichier
-        document.body.appendChild(link)
-        link.click()
+        // 1. Télécharger le blob chiffré
+        const response = await api.get(`/files/download/${fileId}`, { responseType: 'blob' });
         
-        setTimeout(() => {
-          link.remove()
-          window.URL.revokeObjectURL(url)
-        }, 100);
+        // 2. Déchiffrer via Worker
+        const decryptedBlob = await decryptChunkedFileWorker(response.data, authStore.masterKey, mimeType);
+
+        // 3. Sauvegarder
+        const url = window.URL.createObjectURL(decryptedBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', fileName);
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => { link.remove(); window.URL.revokeObjectURL(url); }, 100);
 
       } catch (error) {
         console.error("Erreur download:", error);
-        if (error.message && error.message.includes("déchiffrement")) {
-            alert("Erreur d'intégrité : Le fichier est corrompu ou votre mot de passe est incorrect.");
-        } else {
-            alert("Impossible de télécharger le fichier.");
-        }
+        alert("Erreur lors du téléchargement.");
       }
     },
     async uploadFile(file) {
@@ -78,33 +69,44 @@ export const useFileStore = defineStore('files', {
         console.error('User not authenticated. Cannot upload file.')
         return
       }
-      const masterKey = authStore.masterKey;
+
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      let chunkIndex = 0;
+      let offset = 0;
       try {
-        const encryptedBlob = await encryptFile(file, masterKey);
-        const encryptedFile = new File([encryptedBlob], file.name, { type: 'application/octet-stream' });
-        
-        //Création d'un fichier virtuel chiffré pour l'envoie (nom original conservé)
-        const formData = new FormData()
-        formData.append('file', encryptedFile)
-        formData.append('path', this.currentPath)
+        while(offset < file.size) {
+          const chunkBlob = file.slice(offset, offset + CHUNK_SIZE);
+          const chunkArrayBuffer = await chunkBlob.arrayBuffer();
 
-        //Envoie au serveur
-        await api.post('/files/upload', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        })
+          const encryptedChunkBlob = await encryptChunkWorker(chunkArrayBuffer, authStore.masterKey, chunkIndex);
 
-        // Rafraîchir la liste des fichiers après l'upload
+          const encryptedFile = new File([encryptedChunkBlob], file.name, { type: 'application/octet-stream' });
+
+          const formData = new FormData()
+          formData.append('file', encryptedFile)
+          formData.append('path', this.currentPath)
+          formData.append('chunk_index', chunkIndex)
+          formData.append('total_chunks', totalChunks)
+
+          console.log(`Uploading chunk ${chunkIndex + 1} / ${totalChunks}...`);
+
+          await api.post('/files/upload', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+
+          offset += CHUNK_SIZE;
+          chunkIndex += 1;
+
+          console.log(`Uploaded chunk ${chunkIndex} / ${totalChunks}`);
+        } 
+
         this.fetchItems(this.currentPath)
 
       } catch (error) {
         console.error("Erreur upload:", error);
-        if (error.message && error.message.includes("chiffrement")) {
-            alert("Erreur critique : Impossible de chiffrer le fichier localement.");
-        } else {
-            alert("Erreur lors de l'envoi du fichier au serveur.");
-        }
+        alert("Erreur lors de l'envoi du fichier au serveur.");
       }
     },
     async createFolder(folderName) {
