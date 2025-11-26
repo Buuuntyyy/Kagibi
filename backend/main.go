@@ -12,10 +12,11 @@ import (
 	"safercloud/backend/middleware"
 	"safercloud/backend/pkg"
 
+	"time"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
-	"time"
 )
 
 func main() {
@@ -54,11 +55,11 @@ func main() {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: redisAddr,
 	})
-	
+
 	if _, err := redisClient.Ping(context.Background()).Result(); err != nil {
-        log.Fatalf("Impossible de se connecter à Redis: %v", err)
-    }
-	
+		log.Fatalf("Impossible de se connecter à Redis: %v", err)
+	}
+
 	api := router.Group("/api/v1")
 	// ROUTES PUBLIQUES (Non protégées par l'authentification)
 	publicRoutes := api.Group("/auth")
@@ -86,6 +87,7 @@ func main() {
 			fileRoutes.POST("/bulk-delete", func(c *gin.Context) { files.BulkDeleteHandler(c, db) })
 			fileRoutes.DELETE("/file/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db) })
 			fileRoutes.DELETE("/folder/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db) })
+			fileRoutes.POST("/move", func(c *gin.Context) { files.MoveHandler(c, db) })
 			fileRoutes.GET("/download/:fileID", func(c *gin.Context) { files.DownloadFileHandler(c, db) })
 		}
 
@@ -94,7 +96,7 @@ func main() {
 		{
 			folderRoutes.POST("/create", func(c *gin.Context) { folders.CreateHandler(c, db) })
 		}
-	}	
+	}
 
 	// Définis une route GET
 	router.GET("/", func(c *gin.Context) {

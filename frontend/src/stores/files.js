@@ -143,6 +143,25 @@ export const useFileStore = defineStore('files', {
     } catch (error) {
       console.error('Error deleting items:', error)
     }
-  }
+  },
+    async moveItems(items, destinationPath) {
+      try {
+        const promises = items.map(item => api.post('/files/move', {
+          id: item.id,
+          type: item.type,
+          destinationPath: destinationPath
+        }))
+        
+        await Promise.all(promises)
+        this.fetchItems(this.currentPath)
+      } catch (error) {
+        console.error('Error moving items:', error)
+        alert("Erreur lors du déplacement de certains éléments.")
+        this.fetchItems(this.currentPath)
+      }
+    },
+    async moveItem(itemId, type, destinationPath) {
+      await this.moveItems([{ id: itemId, type: type }], destinationPath)
+    }
   },
 })

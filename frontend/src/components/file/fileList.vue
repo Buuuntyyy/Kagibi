@@ -28,7 +28,10 @@
       </div>
     </div>
     <div class="path-banner">
-      <span @click="goUp" class="back-arrow" :class="{ 'disabled': fileStore.currentPath === '/' }">←</span>
+      <span @click="goUp" class="back-arrow" :class="{ 'disabled': fileStore.currentPath === '/' }"
+            @drop.stop="onDropOnParent"
+            @dragover.prevent="onFolderDragOver"
+            @dragleave="onFolderDragLeave">←</span>
       <div class="breadcrumbs">
         <span v-for="(segment, index) in pathSegments" :key="index" class="breadcrumb-segment">
           <span 
@@ -62,7 +65,14 @@
 
     <div class="list-area">
       <!-- Folders -->
-      <div v-for="folder in fileStore.folders" :key="folder.ID" class="list-item folder-item" @click="openFolder(folder.Name)">
+      <div v-for="folder in fileStore.folders" :key="folder.ID" 
+           class="list-item folder-item" 
+           @click="openFolder(folder.Name)"
+           draggable="true"
+           @dragstart="onDragStart(folder, 'folder', $event)"
+           @drop.stop="onDropOnFolder(folder, $event)"
+           @dragover.prevent="onFolderDragOver"
+           @dragleave="onFolderDragLeave">
         <span class="icon">📁</span>
         <span class="name">{{ folder.Name }}</span>
       </div>
@@ -71,7 +81,9 @@
           class="list-item"
           :class="{ selected: isSelected(file) }"
           @click="selectFile(file, $event)"
-          @dblclick="downloadFile(file)">
+          @dblclick="downloadFile(file)"
+          draggable="true"
+          @dragstart="onDragStart(file, 'file', $event)">
         <span class="icon">📄</span>
         <span class="name">{{ file.Name }}</span>
         <span class="size">{{ formatSize(file.Size) }}</span>
@@ -208,7 +220,10 @@ const closeUploadPopup = () => {
 }
 
 const onDragOver = (e) => {
-  isDragging.value = true
+  // Only show overlay if dragging files from OS
+  if (e.dataTransfer.types.includes('Files')) {
+    isDragging.value = true
+  }
 }
 
 const onDragLeave = (e) => {
@@ -225,6 +240,75 @@ const onDrop = async (e) => {
     for (const file of files) {
       await fileStore.uploadFile(file)
     }
+  }
+}
+
+const onDragStart = (item, type, event) => {
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.dropEffect = 'move'
+  
+  let itemsToDrag = []
+  
+  // Check if the dragged item is in the selection (only for files for now as folders are not selectable)
+  const isSelected = type === 'file' && selectedFiles.value.some(f => f.ID === item.ID)
+  
+  if (isSelected && selectedFiles.value.length > 0) {
+      itemsToDrag = selectedFiles.value.map(f => ({ id: f.ID, type: 'file' }))
+  } else {
+      itemsToDrag = [{ id: item.ID, type: type }]
+  }
+
+  event.dataTransfer.setData('application/json', JSON.stringify({ items: itemsToDrag }))
+}
+
+const onFolderDragOver = (event) => {
+  event.currentTarget.classList.add('drag-over-target')
+}
+
+const onFolderDragLeave = (event) => {
+  event.currentTarget.classList.remove('drag-over-target')
+}
+
+const onDropOnFolder = async (targetFolder, event) => {
+  event.currentTarget.classList.remove('drag-over-target')
+  isDragging.value = false
+  const data = event.dataTransfer.getData('application/json')
+  if (!data) return 
+
+  try {
+    const parsed = JSON.parse(data)
+    const items = parsed.items || [parsed] // Handle potential backward compatibility or single item structure
+    
+    // Filter out the target folder itself if it's being dragged (cannot move folder into itself)
+    const validItems = items.filter(item => !(item.id === targetFolder.ID && item.type === 'folder'))
+    
+    if (validItems.length > 0) {
+        await fileStore.moveItems(validItems, targetFolder.Path)
+    }
+  } catch (e) {
+    console.error("Invalid drag data", e)
+  }
+}
+
+const onDropOnParent = async (event) => {
+  event.currentTarget.classList.remove('drag-over-target')
+  isDragging.value = false
+  if (fileStore.currentPath === '/') return;
+
+  const data = event.dataTransfer.getData('application/json')
+  if (!data) return
+
+  try {
+    const parsed = JSON.parse(data)
+    const items = parsed.items || [parsed]
+    
+    const parts = fileStore.currentPath.split('/').filter(p => p)
+    parts.pop()
+    const parentPath = parts.length > 0 ? '/' + parts.join('/') : '/'
+    
+    await fileStore.moveItems(items, parentPath)
+  } catch (e) {
+    console.error("Invalid drag data", e)
   }
 }
 </script>
@@ -535,5 +619,10 @@ button {
 .drag-text {
   font-size: 1.5rem;
   font-weight: bold;
+}
+
+.drag-over-target {
+  background-color: rgba(66, 185, 131, 0.2) !important;
+  border: 2px dashed var(--primary-color, #42b983);
 }
 </style>
