@@ -233,6 +233,7 @@ const formatSize = (bytes) => {
 }
 .name {
   flex-grow: 1;
+  text-align: left;
 }
 .size {
   color: #666;

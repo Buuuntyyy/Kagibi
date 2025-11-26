@@ -9,6 +9,59 @@ const IV_LENGTH = 12;   // 12 octets pour AES-GCM
 const ARGON2_MEMLIMIT = 64 * 1024 * 1024; // 64 MB de RAM
 const ARGON2_OPSLIMIT = 4; // 4 passes, recommandation OSWASP
 
+export async function generateMasterKey() {
+    return window.crypto.subtle.generateKey(
+        {
+            name: "AES-GCM",
+            length: 256
+        },
+        true,
+        ["encrypt", "decrypt"]
+    );
+}
+
+export async function wrapMasterKey(masterKey, kek) {
+    const rawKeyData = await window.crypto.subtle.exportKey("raw", masterKey);
+    const iv = window.crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+    const encryptedKeyBuffer = await window.crypto.subtle.encrypt(
+        {
+            name: "AES-GCM",
+            iv: iv,
+        },
+        kek,
+        rawKeyData
+    );
+
+    const combined = new Uint8Array(iv.byteLength + encryptedKeyBuffer.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(encryptedKeyBuffer), iv.byteLength);
+
+    return sodium.to_base64(combined);
+}
+
+export async function unwrapMasterKey(wrappedKeyBase64, kek) {
+    const combined = sodium.from_base64(wrappedKeyBase64);
+    const iv = combined.slice(0, IV_LENGTH);
+    const encryptedKeyData = combined.slice(IV_LENGTH);
+
+    const rawKeyData = await window.crypto.subtle.decrypt(
+        {
+            name: "AES-GCM",
+            iv: iv,
+        },
+        kek,
+        encryptedKeyData
+    );
+
+    return window.crypto.subtle.importKey(
+        "raw",
+        rawKeyData,
+        { name: "AES-GCM" },
+        true,
+        ["encrypt", "decrypt"]
+    );
+}
+
 /**
  * Dérive une clé AES-GCM 256 bits à partir d'un mot de passe et d'un sel via Argon2id.
  */

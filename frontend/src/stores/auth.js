@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import api from '../api'
 import router from '../router'
-import { deriveKeyFromPassword, generateSalt } from '../utils/crypto'
+import { deriveKeyFromPassword, generateSalt, generateMasterKey, wrapMasterKey, unwrapMasterKey } from '../utils/crypto'
 import sodium from 'libsodium-wrappers-sumo'
 
 export const useAuthStore = defineStore('auth', {
@@ -18,13 +18,14 @@ export const useAuthStore = defineStore('auth', {
           }
         });
 
-        const { salt } = authentication_response.data;
+        const { salt, encrypted_master_key } = authentication_response.data;
 
-        if (salt) {
+        if (salt && encrypted_master_key) {
           await sodium.ready;
           const saltBytes = sodium.from_hex(salt);
-
-          this.masterKey = await deriveKeyFromPassword(credentials.password, saltBytes);
+          const kek = await deriveKeyFromPassword(credentials.password, saltBytes);
+          this.masterKey = await unwrapMasterKey(encrypted_master_key, kek);
+          
         } else {
           this.masterKey = null;
           console.warn("No salt received from server during login.");
@@ -47,11 +48,16 @@ export const useAuthStore = defineStore('auth', {
       const salt = generateSalt();
       const saltHex = sodium.to_hex(salt);
 
+      const masterKey = await generateMasterKey();
+      const kek = await deriveKeyFromPassword(password, salt);
+      const wrappedMasterKey = await wrapMasterKey(masterKey, kek);
+
       const payload = {
         name: username,
         email: email,
         password: password,
-        salt: saltHex
+        salt: saltHex,
+        encrypted_master_key: wrappedMasterKey
       };
       await api.post('/auth/register', payload)
     },
