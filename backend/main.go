@@ -66,6 +66,8 @@ func main() {
 	{
 		publicRoutes.POST("/register", func(c *gin.Context) { auth.RegisterHandler(c, db) })
 		publicRoutes.POST("/login", func(c *gin.Context) { auth.LoginHandler(c, db, redisClient) })
+		publicRoutes.POST("/recovery/init", func(c *gin.Context) { auth.RecoveryInitHandler(c, db) })
+		publicRoutes.POST("/recovery/finish", func(c *gin.Context) { auth.RecoveryFinishHandler(c, db) })
 	}
 
 	// ROUTES PROTÉGÉES (Protégées par l'authentification JWT)
@@ -78,6 +80,7 @@ func main() {
 		// ROUTES UTILISATEURS
 		userRoutes.GET("/", func(c *gin.Context) { users.ListUsersHandler(c, db) })
 		userRoutes.GET("/me", func(c *gin.Context) { users.MeHandler(c, db) })
+		userRoutes.POST("/change-password", func(c *gin.Context) { users.UpdatePasswordHandler(c, db) })
 
 		// ROUTES FICHIERS
 		fileRoutes := protectedRoutes.Group("/files")

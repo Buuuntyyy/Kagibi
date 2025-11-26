@@ -247,3 +247,24 @@ function validateMimeType(mimeType) {
 export function generateSalt() {
     return window.crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
 }
+
+export function generateRecoveryCode() {
+    // Generate a random 32-byte hex string
+    const bytes = window.crypto.getRandomValues(new Uint8Array(32));
+    return sodium.to_hex(bytes);
+}
+
+export async function deriveKeyFromRecoveryCode(recoveryCode, salt) {
+    // Similar to password derivation but maybe with different params if we wanted
+    // For simplicity, we use the same robust Argon2id derivation
+    return deriveKeyFromPassword(recoveryCode, salt);
+}
+
+export async function hashRecoveryCode(recoveryCode) {
+    await sodium.ready;
+    // Simple SHA-256 hash for server-side verification (proof of possession)
+    // We don't need salt here because the recovery code itself is high entropy
+    const msg = sodium.from_string(recoveryCode);
+    const hash = sodium.crypto_hash_sha256(msg);
+    return sodium.to_hex(hash);
+}

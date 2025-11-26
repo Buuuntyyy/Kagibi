@@ -3,21 +3,24 @@ package auth
 import (
 	"net/http"
 	"safercloud/backend/pkg"
+
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
 	"github.com/go-playground/validator/v10"
 	"github.com/uptrace/bun"
-
+	"golang.org/x/crypto/bcrypt"
 )
 
 var validate = validator.New()
 
 type RegisterRequest struct {
-	Name     string `json:"name" validate:"required"`
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=8"`
-	Salt string `json:"salt" validate:"required"`
-	EncryptedMasterKey string `json:"encrypted_master_key" validate:"required"`
+	Name                       string `json:"name" validate:"required"`
+	Email                      string `json:"email" validate:"required,email"`
+	Password                   string `json:"password" validate:"required,min=8"`
+	Salt                       string `json:"salt" validate:"required"`
+	EncryptedMasterKey         string `json:"encrypted_master_key" validate:"required"`
+	EncryptedMasterKeyRecovery string `json:"encrypted_master_key_recovery" validate:"required"`
+	RecoveryHash               string `json:"recovery_hash" validate:"required"`
+	RecoverySalt               string `json:"recovery_salt" validate:"required"`
 }
 
 func RegisterHandler(c *gin.Context, db *bun.DB) {
@@ -41,11 +44,14 @@ func RegisterHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	user := &pkg.User{
-		Name:         req.Name,
-		Email:        req.Email,
-		PasswordHash: string(hashedPassword),
-		Salt :         req.Salt,
-		EncryptedMasterKey : req.EncryptedMasterKey,
+		Name:                       req.Name,
+		Email:                      req.Email,
+		PasswordHash:               string(hashedPassword),
+		Salt:                       req.Salt,
+		EncryptedMasterKey:         req.EncryptedMasterKey,
+		EncryptedMasterKeyRecovery: req.EncryptedMasterKeyRecovery,
+		RecoveryHash:               req.RecoveryHash,
+		RecoverySalt:               req.RecoverySalt,
 	}
 
 	// Crée l'utilisateur

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import api from '../api'
 import router from '../router'
-import { deriveKeyFromPassword, generateSalt, generateMasterKey, wrapMasterKey, unwrapMasterKey } from '../utils/crypto'
+import { deriveKeyFromPassword, generateSalt, generateMasterKey, wrapMasterKey, unwrapMasterKey, generateRecoveryCode, deriveKeyFromRecoveryCode, hashRecoveryCode } from '../utils/crypto'
 import sodium from 'libsodium-wrappers-sumo'
 
 export const useAuthStore = defineStore('auth', {
@@ -52,14 +52,29 @@ export const useAuthStore = defineStore('auth', {
       const kek = await deriveKeyFromPassword(password, salt);
       const wrappedMasterKey = await wrapMasterKey(masterKey, kek);
 
+      // Generate Recovery Code
+      const recoveryCode = generateRecoveryCode();
+      const recoveryHash = await hashRecoveryCode(recoveryCode);
+      
+      // Encrypt Master Key with Recovery Code
+      // We use the SAME salt for simplicity, or we could generate a specific one.
+      // Using the same salt is fine as long as the recovery code is high entropy.
+      const recoveryKek = await deriveKeyFromRecoveryCode(recoveryCode, salt);
+      const wrappedMasterKeyRecovery = await wrapMasterKey(masterKey, recoveryKek);
+
       const payload = {
         name: username,
         email: email,
         password: password,
         salt: saltHex,
-        encrypted_master_key: wrappedMasterKey
+        encrypted_master_key: wrappedMasterKey,
+        encrypted_master_key_recovery: wrappedMasterKeyRecovery,
+        recovery_hash: recoveryHash,
+        recovery_salt: saltHex // Use same salt initially
       };
       await api.post('/auth/register', payload)
+      
+      return recoveryCode; // Return code so UI can display it
     },
     async logout() {
       try {
@@ -98,5 +113,73 @@ export const useAuthStore = defineStore('auth', {
         this.logout();
       }
     },
+    async updatePassword(currentPassword, newPassword) {
+      if (!this.masterKey) {
+        throw new Error("Master key not available. Please re-login.");
+      }
+
+      await sodium.ready;
+      
+      // 1. Generate new salt
+      const newSalt = generateSalt();
+      const newSaltHex = sodium.to_hex(newSalt);
+
+      // 2. Derive new KEK
+      const newKek = await deriveKeyFromPassword(newPassword, newSalt);
+
+      // 3. Re-encrypt master key
+      const newEncryptedMasterKey = await wrapMasterKey(this.masterKey, newKek);
+
+      // 4. Send to backend
+      await api.post('/users/change-password', {
+        current_password: currentPassword,
+        new_password: newPassword,
+        new_salt: newSaltHex,
+        new_encrypted_master_key: newEncryptedMasterKey
+      });
+    },
+    async recoverAccount(email, recoveryCode, newPassword) {
+        await sodium.ready;
+        
+        // 1. Get encrypted blob from server
+        const initResponse = await api.post('/auth/recovery/init', { email });
+        const { encrypted_master_key_recovery, salt } = initResponse.data;
+        
+        if (!encrypted_master_key_recovery) {
+            throw new Error("Recovery not available for this account.");
+        }
+
+        // 2. Derive Recovery KEK locally
+        const saltBytes = sodium.from_hex(salt);
+        const recoveryKek = await deriveKeyFromRecoveryCode(recoveryCode, saltBytes);
+
+        // 3. Decrypt Master Key
+        let masterKey;
+        try {
+            masterKey = await unwrapMasterKey(encrypted_master_key_recovery, recoveryKek);
+        } catch (e) {
+            throw new Error("Invalid recovery code.");
+        }
+
+        // 4. Prepare new password data
+        const newSalt = generateSalt();
+        const newSaltHex = sodium.to_hex(newSalt);
+        const newKek = await deriveKeyFromPassword(newPassword, newSalt);
+        const newEncryptedMasterKey = await wrapMasterKey(masterKey, newKek);
+        
+        // 5. Calculate recovery hash for proof
+        const recoveryHash = await hashRecoveryCode(recoveryCode);
+
+        // 6. Send reset request
+        await api.post('/auth/recovery/finish', {
+            email: email,
+            recovery_hash: recoveryHash,
+            new_password: newPassword,
+            new_salt: newSaltHex,
+            new_encrypted_master_key: newEncryptedMasterKey
+        });
+        
+        return true;
+    }
   },
 })

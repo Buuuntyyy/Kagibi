@@ -139,14 +139,23 @@ const handleUpdatePassword = async () => {
     alert("Les nouveaux mots de passe ne correspondent pas.")
     return
   }
-  // TODO: Implement backend call
-  alert("La fonctionnalité de changement de mot de passe sera implémentée prochainement.")
-  console.log('Update password requested')
   
-  // Reset sensitive fields
-  passwordForm.value.current = ''
-  passwordForm.value.new = ''
-  passwordForm.value.confirm = ''
+  try {
+    await authStore.updatePassword(passwordForm.value.current, passwordForm.value.new)
+    alert("Mot de passe mis à jour avec succès !")
+    
+    // Reset sensitive fields
+    passwordForm.value.current = ''
+    passwordForm.value.new = ''
+    passwordForm.value.confirm = ''
+  } catch (error) {
+    console.error("Failed to update password:", error)
+    if (error.response && error.response.data && error.response.data.error) {
+        alert("Erreur: " + error.response.data.error)
+    } else {
+        alert("Erreur lors de la mise à jour du mot de passe.")
+    }
+  }
 }
 </script>
 
