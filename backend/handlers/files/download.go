@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"safercloud/backend/pkg"
+	"safercloud/backend/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -35,7 +36,13 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 
 	// Construit le chemin physique vers le fichier dans le dossier "uploads"
 	// Utilise le chemin stocké en base de données (file.Path) et l'ID utilisateur
-	filePath := filepath.Join("uploads", userIDStr, file.Path)
+	userRoot := filepath.Join("uploads", userIDStr)
+	filePath, err := utils.SecureJoin(userRoot, file.Path)
+	if err != nil {
+		log.Printf("Security Alert: Path traversal in download: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Chemin de fichier invalide"})
+		return
+	}
 
 	// Vérifie si le fichier existe physiquement avant de tenter de le servir
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {

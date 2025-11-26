@@ -46,7 +46,7 @@ func main() {
 	router.Use(cors.New(config))
 
 	router.Use(middleware.SecureHeaders())
-	router.Use(middleware.RateLimiter())
+	router.Use(middleware.RateLimitMiddleware())
 
 	redisAddr := os.Getenv("REDIS_URL")
 	if redisAddr == "" {
@@ -91,6 +91,7 @@ func main() {
 			fileRoutes.DELETE("/file/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db) })
 			fileRoutes.DELETE("/folder/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db) })
 			fileRoutes.POST("/move", func(c *gin.Context) { files.MoveHandler(c, db) })
+			fileRoutes.POST("/rename", func(c *gin.Context) { files.RenameHandler(c, db) })
 			fileRoutes.GET("/download/:fileID", func(c *gin.Context) { files.DownloadFileHandler(c, db) })
 		}
 

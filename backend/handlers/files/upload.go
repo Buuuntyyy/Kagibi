@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"safercloud/backend/pkg"
+	"safercloud/backend/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -45,13 +46,29 @@ func UploadHandler(c *gin.Context, db *bun.DB) {
 
 	// Préparation des chemins
 	fullPathDB := filepath.ToSlash(filepath.Join(path, fileHeader.Filename))
-	userUploadDir := filepath.Join("uploads", userIDStr, path)
+	
+	userRoot := filepath.Join("uploads", userIDStr)
+	
+	// Sécurisation du chemin du dossier
+	userUploadDir, err := utils.SecureJoin(userRoot, path)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chemin invalide"})
+		return
+	}
 
 	if err := os.MkdirAll(userUploadDir, 0755); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user upload directory"})
 		return
 	}
-	diskPath := filepath.Join(userUploadDir, fileHeader.Filename)
+	
+	// Sécurisation du chemin du fichier final
+	// On utilise SecureJoin sur le dossier upload sécurisé + le nom du fichier
+	// Attention: fileHeader.Filename peut contenir des ".."
+	diskPath, err := utils.SecureJoin(userUploadDir, fileHeader.Filename)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nom de fichier invalide"})
+		return
+	}
 
 	// LOGIQUE D'ASSEMBLAGE DES MORCEAUX
 	var flags int

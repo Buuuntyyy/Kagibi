@@ -12,6 +12,9 @@ const ARGON2_OPSLIMIT = 4; // 4 passes, recommandation OSWASP
 export const CHUNK_SIZE = 1 * 1024 * 1024; // 1 MB par chunk pour le traitement en worker
 export const ENCRYPTED_CHUNK_SIZE = CHUNK_SIZE + SALT_LENGTH + IV_LENGTH; // Taille estimée après chiffrement
 
+/**
+ * Génère une clé maître AES-GCM 256 bits.
+ */
 export async function generateMasterKey() {
     return window.crypto.subtle.generateKey(
         {
@@ -23,6 +26,9 @@ export async function generateMasterKey() {
     );
 }
 
+/**
+ * Emballe (chiffre) la clé maître avec la KEK dérivée du mot de passe.
+ */
 export async function wrapMasterKey(masterKey, kek) {
     const rawKeyData = await window.crypto.subtle.exportKey("raw", masterKey);
     const iv = window.crypto.getRandomValues(new Uint8Array(IV_LENGTH));
@@ -42,6 +48,9 @@ export async function wrapMasterKey(masterKey, kek) {
     return sodium.to_base64(combined);
 }
 
+/** 
+ * Déballe (déchiffre) la clé maître avec la KEK dérivée du mot de passe.
+ */
 export async function unwrapMasterKey(wrappedKeyBase64, kek) {
     const combined = sodium.from_base64(wrappedKeyBase64);
     const iv = combined.slice(0, IV_LENGTH);
@@ -60,7 +69,7 @@ export async function unwrapMasterKey(wrappedKeyBase64, kek) {
         "raw",
         rawKeyData,
         { name: "AES-GCM" },
-        true,
+        false,
         ["encrypt", "decrypt"]
     );
 }

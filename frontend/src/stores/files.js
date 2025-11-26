@@ -162,6 +162,19 @@ export const useFileStore = defineStore('files', {
     },
     async moveItem(itemId, type, destinationPath) {
       await this.moveItems([{ id: itemId, type: type }], destinationPath)
+    },
+    async renameItem(id, type, newName) {
+      try {
+        await api.post('/files/rename', {
+          id: id,
+          type: type,
+          new_name: newName
+        })
+        this.fetchItems(this.currentPath)
+      } catch (error) {
+        console.error('Error renaming item:', error)
+        throw error
+      }
     }
   },
 })

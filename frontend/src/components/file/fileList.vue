@@ -21,10 +21,13 @@
         <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" />
       </div>
       <div class="toolbar-right">
-        <button @click="downloadSelectedFiles" :disabled="selectedFiles.length === 0" class="btn-download">
+        <button @click="renameSelectedItem" :disabled="selectedItems.length !== 1" class="btn-rename">
+          Renommer
+        </button>
+        <button @click="downloadSelectedFiles" :disabled="selectedItems.length === 0" class="btn-download">
           Télécharger
         </button>
-        <button @click="deleteSelectedItems" :disabled="selectedFiles.length === 0" class="btn-delete">
+        <button @click="deleteSelectedItems" :disabled="selectedItems.length === 0" class="btn-delete">
           Supprimer
         </button>
       </div>
@@ -69,7 +72,9 @@
       <!-- Folders -->
       <div v-for="folder in fileStore.folders" :key="folder.ID" 
            class="list-item folder-item" 
-           @click="openFolder(folder.Name)"
+           :class="{ selected: isSelected(folder, 'folder') }"
+           @click="selectItem(folder, 'folder', $event)"
+           @dblclick="openFolder(folder.Name)"
            draggable="true"
            @dragstart="onDragStart(folder, 'folder', $event)"
            @drop.stop="onDropOnFolder(folder, $event)"
@@ -81,8 +86,8 @@
       <!-- Files -->
       <div v-for="file in fileStore.files" :key="file.ID" 
           class="list-item"
-          :class="{ selected: isSelected(file) }"
-          @click="selectFile(file, $event)"
+          :class="{ selected: isSelected(file, 'file') }"
+          @click="selectItem(file, 'file', $event)"
           @dblclick="downloadFile(file)"
           draggable="true"
           @dragstart="onDragStart(file, 'file', $event)">
@@ -103,7 +108,7 @@ import { useAuthStore } from '../../stores/auth'
 const router = useRouter()
 const authStore = useAuthStore()
 const fileStore = useFileStore()
-const selectedFiles = ref([])
+const selectedItems = ref([])
 const fileInput = ref(null)
 const isDragging = ref(false)
 
@@ -126,7 +131,7 @@ const pathSegments = computed(() => {
 
 const navigateToPath = (path) => {
   if (path === fileStore.currentPath) return
-  selectedFiles.value = []
+  selectedItems.value = []
   fileStore.fetchItems(path)
 }
 
@@ -134,59 +139,93 @@ onMounted(() => {
   fileStore.fetchItems('/')
 })
 
-const selectFile = (file) => {
-  const isSelected = selectedFiles.value.some(f => f.ID === file.ID);
+const selectItem = (item, type, event) => {
+  const isSelected = selectedItems.value.some(i => i.ID === item.ID && i.type === type);
+  const itemWithType = { ...item, type };
+  
   if (!event.ctrlKey && !event.metaKey) { // si ctrl ou cmd n'est pas enfoncé
-    selectedFiles.value = isSelected ? [] : [file]; // Select only this file
+    selectedItems.value = isSelected ? [] : [itemWithType]; // Select only this item
   } else { // si ctrl ou cmd est enfoncé
     if (isSelected) {
-      selectedFiles.value = selectedFiles.value.filter(f => f.ID !== file.ID); // Deselect file
+      selectedItems.value = selectedItems.value.filter(i => !(i.ID === item.ID && i.type === type)); // Deselect item
     } else {
-      selectedFiles.value.push(file); // Add to selection
+      selectedItems.value.push(itemWithType); // Add to selection
     }
   }
 }
 
 // Helper pour vérifier si un item est sélectionné (utile pour le template)
-const isSelected = (file) => {
-  return selectedFiles.value.some(f => f.ID === file.ID);
+const isSelected = (item, type) => {
+  return selectedItems.value.some(i => i.ID === item.ID && i.type === type);
 }
 
 const openFolder = (folderName) => {
-  selectedFiles.value = [] // Deselect file when navigating
+  selectedItems.value = [] // Deselect items when navigating
   fileStore.navigateTo(folderName)
 }
 
 const goUp = () => {
   if (fileStore.currentPath !== '/') {
-    selectedFiles.value = [] // Deselect file when navigating up
+    selectedItems.value = [] // Deselect items when navigating up
     fileStore.navigateUp()
   }
 }
 
 const downloadSelectedFiles = () => {
-  if (selectedFiles.value.length === 0) return;
+  const files = selectedItems.value.filter(i => i.type === 'file');
+  if (files.length === 0) return;
 
-  if (selectedFiles.value.length === 1) {
-    const file = selectedFiles.value[0];
+  if (files.length === 1) {
+    const file = files[0];
     fileStore.downloadFile(file.ID, file.Name);
   } else {
     // Logic for downloading multiple files, e.g., zipping them first
     alert("Le téléchargement de plusieurs fichiers en une fois (ex: zip) n'est pas encore implémenté. Les fichiers seront téléchargés individuellement.");
-    selectedFiles.value.forEach(file => {
+    files.forEach(file => {
       fileStore.downloadFile(file.ID, file.Name);
     });
   }
 }
 
 const deleteSelectedItems = async () => {
-  if (selectedFiles.value.length === 0) return;
+  if (selectedItems.value.length === 0) return;
 
-  const confirmDelete = confirm(`Êtes-vous sûr de vouloir supprimer les ${selectedFiles.value.length} élément(s) sélectionné(s) ?`);
+  const confirmDelete = confirm(`Êtes-vous sûr de vouloir supprimer les ${selectedItems.value.length} élément(s) sélectionné(s) ?`);
   if (confirmDelete) {
-    const fileIDs = selectedFiles.value.map(file => file.ID);
-    await fileStore.deleteFiles(fileIDs);
-    selectedFiles.value = [] // Clear selection after deletion
+    const fileIDs = selectedItems.value.filter(i => i.type === 'file').map(i => i.ID);
+    const folderIDs = selectedItems.value.filter(i => i.type === 'folder').map(i => i.ID);
+    
+    if (fileIDs.length > 0) {
+        await fileStore.deleteFiles(fileIDs);
+    }
+    
+    // Delete folders one by one for now as bulk delete folders is not implemented
+    for (const folderID of folderIDs) {
+        await api.delete(`/files/folder/${folderID}`);
+    }
+    
+    // Refresh list if we deleted folders manually (deleteFiles already refreshes)
+    if (folderIDs.length > 0 && fileIDs.length === 0) {
+        fileStore.fetchItems(fileStore.currentPath);
+    }
+    
+    selectedItems.value = [] // Clear selection after deletion
+  }
+}
+
+const renameSelectedItem = async () => {
+  if (selectedItems.value.length !== 1) return;
+  
+  const item = selectedItems.value[0];
+  const newName = prompt("Entrez le nouveau nom :", item.Name);
+  
+  if (newName && newName !== item.Name) {
+    try {
+      await fileStore.renameItem(item.ID, item.type, newName);
+      selectedItems.value = []; // Clear selection
+    } catch (error) {
+      alert("Erreur lors du renommage : " + (error.response?.data?.error || error.message));
+    }
   }
 }
 
@@ -255,11 +294,11 @@ const onDragStart = (item, type, event) => {
   
   let itemsToDrag = []
   
-  // Check if the dragged item is in the selection (only for files for now as folders are not selectable)
-  const isSelected = type === 'file' && selectedFiles.value.some(f => f.ID === item.ID)
+  // Check if the dragged item is in the selection
+  const isSelected = selectedItems.value.some(i => i.ID === item.ID && i.type === type)
   
-  if (isSelected && selectedFiles.value.length > 0) {
-      itemsToDrag = selectedFiles.value.map(f => ({ id: f.ID, type: 'file' }))
+  if (isSelected && selectedItems.value.length > 0) {
+      itemsToDrag = selectedItems.value.map(i => ({ id: i.ID, type: i.type }))
   } else {
       itemsToDrag = [{ id: item.ID, type: type }]
   }
@@ -474,6 +513,18 @@ button {
 .btn-add-file {
   background-color: var(--primary-color);
   color: white;
+}
+
+.btn-rename {
+  background-color: #ffc107;
+  color: #333;
+  margin-right: 0.5rem;
+}
+
+.btn-rename:disabled {
+  background-color: #e0e0e0;
+  color: #999;
+  cursor: not-allowed;
 }
 
 .btn-download {

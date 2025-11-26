@@ -3,6 +3,8 @@ package auth
 import (
 	"net/http"
 	"safercloud/backend/pkg"
+	"log"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -26,20 +28,20 @@ type RegisterRequest struct {
 func RegisterHandler(c *gin.Context, db *bun.DB) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Données invalides"})
 		return
 	}
 
 	// Valide les données
 	if err := validate.Struct(req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Validation échouée"})
 		return
 	}
 
 	// Hache le mot de passe
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Impossible de hasher le mot de passe"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur interne"})
 		return
 	}
 
@@ -56,7 +58,12 @@ func RegisterHandler(c *gin.Context, db *bun.DB) {
 
 	// Crée l'utilisateur
 	if err := pkg.CreateUser(db, user); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("Error creating user: %v", err)
+		if strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "duplicate key") {
+			c.JSON(http.StatusConflict, gin.H{"error": "Cet email est déjà utilisé"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la création du compte"})
 		return
 	}
 
