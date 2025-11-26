@@ -9,6 +9,9 @@ export const useFileStore = defineStore('files', {
     files: [],
     folders: [],
     currentPath: '/',
+    uploadProgress: 0,
+    isUploading: false,
+    uploadingFileName: '',
   }),
   actions: {
     async fetchItems(path) {
@@ -73,6 +76,10 @@ export const useFileStore = defineStore('files', {
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
       let chunkIndex = 0;
       let offset = 0;
+      this.isUploading = true;
+      this.uploadProgress = 0;
+      this.uploadingFileName = file.name;
+
       try {
         while(offset < file.size) {
           const chunkBlob = file.slice(offset, offset + CHUNK_SIZE);
@@ -99,14 +106,23 @@ export const useFileStore = defineStore('files', {
           offset += CHUNK_SIZE;
           chunkIndex += 1;
 
+          this.uploadProgress = Math.round((chunkIndex / totalChunks) * 100);
           console.log(`Uploaded chunk ${chunkIndex} / ${totalChunks}`);
         } 
 
         this.fetchItems(this.currentPath)
+        
+        // Reset progress after a short delay
+        setTimeout(() => {
+            this.isUploading = false;
+            this.uploadProgress = 0;
+        }, 1000);
 
       } catch (error) {
         console.error("Erreur upload:", error);
         alert("Erreur lors de l'envoi du fichier au serveur.");
+        this.isUploading = false;
+        this.uploadProgress = 0;
       }
     },
     async createFolder(folderName) {

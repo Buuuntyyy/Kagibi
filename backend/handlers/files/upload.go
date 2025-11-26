@@ -124,5 +124,4 @@ func UploadHandler(c *gin.Context, db *bun.DB) {
 	} else {
 		c.JSON(http.StatusOK, gin.H{"message": "Chunk uploaded successfully", "chunk_index": chunkIndex})
 	}
-
 }
