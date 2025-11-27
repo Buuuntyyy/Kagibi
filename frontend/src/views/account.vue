@@ -87,6 +87,39 @@
           </form>
         </div>
       </div>
+
+      <div class="card profile-card"> <!-- J'utilise profile-card pour qu'elle prenne toute la largeur -->
+        <div class="card-header">
+          <h3>Préférences d'Interface</h3>
+        </div>
+        <div class="card-body">
+          <div class="prefs-grid">
+            
+            <div class="pref-item">
+              <div class="pref-info">
+                <label class="pref-label">Menu Contextuel (Clic-droit)</label>
+                <span class="pref-desc">Affiche un menu d'actions rapides au clic-droit sur un fichier.</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" v-model="preferenceStore.enableContextMenu">
+                <span class="slider round"></span>
+              </label>
+            </div>
+
+            <div class="pref-item">
+              <div class="pref-info">
+                <label class="pref-label">Barre d'actions</label>
+                <span class="pref-desc">Affiche la barre d'outils (boutons Renommer, Supprimer...) au dessus de la liste.</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" v-model="preferenceStore.showToolBar">
+                <span class="slider round"></span>
+              </label>
+            </div>
+
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -95,9 +128,11 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { usePreferencesStore } from '../stores/preferences'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const preferenceStore = usePreferencesStore()
 
 const usernameForm = ref({
   newName: ''
@@ -291,5 +326,96 @@ const handleUpdatePassword = async () => {
 
 .btn-primary:hover {
   background-color: #3aa876;
+}
+
+.prefs-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.pref-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.pref-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.pref-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.pref-label {
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 0.25rem;
+}
+
+.pref-desc {
+  font-size: 0.85rem;
+  color: #888;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.switch input { 
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: var(--primary-color, #42b983);
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px var(--primary-color, #42b983);
+}
+
+input:checked + .slider:before {
+  transform: translateX(26px);
+}
+
+.slider.round {
+  border-radius: 34px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
 }
 </style>
