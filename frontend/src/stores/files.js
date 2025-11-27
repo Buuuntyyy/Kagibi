@@ -12,8 +12,12 @@ export const useFileStore = defineStore('files', {
     uploadProgress: 0,
     isUploading: false,
     uploadingFileName: '',
+    searchQuery: '',
   }),
   actions: {
+    setSearchQuery(query) {
+      this.searchQuery = query
+    },
     async fetchItems(path) {
       try {
         const safePath = path.startsWith('/') ? path : `/${path}`
