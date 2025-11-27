@@ -82,7 +82,15 @@
            @dragover.prevent="onFolderDragOver"
            @dragleave="onFolderDragLeave">
         <span class="icon">📁</span>
-        <span class="name">{{ folder.Name }}</span>
+        <span class="name">
+          {{ folder.Name }}
+          <span v-if="folder.Tags && folder.Tags.length" class="tags-container">
+            <span v-for="tag in folder.Tags" :key="tag" class="tag-badge" :style="getTagStyle(tag)">
+              {{ tag }}
+              <span class="remove-tag" @click.stop="removeTag(folder, 'folder', tag)">×</span>
+            </span>
+          </span>
+        </span>
       </div>
       <!-- Files -->
       <div v-for="file in fileStore.files" :key="file.ID" 
@@ -91,10 +99,17 @@
           @click="selectItem(file, 'file', $event)"
           @dblclick="downloadFile(file)"
           @contextmenu.prevent="openContextMenu($event, file, 'file')"
-          draggable="true"
-          @dragstart="onDragStart(file, 'file', $event)">
+      >
         <span class="icon">📄</span>
-        <span class="name">{{ file.Name }}</span>
+        <span class="name">
+          {{ file.Name }}
+          <span v-if="file.Tags && file.Tags.length" class="tags-container">
+            <span v-for="tag in file.Tags" :key="tag" class="tag-badge" :style="getTagStyle(tag)">
+              {{ tag }}
+              <span class="remove-tag" @click.stop="removeTag(file, 'file', tag)">×</span>
+            </span>
+          </span>
+        </span>
         <span class="size">{{ formatSize(file.Size) }}</span>
       </div>
     </div>
@@ -108,10 +123,27 @@
       <div class="menu-item" @click="handleContextAction('rename')">
         ✏️ Renommer
       </div>
+      <div class="menu-item" @click="handleContextAction('tags')">
+        🏷️ Tags
+      </div>
       <div class="menu-item delete" @click="handleContextAction('delete')">
         🗑️ Supprimer
       </div>
     </div>
+
+    <InputDialog 
+      v-model:isOpen="inputDialog.isOpen"
+      :title="inputDialog.title"
+      :defaultValue="inputDialog.defaultValue"
+      :placeholder="inputDialog.placeholder"
+      @confirm="handleInputConfirm"
+      @cancel="handleInputCancel"
+    />
+    <TagDialog 
+      v-model:isOpen="tagDialog.isOpen"
+      :initialTags="tagDialog.initialTags"
+      @confirm="handleTagConfirm"
+    />
   </div>
 </template>
 
@@ -121,14 +153,96 @@ import { useRouter } from 'vue-router'
 import { useFileStore } from '../../stores/files'
 import { useAuthStore } from '../../stores/auth'
 import { usePreferencesStore } from '../../stores/preferences'
+import { useTagStore } from '../../stores/tags'
+import InputDialog from '../InputDialog.vue'
+import TagDialog from '../TagDialog.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const fileStore = useFileStore()
 const preferenceStore = usePreferencesStore()
+const tagStore = useTagStore()
 const selectedItems = ref([])
 const fileInput = ref(null)
 const isDragging = ref(false)
+
+const inputDialog = ref({
+  isOpen: false,
+  title: '',
+  defaultValue: '',
+  placeholder: '',
+  resolve: null
+})
+
+const tagDialog = ref({
+  isOpen: false,
+  initialTags: [],
+  resolve: null
+})
+
+const openInputDialog = (title, defaultValue = '', placeholder = '') => {
+  return new Promise((resolve) => {
+    inputDialog.value = {
+      isOpen: true,
+      title,
+      defaultValue,
+      placeholder,
+      resolve
+    }
+  })
+}
+
+const handleInputConfirm = (value) => {
+  if (inputDialog.value.resolve) {
+    inputDialog.value.resolve(value)
+  }
+  inputDialog.value.resolve = null
+}
+
+const handleInputCancel = () => {
+  if (inputDialog.value.resolve) {
+    inputDialog.value.resolve(null)
+  }
+  inputDialog.value.resolve = null
+}
+
+const openTagDialog = (initialTags) => {
+  return new Promise((resolve) => {
+    tagDialog.value = {
+      isOpen: true,
+      initialTags,
+      resolve
+    }
+  })
+}
+
+const handleTagConfirm = (tags) => {
+  if (tagDialog.value.resolve) {
+    tagDialog.value.resolve(tags)
+  }
+  tagDialog.value.resolve = null
+}
+
+const getTagStyle = (tagName) => {
+    const tag = tagStore.tags.find(t => t.name === tagName)
+    if (tag) {
+        return {
+            backgroundColor: tag.color,
+            color: getContrastColor(tag.color),
+            borderColor: tag.color
+        }
+    }
+    return {}
+}
+
+const getContrastColor = (hexcolor) => {
+    if (!hexcolor || hexcolor[0] !== '#') return 'black';
+    var r = parseInt(hexcolor.substr(1,2),16);
+    var g = parseInt(hexcolor.substr(3,2),16);
+    var b = parseInt(hexcolor.substr(5,2),16);
+    var yiq = ((r*299)+(g*587)+(b*114))/1000;
+    return (yiq >= 128) ? 'black' : 'white';
+}
 
 const contextMenu = ref({
   visible: false,
@@ -166,6 +280,7 @@ const navigateToPath = (path) => {
 
 onMounted(() => {
   fileStore.fetchItems('/')
+  tagStore.fetchTags()
   document.addEventListener('click', closeContextMenu)
 })
 
@@ -210,6 +325,9 @@ const handleContextAction = (action) => {
       break
     case 'rename':
       renameSelectedItem()
+      break
+    case 'tags':
+      updateTags()
       break
     case 'delete':
       deleteSelectedItems()
@@ -296,7 +414,7 @@ const renameSelectedItem = async () => {
   if (selectedItems.value.length !== 1) return;
   
   const item = selectedItems.value[0];
-  const newName = prompt("Entrez le nouveau nom :", item.Name);
+  const newName = await openInputDialog("Entrez le nouveau nom :", item.Name);
   
   if (newName && newName !== item.Name) {
     try {
@@ -304,6 +422,35 @@ const renameSelectedItem = async () => {
       selectedItems.value = []; // Clear selection
     } catch (error) {
       alert("Erreur lors du renommage : " + (error.response?.data?.error || error.message));
+    }
+  }
+}
+
+const removeTag = async (item, type, tagToRemove) => {
+  const currentTags = item.Tags || [];
+  const newTags = currentTags.filter(t => t !== tagToRemove);
+  try {
+    await fileStore.updateTags(item.ID, type, newTags);
+  } catch (error) {
+    console.error(error);
+    alert("Erreur lors de la suppression du tag.");
+  }
+}
+
+const updateTags = async () => {
+  if (selectedItems.value.length !== 1) return;
+  
+  const item = selectedItems.value[0];
+  const currentTags = item.Tags || [];
+  
+  const newTags = await openTagDialog(currentTags);
+  
+  if (newTags !== null) {
+    try {
+      await fileStore.updateTags(item.ID, item.type, newTags);
+      selectedItems.value = []; // Clear selection
+    } catch (error) {
+      alert("Erreur lors de la mise à jour des tags : " + (error.response?.data?.error || error.message));
     }
   }
 }
@@ -325,7 +472,7 @@ const handleFileUpload = async (event) => {
 }
 
 const createNewFolder = async () => {
-  const folderName = prompt("Entrez le nom du nouveau dossier :")
+  const folderName = await openInputDialog("Entrez le nom du nouveau dossier :")
   if (folderName) {
     await fileStore.createFolder(folderName)
   }
@@ -830,11 +977,29 @@ button {
 .menu-item.delete {
   color: #dc3545;
   border-top: 1px solid #eee;
-  margin-top: 5px;
-  padding-top: 8px;
 }
 
-.menu-item.delete:hover {
-  background-color: #f8d7da;
+.tag-badge {
+  background-color: #e0e0e0;
+  color: #333;
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.remove-tag {
+  cursor: pointer;
+  color: #666;
+  font-weight: bold;
+  line-height: 1;
+  display: inline-block;
+}
+
+.remove-tag:hover {
+  color: #dc3545;
 }
 </style>

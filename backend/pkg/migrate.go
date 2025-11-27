@@ -11,7 +11,7 @@ func Migrate(db *bun.DB) error {
 	ctx := context.Background()
 
 	// Crée les tables si elles n'existent pas
-	models := []interface{}{(*User)(nil), (*File)(nil), (*Folder)(nil)}
+	models := []interface{}{(*User)(nil), (*File)(nil), (*Folder)(nil), (*Tag)(nil)}
 
 	for _, model := range models {
 		_, err := db.NewSelect().Model(model).Exec(ctx)
@@ -24,9 +24,5 @@ func Migrate(db *bun.DB) error {
 		}
 	}
 
-	_, err := db.Exec(`
-		CREATE INDEX IF NOT EXISTS idx_files_user_id ON files(user_id);
-		CREATE INDEX IF NOT EXISTS idx_folders_user_id ON folders(user_id);
-	`)
-	return err
+	return nil
 }

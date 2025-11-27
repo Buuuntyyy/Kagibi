@@ -24,6 +24,7 @@ type File struct {
 	Size      int64     `bun:"size,notnull"`       // Taille en octets
 	MimeType  string    `bun:"mime_type,notnull"`  // Ex: "application/pdf"
 	UserID    int64     `bun:"user_id,notnull"`    // Propriétaire du fichier
+	Tags      []string  `bun:"tags,array"`         // Tags
 	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 }
@@ -33,5 +34,13 @@ type Folder struct {
 	Name      string    `bun:"name,notnull"`
 	Path      string    `bun:"path,notnull"`       // Chemin relatif (ex: "/dossier1")
 	UserID    int64     `bun:"user_id,notnull"`
+	Tags      []string  `bun:"tags,array"`         // Tags
 	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+}
+
+type Tag struct {
+	ID     int64  `bun:"id,pk,autoincrement" json:"id"`
+	UserID int64  `bun:"user_id,notnull" json:"user_id"`
+	Name   string `bun:"name,notnull" json:"name"`
+	Color  string `bun:"color,notnull" json:"color"` // Code Hex (ex: #FF0000)
 }
