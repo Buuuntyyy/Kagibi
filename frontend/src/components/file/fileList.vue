@@ -1,7 +1,4 @@
 <template>
-  <div class="dashboard-header">
-    <h2 class="dashboard-title">Dashboard</h2>
-  </div>
   <div class="file-list-container"
        @dragover.prevent="onDragOver"
        @dragleave.prevent="onDragLeave"
@@ -68,9 +65,18 @@
       </div>
     </div>
 
+    <div class="list-header">
+      <span class="header-icon"></span>
+      <span class="header-name">Nom</span>
+      <span class="header-tags">Tags</span>
+      <span class="header-date">Créé le</span>
+      <span class="header-date">Modifié le</span>
+      <span class="header-size">Taille</span>
+    </div>
+
     <div class="list-area">
       <!-- Folders -->
-      <div v-for="folder in fileStore.folders" :key="folder.ID" 
+      <div v-for="folder in filteredFolders" :key="folder.ID" 
            class="list-item folder-item" 
            :class="{ selected: isSelected(folder, 'folder') }"
            @click="selectItem(folder, 'folder', $event)"
@@ -82,8 +88,8 @@
            @dragover.prevent="onFolderDragOver"
            @dragleave="onFolderDragLeave">
         <span class="icon">📁</span>
-        <span class="name">
-          {{ folder.Name }}
+        <span class="name">{{ folder.Name }}</span>
+        <span class="tags-column">
           <span v-if="folder.Tags && folder.Tags.length" class="tags-container">
             <span v-for="tag in folder.Tags" :key="tag" class="tag-badge" :style="getTagStyle(tag)">
               {{ tag }}
@@ -91,9 +97,12 @@
             </span>
           </span>
         </span>
+        <span class="date-column"></span>
+        <span class="date-column">{{ formatDate(folder.CreatedAt) }}</span>
+        <span class="size">-</span>
       </div>
       <!-- Files -->
-      <div v-for="file in fileStore.files" :key="file.ID" 
+      <div v-for="file in filteredFiles" :key="file.ID" 
           class="list-item"
           :class="{ selected: isSelected(file, 'file') }"
           @click="selectItem(file, 'file', $event)"
@@ -101,8 +110,8 @@
           @contextmenu.prevent="openContextMenu($event, file, 'file')"
       >
         <span class="icon">📄</span>
-        <span class="name">
-          {{ file.Name }}
+        <span class="name">{{ file.Name }}</span>
+        <span class="tags-column">
           <span v-if="file.Tags && file.Tags.length" class="tags-container">
             <span v-for="tag in file.Tags" :key="tag" class="tag-badge" :style="getTagStyle(tag)">
               {{ tag }}
@@ -110,6 +119,8 @@
             </span>
           </span>
         </span>
+        <span class="date-column">{{ formatDate(file.CreatedAt) }}</span>
+        <span class="date-column">{{ formatDate(file.UpdatedAt) }}</span>
         <span class="size">{{ formatSize(file.Size) }}</span>
       </div>
     </div>
@@ -165,6 +176,18 @@ const tagStore = useTagStore()
 const selectedItems = ref([])
 const fileInput = ref(null)
 const isDragging = ref(false)
+
+const filteredFolders = computed(() => {
+  if (!fileStore.searchQuery) return fileStore.folders
+  const query = fileStore.searchQuery.toLowerCase()
+  return fileStore.folders.filter(folder => folder.Name.toLowerCase().includes(query))
+})
+
+const filteredFiles = computed(() => {
+  if (!fileStore.searchQuery) return fileStore.files
+  const query = fileStore.searchQuery.toLowerCase()
+  return fileStore.files.filter(file => file.Name.toLowerCase().includes(query))
+})
 
 const inputDialog = ref({
   isOpen: false,
@@ -486,6 +509,12 @@ const formatSize = (bytes) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+const formatDate = (dateString) => {
+  if (!dateString) return '-'
+  const date = new Date(dateString)
+  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
 const closeUploadPopup = () => {
   fileStore.isUploading = false
 }
@@ -587,25 +616,22 @@ const onDropOnParent = async (event) => {
 <style scoped>
 .file-list-container {
   position: relative;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  background-color: var(--background-color);
-  height: 60vh;
-  width: 80vw;
+  background-color: var(--card-color);
+  height: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 }
 
 .path-banner {
   padding: 0.5rem 1rem;
-  background-color: var(--background-color);
+  background-color: var(--card-color);
   border-bottom: 1px solid #ccc;
   display: flex;
   justify-content: flex-start;
   align-items: center;
   gap: 1rem;
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
 }
 
 .back-arrow {
@@ -697,14 +723,26 @@ const onDropOnParent = async (event) => {
   padding: 0 1rem;
 }
 
+.list-header {
+  display: grid;
+  grid-template-columns: 40px 2fr 1fr 150px 150px 100px;
+  padding: 0.5rem;
+  font-weight: bold;
+  border-bottom: 1px solid #ccc;
+  background-color: var(--card-color);
+  align-items: center;
+}
+
 .list-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: 40px 2fr 1fr 150px 150px 100px;
   align-items: center;
   padding: 0.5rem;
   cursor: pointer;
   border-radius: 4px;
   transition: background-color 0.2s;
   user-select: none;
+  border-bottom: 1px solid #ccc;
 }
 
 .list-item:hover {
@@ -713,14 +751,20 @@ const onDropOnParent = async (event) => {
 
 .list-item .icon {
   margin-right: 0.5rem;
+  display: flex;
+  justify-content: center;
 }
 .name {
-  flex-grow: 1;
   text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 1rem;
 }
 .size {
-  color: #666;
+  color: #5c5c5c;
   font-size: 0.9em;
+  text-align: right;
 }
 
 .list-item.selected {
@@ -771,7 +815,7 @@ button {
 .breadcrumbs {
   display: flex;
   align-items: center;
-  font-size: 1rem;
+  font-size: 1.5rem;
 }
 
 .breadcrumb-segment {
@@ -1001,5 +1045,16 @@ button {
 
 .remove-tag:hover {
   color: #dc3545;
+}
+
+.tags-column {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.date-column {
+  font-size: 0.9em;
+  color: #666;
 }
 </style>
