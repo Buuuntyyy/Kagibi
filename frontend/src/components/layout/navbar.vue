@@ -1,6 +1,7 @@
 <template>
   <nav>
     <router-link to="/" class="brand">SaferCloud</router-link>
+    <SearchBar v-if="authStore.isAuthenticated" />
     <div class="nav-links">
       <button @click="themeStore.toggleTheme" class="theme-toggle">
         {{ themeStore.theme === 'light' ? '🌙' : '☀️' }}
@@ -18,6 +19,7 @@
 import { useAuthStore } from '../../stores/auth'
 import { useThemeStore } from '../../stores/theme'
 import { useRouter } from 'vue-router'
+import SearchBar from '../bar/searchBar.vue'
 
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
@@ -31,19 +33,19 @@ const logout = () => {
 
 <style scoped>
 nav {
-  height: 5vh;
+  height: 3vh;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  background-color: var(--card-color);
+  background-color: var(--background-color);
   color: var(--main-text-color);
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 1000;
-  border-bottom: 1px solid var(--border-color);
+  /* border-bottom: 1px solid var(--border-color); */
 }
 
 .brand {
