@@ -9,10 +9,11 @@ import (
 	"safercloud/backend/pkg"
 	"safercloud/backend/utils"
 
-	"github.com/gin-gonic/gin"
-	"github.com/uptrace/bun"
 	"log"
 	"regexp"
+
+	"github.com/gin-gonic/gin"
+	"github.com/uptrace/bun"
 )
 
 var validNameRegex = regexp.MustCompile(`^[a-zA-Z0-9\s\-\._]+$`)
@@ -25,11 +26,13 @@ type RenameRequest struct {
 
 func RenameHandler(c *gin.Context, db *bun.DB) {
 	var req RenameRequest
+	// 1. Bind and validate input
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
 		return
 	}
 
+	// Validate new name
 	if !validNameRegex.MatchString(req.NewName) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid name"})
 		return
@@ -42,6 +45,7 @@ func RenameHandler(c *gin.Context, db *bun.DB) {
 	var oldPath string
 	var parentPath string
 
+	// 1. Get the item to rename
 	if req.Type == "file" {
 		file, err := pkg.GetFile(db, req.ID, userID)
 		if err != nil {
@@ -68,12 +72,27 @@ func RenameHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	var newPath string
+	if req.Type == "file" {
+		// Conserver l'extension originale
+		ext := filepath.Ext(oldPath)
+		// Si le nouveau nom n'a pas l'extension, on l'ajoute
+		if filepath.Ext(req.NewName) != ext {
+			req.NewName = req.NewName + ext
+		}
+	}
+
 	if parentPath == "/" || parentPath == "" {
 		newPath = "/" + req.NewName
 	} else {
 		newPath = parentPath + "/" + req.NewName
 	}
 
+	if newPath == oldPath {
+		c.JSON(http.StatusOK, gin.H{"message": "No changes made", "newName": req.NewName, "newPath": newPath})
+		return
+	}
+
+	// Check for name conflicts
 	if req.Type == "file" {
 		exists, _ := db.NewSelect().Model((*pkg.File)(nil)).Where("path = ? AND user_id = ?", newPath, userID).Exists(c.Request.Context())
 		if exists {
@@ -101,7 +120,7 @@ func RenameHandler(c *gin.Context, db *bun.DB) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to rename item on disk: " + err.Error()})
 		return
 	}
-
+	// 4. Update database records
 	ctx := c.Request.Context()
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
