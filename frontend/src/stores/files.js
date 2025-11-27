@@ -175,6 +175,19 @@ export const useFileStore = defineStore('files', {
         console.error('Error renaming item:', error)
         throw error
       }
+    },
+    async updateTags(id, type, tags) {
+      try {
+        await api.post('/files/tags', {
+          id: id,
+          type: type,
+          tags: tags
+        })
+        this.fetchItems(this.currentPath)
+      } catch (error) {
+        console.error('Error updating tags:', error)
+        throw error
+      }
     }
   },
 })

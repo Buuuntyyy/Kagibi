@@ -30,8 +30,8 @@ func getVisitor(ip string) *rate.Limiter {
 
 	v, exists := visitors[ip]
 	if !exists {
-		// Allow 5 requests per second with a burst of 10
-		limiter := rate.NewLimiter(5, 10)
+		// Allow 20 requests per second with a burst of 50
+		limiter := rate.NewLimiter(20, 50)
 		// Include lastSeen time
 		visitors[ip] = &visitor{limiter, time.Now()}
 		return limiter
@@ -60,6 +60,12 @@ func cleanupVisitors() {
 // RateLimitMiddleware is the Gin middleware function
 func RateLimitMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Skip rate limiting for OPTIONS requests (CORS preflight)
+		if c.Request.Method == "OPTIONS" {
+			c.Next()
+			return
+		}
+
 		ip := c.ClientIP()
 		limiter := getVisitor(ip)
 		if !limiter.Allow() {
