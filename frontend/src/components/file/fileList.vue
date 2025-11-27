@@ -13,8 +13,8 @@
         <span class="drag-text">Déposez vos fichiers ici</span>
       </div>
     </div>
-
-    <div class="toolbar">
+    
+    <div class="toolbar" v-if="preferenceStore.showToolBar">
       <div class="toolbar-left">
         <button @click="triggerFileInput" class="btn-add-file">Ajouter un fichier</button>
         <button @click="createNewFolder" class="btn-add-file">Créer un dossier</button>
@@ -75,6 +75,7 @@
            :class="{ selected: isSelected(folder, 'folder') }"
            @click="selectItem(folder, 'folder', $event)"
            @dblclick="openFolder(folder.Name)"
+           @contextmenu.prevent="openContextMenu($event, folder, 'folder')"
            draggable="true"
            @dragstart="onDragStart(folder, 'folder', $event)"
            @drop.stop="onDropOnFolder(folder, $event)"
@@ -89,6 +90,7 @@
           :class="{ selected: isSelected(file, 'file') }"
           @click="selectItem(file, 'file', $event)"
           @dblclick="downloadFile(file)"
+          @contextmenu.prevent="openContextMenu($event, file, 'file')"
           draggable="true"
           @dragstart="onDragStart(file, 'file', $event)">
         <span class="icon">📄</span>
@@ -96,21 +98,48 @@
         <span class="size">{{ formatSize(file.Size) }}</span>
       </div>
     </div>
+
+    <div v-if="contextMenu.visible" 
+         class="context-menu" 
+         :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }">
+      <div class="menu-item" @click="handleContextAction('download')" v-if="contextMenu.item.type === 'file'">
+        📥 Télécharger
+      </div>
+      <div class="menu-item" @click="handleContextAction('rename')">
+        ✏️ Renommer
+      </div>
+      <div class="menu-item delete" @click="handleContextAction('delete')">
+        🗑️ Supprimer
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFileStore } from '../../stores/files'
 import { useAuthStore } from '../../stores/auth'
+import { usePreferencesStore } from '../../stores/preferences'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const fileStore = useFileStore()
+const preferenceStore = usePreferencesStore()
 const selectedItems = ref([])
 const fileInput = ref(null)
 const isDragging = ref(false)
+
+const contextMenu = ref({
+  visible: false,
+  x: 0,
+  y: 0,
+  item: null
+})
+
+const closeContextMenu = () => {
+  contextMenu.value.visible = false
+}
 
 const pathSegments = computed(() => {
   const path = fileStore.currentPath
@@ -137,7 +166,57 @@ const navigateToPath = (path) => {
 
 onMounted(() => {
   fileStore.fetchItems('/')
+  document.addEventListener('click', closeContextMenu)
 })
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeContextMenu)
+})
+
+const openContextMenu = (event, item, type) => {
+  if (!preferenceStore.enableContextMenu) return;
+  if(!isSelected(item, type)) {
+    selectItem.value = [{...item, type}]
+  }
+  const menuWidth = 150; // Approximate width of context menu
+  const menuHeight = 100; // Approximate height of context menu
+  let x = event.clientX;
+  let y = event.clientY;
+
+  if (x + menuWidth > window.innerWidth) {
+    x -= menuWidth;
+  }
+  if (y + menuHeight > window.innerHeight) {
+    y -= menuHeight;
+  }
+
+  contextMenu.value = {
+    visible: true,
+    x: x,
+    y: y,
+    item: { ...item, type }
+  }
+}
+
+const handleContextAction = (action) => {
+  const item = contextMenu.value.item
+  if (!item) return;
+
+  switch (action){
+    case 'download':
+      if (item.type === 'file') {
+        fileStore.downloadFile(item.ID, item.Name, item.MimeType)
+      }
+      break
+    case 'rename':
+      renameSelectedItem()
+      break
+    case 'delete':
+      deleteSelectedItems()
+      break
+  }
+  closeContextMenu()
+}
 
 const selectItem = (item, type, event) => {
   const isSelected = selectedItems.value.some(i => i.ID === item.ID && i.type === type);
@@ -719,5 +798,43 @@ button {
 .drag-over-target {
   background-color: rgba(66, 185, 131, 0.2) !important;
   border: 2px dashed var(--primary-color, #42b983);
+}
+
+.context-menu {
+  position: fixed;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  z-index: 1000;
+  min-width: 150px;
+  padding: 5px 0;
+}
+
+.menu-item {
+  padding: 8px 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: #333;
+  transition: background-color 0.2s;
+  text-align: left;
+}
+
+.menu-item:hover {
+  background-color: #f0f0f0;
+}
+
+.menu-item.delete {
+  color: #dc3545;
+  border-top: 1px solid #eee;
+  margin-top: 5px;
+  padding-top: 8px;
+}
+
+.menu-item.delete:hover {
+  background-color: #f8d7da;
 }
 </style>
