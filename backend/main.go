@@ -8,6 +8,7 @@ import (
 	"safercloud/backend/handlers/auth"
 	"safercloud/backend/handlers/files"
 	"safercloud/backend/handlers/folders"
+	"safercloud/backend/handlers/tags"
 	"safercloud/backend/handlers/users"
 	"safercloud/backend/middleware"
 	"safercloud/backend/pkg"
@@ -92,6 +93,7 @@ func main() {
 			fileRoutes.DELETE("/folder/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db) })
 			fileRoutes.POST("/move", func(c *gin.Context) { files.MoveHandler(c, db) })
 			fileRoutes.POST("/rename", func(c *gin.Context) { files.RenameHandler(c, db) })
+			fileRoutes.POST("/tags", func(c *gin.Context) { files.UpdateTagsHandler(c, db) })
 			fileRoutes.GET("/download/:fileID", func(c *gin.Context) { files.DownloadFileHandler(c, db) })
 		}
 
@@ -99,6 +101,14 @@ func main() {
 		folderRoutes := protectedRoutes.Group("/folders")
 		{
 			folderRoutes.POST("/create", func(c *gin.Context) { folders.CreateHandler(c, db) })
+		}
+
+		// ROUTES TAGS
+		tagRoutes := protectedRoutes.Group("/tags")
+		{
+			tagRoutes.GET("/", tags.ListTagsHandler(db))
+			tagRoutes.POST("/", tags.CreateTagHandler(db))
+			tagRoutes.DELETE("/:id", tags.DeleteTagHandler(db))
 		}
 	}
 
