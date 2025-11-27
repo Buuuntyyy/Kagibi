@@ -44,8 +44,6 @@ body {
   background-color: var(--background-color);
   color: var(--main-text-color);
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
 }
@@ -92,10 +90,11 @@ button:focus-visible {
 }
 
 #app {
-  max-width: 90vw;
-  max-height: 90vh;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 
