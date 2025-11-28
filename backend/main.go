@@ -12,15 +12,29 @@ import (
 	"safercloud/backend/handlers/users"
 	"safercloud/backend/middleware"
 	"safercloud/backend/pkg"
+	"safercloud/backend/pkg/s3storage"
+	"safercloud/backend/pkg/workers"
 
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found")
+	}
+
+	// Initialize S3
+	if err := s3storage.InitS3(); err != nil {
+		log.Printf("Warning: S3 not configured: %v", err)
+	} else {
+		log.Println("S3 Storage initialized successfully")
+	}
 
 	// Initialise la connexion à la base de données
 	db := pkg.NewDB()
@@ -61,6 +75,9 @@ func main() {
 		log.Fatalf("Impossible de se connecter à Redis: %v", err)
 	}
 
+	// Start S3 Worker
+	workers.StartWorker(redisClient)
+
 	api := router.Group("/api/v1")
 	// ROUTES PUBLIQUES (Non protégées par l'authentification)
 	publicRoutes := api.Group("/auth")
@@ -86,13 +103,13 @@ func main() {
 		// ROUTES FICHIERS
 		fileRoutes := protectedRoutes.Group("/files")
 		{
-			fileRoutes.POST("/upload", func(c *gin.Context) { files.UploadHandler(c, db) })
+			fileRoutes.POST("/upload", func(c *gin.Context) { files.UploadHandler(c, db, redisClient) })
 			fileRoutes.GET("/list/*path", func(c *gin.Context) { files.ListFilesHandler(c, db) })
 			fileRoutes.POST("/bulk-delete", func(c *gin.Context) { files.BulkDeleteHandler(c, db) })
 			fileRoutes.DELETE("/file/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db) })
 			fileRoutes.DELETE("/folder/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db) })
-			fileRoutes.POST("/move", func(c *gin.Context) { files.MoveHandler(c, db) })
-			fileRoutes.POST("/rename", func(c *gin.Context) { files.RenameHandler(c, db) })
+			fileRoutes.POST("/move", func(c *gin.Context) { files.MoveHandler(c, db, redisClient) })
+			fileRoutes.POST("/rename", func(c *gin.Context) { files.RenameHandler(c, db, redisClient) })
 			fileRoutes.POST("/tags", func(c *gin.Context) { files.UpdateTagsHandler(c, db) })
 			fileRoutes.GET("/download/:fileID", func(c *gin.Context) { files.DownloadFileHandler(c, db) })
 		}

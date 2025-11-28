@@ -1,15 +1,16 @@
 package files
 
 import (
+	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 
 	"safercloud/backend/pkg"
-	"safercloud/backend/utils"
+	"safercloud/backend/pkg/s3storage"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
@@ -31,18 +32,18 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// 2. Supprimer du disque de manière sécurisée
-	userRoot := filepath.Join("uploads", userID)
-	diskPath, err := utils.SecureJoin(userRoot, file.Path)
-	if err != nil {
-		log.Printf("Security Alert: Path traversal in delete file: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Chemin invalide"})
-		return
-	}
+	// 2. Supprimer de S3
+	s3Key := fmt.Sprintf("users/%s%s", userID, file.Path)
+	_, err = s3storage.Client.DeleteObject(c.Request.Context(), &s3.DeleteObjectInput{
+		Bucket: aws.String(s3storage.BucketName),
+		Key:    aws.String(s3Key),
+	})
 
-	if err := os.Remove(diskPath); err != nil && !os.IsNotExist(err) {
-		log.Printf("Error deleting file from disk: %v", err)
-		// On continue quand même pour supprimer de la BDD
+	if err != nil {
+		log.Printf("Error deleting file from S3: %v", err)
+		// On continue quand même pour supprimer de la BDD, ou on peut retourner une erreur
+		// c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete file from storage"})
+		// return
 	}
 
 	// 3. Supprimer de la BDD
