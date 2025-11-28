@@ -2,6 +2,7 @@
 package files
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -9,13 +10,14 @@ import (
 	"strconv"
 
 	"safercloud/backend/pkg"
-	"safercloud/backend/utils"
+	"safercloud/backend/pkg/workers"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/uptrace/bun"
 )
 
-func UploadHandler(c *gin.Context, db *bun.DB) {
+func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 	userIDInterface, _ := c.Get("user_id")
 	userID := userIDInterface.(string)
 
@@ -46,28 +48,15 @@ func UploadHandler(c *gin.Context, db *bun.DB) {
 	// Préparation des chemins
 	fullPathDB := filepath.ToSlash(filepath.Join(path, fileHeader.Filename))
 
-	userRoot := filepath.Join("uploads", userID)
-
-	// Sécurisation du chemin du dossier
-	userUploadDir, err := utils.SecureJoin(userRoot, path)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Chemin invalide"})
+	// Use a temporary directory for assembling chunks
+	tempDir := filepath.Join(os.TempDir(), "safercloud_uploads", userID)
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create temp directory"})
 		return
 	}
 
-	if err := os.MkdirAll(userUploadDir, 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user upload directory"})
-		return
-	}
-
-	// Sécurisation du chemin du fichier final
-	// On utilise SecureJoin sur le dossier upload sécurisé + le nom du fichier
-	// Attention: fileHeader.Filename peut contenir des ".."
-	diskPath, err := utils.SecureJoin(userUploadDir, fileHeader.Filename)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Nom de fichier invalide"})
-		return
-	}
+	// Temporary file path for assembly
+	tempFilePath := filepath.Join(tempDir, fileHeader.Filename+"_partial")
 
 	// LOGIQUE D'ASSEMBLAGE DES MORCEAUX
 	var flags int
@@ -80,9 +69,9 @@ func UploadHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	// Ouverture du fichier sur le disque
-	dst, err := os.OpenFile(diskPath, flags, 0644)
+	dst, err := os.OpenFile(tempFilePath, flags, 0644)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open file on disk"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open temp file"})
 		return
 	}
 	defer dst.Close()
@@ -97,7 +86,7 @@ func UploadHandler(c *gin.Context, db *bun.DB) {
 
 	// Copie du morceau dans le fichier sur le disque
 	if _, err := io.Copy(dst, src); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to write chunk to final file"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to write chunk to temp file"})
 		return
 	}
 
@@ -105,7 +94,12 @@ func UploadHandler(c *gin.Context, db *bun.DB) {
 	isLastChunk := !isChunked || (chunkIndex == totalChunks-1)
 
 	if isLastChunk {
-		fi, err := os.Stat(diskPath)
+		// Ensure data is written to disk
+		dst.Sync()
+		// Close the file before reading it for upload
+		dst.Close()
+
+		fi, err := os.Stat(tempFilePath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to stat final file"})
 			return
@@ -130,10 +124,31 @@ func UploadHandler(c *gin.Context, db *bun.DB) {
 		}
 
 		if user.StorageUsed+fileSize > user.StorageLimit {
-			os.Remove(diskPath) // Clean up
+			os.Remove(tempFilePath) // Clean up
 			c.JSON(http.StatusForbidden, gin.H{"error": "Storage limit exceeded"})
 			return
 		}
+
+		// S3 Key: users/{userID}/{path}/{filename}
+		// fullPathDB starts with /, so we trim it or just concat
+		s3Key := fmt.Sprintf("users/%s%s", userID, fullPathDB)
+
+		// Enqueue Upload Task to Redis
+		task := workers.S3Task{
+			Type:        workers.TaskUpload,
+			UserID:      userID,
+			SrcKey:      tempFilePath, // Local path to temp file
+			DestKey:     s3Key,        // S3 Key
+			ContentType: fileHeader.Header.Get("Content-Type"),
+		}
+
+		if err := workers.EnqueueTask(redisClient, task); err != nil {
+			os.Remove(tempFilePath) // Clean up if enqueue fails
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to enqueue upload task"})
+			return
+		}
+
+		// Note: We do NOT remove tempFilePath here. The worker will remove it after successful upload.
 
 		fileRecord := &pkg.File{
 			Name:     fileHeader.Filename,
@@ -183,7 +198,7 @@ func UploadHandler(c *gin.Context, db *bun.DB) {
 			return
 		}
 
-		c.JSON(http.StatusCreated, gin.H{"message": "Upload terminé et assemblé", "file": fileRecord})
+		c.JSON(http.StatusCreated, gin.H{"message": "Upload en cours de traitement", "file": fileRecord})
 	} else {
 		c.JSON(http.StatusOK, gin.H{"message": "Chunk uploaded successfully", "chunk_index": chunkIndex})
 	}

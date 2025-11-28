@@ -1,17 +1,18 @@
 package files
 
 import (
+	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 
 	"safercloud/backend/pkg"
-	"safercloud/backend/utils"
+	"safercloud/backend/pkg/workers"
 
 	"log"
 	"regexp"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/uptrace/bun"
 )
 
@@ -23,7 +24,7 @@ type RenameRequest struct {
 	NewName string `json:"new_name" binding:"required"`
 }
 
-func RenameHandler(c *gin.Context, db *bun.DB) {
+func RenameHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 	var req RenameRequest
 	// 1. Bind and validate input
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -104,25 +105,11 @@ func RenameHandler(c *gin.Context, db *bun.DB) {
 			return
 		}
 	}
-	userRoot := filepath.Join("uploads", userID)
-	oldDiskPath, err := utils.SecureJoin(userRoot, oldPath)
-	newDiskPath, err := utils.SecureJoin(userRoot, newPath)
 
-	if err != nil {
-		log.Printf("Security Alert: Path traversal in rename: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Chemin invalide"})
-		return
-	}
-
-	if err := os.Rename(oldDiskPath, newDiskPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to rename item on disk: " + err.Error()})
-		return
-	}
 	// 4. Update database records
 	ctx := c.Request.Context()
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		os.Rename(newDiskPath, oldDiskPath)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction error"})
 		return
 	}
@@ -131,7 +118,6 @@ func RenameHandler(c *gin.Context, db *bun.DB) {
 		_, err = tx.NewUpdate().Model((*pkg.File)(nil)).Set("name = ?", req.NewName).Set("path = ?", newPath).Where("id = ?", req.ID).Exec(ctx)
 		if err != nil {
 			tx.Rollback()
-			os.Rename(newDiskPath, oldDiskPath)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update file"})
 			return
 		}
@@ -139,7 +125,6 @@ func RenameHandler(c *gin.Context, db *bun.DB) {
 		_, err = tx.NewUpdate().Model((*pkg.Folder)(nil)).Set("name = ?", req.NewName).Set("path = ?", newPath).Where("id = ?", req.ID).Exec(ctx)
 		if err != nil {
 			tx.Rollback()
-			os.Rename(newDiskPath, oldDiskPath)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update folder"})
 			return
 		}
@@ -151,7 +136,6 @@ func RenameHandler(c *gin.Context, db *bun.DB) {
 
 		if err != nil {
 			tx.Rollback()
-			os.Rename(newDiskPath, oldDiskPath)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update children files"})
 			return
 		}
@@ -161,16 +145,30 @@ func RenameHandler(c *gin.Context, db *bun.DB) {
 
 		if err != nil {
 			tx.Rollback()
-			os.Rename(newDiskPath, oldDiskPath)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update children folders"})
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		os.Rename(newDiskPath, oldDiskPath)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
 		return
+	}
+
+	// 5. Enqueue S3 Task
+	srcKey := fmt.Sprintf("users/%s%s", userID, oldPath)
+	destKey := fmt.Sprintf("users/%s%s", userID, newPath)
+
+	task := workers.S3Task{
+		Type:     workers.TaskRename,
+		UserID:   userID,
+		SrcKey:   srcKey,
+		DestKey:  destKey,
+		IsFolder: req.Type == "folder",
+	}
+
+	if err := workers.EnqueueTask(redisClient, task); err != nil {
+		log.Printf("Failed to enqueue S3 task: %v", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Item renamed successfully", "newName": req.NewName, "newPath": newPath})
