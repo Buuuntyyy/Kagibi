@@ -16,8 +16,8 @@ import (
 )
 
 func DownloadFileHandler(c *gin.Context, db *bun.DB) {
-	userIDStr := c.GetString("user_id")
-	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+	userIDInterface, _ := c.Get("user_id")
+	userID := userIDInterface.(string)
 
 	fileIDStr := c.Param("fileID")
 	fileID, err := strconv.ParseInt(fileIDStr, 10, 64)
@@ -29,14 +29,14 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 	file, err := pkg.GetFile(db, fileID, userID)
 	if err != nil {
 		// Log l'erreur pour le débogage côté serveur
-		log.Printf("Error getting file from DB. FileID: %d, UserID: %d, Error: %v", fileID, userID, err)
+		log.Printf("Error getting file from DB. FileID: %d, UserID: %s, Error: %v", fileID, userID, err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "File not found or permission denied"})
 		return
 	}
 
 	// Construit le chemin physique vers le fichier dans le dossier "uploads"
 	// Utilise le chemin stocké en base de données (file.Path) et l'ID utilisateur
-	userRoot := filepath.Join("uploads", userIDStr)
+	userRoot := filepath.Join("uploads", userID)
 	filePath, err := utils.SecureJoin(userRoot, file.Path)
 	if err != nil {
 		log.Printf("Security Alert: Path traversal in download: %v", err)

@@ -3,7 +3,6 @@ package users
 import (
 	"net/http"
 	"safercloud/backend/pkg"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -11,9 +10,9 @@ import (
 )
 
 type UpdatePasswordRequest struct {
-	CurrentPassword    string `json:"current_password" binding:"required"`
-	NewPassword        string `json:"new_password" binding:"required,min=8"`
-	NewSalt            string `json:"new_salt" binding:"required"`
+	CurrentPassword       string `json:"current_password" binding:"required"`
+	NewPassword           string `json:"new_password" binding:"required,min=8"`
+	NewSalt               string `json:"new_salt" binding:"required"`
 	NewEncryptedMasterKey string `json:"new_encrypted_master_key" binding:"required"`
 }
 
@@ -25,8 +24,7 @@ func UpdatePasswordHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	userIDInterface, _ := c.Get("user_id")
-	userIDStr, _ := userIDInterface.(string)
-	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+	userID, _ := userIDInterface.(string)
 
 	// Fetch user
 	user, err := pkg.FindUserByID(db, userID)
