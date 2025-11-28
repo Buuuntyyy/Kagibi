@@ -2,7 +2,6 @@ package files
 
 import (
 	"net/http"
-	"strconv"
 
 	"safercloud/backend/pkg"
 
@@ -24,8 +23,7 @@ func UpdateTagsHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	userIDInterface, _ := c.Get("user_id")
-	userIDStr, _ := userIDInterface.(string)
-	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+	userID, _ := userIDInterface.(string)
 
 	ctx := c.Request.Context()
 

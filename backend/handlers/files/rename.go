@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"safercloud/backend/pkg"
 	"safercloud/backend/utils"
@@ -39,8 +38,7 @@ func RenameHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	userIDInterface, _ := c.Get("user_id")
-	userIDStr, _ := userIDInterface.(string)
-	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+	userID, _ := userIDInterface.(string)
 
 	var oldPath string
 	var parentPath string
@@ -106,7 +104,7 @@ func RenameHandler(c *gin.Context, db *bun.DB) {
 			return
 		}
 	}
-	userRoot := filepath.Join("uploads", userIDStr)
+	userRoot := filepath.Join("uploads", userID)
 	oldDiskPath, err := utils.SecureJoin(userRoot, oldPath)
 	newDiskPath, err := utils.SecureJoin(userRoot, newPath)
 
