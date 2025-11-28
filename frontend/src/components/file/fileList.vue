@@ -15,7 +15,6 @@
       <div class="toolbar-left">
         <button @click="triggerFileInput" class="btn-add-file">Ajouter un fichier</button>
         <button @click="createNewFolder" class="btn-add-file">Créer un dossier</button>
-        <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" />
       </div>
       <div class="toolbar-right">
         <button @click="renameSelectedItem" :disabled="selectedItems.length !== 1" class="btn-rename">
@@ -29,6 +28,7 @@
         </button>
       </div>
     </div>
+    <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" />
     <div class="path-banner">
       <span @click="goUp" class="back-arrow" :class="{ 'disabled': fileStore.currentPath === '/' }"
             @drop.stop="onDropOnParent"
@@ -74,14 +74,14 @@
       <span class="header-size">Taille</span>
     </div>
 
-    <div class="list-area">
+    <div class="list-area" @contextmenu.prevent="openBackgroundContextMenu($event)">
       <!-- Folders -->
       <div v-for="folder in filteredFolders" :key="folder.ID" 
            class="list-item folder-item" 
            :class="{ selected: isSelected(folder, 'folder') }"
            @click="selectItem(folder, 'folder', $event)"
            @dblclick="openFolder(folder.Name)"
-           @contextmenu.prevent="openContextMenu($event, folder, 'folder')"
+           @contextmenu.prevent.stop="openContextMenu($event, folder, 'folder')"
            draggable="true"
            @dragstart="onDragStart(folder, 'folder', $event)"
            @drop.stop="onDropOnFolder(folder, $event)"
@@ -107,7 +107,7 @@
           :class="{ selected: isSelected(file, 'file') }"
           @click="selectItem(file, 'file', $event)"
           @dblclick="downloadFile(file)"
-          @contextmenu.prevent="openContextMenu($event, file, 'file')"
+          @contextmenu.prevent.stop="openContextMenu($event, file, 'file')"
       >
         <span class="icon">📄</span>
         <span class="name">{{ file.Name }}</span>
@@ -128,18 +128,28 @@
     <div v-if="contextMenu.visible" 
          class="context-menu" 
          :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }">
-      <div class="menu-item" @click="handleContextAction('download')" v-if="contextMenu.item.type === 'file'">
-        📥 Télécharger
-      </div>
-      <div class="menu-item" @click="handleContextAction('rename')">
-        ✏️ Renommer
-      </div>
-      <div class="menu-item" @click="handleContextAction('tags')">
-        🏷️ Tags
-      </div>
-      <div class="menu-item delete" @click="handleContextAction('delete')">
-        🗑️ Supprimer
-      </div>
+      <template v-if="contextMenu.item">
+        <div class="menu-item" @click="handleContextAction('download')" v-if="contextMenu.item.type === 'file'">
+          📥 Télécharger
+        </div>
+        <div class="menu-item" @click="handleContextAction('rename')">
+          ✏️ Renommer
+        </div>
+        <div class="menu-item" @click="handleContextAction('tags')">
+          🏷️ Tags
+        </div>
+        <div class="menu-item delete" @click="handleContextAction('delete')">
+          🗑️ Supprimer
+        </div>
+      </template>
+      <template v-else>
+        <div class="menu-item" @click="handleContextAction('add-file')">
+          📄 Ajouter un fichier
+        </div>
+        <div class="menu-item" @click="handleContextAction('create-folder')">
+          📁 Créer un dossier
+        </div>
+      </template>
     </div>
 
     <InputDialog 
@@ -311,10 +321,36 @@ onUnmounted(() => {
   document.removeEventListener('click', closeContextMenu)
 })
 
+const openBackgroundContextMenu = (event) => {
+  if (!preferenceStore.enableContextMenu) return;
+  
+  // Deselect items when clicking on background
+  selectedItems.value = []
+
+  const menuWidth = 150;
+  const menuHeight = 100;
+  let x = event.clientX;
+  let y = event.clientY;
+
+  if (x + menuWidth > window.innerWidth) {
+    x -= menuWidth;
+  }
+  if (y + menuHeight > window.innerHeight) {
+    y -= menuHeight;
+  }
+
+  contextMenu.value = {
+    visible: true,
+    x: x,
+    y: y,
+    item: null
+  }
+}
+
 const openContextMenu = (event, item, type) => {
   if (!preferenceStore.enableContextMenu) return;
   if(!isSelected(item, type)) {
-    selectItem.value = [{...item, type}]
+    selectedItems.value = [{...item, type}]
   }
   const menuWidth = 150; // Approximate width of context menu
   const menuHeight = 100; // Approximate height of context menu
@@ -338,6 +374,18 @@ const openContextMenu = (event, item, type) => {
 
 const handleContextAction = (action) => {
   const item = contextMenu.value.item
+  
+  if (action === 'add-file') {
+    triggerFileInput()
+    closeContextMenu()
+    return
+  }
+  if (action === 'create-folder') {
+    createNewFolder()
+    closeContextMenu()
+    return
+  }
+
   if (!item) return;
 
   switch (action){
