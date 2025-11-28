@@ -18,17 +18,42 @@
     <div class="storage-section">
       <div class="storage-info">
         <span class="storage-label">Stockage</span>
-        <span class="storage-value">2.5 GB / 10 GB</span>
+        <span class="storage-value">{{ formattedStorageUsed }} / {{ formattedStorageLimit }}</span>
       </div>
       <div class="storage-bar">
-        <div class="storage-fill" style="width: 25%"></div>
+        <div class="storage-fill" :style="{ width: storagePercentage + '%' }"></div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-// Logic for navigation or active state can be added here
+import { computed } from 'vue'
+import { useAuthStore } from '../../stores/auth'
+
+const authStore = useAuthStore()
+
+const formatSize = (bytes) => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+const formattedStorageUsed = computed(() => {
+  return formatSize(authStore.user?.storage_used || 0)
+})
+
+const formattedStorageLimit = computed(() => {
+  return formatSize(authStore.user?.storage_limit || 10737418240) // Default 10GB
+})
+
+const storagePercentage = computed(() => {
+  const used = authStore.user?.storage_used || 0
+  const limit = authStore.user?.storage_limit || 10737418240
+  return Math.min((used / limit) * 100, 100)
+})
 </script>
 
 <style scoped>

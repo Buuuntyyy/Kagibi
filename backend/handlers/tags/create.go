@@ -10,7 +10,9 @@ import (
 
 func CreateTagHandler(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID := c.GetInt64("userID")
+		userIDInterface, _ := c.Get("user_id")
+		userID, _ := userIDInterface.(string)
+
 		var input struct {
 			Name  string `json:"name"`
 			Color string `json:"color"`
@@ -25,12 +27,12 @@ func CreateTagHandler(db *bun.DB) gin.HandlerFunc {
 		exists, err := db.NewSelect().Model((*pkg.Tag)(nil)).
 			Where("user_id = ? AND name = ?", userID, input.Name).
 			Exists(c.Request.Context())
-		
+
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 			return
 		}
-		
+
 		if exists {
 			c.JSON(http.StatusConflict, gin.H{"error": "Tag already exists"})
 			return

@@ -17,8 +17,7 @@ import (
 
 func UploadHandler(c *gin.Context, db *bun.DB) {
 	userIDInterface, _ := c.Get("user_id")
-    userIDStr := userIDInterface.(string)
-    userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+	userID := userIDInterface.(string)
 
 	path := c.PostForm("path") // Chemin virtuel où le fichier doit être stocké
 	if path == "" {
@@ -46,9 +45,9 @@ func UploadHandler(c *gin.Context, db *bun.DB) {
 
 	// Préparation des chemins
 	fullPathDB := filepath.ToSlash(filepath.Join(path, fileHeader.Filename))
-	
-	userRoot := filepath.Join("uploads", userIDStr)
-	
+
+	userRoot := filepath.Join("uploads", userID)
+
 	// Sécurisation du chemin du dossier
 	userUploadDir, err := utils.SecureJoin(userRoot, path)
 	if err != nil {
@@ -60,7 +59,7 @@ func UploadHandler(c *gin.Context, db *bun.DB) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user upload directory"})
 		return
 	}
-	
+
 	// Sécurisation du chemin du fichier final
 	// On utilise SecureJoin sur le dossier upload sécurisé + le nom du fichier
 	// Attention: fileHeader.Filename peut contenir des ".."
@@ -112,31 +111,78 @@ func UploadHandler(c *gin.Context, db *bun.DB) {
 			return
 		}
 
+		fileSize := fi.Size()
+
+		// Start transaction
+		tx, err := db.Begin()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			return
+		}
+		defer tx.Rollback()
+
+		// Check storage limit
+		var user pkg.User
+		err = tx.NewSelect().Model(&user).Where("id = ?", userID).Scan(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "User not found"})
+			return
+		}
+
+		if user.StorageUsed+fileSize > user.StorageLimit {
+			os.Remove(diskPath) // Clean up
+			c.JSON(http.StatusForbidden, gin.H{"error": "Storage limit exceeded"})
+			return
+		}
+
 		fileRecord := &pkg.File{
-			Name:   fileHeader.Filename,
-			Path:   fullPathDB,
-			Size:   fi.Size(),
+			Name:     fileHeader.Filename,
+			Path:     fullPathDB,
+			Size:     fileSize,
 			MimeType: fileHeader.Header.Get("Content-Type"),
-			UserID: userID,
+			UserID:   userID,
 		}
 
 		// Vérifier si le fichier existe deja
-		existsInDB, _ := db.NewSelect().Model((*pkg.File)(nil)).
+		existsInDB, _ := tx.NewSelect().Model((*pkg.File)(nil)).
 			Where("user_id = ? AND path = ?", userID, fullPathDB).
 			Exists(c)
-		
+
 		if existsInDB {
+			// Get old file size to adjust storage
+			var oldFile pkg.File
+			err = tx.NewSelect().Model(&oldFile).Where("user_id = ? AND path = ?", userID, fullPathDB).Scan(c)
+			if err == nil {
+				// Update storage: remove old size, add new size
+				_, err = tx.NewUpdate().Model(&user).
+					Set("storage_used = storage_used - ? + ?", oldFile.Size, fileSize).
+					Where("id = ?", userID).
+					Exec(c)
+			}
+
 			// Mettre à jour l'enregistrement existant
-			_, err = db.NewUpdate().Model(fileRecord).Where("user_id = ? AND path = ?", userID, fullPathDB).Exec(c)
+			_, err = tx.NewUpdate().Model(fileRecord).Where("user_id = ? AND path = ?", userID, fullPathDB).Exec(c)
 		} else {
 			// Créer un nouvel enregistrement
-			err = pkg.CreateFile(db, fileRecord)
+			_, err = tx.NewInsert().Model(fileRecord).Exec(c)
+
+			// Update storage: add new size
+			_, err = tx.NewUpdate().Model(&user).
+				Set("storage_used = storage_used + ?", fileSize).
+				Where("id = ?", userID).
+				Exec(c)
 		}
 
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur base de données"})
-            return
+			return
 		}
+
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
+			return
+		}
+
 		c.JSON(http.StatusCreated, gin.H{"message": "Upload terminé et assemblé", "file": fileRecord})
 	} else {
 		c.JSON(http.StatusOK, gin.H{"message": "Chunk uploaded successfully", "chunk_index": chunkIndex})

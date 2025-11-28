@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"safercloud/backend/pkg"
 	"safercloud/backend/utils"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -30,9 +29,8 @@ func BulkDeleteHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	userID, _ := c.Get("user_id")
-	userIDStr := userID.(string)
-	userIDInt, _ := strconv.ParseInt(userIDStr, 10, 64)
+	userIDInterface, _ := c.Get("user_id")
+	userID := userIDInterface.(string)
 
 	// Débuter une transaction pour s'assurer que tout réussit ou tout échoue
 	tx, err := db.Begin()
@@ -46,7 +44,7 @@ func BulkDeleteHandler(c *gin.Context, db *bun.DB) {
 	// Récupérer les infos des fichiers pour obtenir leurs chemins
 	err = tx.NewSelect().Model(&filesToDelete).
 		Where("id IN (?)", bun.In(req.FileIDs)).
-		Where("user_id = ?", userIDInt).
+		Where("user_id = ?", userID).
 		Scan(c)
 
 	if err != nil {
@@ -60,7 +58,7 @@ func BulkDeleteHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	// Supprimer les fichiers du système de fichiers
-	userRoot := filepath.Join("uploads", userIDStr)
+	userRoot := filepath.Join("uploads", userID)
 	for _, file := range filesToDelete {
 		diskPath, err := utils.SecureJoin(userRoot, file.Path)
 		if err != nil {
@@ -73,11 +71,27 @@ func BulkDeleteHandler(c *gin.Context, db *bun.DB) {
 	// Supprimer les enregistrements de la base de données
 	_, err = tx.NewDelete().Model((*pkg.File)(nil)).
 		Where("id IN (?)", bun.In(req.FileIDs)).
-		Where("user_id = ?", userIDInt).
+		Where("user_id = ?", userID).
 		Exec(c)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Impossible de supprimer les fichiers de la base de données"})
+		return
+	}
+
+	// Mettre à jour l'espace de stockage utilisé
+	var totalSize int64
+	for _, file := range filesToDelete {
+		totalSize += file.Size
+	}
+
+	_, err = tx.NewUpdate().Model((*pkg.User)(nil)).
+		Set("storage_used = storage_used - ?", totalSize).
+		Where("id = ?", userID).
+		Exec(c)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Impossible de mettre à jour le quota de stockage"})
 		return
 	}
 

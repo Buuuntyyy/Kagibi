@@ -4,18 +4,19 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"safercloud/backend/pkg"
 
-	"github.com/gin-gonic/gin"
-	"github.com/uptrace/bun"
+	"log"
 	"regexp"
 	"safercloud/backend/utils"
-	"log"
+
+	"github.com/gin-gonic/gin"
+	"github.com/uptrace/bun"
 )
 
-var validNameRegex = regexp.MustCompile(`^[a-zA-Z0-9\s\-\._]+$`)	
+var validNameRegex = regexp.MustCompile(`^[a-zA-Z0-9\s\-\._]+$`)
+
 type CreateFolderRequest struct {
 	Name string `json:"name" binding:"required" validate:"required,foldername"`
 	Path string `json:"path" binding:"required"`
@@ -35,27 +36,25 @@ func CreateHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	userIDInterface, _ := c.Get("user_id")
-	userIDStr, _ := userIDInterface.(string)
-	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+	userID, _ := userIDInterface.(string)
 
 	logicalPath := filepath.ToSlash(filepath.Join(req.Path, req.Name))
 
-	userRoot := filepath.Join("uploads", userIDStr)
-
+	userRoot := filepath.Join("uploads", userID)
 
 	diskPath, err := utils.SecureJoin(userRoot, logicalPath)
 	if err != nil {
-        log.Printf("Security Alert: Path traversal attempt by user %s: %v", userIDStr, err)
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Chemin invalide"})
-        return
-    }
+		log.Printf("Security Alert: Path traversal attempt by user %s: %v", userID, err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chemin invalide"})
+		return
+	}
 
 	if err := os.MkdirAll(diskPath, 0755); err != nil {
 		// 3. Log serveur détaillé, erreur client générique
-        log.Printf("Error creating directory %s: %v", diskPath, err)
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur interne lors de la création"})
-        return
-    }
+		log.Printf("Error creating directory %s: %v", diskPath, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur interne lors de la création"})
+		return
+	}
 
 	folder := &pkg.Folder{
 		Name:   req.Name,
@@ -70,5 +69,5 @@ func CreateHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-    c.JSON(http.StatusCreated, gin.H{"message": "Dossier créé avec succès", "folder": folder})
+	c.JSON(http.StatusCreated, gin.H{"message": "Dossier créé avec succès", "folder": folder})
 }
