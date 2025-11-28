@@ -4,7 +4,6 @@ package files
 import (
 	"log"
 	"net/http"
-	"strconv"
 
 	"safercloud/backend/pkg"
 
@@ -13,15 +12,15 @@ import (
 )
 
 func ListFilesHandler(c *gin.Context, db *bun.DB) {
-	userIDStr := c.GetString("user_id")
-	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+	userIDInterface, _ := c.Get("user_id")
+	userID := userIDInterface.(string)
 
 	path := c.Param("path")
 	if path == "" {
 		path = "/"
 	}
-	
-    log.Printf("ListFilesHandler: userID=%d path=%s", userID, path)
+
+	log.Printf("ListFilesHandler: userID=%s path=%s", userID, path)
 
 	files, folders, err := pkg.ListItemsByUser(db, userID, path)
 	if err != nil {

@@ -1,13 +1,14 @@
 package auth
 
 import (
+	"log"
 	"net/http"
 	"safercloud/backend/pkg"
-	"log"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -46,6 +47,7 @@ func RegisterHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	user := &pkg.User{
+		ID:                         uuid.New().String(),
 		Name:                       req.Name,
 		Email:                      req.Email,
 		PasswordHash:               string(hashedPassword),

@@ -21,8 +21,8 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	userIDStr := c.GetString("user_id")
-	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+	userIDInterface, _ := c.Get("user_id")
+	userID := userIDInterface.(string)
 
 	// 1. Récupérer les infos du fichier
 	file, err := pkg.GetFile(db, fileID, userID)
@@ -32,7 +32,7 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	// 2. Supprimer du disque de manière sécurisée
-	userRoot := filepath.Join("uploads", userIDStr)
+	userRoot := filepath.Join("uploads", userID)
 	diskPath, err := utils.SecureJoin(userRoot, file.Path)
 	if err != nil {
 		log.Printf("Security Alert: Path traversal in delete file: %v", err)
@@ -61,8 +61,8 @@ func DeleteFolderHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	userIDStr := c.GetString("user_id")
-	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+	userIDInterface, _ := c.Get("user_id")
+	userID := userIDInterface.(string)
 
 	// Note: Pour supprimer un dossier, il faudrait idéalement récupérer son chemin
 	// et supprimer récursivement. pkg.DeleteFolder ne fait que le DELETE SQL.

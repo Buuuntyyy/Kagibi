@@ -1,12 +1,11 @@
 package files
 
 import (
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
-	"log"
 
 	"safercloud/backend/pkg"
 	"safercloud/backend/utils"
@@ -29,8 +28,7 @@ func MoveHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	userIDInterface, _ := c.Get("user_id")
-	userIDStr, _ := userIDInterface.(string)
-	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+	userID, _ := userIDInterface.(string)
 
 	// 1. Get the item to move
 	var oldPath string
@@ -110,14 +108,14 @@ func MoveHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	// 3. Move on disk
-	userRoot := filepath.Join("uploads", userIDStr)
+	userRoot := filepath.Join("uploads", userID)
 	oldDiskPath, err := utils.SecureJoin(userRoot, oldPath)
 	if err != nil {
 		log.Printf("Security Alert: Path traversal in move (source): %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Chemin source invalide"})
 		return
 	}
-	
+
 	newDiskPath, err := utils.SecureJoin(userRoot, newPath)
 	if err != nil {
 		log.Printf("Security Alert: Path traversal in move (dest): %v", err)

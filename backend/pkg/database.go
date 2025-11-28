@@ -37,7 +37,7 @@ func FindUserByEmail(db *bun.DB, email string) (*User, error) {
 	return &user, err
 }
 
-func FindUserByID(db *bun.DB, userID int64) (*User, error) {
+func FindUserByID(db *bun.DB, userID string) (*User, error) {
 	var user User
 	err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(context.Background())
 	if err != nil {
@@ -65,69 +65,69 @@ func CreateFolderDB(db *bun.DB, folder *Folder) error {
 }
 
 // Lister les fichier d'un utilisateur
-func ListItemsByUser(db *bun.DB, userID int64, path string) ([]File, []Folder, error) {
-    ctx := context.Background()
-    var files []File
-    var folders []Folder
-    var err error
+func ListItemsByUser(db *bun.DB, userID string, path string) ([]File, []Folder, error) {
+	ctx := context.Background()
+	var files []File
+	var folders []Folder
+	var err error
 
-    if path == "/" {
-        // Pour la racine : on cherche les chemins qui commencent par '/' mais qui n'ont pas de deuxième '/'.
-        // Ex: '/test' (OK), '/image.jpg' (OK), mais pas '/test/doc.pdf' (NON)
-        err = db.NewSelect().Model(&files).
-            Where("user_id = ?", userID).
-            Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
-            Scan(ctx)
-        if err != nil {
-            return nil, nil, err
-        }
+	if path == "/" {
+		// Pour la racine : on cherche les chemins qui commencent par '/' mais qui n'ont pas de deuxième '/'.
+		// Ex: '/test' (OK), '/image.jpg' (OK), mais pas '/test/doc.pdf' (NON)
+		err = db.NewSelect().Model(&files).
+			Where("user_id = ?", userID).
+			Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
+			Scan(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
 
-        err = db.NewSelect().Model(&folders).
-            Where("user_id = ?", userID).
-            Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
-            Scan(ctx)
-        if err != nil {
-            return nil, nil, err
-        }
-    } else {
-        // Pour un sous-dossier (ex: /test) : on cherche les chemins qui commencent par '/test/'
-        // mais qui n'ont pas de '/' supplémentaire après.
-        searchPrefix := path + "/"
-        err = db.NewSelect().Model(&files).
-            Where("user_id = ?", userID).
-            Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
-            Scan(ctx)
-        if err != nil {
-            return nil, nil, err
-        }
+		err = db.NewSelect().Model(&folders).
+			Where("user_id = ?", userID).
+			Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
+			Scan(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		// Pour un sous-dossier (ex: /test) : on cherche les chemins qui commencent par '/test/'
+		// mais qui n'ont pas de '/' supplémentaire après.
+		searchPrefix := path + "/"
+		err = db.NewSelect().Model(&files).
+			Where("user_id = ?", userID).
+			Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
+			Scan(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
 
-        err = db.NewSelect().Model(&folders).
-            Where("user_id = ?", userID).
-            Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
-            Scan(ctx)
-        if err != nil {
-            return nil, nil, err
-        }
-    }
+		err = db.NewSelect().Model(&folders).
+			Where("user_id = ?", userID).
+			Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
+			Scan(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 
-    return files, folders, nil
+	return files, folders, nil
 }
 
 // supprimer un fichier
-func DeleteFile(db *bun.DB, fileID int64, userID int64) error {
+func DeleteFile(db *bun.DB, fileID int64, userID string) error {
 	ctx := context.Background()
 	_, err := db.NewDelete().Model((*File)(nil)).Where("id = ? AND user_id = ?", fileID, userID).Exec(ctx)
 	return err
 }
 
-func DeleteFolder(db *bun.DB, folderID int64, userID int64) error {
+func DeleteFolder(db *bun.DB, folderID int64, userID string) error {
 	ctx := context.Background()
 	_, err := db.NewDelete().Model((*Folder)(nil)).Where("id = ? AND user_id = ?", folderID, userID).Exec(ctx)
 	return err
 }
 
 // Trouver un fichier par son ID
-func GetFile(db *bun.DB, fileID int64, userID int64) (*File, error) {
+func GetFile(db *bun.DB, fileID int64, userID string) (*File, error) {
 	ctx := context.Background()
 	var file File
 	err := db.NewSelect().Model(&file).Where("id = ? AND user_id = ?", fileID, userID).Scan(ctx)

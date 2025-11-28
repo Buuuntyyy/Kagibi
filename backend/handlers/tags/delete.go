@@ -11,7 +11,9 @@ import (
 
 func DeleteTagHandler(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID := c.GetInt64("userID")
+		userIDInterface, _ := c.Get("user_id")
+		userID, _ := userIDInterface.(string)
+
 		tagID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid tag ID"})

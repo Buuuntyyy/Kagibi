@@ -10,7 +10,9 @@ import (
 
 func ListTagsHandler(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID := c.GetInt64("userID")
+		userIDInterface, _ := c.Get("user_id")
+		userID, _ := userIDInterface.(string)
+
 		var tags []pkg.Tag
 
 		err := db.NewSelect().Model(&tags).Where("user_id = ?", userID).Scan(c.Request.Context())
