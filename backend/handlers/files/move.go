@@ -1,16 +1,16 @@
 package files
 
 import (
-	"log"
+	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 
 	"safercloud/backend/pkg"
-	"safercloud/backend/utils"
+	"safercloud/backend/pkg/workers"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/uptrace/bun"
 )
 
@@ -20,7 +20,7 @@ type MoveRequest struct {
 	DestinationPath string `json:"destinationPath"` // Can be empty for root, or "/"
 }
 
-func MoveHandler(c *gin.Context, db *bun.DB) {
+func MoveHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 	var req MoveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
@@ -107,39 +107,10 @@ func MoveHandler(c *gin.Context, db *bun.DB) {
 		}
 	}
 
-	// 3. Move on disk
-	userRoot := filepath.Join("uploads", userID)
-	oldDiskPath, err := utils.SecureJoin(userRoot, oldPath)
-	if err != nil {
-		log.Printf("Security Alert: Path traversal in move (source): %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Chemin source invalide"})
-		return
-	}
-
-	newDiskPath, err := utils.SecureJoin(userRoot, newPath)
-	if err != nil {
-		log.Printf("Security Alert: Path traversal in move (dest): %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Chemin destination invalide"})
-		return
-	}
-
-	// Ensure parent directory of new path exists
-	newDir := filepath.Dir(newDiskPath)
-	if err := os.MkdirAll(newDir, 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare destination directory"})
-		return
-	}
-
-	if err := os.Rename(oldDiskPath, newDiskPath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to move item on disk: " + err.Error()})
-		return
-	}
-
-	// 4. Update DB
+	// 3. Update DB
 	ctx := c.Request.Context()
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		os.Rename(newDiskPath, oldDiskPath) // Revert disk change
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction error"})
 		return
 	}
@@ -148,7 +119,6 @@ func MoveHandler(c *gin.Context, db *bun.DB) {
 		_, err = tx.NewUpdate().Model((*pkg.File)(nil)).Set("path = ?", newPath).Where("id = ?", req.ID).Exec(ctx)
 		if err != nil {
 			tx.Rollback()
-			os.Rename(newDiskPath, oldDiskPath)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update file path"})
 			return
 		}
@@ -157,7 +127,6 @@ func MoveHandler(c *gin.Context, db *bun.DB) {
 		_, err = tx.NewUpdate().Model((*pkg.Folder)(nil)).Set("path = ?", newPath).Where("id = ?", req.ID).Exec(ctx)
 		if err != nil {
 			tx.Rollback()
-			os.Rename(newDiskPath, oldDiskPath)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update folder path"})
 			return
 		}
@@ -177,7 +146,6 @@ func MoveHandler(c *gin.Context, db *bun.DB) {
 
 		if err != nil {
 			tx.Rollback()
-			os.Rename(newDiskPath, oldDiskPath)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update children files"})
 			return
 		}
@@ -187,16 +155,33 @@ func MoveHandler(c *gin.Context, db *bun.DB) {
 
 		if err != nil {
 			tx.Rollback()
-			os.Rename(newDiskPath, oldDiskPath)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update children folders"})
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		os.Rename(newDiskPath, oldDiskPath)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
 		return
+	}
+
+	// 4. Enqueue S3 Task
+	// S3 Keys: users/{userID}/{path}
+	srcKey := fmt.Sprintf("users/%s%s", userID, oldPath)
+	destKey := fmt.Sprintf("users/%s%s", userID, newPath)
+
+	task := workers.S3Task{
+		Type:     workers.TaskMove,
+		UserID:   userID,
+		SrcKey:   srcKey,
+		DestKey:  destKey,
+		IsFolder: req.Type == "folder",
+	}
+
+	if err := workers.EnqueueTask(redisClient, task); err != nil {
+		// Log error but don't fail request as DB is updated
+		// In a real system, we might want to rollback DB or have a retry mechanism
+		fmt.Printf("Failed to enqueue S3 task: %v\n", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Item moved successfully", "newPath": newPath})

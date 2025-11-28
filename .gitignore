@@ -2,3 +2,4 @@ db_data/*
 redis-data/*
 
 backend/uploads/*
+backend/.env
