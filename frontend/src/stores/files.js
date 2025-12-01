@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import api from '../api'
 import { useAuthStore } from './auth'
-import { encryptFile, decryptFile } from '../utils/crypto'
+import { encryptFile, decryptFile, generateMasterKey, wrapMasterKey, unwrapMasterKey, deriveKeyFromToken } from '../utils/crypto'
 import { encryptChunkWorker, decryptChunkedFileWorker, CHUNK_SIZE } from '../utils/crypto'
 
 export const useFileStore = defineStore('files', {
@@ -49,12 +49,27 @@ export const useFileStore = defineStore('files', {
       const authStore = useAuthStore();
       if (!authStore.masterKey) return;
 
+      // Find the file in the store to get encrypted_key
+      const file = this.files.find(f => f.ID === fileId);
+      let fileKey = authStore.masterKey; // Default to masterKey for old files
+
+      if (file && file.EncryptedKey) {
+          // Decrypt the file key
+          try {
+              fileKey = await unwrapMasterKey(file.EncryptedKey, authStore.masterKey);
+          } catch (e) {
+              console.error("Failed to decrypt file key", e);
+              alert("Erreur de déchiffrement de la clé du fichier.");
+              return;
+          }
+      }
+
       try {
         // 1. Télécharger le blob chiffré
         const response = await api.get(`/files/download/${fileId}`, { responseType: 'blob' });
         
         // 2. Déchiffrer via Worker
-        const decryptedBlob = await decryptChunkedFileWorker(response.data, authStore.masterKey, mimeType);
+        const decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, mimeType);
 
         // 3. Sauvegarder
         const url = window.URL.createObjectURL(decryptedBlob);
@@ -77,6 +92,28 @@ export const useFileStore = defineStore('files', {
         return
       }
 
+      // Generate a unique key for this file
+      const fileKey = await generateMasterKey();
+      // Encrypt this key with the user's master key
+      const encryptedFileKey = await wrapMasterKey(fileKey, authStore.masterKey);
+
+      // Check for active shares on this path
+      let shareKeysMap = {};
+      try {
+          const shareRes = await api.get('/shares/check-path', { params: { path: this.currentPath } });
+          const activeShares = shareRes.data.shares || [];
+          
+          for (const share of activeShares) {
+              // Derive Share Key from Token
+              const shareKey = await deriveKeyFromToken(share.Token);
+              // Encrypt File Key with Share Key
+              const encryptedForShare = await wrapMasterKey(fileKey, shareKey);
+              shareKeysMap[share.ID] = encryptedForShare;
+          }
+      } catch (e) {
+          console.error("Error checking active shares:", e);
+      }
+
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
       let chunkIndex = 0;
       let offset = 0;
@@ -89,7 +126,7 @@ export const useFileStore = defineStore('files', {
           const chunkBlob = file.slice(offset, offset + CHUNK_SIZE);
           const chunkArrayBuffer = await chunkBlob.arrayBuffer();
 
-          const encryptedChunkBlob = await encryptChunkWorker(chunkArrayBuffer, authStore.masterKey, chunkIndex);
+          const encryptedChunkBlob = await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex);
 
           const encryptedFile = new File([encryptedChunkBlob], file.name, { type: 'application/octet-stream' });
 
@@ -98,6 +135,15 @@ export const useFileStore = defineStore('files', {
           formData.append('path', this.currentPath)
           formData.append('chunk_index', chunkIndex)
           formData.append('total_chunks', totalChunks)
+          formData.append('encrypted_key', encryptedFileKey)
+          
+          // Send share keys only with the last chunk (or every chunk, but backend only uses it on commit)
+          // To be safe and simple, send with every chunk, backend ignores until commit.
+          if (Object.keys(shareKeysMap).length > 0) {
+              formData.append('share_keys', JSON.stringify(shareKeysMap));
+          }
+
+          console.log(`Uploading chunk ${chunkIndex + 1} / ${totalChunks}...`);
 
           console.log(`Uploading chunk ${chunkIndex + 1} / ${totalChunks}...`);
 
@@ -151,7 +197,7 @@ export const useFileStore = defineStore('files', {
     async moveItems(items, destinationPath) {
       try {
         const promises = items.map(item => api.post('/files/move', {
-          id: item.id,
+          id: item.ID,
           type: item.type,
           destinationPath: destinationPath
         }))
@@ -190,6 +236,85 @@ export const useFileStore = defineStore('files', {
         this.fetchItems(this.currentPath)
       } catch (error) {
         console.error('Error updating tags:', error)
+        throw error
+      }
+    },
+    async createShareLink(resourceId, resourceType, expiresAt = null) {
+      const authStore = useAuthStore();
+      
+      // 1. Generate Token
+      const tokenBytes = window.crypto.getRandomValues(new Uint8Array(32));
+      const token = btoa(String.fromCharCode(...tokenBytes))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+      let encryptedKeyForShare = "";
+      let fileKeys = {};
+
+      if (resourceType === 'file') {
+          const file = this.files.find(f => f.ID === resourceId);
+          if (file && file.EncryptedKey) {
+              try {
+                  // 2. Decrypt File Key
+                  const fileKey = await unwrapMasterKey(file.EncryptedKey, authStore.masterKey);
+                  
+                  // 3. Derive Share Key from Token
+                  const shareKey = await deriveKeyFromToken(token);
+
+                  // 4. Encrypt File Key with Share Key
+                  encryptedKeyForShare = await wrapMasterKey(fileKey, shareKey);
+              } catch (e) {
+                  console.error("Encryption error for share:", e);
+                  throw new Error("Failed to prepare encryption for share.");
+              }
+          }
+      } else if (resourceType === 'folder') {
+          const folder = this.folders.find(f => f.ID === resourceId);
+          if (folder) {
+              try {
+                  // Fetch ALL files in the folder recursively to get their keys
+                  console.log(`Fetching recursive files for path: ${folder.Path}`);
+                  const res = await api.get(`/files/list-recursive`, { params: { path: folder.Path } });
+                  const filesInFolder = res.data.files || [];
+                  console.log(`Found ${filesInFolder.length} files in folder.`);
+                  
+                  const shareKey = await deriveKeyFromToken(token);
+                  
+                  let missingKeysCount = 0;
+                  for (const f of filesInFolder) {
+                      console.log(`Processing file ${f.ID} (${f.Name}). Has Key: ${!!f.EncryptedKey}`);
+                      if (f.EncryptedKey) {
+                          const k = await unwrapMasterKey(f.EncryptedKey, authStore.masterKey);
+                          const sk = await wrapMasterKey(k, shareKey);
+                          fileKeys[f.ID] = sk;
+                      } else {
+                          missingKeysCount++;
+                      }
+                  }
+                  console.log(`Prepared keys for ${Object.keys(fileKeys).length} files.`);
+
+                  if (missingKeysCount > 0) {
+                      console.warn(`${missingKeysCount} files in this folder are missing encryption keys.`);
+                      alert(`Attention : ${missingKeysCount} fichiers dans ce dossier n'ont pas de clé de chiffrement (anciens fichiers ?). Ils ne seront pas lisibles via le partage.`);
+                  }
+              } catch (e) {
+                  console.error("Error preparing folder share:", e);
+                  // Continue anyway, maybe some files won't be readable
+              }
+          }
+      }
+
+      try {
+        const response = await api.post('/shares/link', {
+          resource_id: resourceId,
+          resource_type: resourceType,
+          expires_at: expiresAt,
+          token: token,
+          encrypted_key: encryptedKeyForShare,
+          file_keys: fileKeys
+        })
+        return response.data
+      } catch (error) {
+        console.error('Error creating share link:', error)
         throw error
       }
     }

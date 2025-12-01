@@ -65,16 +65,16 @@ func CreateFolderDB(db *bun.DB, folder *Folder) error {
 }
 
 // Lister les fichier d'un utilisateur
-func ListItemsByUser(db *bun.DB, userID string, path string) ([]File, []Folder, error) {
+func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, []FolderWithShare, error) {
 	ctx := context.Background()
-	var files []File
-	var folders []Folder
+	var filesPlain []File
+	var foldersPlain []Folder
 	var err error
 
 	if path == "/" {
 		// Pour la racine : on cherche les chemins qui commencent par '/' mais qui n'ont pas de deuxième '/'.
 		// Ex: '/test' (OK), '/image.jpg' (OK), mais pas '/test/doc.pdf' (NON)
-		err = db.NewSelect().Model(&files).
+		err = db.NewSelect().Model(&filesPlain).
 			Where("user_id = ?", userID).
 			Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
 			Scan(ctx)
@@ -82,7 +82,7 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]File, []Folder, 
 			return nil, nil, err
 		}
 
-		err = db.NewSelect().Model(&folders).
+		err = db.NewSelect().Model(&foldersPlain).
 			Where("user_id = ?", userID).
 			Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
 			Scan(ctx)
@@ -93,7 +93,7 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]File, []Folder, 
 		// Pour un sous-dossier (ex: /test) : on cherche les chemins qui commencent par '/test/'
 		// mais qui n'ont pas de '/' supplémentaire après.
 		searchPrefix := path + "/"
-		err = db.NewSelect().Model(&files).
+		err = db.NewSelect().Model(&filesPlain).
 			Where("user_id = ?", userID).
 			Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
 			Scan(ctx)
@@ -101,7 +101,7 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]File, []Folder, 
 			return nil, nil, err
 		}
 
-		err = db.NewSelect().Model(&folders).
+		err = db.NewSelect().Model(&foldersPlain).
 			Where("user_id = ?", userID).
 			Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
 			Scan(ctx)
@@ -110,7 +110,103 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]File, []Folder, 
 		}
 	}
 
-	return files, folders, nil
+	// --- Traitement des fichiers ---
+	filesWithShare := make([]FileWithShare, 0, len(filesPlain))
+	if len(filesPlain) > 0 {
+		fileIds := make([]int64, 0, len(filesPlain))
+		for _, f := range filesPlain {
+			fileIds = append(fileIds, f.ID)
+		}
+
+		var fileLinks []ShareLink
+		err = db.NewSelect().Model(&fileLinks).
+			Where("resource_type = ?", "file").
+			Where("resource_id IN (?)", bun.In(fileIds)).
+			Scan(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		fileLinkMap := make(map[int64]ShareLink)
+		for _, l := range fileLinks {
+			if _, ok := fileLinkMap[l.ResourceID]; !ok {
+				fileLinkMap[l.ResourceID] = l
+			}
+		}
+
+		for _, f := range filesPlain {
+			fw := FileWithShare{File: f}
+			if l, ok := fileLinkMap[f.ID]; ok {
+				fw.Shared = true
+				if l.OwnerID == userID {
+					tok := l.Token
+					fw.ShareToken = &tok
+					id := l.ID
+					fw.ShareID = &id
+				}
+			}
+			filesWithShare = append(filesWithShare, fw)
+		}
+	}
+
+	// --- Traitement des dossiers ---
+	foldersWithShare := make([]FolderWithShare, 0, len(foldersPlain))
+	if len(foldersPlain) > 0 {
+		folderIds := make([]int64, 0, len(foldersPlain))
+		for _, f := range foldersPlain {
+			folderIds = append(folderIds, f.ID)
+		}
+
+		var folderLinks []ShareLink
+		err = db.NewSelect().Model(&folderLinks).
+			Where("resource_type = ?", "folder").
+			Where("resource_id IN (?)", bun.In(folderIds)).
+			Scan(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		folderLinkMap := make(map[int64]ShareLink)
+		for _, l := range folderLinks {
+			if _, ok := folderLinkMap[l.ResourceID]; !ok {
+				folderLinkMap[l.ResourceID] = l
+			}
+		}
+
+		for _, f := range foldersPlain {
+			fw := FolderWithShare{Folder: f}
+			if l, ok := folderLinkMap[f.ID]; ok {
+				fw.Shared = true
+				if l.OwnerID == userID {
+					tok := l.Token
+					fw.ShareToken = &tok
+					id := l.ID
+					fw.ShareID = &id
+				}
+			}
+			foldersWithShare = append(foldersWithShare, fw)
+		}
+	}
+
+	return filesWithShare, foldersWithShare, nil
+}
+
+// GetAllFilesRecursive retrieves all files in a folder and its subfolders
+func GetAllFilesRecursive(db *bun.DB, userID string, rootPath string) ([]File, error) {
+	ctx := context.Background()
+	var files []File
+
+	searchPrefix := rootPath
+	if searchPrefix != "/" {
+		searchPrefix += "/"
+	}
+
+	err := db.NewSelect().Model(&files).
+		Where("user_id = ?", userID).
+		Where("path LIKE ?", searchPrefix+"%").
+		Scan(ctx)
+
+	return files, err
 }
 
 // supprimer un fichier
