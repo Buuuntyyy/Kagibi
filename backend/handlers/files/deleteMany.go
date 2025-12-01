@@ -1,14 +1,15 @@
 package files
 
 import (
+	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"safercloud/backend/pkg"
+	"safercloud/backend/pkg/s3storage"
 	"safercloud/backend/pkg/ws"
-	"safercloud/backend/utils"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
@@ -57,18 +58,22 @@ func BulkDeleteHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Aucun fichier trouvé à supprimer"})
 		return
 	}
-
-	// Supprimer les fichiers du système de fichiers
-	userRoot := filepath.Join("uploads", userID)
+	// Supprimer les fichiers de S3
 	for _, file := range filesToDelete {
-		diskPath, err := utils.SecureJoin(userRoot, file.Path)
+		s3Key := fmt.Sprintf("users/%s%s", userID, file.Path)
+		log.Printf("BulkDelete: Deleting S3 object. Bucket: %s, Key: %s", s3storage.BucketName, s3Key)
+
+		_, err = s3storage.Client.DeleteObject(c.Request.Context(), &s3.DeleteObjectInput{
+			Bucket: aws.String(s3storage.BucketName),
+			Key:    aws.String(s3Key),
+		})
+
 		if err != nil {
-			log.Printf("Security Alert: Path traversal in bulk delete: %v", err)
-			continue // On saute ce fichier suspect
+			log.Printf("Error deleting file from S3: %v", err)
 		}
-		os.Remove(diskPath) // On ignore l'erreur si le fichier n'existe déjà plus
 	}
 
+	// Supprimer les enregistrements de la base de données
 	// Supprimer les enregistrements de la base de données
 	_, err = tx.NewDelete().Model((*pkg.File)(nil)).
 		Where("id IN (?)", bun.In(req.FileIDs)).
