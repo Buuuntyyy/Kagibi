@@ -69,7 +69,7 @@ export async function unwrapMasterKey(wrappedKeyBase64, kek) {
         "raw",
         rawKeyData,
         { name: "AES-GCM" },
-        false,
+        true,
         ["encrypt", "decrypt"]
     );
 }
@@ -276,4 +276,17 @@ export async function hashRecoveryCode(recoveryCode) {
     const msg = sodium.from_string(recoveryCode);
     const hash = sodium.crypto_hash_sha256(msg);
     return sodium.to_hex(hash);
+}
+
+export async function deriveKeyFromToken(token) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(token);
+    const hash = await window.crypto.subtle.digest("SHA-256", data);
+    return window.crypto.subtle.importKey(
+        "raw",
+        hash,
+        { name: "AES-GCM" },
+        false,
+        ["encrypt", "decrypt"]
+    );
 }

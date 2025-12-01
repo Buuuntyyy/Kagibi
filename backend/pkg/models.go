@@ -1,7 +1,11 @@
 // internal/models.go
 package pkg
 
-import "time"
+import (
+	"time"
+
+	"github.com/uptrace/bun"
+)
 
 type User struct {
 	ID                         string    `bun:"id,pk"`
@@ -21,15 +25,41 @@ type User struct {
 }
 
 type File struct {
-	ID        int64     `bun:"id,pk,autoincrement"`
-	Name      string    `bun:"name,notnull"`
-	Path      string    `bun:"path,notnull"`      // Chemin relatif (ex: "/dossier1/fichier.txt")
-	Size      int64     `bun:"size,notnull"`      // Taille en octets
-	MimeType  string    `bun:"mime_type,notnull"` // Ex: "application/pdf"
-	UserID    string    `bun:"user_id,notnull"`   // Propriétaire du fichier
-	Tags      []string  `bun:"tags,array"`        // Tags
-	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
-	UpdatedAt time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
+	ID           int64     `bun:"id,pk,autoincrement"`
+	Name         string    `bun:"name,notnull"`
+	Path         string    `bun:"path,notnull"`      // Chemin relatif (ex: "/dossier1/fichier.txt")
+	Size         int64     `bun:"size,notnull"`      // Taille en octets
+	MimeType     string    `bun:"mime_type,notnull"` // Ex: "application/pdf"
+	UserID       string    `bun:"user_id,notnull"`   // Propriétaire du fichier
+	EncryptedKey string    `bun:"encrypted_key"`     // Clé du fichier chiffrée avec la MasterKey (pour les nouveaux fichiers)
+	Tags         []string  `bun:"tags,array"`        // Tags
+	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	UpdatedAt    time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
+}
+
+// Champs non persistés utilisés pour l'API
+func (File) TableName() string { return "files" }
+
+// Champs ajoutés pour l'API (non mappés en base)
+// `bun:"-"` indique à bun de ne pas essayer de mapper ces champs.
+type FileWithShare struct {
+	File
+	Shared     bool    `bun:"-" json:"shared"`
+	ShareToken *string `bun:"-" json:"share_token,omitempty"`
+	ShareID    *int64  `bun:"-" json:"share_id,omitempty"`
+}
+
+type FolderWithShare struct {
+	Folder
+	Shared     bool    `bun:"-" json:"shared"`
+	ShareToken *string `bun:"-" json:"share_token,omitempty"`
+	ShareID    *int64  `bun:"-" json:"share_id,omitempty"`
+}
+
+type ShareFileKey struct {
+	ShareID      int64  `bun:"share_id,pk"`
+	FileID       int64  `bun:"file_id,pk"`
+	EncryptedKey string `bun:"encrypted_key,notnull"`
 }
 
 type Folder struct {
@@ -46,4 +76,20 @@ type Tag struct {
 	UserID string `bun:"user_id,notnull" json:"user_id"`
 	Name   string `bun:"name,notnull" json:"name"`
 	Color  string `bun:"color,notnull" json:"color"` // Code Hex (ex: #FF0000)
+}
+
+type ShareLink struct {
+	bun.BaseModel `bun:"table:share_links,alias:sl"`
+
+	ID           int64      `bun:"id,pk,autoincrement"`
+	ResourceID   int64      `bun:"resource_id,notnull"`   // ID du fichier ou dossier
+	ResourceType string     `bun:"resource_type,notnull"` // "file" ou "folder"
+	Path         string     `bun:"path"`                  // Base path of the shared resource
+	OwnerID      string     `bun:"owner_id,notnull"`      // Créateur du lien
+	Token        string     `bun:"token,unique,notnull"`  // Le code dans l'URL (ex: "xYz123")
+	EncryptedKey string     `bun:"encrypted_key"`         // Clé du fichier chiffrée avec la ShareKey (pour les partages de fichiers)
+	PasswordHash string     `bun:"password_hash"`         // Optionnel : mot de passe
+	ExpiresAt    *time.Time `bun:"expires_at"`            // Optionnel : expiration
+	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	Views        int64      `bun:"views,default:0"`
 }
