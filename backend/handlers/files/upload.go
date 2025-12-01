@@ -12,13 +12,14 @@ import (
 
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/workers"
+	"safercloud/backend/pkg/ws"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/uptrace/bun"
 )
 
-func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
+func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client, wsManager *ws.Manager) {
 	userIDInterface, _ := c.Get("user_id")
 	userID := userIDInterface.(string)
 
@@ -248,6 +249,15 @@ func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 		if err := tx.Commit(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 			return
+		}
+
+		// Notify WebSocket about storage update
+		// We need to fetch the new total storage used
+		var updatedUser pkg.User
+		if err := db.NewSelect().Model(&updatedUser).Where("id = ?", userID).Scan(c); err == nil {
+			wsManager.SendToUser(userID, ws.MsgStorageUpdate, map[string]interface{}{
+				"storage_used": updatedUser.StorageUsed,
+			})
 		}
 
 		c.JSON(http.StatusCreated, gin.H{"message": "Upload en cours de traitement", "file": fileRecord})

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"os"
 	"safercloud/backend/handlers/auth"
 	"safercloud/backend/handlers/files"
@@ -11,10 +10,12 @@ import (
 	"safercloud/backend/handlers/shares"
 	"safercloud/backend/handlers/tags"
 	"safercloud/backend/handlers/users"
+	"safercloud/backend/handlers/ws"
 	"safercloud/backend/middleware"
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/s3storage"
 	"safercloud/backend/pkg/workers"
+	wsPkg "safercloud/backend/pkg/ws"
 
 	"time"
 
@@ -81,6 +82,9 @@ func main() {
 	// Start S3 Worker
 	workers.StartWorker(redisClient)
 
+	// Initialize WebSocket Manager
+	wsManager := wsPkg.NewManager()
+
 	api := router.Group("/api/v1")
 	// ROUTES PUBLIQUES (Non protégées par l'authentification)
 	publicRoutes := api.Group("/auth")
@@ -115,12 +119,12 @@ func main() {
 		// ROUTES FICHIERS
 		fileRoutes := protectedRoutes.Group("/files")
 		{
-			fileRoutes.POST("/upload", func(c *gin.Context) { files.UploadHandler(c, db, redisClient) })
+			fileRoutes.POST("/upload", func(c *gin.Context) { files.UploadHandler(c, db, redisClient, wsManager) })
 			fileRoutes.GET("/list-recursive", func(c *gin.Context) { files.ListAllFilesRecursiveHandler(c, db) })
 			fileRoutes.GET("/list/*path", func(c *gin.Context) { files.ListFilesHandler(c, db) })
-			fileRoutes.POST("/bulk-delete", func(c *gin.Context) { files.BulkDeleteHandler(c, db) })
-			fileRoutes.DELETE("/file/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db) })
-			fileRoutes.DELETE("/folder/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db) })
+			fileRoutes.POST("/bulk-delete", func(c *gin.Context) { files.BulkDeleteHandler(c, db, wsManager) })
+			fileRoutes.DELETE("/file/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db, wsManager) })
+			fileRoutes.DELETE("/folder/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db, wsManager) })
 			fileRoutes.POST("/move", func(c *gin.Context) { files.MoveHandler(c, db, redisClient) })
 			fileRoutes.POST("/rename", func(c *gin.Context) { files.RenameHandler(c, db, redisClient) })
 			fileRoutes.POST("/tags", func(c *gin.Context) { files.UpdateTagsHandler(c, db) })
@@ -151,13 +155,9 @@ func main() {
 		}
 	}
 
-	// Définis une route GET
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Hello, Gin!",
-		})
-	})
-
-	// Démarre le serveur sur le port 8080
-	router.Run(":8080")
-}
+		// Route WebSocket (Racine)
+		router.GET("/ws", func(c *gin.Context) { ws.ConnectHandler(c, wsManager, redisClient) })
+	
+		// Démarre le serveur sur le port 8080
+		router.Run(":8080")
+	}

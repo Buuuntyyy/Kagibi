@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"safercloud/backend/pkg"
+	"safercloud/backend/pkg/ws"
 	"safercloud/backend/utils"
 
 	"github.com/gin-gonic/gin"
@@ -17,7 +18,7 @@ type BulkDeleteRequest struct {
 	FileIDs []int64 `json:"file_ids" binding:"required"`
 }
 
-func BulkDeleteHandler(c *gin.Context, db *bun.DB) {
+func BulkDeleteHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
 	var req BulkDeleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Liste d'IDs invalide"})
@@ -97,8 +98,16 @@ func BulkDeleteHandler(c *gin.Context, db *bun.DB) {
 
 	// Si tout s'est bien passé, on commit la transaction
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Impossible de finaliser la suppression"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Impossible de valider la transaction"})
 		return
+	}
+
+	// Notify WebSocket about storage update
+	var user pkg.User
+	if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c); err == nil {
+		wsManager.SendToUser(userID, ws.MsgStorageUpdate, map[string]interface{}{
+			"storage_used": user.StorageUsed,
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Fichiers supprimés avec succès"})
