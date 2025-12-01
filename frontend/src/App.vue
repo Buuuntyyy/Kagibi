@@ -8,8 +8,22 @@
 <script setup>
 import Navbar from './components/layout/navbar.vue'
 import { useThemeStore } from './stores/theme'
+import { useAuthStore } from './stores/auth'
+import { useWebSocketStore } from './stores/websocket'
+import { watch } from 'vue'
 
 const themeStore = useThemeStore()
+const authStore = useAuthStore()
+const wsStore = useWebSocketStore()
+
+// Connect WebSocket when authenticated
+watch(() => authStore.isAuthenticated, (isAuthenticated) => {
+  if (isAuthenticated) {
+    wsStore.connect()
+  } else {
+    wsStore.disconnect()
+  }
+}, { immediate: true })
 </script>
 
 <style>
