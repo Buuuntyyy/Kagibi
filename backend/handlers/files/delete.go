@@ -8,6 +8,7 @@ import (
 
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/s3storage"
+	"safercloud/backend/pkg/ws"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -15,7 +16,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-func DeleteFileHandler(c *gin.Context, db *bun.DB) {
+func DeleteFileHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
 	fileID, err := strconv.ParseInt(c.Param("fileID"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID de fichier invalide"})
@@ -52,10 +53,18 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	// Notify WebSocket about storage update
+	var user pkg.User
+	if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c); err == nil {
+		wsManager.SendToUser(userID, ws.MsgStorageUpdate, map[string]interface{}{
+			"storage_used": user.StorageUsed,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "Fichier supprimé avec succès"})
 }
 
-func DeleteFolderHandler(c *gin.Context, db *bun.DB) {
+func DeleteFolderHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
 	folderID, err := strconv.ParseInt(c.Param("folderID"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID de dossier invalide"})
@@ -75,6 +84,14 @@ func DeleteFolderHandler(c *gin.Context, db *bun.DB) {
 	if err := pkg.DeleteFolder(db, folderID, userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la suppression en base"})
 		return
+	}
+
+	// Notify WebSocket about storage update
+	var user pkg.User
+	if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c); err == nil {
+		wsManager.SendToUser(userID, ws.MsgStorageUpdate, map[string]interface{}{
+			"storage_used": user.StorageUsed,
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Dossier supprimé avec succès"})
