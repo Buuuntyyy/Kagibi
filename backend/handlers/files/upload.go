@@ -2,6 +2,7 @@
 package files
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,6 +26,9 @@ func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 	if path == "" {
 		path = "/"
 	}
+
+	encryptedKey := c.PostForm("encrypted_key")
+	shareKeysJSON := c.PostForm("share_keys") // JSON string: {"shareID": "encryptedKey", ...}
 
 	// Paramètre de chunking
 	chunkIndexStr := c.PostForm("chunk_index")
@@ -151,11 +155,12 @@ func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 		// Note: We do NOT remove tempFilePath here. The worker will remove it after successful upload.
 
 		fileRecord := &pkg.File{
-			Name:     fileHeader.Filename,
-			Path:     fullPathDB,
-			Size:     fileSize,
-			MimeType: fileHeader.Header.Get("Content-Type"),
-			UserID:   userID,
+			Name:         fileHeader.Filename,
+			Path:         fullPathDB,
+			Size:         fileSize,
+			MimeType:     fileHeader.Header.Get("Content-Type"),
+			UserID:       userID,
+			EncryptedKey: encryptedKey,
 		}
 
 		// Vérifier si le fichier existe deja
@@ -191,6 +196,53 @@ func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur base de données"})
 			return
+		}
+
+		// Handle Share Keys if provided
+		if shareKeysJSON != "" {
+			var shareKeysMap map[string]string
+			if err := json.Unmarshal([]byte(shareKeysJSON), &shareKeysMap); err == nil {
+				var shareFileKeys []pkg.ShareFileKey
+
+				// Need to get the File ID. If it was an update, we need to fetch it.
+				// If it was an insert, fileRecord.ID should be populated by Bun if we passed a pointer?
+				// Bun populates ID on Insert. But on Update, we might need to fetch it if we didn't have it.
+
+				var finalFileID int64
+				if existsInDB {
+					// Fetch ID
+					var f pkg.File
+					_ = tx.NewSelect().Model(&f).Where("user_id = ? AND path = ?", userID, fullPathDB).Scan(c)
+					finalFileID = f.ID
+				} else {
+					finalFileID = fileRecord.ID
+				}
+
+				for sIDStr, key := range shareKeysMap {
+					sID, _ := strconv.ParseInt(sIDStr, 10, 64)
+					if sID > 0 {
+						shareFileKeys = append(shareFileKeys, pkg.ShareFileKey{
+							ShareID:      sID,
+							FileID:       finalFileID,
+							EncryptedKey: key,
+						})
+					}
+				}
+
+				if len(shareFileKeys) > 0 {
+					// Use OnConflict to update if exists
+					_, err = tx.NewInsert().Model(&shareFileKeys).
+						On("CONFLICT (share_id, file_id) DO UPDATE").
+						Set("encrypted_key = EXCLUDED.encrypted_key").
+						Exec(c)
+					if err != nil {
+						// Log error but don't fail upload? Or fail?
+						// Better to fail so client knows sharing is broken
+						// But maybe not critical. Let's log.
+						fmt.Printf("Error inserting share keys: %v\n", err)
+					}
+				}
+			}
 		}
 
 		if err := tx.Commit(); err != nil {

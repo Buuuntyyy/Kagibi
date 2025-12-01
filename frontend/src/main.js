@@ -12,7 +12,5 @@ const app = createApp(App)
 app.use(pinia)
 const authStore = useAuthStore(pinia);
 
-authStore.checkAuth().then(() => {
-  app.use(router)
-  app.mount('#app')
-})
+app.use(router)
+app.mount('#app')

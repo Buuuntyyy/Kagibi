@@ -1,5 +1,20 @@
 <template>
   <div class="left-bar">
+    <div class="action-section">
+      <button class="btn-new" @click.stop="toggleNewMenu">
+        <span class="plus-icon">+</span>
+        <span>Nouveau</span>
+      </button>
+      <div v-if="showNewMenu" class="new-menu-dropdown" @click.stop>
+        <div class="dropdown-item" @click="triggerUpload">
+          <span class="icon">📄</span> Fichier
+        </div>
+        <div class="dropdown-item" @click="triggerCreateFolder">
+          <span class="icon">📁</span> Dossier
+        </div>
+      </div>
+    </div>
+
     <div class="menu-section">
       <div class="menu-item active">
         <span class="icon">📁</span>
@@ -24,14 +39,100 @@
         <div class="storage-fill" :style="{ width: storagePercentage + '%' }"></div>
       </div>
     </div>
+
+    <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" />
+    <InputDialog 
+      v-model:isOpen="inputDialog.isOpen"
+      :title="inputDialog.title"
+      :defaultValue="inputDialog.defaultValue"
+      :placeholder="inputDialog.placeholder"
+      @confirm="handleInputConfirm"
+      @cancel="handleInputCancel"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../../stores/auth'
+import { useFileStore } from '../../stores/files'
+import InputDialog from '../InputDialog.vue'
 
 const authStore = useAuthStore()
+const fileStore = useFileStore()
+
+const showNewMenu = ref(false)
+const fileInput = ref(null)
+const inputDialog = ref({
+  isOpen: false,
+  title: '',
+  defaultValue: '',
+  placeholder: '',
+  resolve: null
+})
+
+const toggleNewMenu = () => {
+  showNewMenu.value = !showNewMenu.value
+}
+
+const closeNewMenu = () => {
+  showNewMenu.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('click', closeNewMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeNewMenu)
+})
+
+const triggerUpload = () => {
+  fileInput.value.click()
+  showNewMenu.value = false
+}
+
+const handleFileUpload = async (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    await fileStore.uploadFile(file)
+    event.target.value = ''
+  }
+}
+
+const openInputDialog = (title, defaultValue = '', placeholder = '') => {
+  return new Promise((resolve) => {
+    inputDialog.value = {
+      isOpen: true,
+      title,
+      defaultValue,
+      placeholder,
+      resolve
+    }
+  })
+}
+
+const handleInputConfirm = (value) => {
+  if (inputDialog.value.resolve) {
+    inputDialog.value.resolve(value)
+  }
+  inputDialog.value.resolve = null
+}
+
+const handleInputCancel = () => {
+  if (inputDialog.value.resolve) {
+    inputDialog.value.resolve(null)
+  }
+  inputDialog.value.resolve = null
+}
+
+const triggerCreateFolder = async () => {
+  showNewMenu.value = false
+  const folderName = await openInputDialog("Entrez le nom du nouveau dossier :")
+  if (folderName) {
+    await fileStore.createFolder(folderName)
+  }
+}
 
 const formatSize = (bytes) => {
   if (bytes === 0) return '0 B'
@@ -64,8 +165,15 @@ const storagePercentage = computed(() => {
   flex-direction: column;
   justify-content: space-between;
   padding: 1rem;
+  padding-top: 0;
   height: 100%;
   box-sizing: border-box;
+}
+
+.menu-section {
+  padding-top: 2rem;
+  flex-grow: 1;
+  overflow-y: auto;
 }
 
 .menu-item {
@@ -121,5 +229,64 @@ const storagePercentage = computed(() => {
   height: 100%;
   background-color: #42b983;
   border-radius: 3px;
+}
+
+.action-section {
+  margin-bottom: 1rem;
+  position: relative;
+}
+
+.btn-new {
+  width: 100%;
+  height: 120%;
+  padding: 0.8rem;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-weight: bold;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  transition: all 0.2s;
+}
+
+.btn-new:hover {
+  background-color: #f8f9fa;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+
+.plus-icon {
+  font-size: 1.2rem;
+  color: var(--primary-color, #42b983);
+}
+
+.new-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 100;
+  margin-top: 5px;
+  overflow: hidden;
+}
+
+.dropdown-item {
+  padding: 10px 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 0.2s;
+}
+
+.dropdown-item:hover {
+  background-color: #f0f0f0;
 }
 </style>
