@@ -35,6 +35,8 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
 
 	// 2. Supprimer de S3
 	s3Key := fmt.Sprintf("users/%s%s", userID, file.Path)
+	log.Printf("Attempting to delete S3 object. Bucket: %s, Key: %s", s3storage.BucketName, s3Key)
+
 	_, err = s3storage.Client.DeleteObject(c.Request.Context(), &s3.DeleteObjectInput{
 		Bucket: aws.String(s3storage.BucketName),
 		Key:    aws.String(s3Key),
@@ -42,9 +44,8 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
 
 	if err != nil {
 		log.Printf("Error deleting file from S3: %v", err)
-		// On continue quand même pour supprimer de la BDD, ou on peut retourner une erreur
-		// c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete file from storage"})
-		// return
+	} else {
+		log.Printf("Successfully deleted S3 object: %s", s3Key)
 	}
 
 	// 3. Supprimer de la BDD
