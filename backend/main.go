@@ -8,6 +8,7 @@ import (
 	"safercloud/backend/handlers/auth"
 	"safercloud/backend/handlers/files"
 	"safercloud/backend/handlers/folders"
+	"safercloud/backend/handlers/shares"
 	"safercloud/backend/handlers/tags"
 	"safercloud/backend/handlers/users"
 	"safercloud/backend/middleware"
@@ -24,6 +25,8 @@ import (
 )
 
 func main() {
+	log.Println("Starting SaferCloud Backend v2.1 (With Share Keys Fix)...")
+
 	// Load .env file
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found")
@@ -88,6 +91,15 @@ func main() {
 		publicRoutes.POST("/recovery/finish", func(c *gin.Context) { auth.RecoveryFinishHandler(c, db) })
 	}
 
+	// ROUTES PUBLIQUES DE PARTAGE
+	publicShareRoutes := api.Group("/public/share")
+	{
+		publicShareRoutes.GET("/:token", func(c *gin.Context) { shares.GetShareLinkHandler(c, db) })
+		publicShareRoutes.GET("/:token/download", func(c *gin.Context) { shares.DownloadSharedFileHandler(c, db) })
+		publicShareRoutes.GET("/:token/download/file/:file_id", func(c *gin.Context) { shares.DownloadFileFromSharedFolderHandler(c, db) })
+		publicShareRoutes.GET("/:token/browse/*subpath", func(c *gin.Context) { shares.BrowseSharedFolderHandler(c, db) })
+	}
+
 	// ROUTES PROTÉGÉES (Protégées par l'authentification JWT)
 	protectedRoutes := api.Group("/")
 	protectedRoutes.Use(middleware.AuthMiddleware(redisClient))
@@ -104,6 +116,7 @@ func main() {
 		fileRoutes := protectedRoutes.Group("/files")
 		{
 			fileRoutes.POST("/upload", func(c *gin.Context) { files.UploadHandler(c, db, redisClient) })
+			fileRoutes.GET("/list-recursive", func(c *gin.Context) { files.ListAllFilesRecursiveHandler(c, db) })
 			fileRoutes.GET("/list/*path", func(c *gin.Context) { files.ListFilesHandler(c, db) })
 			fileRoutes.POST("/bulk-delete", func(c *gin.Context) { files.BulkDeleteHandler(c, db) })
 			fileRoutes.DELETE("/file/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db) })
@@ -126,6 +139,15 @@ func main() {
 			tagRoutes.GET("/", tags.ListTagsHandler(db))
 			tagRoutes.POST("/", tags.CreateTagHandler(db))
 			tagRoutes.DELETE("/:id", tags.DeleteTagHandler(db))
+		}
+
+		// ROUTES PARTAGE
+		shareRoutes := protectedRoutes.Group("/shares")
+		{
+			shareRoutes.POST("/link", func(c *gin.Context) { shares.CreateShareLinkHandler(c, db) })
+			shareRoutes.GET("/check-path", func(c *gin.Context) { shares.GetActiveSharesForPathHandler(c, db) })
+			shareRoutes.GET("/file/:fileID", func(c *gin.Context) { shares.GetShareForResourceHandler(c, db) })
+			shareRoutes.DELETE("/link/:shareID", func(c *gin.Context) { shares.DeleteShareLinkHandler(c, db) })
 		}
 	}
 

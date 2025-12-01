@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Dashboard from '../views/dashboard.vue'
 import Login from '../views/Login.vue'
 import Account from '../views/account.vue'
+import PublicShare from '../views/PublicShare.vue'
+import PublicBrowse from '../views/PublicBrowse.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -23,6 +25,16 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/s/:token',
+    name: 'PublicShare',
+    component: PublicShare,
+  },
+  {
+    path: '/s/:token/browse/:subpath(.*)*',
+    name: 'PublicBrowse',
+    component: PublicBrowse,
+  },
+  {
     path: '/',
     redirect: '/dashboard',
   },
@@ -35,6 +47,13 @@ const router = createRouter({
 
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
+
+  // Skip auth check for public routes to avoid 401 errors for non-authenticated users
+  if (to.name === 'PublicShare' || to.name === 'PublicBrowse') {
+    next()
+    return
+  }
+
   const isAuthenticated = await authStore.checkAuth()
 
   if (to.meta.requiresAuth && !isAuthenticated) {

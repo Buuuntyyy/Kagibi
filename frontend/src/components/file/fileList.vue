@@ -33,7 +33,11 @@
       <span @click="goUp" class="back-arrow" :class="{ 'disabled': fileStore.currentPath === '/' }"
             @drop.stop="onDropOnParent"
             @dragover.prevent="onFolderDragOver"
-            @dragleave="onFolderDragLeave">←</span>
+            @dragleave="onFolderDragLeave">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </span>
       <div class="breadcrumbs">
         <span v-for="(segment, index) in pathSegments" :key="index" class="breadcrumb-segment">
           <span 
@@ -74,7 +78,7 @@
       <span class="header-size">Taille</span>
     </div>
 
-    <div class="list-area" @contextmenu.prevent="openBackgroundContextMenu($event)">
+    <div class="list-area" @contextmenu.prevent="openBackgroundContextMenu($event)" @click.self="selectedItems = []">
       <!-- Folders -->
       <div v-for="folder in filteredFolders" :key="folder.ID" 
            class="list-item folder-item" 
@@ -88,7 +92,12 @@
            @dragover.prevent="onFolderDragOver"
            @dragleave="onFolderDragLeave">
         <span class="icon">📁</span>
-        <span class="name">{{ folder.Name }}</span>
+        <div class="name-wrapper">
+          <span class="name">{{ folder.Name }}</span>
+          <span v-if="folder.shared" class="shared-icon" title="Dossier partagé" @click.stop="openManageShareDialog(folder, 'folder')">
+            <svg xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 0 24 24" width="18px" fill="#5f6368"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          </span>
+        </div>
         <span class="tags-column">
           <span v-if="folder.Tags && folder.Tags.length" class="tags-container">
             <span v-for="tag in folder.Tags" :key="tag" class="tag-badge" :style="getTagStyle(tag)">
@@ -108,9 +117,16 @@
           @click="selectItem(file, 'file', $event)"
           @dblclick="downloadFile(file)"
           @contextmenu.prevent.stop="openContextMenu($event, file, 'file')"
+          draggable="true"
+          @dragstart="onDragStart(file, 'file', $event)"
       >
         <span class="icon">📄</span>
-        <span class="name">{{ file.Name }}</span>
+        <div class="name-wrapper">
+          <span class="name">{{ file.Name }}</span>
+          <span v-if="file.shared" class="shared-icon" title="Fichier partagé" @click.stop="openManageShareDialog(file)" @mouseover="onShareIconHover(true, $event)" @mouseleave="onShareIconHover(false, $event)">
+            <svg xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 0 24 24" width="18px" fill="#5f6368"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+          </span>
+        </div>
         <span class="tags-column">
           <span v-if="file.Tags && file.Tags.length" class="tags-container">
             <span v-for="tag in file.Tags" :key="tag" class="tag-badge" :style="getTagStyle(tag)">
@@ -134,6 +150,15 @@
         </div>
         <div class="menu-item" @click="handleContextAction('rename')">
           ✏️ Renommer
+        </div>
+        <div class="menu-item" @click="handleContextAction('move')">
+          🚚 Déplacer
+        </div>
+        <div class="menu-item" @click="handleContextAction('share')">
+          🔗 Partager
+        </div>
+        <div class="menu-item" v-if="contextMenu.item && contextMenu.item.shared" @click="handleContextAction('get-share-link')">
+          🔎 Voir le lien de partage
         </div>
         <div class="menu-item" @click="handleContextAction('tags')">
           🏷️ Tags
@@ -165,6 +190,88 @@
       :initialTags="tagDialog.initialTags"
       @confirm="handleTagConfirm"
     />
+    <ShareDialog
+      :isOpen="shareDialog.isOpen"
+      :item="shareDialog.item"
+      @close="closeShareDialog"
+    />
+    <ManageShareDialog
+      :isOpen="manageShareDialog.isOpen"
+      :item="manageShareDialog.item"
+      @close="closeManageShareDialog"
+      @share-deleted="onShareDeleted"
+    />
+    <MoveDialog
+      v-if="moveDialog.isOpen"
+      @close="closeMoveDialog"
+      @move-to="onMoveTo"
+    />
+  <div
+    class="context-menu"
+    v-if="contextMenu.visible"
+    :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }">
+      <template v-if="contextMenu.item">
+        <div class="menu-item" @click="handleContextAction('download')" v-if="contextMenu.item.type === 'file'">
+          📥 Télécharger
+        </div>
+        <div class="menu-item" @click="handleContextAction('rename')">
+          ✏️ Renommer
+        </div>
+        <div class="menu-item" @click="handleContextAction('move')">
+          🚚 Déplacer
+        </div>
+        <div class="menu-item" @click="handleContextAction('share')">
+          🔗 Partager
+        </div>
+        <div class="menu-item" v-if="contextMenu.item && contextMenu.item.shared" @click="handleContextAction('get-share-link')">
+          🔎 Voir le lien de partage
+        </div>
+        <div class="menu-item" @click="handleContextAction('tags')">
+          🏷️ Tags
+        </div>
+        <div class="menu-item delete" @click="handleContextAction('delete')">
+          🗑️ Supprimer
+        </div>
+      </template>
+      <template v-else>
+        <div class="menu-item" @click="handleContextAction('add-file')">
+          📄 Ajouter un fichier
+        </div>
+        <div class="menu-item" @click="handleContextAction('create-folder')">
+          📁 Créer un dossier
+        </div>
+      </template>
+    </div>
+
+    <InputDialog 
+      v-model:isOpen="inputDialog.isOpen"
+      :title="inputDialog.title"
+      :defaultValue="inputDialog.defaultValue"
+      :placeholder="inputDialog.placeholder"
+      @confirm="handleInputConfirm"
+      @cancel="handleInputCancel"
+    />
+    <TagDialog 
+      v-model:isOpen="tagDialog.isOpen"
+      :initialTags="tagDialog.initialTags"
+      @confirm="handleTagConfirm"
+    />
+    <ShareDialog
+      :isOpen="shareDialog.isOpen"
+      :item="shareDialog.item"
+      @close="closeShareDialog"
+    />
+    <ManageShareDialog
+      :isOpen="manageShareDialog.isOpen"
+      :item="manageShareDialog.item"
+      @close="closeManageShareDialog"
+      @share-deleted="onShareDeleted"
+    />
+    <MoveDialog
+      v-if="moveDialog.isOpen"
+      @close="closeMoveDialog"
+      @move-to="onMoveTo"
+    />
   </div>
 </template>
 
@@ -177,6 +284,10 @@ import { usePreferencesStore } from '../../stores/preferences'
 import { useTagStore } from '../../stores/tags'
 import InputDialog from '../InputDialog.vue'
 import TagDialog from '../TagDialog.vue'
+import ShareDialog from '../ShareDialog.vue'
+import api from '../../api'
+import MoveDialog from '../MoveDialog.vue';
+import ManageShareDialog from '../ManageShareDialog.vue';
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -184,6 +295,7 @@ const fileStore = useFileStore()
 const preferenceStore = usePreferencesStore()
 const tagStore = useTagStore()
 const selectedItems = ref([])
+const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
 const fileInput = ref(null)
 const isDragging = ref(false)
 
@@ -199,6 +311,13 @@ const filteredFiles = computed(() => {
   return fileStore.files.filter(file => file.Name.toLowerCase().includes(query))
 })
 
+const allItems = computed(() => {
+  return [
+    ...filteredFolders.value.map(item => ({ ...item, type: 'folder' })),
+    ...filteredFiles.value.map(item => ({ ...item, type: 'file' }))
+  ]
+})
+
 const inputDialog = ref({
   isOpen: false,
   title: '',
@@ -212,6 +331,77 @@ const tagDialog = ref({
   initialTags: [],
   resolve: null
 })
+
+const shareDialog = ref({
+  isOpen: false,
+  item: null
+})
+
+const manageShareDialog = ref({
+  isOpen: false,
+  item: null,
+});
+
+const moveDialog = ref({
+  isOpen: false,
+});
+
+const openManageShareDialog = (item, type = 'file') => {
+  manageShareDialog.value = {
+    isOpen: true,
+    item: { ...item, type: type },
+  };
+};
+
+const closeManageShareDialog = () => {
+  manageShareDialog.value.isOpen = false;
+  manageShareDialog.value.item = null;
+};
+
+const onShareDeleted = () => {
+  fileStore.fetchItems(fileStore.currentPath)
+  closeManageShareDialog()
+}
+
+const openMoveDialog = () => {
+  moveDialog.value.isOpen = true
+}
+
+const closeMoveDialog = () => {
+  moveDialog.value.isOpen = false
+}
+
+const onMoveTo = (destinationPath) => {
+  fileStore.moveItems(selectedItems.value, destinationPath)
+  closeMoveDialog()
+}
+
+const onFileUploaded = () => {
+  fileStore.fetchItems(fileStore.currentPath)
+}
+
+const onShareIconHover = (isHovering, event) => {
+  const listItem = event.target.closest('.list-item');
+  if (listItem) {
+    if (isHovering) {
+      listItem.classList.add('no-hover');
+    } else {
+      listItem.classList.remove('no-hover');
+    }
+  }
+};
+
+const openShareDialog = (item) => {
+  shareDialog.value = {
+    isOpen: true,
+    item: { id: item.ID, type: item.type, name: item.Name }
+  };
+};
+
+const closeShareDialog = () => {
+  shareDialog.value.isOpen = false;
+  shareDialog.value.item = null;
+};
 
 const openInputDialog = (title, defaultValue = '', placeholder = '') => {
   return new Promise((resolve) => {
@@ -397,6 +587,23 @@ const handleContextAction = (action) => {
     case 'rename':
       renameSelectedItem()
       break
+    case 'move':
+      openMoveDialog()
+      break
+    case 'share':
+      openShareDialog(item)
+      break
+    case 'get-share-link':
+      if (item.type === 'file' && item.share_token) {
+        const shareUrl = `${window.location.origin}/s/${item.share_token}`;
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          alert('Lien de partage copié dans le presse-papiers !');
+        }).catch(err => {
+          alert('Impossible de copier le lien.');
+          console.error('Could not copy text: ', err);
+        });
+      }
+      break
     case 'tags':
       updateTags()
       break
@@ -408,16 +615,31 @@ const handleContextAction = (action) => {
 }
 
 const selectItem = (item, type, event) => {
-  const isSelected = selectedItems.value.some(i => i.ID === item.ID && i.type === type);
+  const currentIndex = allItems.value.findIndex(i => i.ID === item.ID && i.type === type);
   const itemWithType = { ...item, type };
-  
-  if (!event.ctrlKey && !event.metaKey) { // si ctrl ou cmd n'est pas enfoncé
-    selectedItems.value = isSelected ? [] : [itemWithType]; // Select only this item
-  } else { // si ctrl ou cmd est enfoncé
-    if (isSelected) {
-      selectedItems.value = selectedItems.value.filter(i => !(i.ID === item.ID && i.type === type)); // Deselect item
+
+  if (event.shiftKey && lastClickedIndex.value !== -1) {
+    const start = Math.min(lastClickedIndex.value, currentIndex);
+    const end = Math.max(lastClickedIndex.value, currentIndex);
+    const rangeToSelect = allItems.value.slice(start, end + 1);
+    
+    selectedItems.value = rangeToSelect;
+
+  } else if (event.ctrlKey || event.metaKey) {
+    const isItemSelected = isSelected(item, type);
+    if (isItemSelected) {
+      selectedItems.value = selectedItems.value.filter(i => !(i.ID === item.ID && i.type === type));
     } else {
-      selectedItems.value.push(itemWithType); // Add to selection
+      selectedItems.value.push(itemWithType);
+    }
+    lastClickedIndex.value = currentIndex;
+  } else {
+    if (isSelected(item, type) && selectedItems.value.length === 1) {
+      selectedItems.value = [];
+      lastClickedIndex.value = -1;
+    } else {
+      selectedItems.value = [itemWithType];
+      lastClickedIndex.value = currentIndex;
     }
   }
 }
@@ -663,6 +885,7 @@ const onDropOnParent = async (event) => {
 
 <style scoped>
 .file-list-container {
+  margin-top: 0.8rem;
   position: relative;
   background-color: var(--card-color);
   height: 100%;
@@ -674,6 +897,7 @@ const onDropOnParent = async (event) => {
 
 .path-banner {
   padding: 0.5rem 1rem;
+  padding-top: 0;
   background-color: var(--card-color);
   border-bottom: 1px solid #ccc;
   display: flex;
@@ -684,25 +908,29 @@ const onDropOnParent = async (event) => {
 
 .back-arrow {
   cursor: pointer;
-  font-size: 1.5rem;
-  font-weight: bold;
-  padding: 0.2rem 0.8rem;
-  color: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: #555;
   border: 1px solid #ccc;
-  border-radius: 5px;
-  background-color: #f0f0f0;
-  transition: background-color 0.2s;
-  line-height: 1;
+  border-radius: 50%;
+  background-color: white;
+  transition: all 0.2s;
 }
 
 .back-arrow:not(.disabled):hover {
-  background-color: var(--hover-background-color);
+  background-color: #f0f0f0;
+  border-color: #bbb;
+  color: #333;
 }
 
 .back-arrow.disabled {
   color: #ccc;
   cursor: not-allowed;
-  background-color: var(--background-color);
+  background-color: #f9f9f9;
   border-color: #eee;
 }
 
@@ -802,12 +1030,36 @@ const onDropOnParent = async (event) => {
   display: flex;
   justify-content: center;
 }
+.name-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  padding-right: 1rem;
+}
+
 .name {
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-right: 1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.shared-icon {
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+  text-align: right;
+  cursor: pointer;
+}
+.shared-icon:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 25%;
+}
+
+.list-item.no-hover:hover {
+  background-color: transparent;
 }
 .size {
   color: #5c5c5c;
@@ -864,6 +1116,7 @@ button {
   display: flex;
   align-items: center;
   font-size: 1.5rem;
+  transform: translateY(-2px);
 }
 
 .breadcrumb-segment {
@@ -876,6 +1129,7 @@ button {
   color: var(--primary-color, #42b983);
   text-decoration: none;
   padding: 0.2rem 0.5rem;
+  padding-top: 0.2rem;
   border-radius: 4px;
   transition: all 0.2s ease;
 }
@@ -1076,7 +1330,7 @@ button {
   color: #333;
   font-size: 0.75rem;
   padding: 2px 6px;
-  border-radius: 10px;
+  border-radius: 10%;
   border: 1px solid #ccc;
   display: inline-flex;
   align-items: center;

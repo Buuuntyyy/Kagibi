@@ -4,24 +4,52 @@ package pkg
 import (
 	"context"
 	"fmt"
+
 	"github.com/uptrace/bun"
 )
 
 func Migrate(db *bun.DB) error {
 	ctx := context.Background()
 
+	// Enable uuid-ossp extension for UUID generation
+	_, err := db.ExecContext(ctx, `CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`)
+	if err != nil {
+		return fmt.Errorf("failed to enable uuid-ossp extension: %w", err)
+	}
+
 	// Crée les tables si elles n'existent pas
-	models := []interface{}{(*User)(nil), (*File)(nil), (*Folder)(nil), (*Tag)(nil)}
+	models := []interface{}{(*User)(nil), (*File)(nil), (*Folder)(nil), (*Tag)(nil), (*ShareLink)(nil), (*ShareFileKey)(nil)}
 
 	for _, model := range models {
-		_, err := db.NewSelect().Model(model).Exec(ctx)
+		// Try to create table if not exists
+		_, err := db.NewCreateTable().Model(model).IfNotExists().Exec(ctx)
 		if err != nil {
-			_, err = db.NewCreateTable().Model(model).IfNotExists().Exec(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to create table: %w", err)
-			}
-			fmt.Printf("Table created: %T\n", model)
+			return fmt.Errorf("failed to create table: %w", err)
 		}
+	}
+
+	// Manually add the 'path' column to 'share_links' if it doesn't exist
+	_, err = db.ExecContext(ctx, `ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "path" VARCHAR NOT NULL DEFAULT '';`)
+	if err != nil {
+		return fmt.Errorf("failed to add path column to share_links: %w", err)
+	}
+
+	// Add encrypted_key to files
+	_, err = db.ExecContext(ctx, `ALTER TABLE "files" ADD COLUMN IF NOT EXISTS "encrypted_key" VARCHAR;`)
+	if err != nil {
+		return fmt.Errorf("failed to add encrypted_key column to files: %w", err)
+	}
+
+	// Add encrypted_key to share_links
+	_, err = db.ExecContext(ctx, `ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "encrypted_key" VARCHAR;`)
+	if err != nil {
+		return fmt.Errorf("failed to add encrypted_key column to share_links: %w", err)
+	}
+
+	// Update existing rows to have a default path if it's empty
+	_, err = db.ExecContext(ctx, `UPDATE "share_links" SET "path" = '' WHERE "path" IS NULL;`)
+	if err != nil {
+		return fmt.Errorf("failed to update existing paths in share_links: %w", err)
 	}
 
 	return nil
