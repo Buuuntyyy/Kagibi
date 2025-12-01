@@ -26,6 +26,14 @@ export const useAuthStore = defineStore('auth', {
           const kek = await deriveKeyFromPassword(credentials.password, saltBytes);
           this.masterKey = await unwrapMasterKey(encrypted_master_key, kek);
           
+          // Persist key for page reload (SessionStorage)
+          try {
+            const exportedKey = await window.crypto.subtle.exportKey("jwk", this.masterKey);
+            sessionStorage.setItem("safercloud_mk", JSON.stringify(exportedKey));
+          } catch (e) {
+            console.error("Failed to persist master key", e);
+          }
+          
         } else {
           this.masterKey = null;
           console.warn("No salt received from server during login.");
@@ -85,6 +93,7 @@ export const useAuthStore = defineStore('auth', {
         this.isAuthenticated = false;
         this.user = null;
         this.masterKey = null;
+        sessionStorage.removeItem("safercloud_mk");
         router.push({ name: 'Login' });
       }
     },
@@ -93,8 +102,26 @@ export const useAuthStore = defineStore('auth', {
         const response = await api.get('/users/me');
         this.isAuthenticated = true;
         this.user = response.data;
-        // Note: Au refresh de la page, masterKey est perdu (c'est voulu pour la sécurité).
-        // L'utilisateur devra peut-être se reconnecter ou retaper son mot de passe pour déchiffrer.
+        
+        // Restore master key from session if available
+        if (!this.masterKey) {
+          const storedKey = sessionStorage.getItem("safercloud_mk");
+          if (storedKey) {
+            try {
+              const jwk = JSON.parse(storedKey);
+              this.masterKey = await window.crypto.subtle.importKey(
+                "jwk",
+                jwk,
+                { name: "AES-GCM" },
+                true,
+                ["encrypt", "decrypt"]
+              );
+            } catch (e) {
+              console.error("Failed to restore master key from session", e);
+            }
+          }
+        }
+
         return true
 
       } catch (error) {
