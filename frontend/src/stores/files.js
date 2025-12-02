@@ -115,6 +115,10 @@ export const useFileStore = defineStore('files', {
       }
 
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      // Calculate estimated encrypted size: original size + overhead (16 bytes salt + 12 bytes IV) per chunk
+      const overheadPerChunk = 28; 
+      const totalEncryptedSize = file.size + (totalChunks * overheadPerChunk);
+
       let chunkIndex = 0;
       let offset = 0;
       this.isUploading = true;
@@ -123,18 +127,26 @@ export const useFileStore = defineStore('files', {
 
       try {
         while(offset < file.size) {
-          const chunkBlob = file.slice(offset, offset + CHUNK_SIZE);
-          const chunkArrayBuffer = await chunkBlob.arrayBuffer();
+          let chunkBlob = file.slice(offset, offset + CHUNK_SIZE);
+          let chunkArrayBuffer = await chunkBlob.arrayBuffer();
 
-          const encryptedChunkBlob = await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex);
+          let encryptedChunkBlob = await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex);
+          
+          // Help GC: Release source buffer immediately
+          chunkArrayBuffer = null;
+          chunkBlob = null;
 
-          const encryptedFile = new File([encryptedChunkBlob], file.name, { type: 'application/octet-stream' });
+          let encryptedFile = new File([encryptedChunkBlob], file.name, { type: 'application/octet-stream' });
+          
+          // Help GC: Release encrypted blob reference
+          encryptedChunkBlob = null;
 
           const formData = new FormData()
           formData.append('file', encryptedFile)
           formData.append('path', this.currentPath)
           formData.append('chunk_index', chunkIndex)
           formData.append('total_chunks', totalChunks)
+          formData.append('total_file_size', totalEncryptedSize) // Send total size for quota check
           formData.append('encrypted_key', encryptedFileKey)
           
           // Send share keys only with the last chunk (or every chunk, but backend only uses it on commit)
@@ -145,18 +157,26 @@ export const useFileStore = defineStore('files', {
 
           console.log(`Uploading chunk ${chunkIndex + 1} / ${totalChunks}...`);
 
-          console.log(`Uploading chunk ${chunkIndex + 1} / ${totalChunks}...`);
-
           await api.post('/files/upload', formData, {
             headers: {
               'Content-Type': 'multipart/form-data',
             },
+            onUploadProgress: (progressEvent) => {
+                // Calculate global progress
+                const currentChunkProgress = progressEvent.loaded;
+                const previousProgress = chunkIndex * CHUNK_SIZE;
+                const totalProgress = previousProgress + currentChunkProgress;
+                this.uploadProgress = Math.min(Math.round((totalProgress / totalEncryptedSize) * 100), 100);
+            }
           });
+          
+          // Help GC: Release file object
+          encryptedFile = null;
 
           offset += CHUNK_SIZE;
           chunkIndex += 1;
 
-          this.uploadProgress = Math.round((chunkIndex / totalChunks) * 100);
+          // this.uploadProgress is updated in onUploadProgress
           console.log(`Uploaded chunk ${chunkIndex} / ${totalChunks}`);
         } 
 
