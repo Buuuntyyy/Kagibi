@@ -43,6 +43,23 @@ func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client, wsMana
 		totalChunks, _ = strconv.Atoi(totalChunksStr)
 	}
 
+	// Early Storage Quota Check (on first chunk)
+	if chunkIndex == 0 {
+		totalSizeStr := c.PostForm("total_file_size")
+		if totalSizeStr != "" {
+			totalSize, _ := strconv.ParseInt(totalSizeStr, 10, 64)
+			if totalSize > 0 {
+				var user pkg.User
+				if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c); err == nil {
+					if user.StorageUsed+totalSize > user.StorageLimit {
+						c.JSON(http.StatusForbidden, gin.H{"error": "Storage limit exceeded"})
+						return
+					}
+				}
+			}
+		}
+	}
+
 	// Récupération du fichier (morceau actuel)
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
