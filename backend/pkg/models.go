@@ -93,3 +93,13 @@ type ShareLink struct {
 	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	Views        int64      `bun:"views,default:0"`
 }
+
+type ImportedShare struct {
+	bun.BaseModel `bun:"table:imported_shares,alias:is"`
+
+	ID          int64      `bun:"id,pk,autoincrement"`
+	UserID      string     `bun:"user_id,notnull"`       // L'utilisateur qui a importé le partage
+	ShareLinkID int64      `bun:"share_link_id,notnull"` // Le partage importé
+	ShareLink   *ShareLink `bun:"rel:belongs-to,join:share_link_id=id"`
+	CreatedAt   time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+}

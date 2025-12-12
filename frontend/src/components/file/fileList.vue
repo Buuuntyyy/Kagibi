@@ -203,6 +203,7 @@
       :item="manageShareDialog.item"
       @close="closeManageShareDialog"
       @share-deleted="onShareDeleted"
+      @share-created="onShareCreated"
     />
     <MoveDialog
       v-if="moveDialog.isOpen"
@@ -305,6 +306,10 @@ const closeManageShareDialog = () => {
   manageShareDialog.value.item = null;
 };
 
+const onShareCreated = () => {
+  fileStore.fetchItems(fileStore.currentPath)
+}
+
 const onShareDeleted = () => {
   fileStore.fetchItems(fileStore.currentPath)
   closeManageShareDialog()
@@ -330,10 +335,7 @@ const onFileUploaded = () => {
 
 
 const openShareDialog = (item) => {
-  shareDialog.value = {
-    isOpen: true,
-    item: { id: item.ID, type: item.type, name: item.Name }
-  };
+  openManageShareDialog(item, item.type);
 };
 
 const closeShareDialog = () => {
