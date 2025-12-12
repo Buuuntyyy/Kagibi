@@ -2,13 +2,12 @@
   <div class="dashboard-container">
     <LeftBar />
     <div class="main-content">
-      <FileBrowser />
+      <router-view />
     </div>
   </div>
 </template>
 
 <script setup>
-import FileBrowser from '../components/FileBrowser.vue'
 import LeftBar from '../components/bar/leftBar.vue'
 </script>
 
