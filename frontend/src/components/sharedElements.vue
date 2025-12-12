@@ -7,74 +7,107 @@
     </div>
     <div class="path-banner">
       <div class="breadcrumbs">
-        <span class="breadcrumb-link current">Mes Partages</span>
+        <span class="breadcrumb-link current">Partage</span>
       </div>
     </div>
 
-    <div v-if="loading" class="loading">
-      <div class="spinner"></div> Chargement des partages...
-    </div>
-    <div v-else-if="error" class="error">{{ error }}</div>
-    <div v-else-if="shares.length === 0" class="empty">
-      <p>Vous n'avez aucun partage actif.</p>
-    </div>
-    <FileTable 
-      v-else 
-      :folders="sharedFolders"
-      :files="sharedFiles"
-      :columns="columns"
-    >
-      <template #resource_name="{ item }">
-        <span :title="item.resource_name">{{ item.resource_name }}</span>
-      </template>
-
-      <template #resource_type="{ item }">
-        <span v-if="item.resource_type === 'file'" class="badge file">Fichier</span>
-        <span v-else class="badge folder">Dossier</span>
-      </template>
-
-      <template #views="{ item }">
-        {{ item.views }}
-      </template>
-
-      <template #created_at="{ item }">
-        {{ formatDate(item.created_at) }}
-      </template>
-
-      <template #expires_at="{ item }">
-        <span :class="{ 'expired': isExpired(item.expires_at) }">
-          {{ item.expires_at ? formatDate(item.expires_at) : 'Jamais' }}
-        </span>
-      </template>
-
-      <template #link="{ item }">
-        <div class="link-actions">
-          <a :href="item.link" target="_blank" class="open-link">Ouvrir</a>
-          <button @click.stop="copyLink(item.link)" class="icon-btn" title="Copier le lien">
-            📋
-          </button>
+    <div class="scrollable-content">
+      <!-- Section: Mes Partages -->
+      <div class="accordion-item">
+        <div class="accordion-header" @click="toggleSection('my-shares')" :class="{ active: sections['my-shares'] }">
+          <span class="accordion-title">Fichiers partagés ({{ shares.length }})</span>
+          <span class="accordion-icon">{{ sections['my-shares'] ? '▼' : '▶' }}</span>
         </div>
-      </template>
+        
+        <div v-show="sections['my-shares']" class="accordion-content">
+          <div v-if="loading" class="loading">
+            <div class="spinner"></div> Chargement...
+          </div>
+          <div v-else-if="error" class="error">{{ error }}</div>
+          <div v-else-if="shares.length === 0" class="empty">
+            <p>Vous n'avez aucun partage actif.</p>
+          </div>
+          <FileTable 
+            v-else 
+            :folders="sharedFolders"
+            :files="sharedFiles"
+            :columns="columns"
+          >
+            <template #resource_name="{ item }">
+              <span :title="item.resource_name">{{ item.resource_name }}</span>
+            </template>
 
-      <template #actions="{ item }">
-        <button @click.stop="deleteShare(item.id)" class="delete-btn" title="Supprimer le partage">
-          🗑️ Supprimer
-        </button>
-      </template>
-    </FileTable>
+            <template #resource_type="{ item }">
+              <span v-if="item.resource_type === 'file'" class="badge file">Fichier</span>
+              <span v-else class="badge folder">Dossier</span>
+            </template>
+
+            <template #views="{ item }">
+              {{ item.views }}
+            </template>
+
+            <template #created_at="{ item }">
+              {{ formatDate(item.created_at) }}
+            </template>
+
+            <template #expires_at="{ item }">
+              <span :class="{ 'expired': isExpired(item.expires_at) }">
+                {{ item.expires_at ? formatDate(item.expires_at) : 'Jamais' }}
+              </span>
+            </template>
+
+            <template #link="{ item }">
+              <div class="link-actions">
+                <a :href="item.link" target="_blank" class="open-link">Ouvrir</a>
+                <button @click.stop="copyLink(item.link)" class="icon-btn" title="Copier le lien">
+                  📋
+                </button>
+              </div>
+            </template>
+
+            <template #actions="{ item }">
+              <button @click.stop="deleteShare(item.id)" class="delete-btn" title="Supprimer le partage">
+                🗑️ Supprimer
+              </button>
+            </template>
+          </FileTable>
+        </div>
+      </div>
+
+      <!-- Section: Partagés avec moi -->
+      <div class="accordion-item">
+        <div class="accordion-header" @click="toggleSection('shared-with-me')" :class="{ active: sections['shared-with-me'] }">
+          <span class="accordion-title">Partagés avec moi</span>
+          <span class="accordion-icon">{{ sections['shared-with-me'] ? '▼' : '▶' }}</span>
+        </div>
+        <div v-show="sections['shared-with-me']" class="accordion-content">
+          <SharedWithMe />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, reactive } from 'vue';
 import api from '../api';
 import FileTable from './file/FileTable.vue';
+import SharedWithMe from './sharedWithMe.vue';
 import { usePreferencesStore } from '../stores/preferences';
 
 const preferenceStore = usePreferencesStore();
 const shares = ref([]);
 const loading = ref(true);
 const error = ref(null);
+
+const sections = reactive({
+  'my-shares': true,
+  'shared-with-me': false
+});
+
+const toggleSection = (section) => {
+  sections[section] = !sections[section];
+};
 
 const columns = [
   { key: 'resource_name', label: 'Nom', cellClass: 'name-cell' },
@@ -267,48 +300,147 @@ onMounted(() => {
   text-align: right;
 }
 
-.list-item.selected {
-  background-color: rgba(66, 185, 131, 0.2); /* Light green selection */
+.badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
-button {
-  padding: 0.5rem 1rem;
+.badge.file {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.badge.folder {
+  background-color: #fff3e0;
+  color: #f57c00;
+}
+
+.link-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.open-link {
+  color: #2196f3;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.open-link:hover {
+  text-decoration: underline;
+}
+
+.icon-btn {
+  background: none;
   border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.icon-btn:hover {
+  background-color: #f0f0f0;
+}
+
+.delete-btn {
+  background-color: #ffebee;
+  color: #c62828;
+  border: none;
+  padding: 0.25rem 0.5rem;
   border-radius: 4px;
   cursor: pointer;
-  font-weight: bold;
+  font-size: 0.85rem;
+  transition: background-color 0.2s;
 }
 
-.btn-add-file {
-  background-color: var(--primary-color);
-  color: white;
+.delete-btn:hover {
+  background-color: #ffcdd2;
 }
 
-.btn-rename {
-  background-color: #ffc107;
-  color: #333;
+.expired {
+  color: #d32f2f;
+  font-weight: 500;
+}
+
+.loading, .error, .empty {
+  padding: 2rem;
+  text-align: center;
+  color: #666;
+}
+
+.error {
+  color: #d32f2f;
+}
+
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: #2196f3;
+  animation: spin 1s ease-in-out infinite;
   margin-right: 0.5rem;
+  vertical-align: middle;
 }
 
-.btn-rename:disabled {
-  background-color: #e0e0e0;
-  color: #999;
-  cursor: not-allowed;
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
-.btn-download {
-  background-color: var(--primary-color);
-  color: white;
+/* Accordion Styles */
+.scrollable-content {
+  overflow-y: auto;
+  flex-grow: 1;
+  padding: 0 1rem;
 }
 
-.path-banner button {
-    background-color: var(--background-color);
-    border: 1px solid #ccc;
+.accordion-item {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+  background-color: white;
 }
 
-.path-banner button:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
+.accordion-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background-color: #f9f9f9;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  user-select: none;
+}
+
+.accordion-header:hover {
+  background-color: #f0f0f0;
+}
+
+.accordion-header.active {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.accordion-title {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.accordion-icon {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.accordion-content {
+  padding: 0;
+  border-top: 1px solid #eee;
 }
 
 .breadcrumbs {
@@ -344,296 +476,5 @@ button {
   cursor: default;
   font-weight: bold;
   text-decoration: none;
-}
-
-.separator {
-  margin: 0 0.5rem;
-  color: #999;
-}
-
-.progress-container {
-  padding: 0.5rem 1rem;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  background-color: #f9f9f9;
-  border-bottom: 1px solid #eee;
-}
-
-.progress-bar {
-  flex-grow: 1;
-  height: 10px;
-  background-color: #e0e0e0;
-  border-radius: 5px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background-color: var(--primary-color, #42b983);
-  transition: width 0.3s ease;
-}
-
-.progress-text {
-  font-size: 0.9rem;
-  font-weight: bold;
-  color: #555;
-  min-width: 3rem;
-  text-align: right;
-}
-
-.upload-popup {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  width: 320px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  z-index: 1000;
-  border: 1px solid #eee;
-  overflow: hidden;
-  animation: slideIn 0.3s ease;
-}
-
-@keyframes slideIn {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
-
-.popup-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 1rem;
-  background-color: #f5f5f5;
-  border-bottom: 1px solid #eee;
-}
-
-.popup-title {
-  font-weight: bold;
-  font-size: 0.9rem;
-  color: #333;
-}
-
-.btn-close {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  padding: 0;
-  line-height: 0.8;
-  color: #999;
-  width: auto;
-  height: auto;
-}
-
-.btn-close:hover {
-  color: #333;
-  background: none;
-}
-
-.popup-content {
-  padding: 1rem;
-}
-
-.file-name {
-  margin-bottom: 0.8rem;
-  font-size: 0.9rem;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #333;
-  text-align: left;
-}
-
-.progress-container-popup {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-}
-
-.drag-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(255, 255, 255, 0.9);
-  border: 3px dashed var(--primary-color);
-  border-radius: 8px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 500;
-  pointer-events: none; /* Permet de drop "au travers" de l'overlay */
-}
-
-.drag-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  color: var(--primary-color);
-}
-
-.drag-icon {
-  font-size: 4rem;
-  margin-bottom: 1rem;
-}
-
-.drag-text {
-  font-size: 1.5rem;
-  font-weight: bold;
-}
-
-
-
-.context-menu {
-  position: fixed;
-  background: white;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-  z-index: 1000;
-  min-width: 150px;
-  padding: 5px 0;
-}
-
-.menu-item {
-  padding: 8px 15px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
-  color: #333;
-  transition: background-color 0.2s;
-  text-align: left;
-}
-
-.menu-item:hover {
-  background-color: #f0f0f0;
-}
-
-.menu-item.delete {
-  color: #dc3545;
-  border-top: 1px solid #eee;
-}
-
-
-
-.date-column {
-  font-size: 0.9em;
-  color: #666;
-}
-
-.name-cell {
-  font-weight: 500;
-  color: var(--main-text-color);
-  max-width: 250px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.badge {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.badge.file {
-  background-color: rgba(66, 165, 245, 0.2);
-  color: #90caf9;
-}
-
-.badge.folder {
-  background-color: rgba(255, 167, 38, 0.2);
-  color: #ffcc80;
-}
-
-.expired {
-  color: #ef5350;
-  font-weight: bold;
-}
-
-.link-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.open-link {
-  color: #64b5f6;
-  text-decoration: none;
-  font-size: 0.9rem;
-}
-
-.open-link:hover {
-  text-decoration: underline;
-}
-
-.icon-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.2rem;
-  padding: 4px;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.icon-btn:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.delete-btn {
-  background-color: transparent;
-  color: #ef5350;
-  border: 1px solid #ef5350;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.delete-btn:hover {
-  background-color: #ef5350;
-  color: white;
-}
-
-.loading, .error, .empty {
-  text-align: center;
-  padding: 60px 20px;
-  background-color: #1e1e1e;
-  border-radius: 8px;
-  color: #888;
-}
-
-.error {
-  color: #ef5350;
-}
-
-.spinner {
-  border: 3px solid rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  border-top: 3px solid #64b5f6;
-  width: 24px;
-  height: 24px;
-  animation: spin 1s linear infinite;
-  display: inline-block;
-  vertical-align: middle;
-  margin-right: 10px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }
 </style>
