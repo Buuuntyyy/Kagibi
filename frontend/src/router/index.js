@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Dashboard from '../views/dashboard.vue'
 import Login from '../views/Login.vue'
 import Account from '../views/account.vue'
+import SharedElements from '../components/sharedElements.vue'
+import FileBrowser from '../components/FileBrowser.vue'
 import PublicShare from '../views/PublicShare.vue'
 import PublicBrowse from '../views/PublicBrowse.vue'
 import { useAuthStore } from '../stores/auth'
@@ -14,9 +16,20 @@ const routes = [
   },
   {
     path: '/dashboard',
-    name: 'Dashboard',
     component: Dashboard,
     meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        name: 'Dashboard',
+        component: FileBrowser
+      },
+      {
+        path: 'shares',
+        name: 'SharedElements',
+        component: SharedElements
+      }
+    ]
   },
   {
     path: '/account',

@@ -11,12 +11,6 @@ import (
 func Migrate(db *bun.DB) error {
 	ctx := context.Background()
 
-	// Enable uuid-ossp extension for UUID generation
-	_, err := db.ExecContext(ctx, `CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`)
-	if err != nil {
-		return fmt.Errorf("failed to enable uuid-ossp extension: %w", err)
-	}
-
 	// Crée les tables si elles n'existent pas
 	models := []interface{}{(*User)(nil), (*File)(nil), (*Folder)(nil), (*Tag)(nil), (*ShareLink)(nil), (*ShareFileKey)(nil)}
 
@@ -29,7 +23,7 @@ func Migrate(db *bun.DB) error {
 	}
 
 	// Manually add the 'path' column to 'share_links' if it doesn't exist
-	_, err = db.ExecContext(ctx, `ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "path" VARCHAR NOT NULL DEFAULT '';`)
+	_, err := db.ExecContext(ctx, `ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "path" VARCHAR NOT NULL DEFAULT '';`)
 	if err != nil {
 		return fmt.Errorf("failed to add path column to share_links: %w", err)
 	}

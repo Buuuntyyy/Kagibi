@@ -30,14 +30,7 @@
     </div>
     <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" />
     <div class="path-banner">
-      <span @click="goUp" class="back-arrow" :class="{ 'disabled': fileStore.currentPath === '/' }"
-            @drop.stop="onDropOnParent"
-            @dragover.prevent="onFolderDragOver"
-            @dragleave="onFolderDragLeave">
-        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M19 12H5M12 19l-7-7 7-7"/>
-        </svg>
-      </span>
+      
       <div class="breadcrumbs">
         <span v-for="(segment, index) in pathSegments" :key="index" class="breadcrumb-segment">
           <span 
@@ -68,78 +61,22 @@
         </div>
       </div>
     </div>
-
-    <div class="list-header">
-      <span class="header-icon"></span>
-      <span class="header-name">Nom</span>
-      <span class="header-tags">Tags</span>
-      <span class="header-date">Créé le</span>
-      <span class="header-date">Modifié le</span>
-      <span class="header-size">Taille</span>
-    </div>
-
-    <div class="list-area" @contextmenu.prevent="openBackgroundContextMenu($event)" @click.self="selectedItems = []">
-      <!-- Folders -->
-      <div v-for="folder in filteredFolders" :key="folder.ID" 
-           class="list-item folder-item" 
-           :class="{ selected: isSelected(folder, 'folder') }"
-           @click="selectItem(folder, 'folder', $event)"
-           @dblclick="openFolder(folder.Name)"
-           @contextmenu.prevent.stop="openContextMenu($event, folder, 'folder')"
-           draggable="true"
-           @dragstart="onDragStart(folder, 'folder', $event)"
-           @drop.stop="onDropOnFolder(folder, $event)"
-           @dragover.prevent="onFolderDragOver"
-           @dragleave="onFolderDragLeave">
-        <span class="icon">📁</span>
-        <div class="name-wrapper">
-          <span class="name">{{ folder.Name }}</span>
-          <span v-if="folder.shared" class="shared-icon" title="Dossier partagé" @click.stop="openManageShareDialog(folder, 'folder')">
-            <svg xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 0 24 24" width="18px" fill="#5f6368"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-          </span>
-        </div>
-        <span class="tags-column">
-          <span v-if="folder.Tags && folder.Tags.length" class="tags-container">
-            <span v-for="tag in folder.Tags" :key="tag" class="tag-badge" :style="getTagStyle(tag)">
-              {{ tag }}
-              <span class="remove-tag" @click.stop="removeTag(folder, 'folder', tag)">×</span>
-            </span>
-          </span>
-        </span>
-        <span class="date-column"></span>
-        <span class="date-column">{{ formatDate(folder.CreatedAt) }}</span>
-        <span class="size">-</span>
-      </div>
-      <!-- Files -->
-      <div v-for="file in filteredFiles" :key="file.ID" 
-          class="list-item"
-          :class="{ selected: isSelected(file, 'file') }"
-          @click="selectItem(file, 'file', $event)"
-          @dblclick="downloadFile(file)"
-          @contextmenu.prevent.stop="openContextMenu($event, file, 'file')"
-          draggable="true"
-          @dragstart="onDragStart(file, 'file', $event)"
-      >
-        <span class="icon">📄</span>
-        <div class="name-wrapper">
-          <span class="name">{{ file.Name }}</span>
-          <span v-if="file.shared" class="shared-icon" title="Fichier partagé" @click.stop="openManageShareDialog(file)" @mouseover="onShareIconHover(true, $event)" @mouseleave="onShareIconHover(false, $event)">
-            <svg xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 0 24 24" width="18px" fill="#5f6368"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-          </span>
-        </div>
-        <span class="tags-column">
-          <span v-if="file.Tags && file.Tags.length" class="tags-container">
-            <span v-for="tag in file.Tags" :key="tag" class="tag-badge" :style="getTagStyle(tag)">
-              {{ tag }}
-              <span class="remove-tag" @click.stop="removeTag(file, 'file', tag)">×</span>
-            </span>
-          </span>
-        </span>
-        <span class="date-column">{{ formatDate(file.CreatedAt) }}</span>
-        <span class="date-column">{{ formatDate(file.UpdatedAt) }}</span>
-        <span class="size">{{ formatSize(file.Size) }}</span>
-      </div>
-    </div>
+    <FileTable 
+      :folders="filteredFolders"
+      :files="filteredFiles"
+      :selectedItems="selectedItems"
+      :columns="columns"
+      @select-item="selectItem"
+      @open-folder="openFolder"
+      @open-file="downloadFile"
+      @context-menu="openContextMenu"
+      @drag-start="onDragStart"
+      @drop-on-folder="onDropOnFolder"
+      @folder-drag-over="onFolderDragOver"
+      @folder-drag-leave="onFolderDragLeave"
+      @manage-share="openManageShareDialog"
+      @remove-tag="removeTag"
+    />
 
     <div v-if="contextMenu.visible" 
          class="context-menu" 
@@ -288,6 +225,7 @@ import ShareDialog from '../ShareDialog.vue'
 import api from '../../api'
 import MoveDialog from '../MoveDialog.vue';
 import ManageShareDialog from '../ManageShareDialog.vue';
+import FileTable from './FileTable.vue';
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -298,6 +236,15 @@ const selectedItems = ref([])
 const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
 const fileInput = ref(null)
 const isDragging = ref(false)
+
+const columns = ref([
+  { key: 'icon', label: '', headerClass: 'icon-col', cellClass: 'icon-col' },
+  { key: 'name', label: 'Nom', cellClass: 'name-cell' },
+  { key: 'tags', label: 'Tags' },
+  { key: 'created', label: 'Créé le' },
+  { key: 'updated', label: 'Modifié le' },
+  { key: 'size', label: 'Taille' }
+])
 
 const filteredFolders = computed(() => {
   if (!fileStore.searchQuery) return fileStore.folders
@@ -380,16 +327,7 @@ const onFileUploaded = () => {
   fileStore.fetchItems(fileStore.currentPath)
 }
 
-const onShareIconHover = (isHovering, event) => {
-  const listItem = event.target.closest('.list-item');
-  if (listItem) {
-    if (isHovering) {
-      listItem.classList.add('no-hover');
-    } else {
-      listItem.classList.remove('no-hover');
-    }
-  }
-};
+
 
 const openShareDialog = (item) => {
   shareDialog.value = {
@@ -446,26 +384,7 @@ const handleTagConfirm = (tags) => {
   tagDialog.value.resolve = null
 }
 
-const getTagStyle = (tagName) => {
-    const tag = tagStore.tags.find(t => t.name === tagName)
-    if (tag) {
-        return {
-            backgroundColor: tag.color,
-            color: getContrastColor(tag.color),
-            borderColor: tag.color
-        }
-    }
-    return {}
-}
 
-const getContrastColor = (hexcolor) => {
-    if (!hexcolor || hexcolor[0] !== '#') return 'black';
-    var r = parseInt(hexcolor.substr(1,2),16);
-    var g = parseInt(hexcolor.substr(3,2),16);
-    var b = parseInt(hexcolor.substr(5,2),16);
-    var yiq = ((r*299)+(g*587)+(b*114))/1000;
-    return (yiq >= 128) ? 'black' : 'white';
-}
 
 const contextMenu = ref({
   visible: false,
@@ -480,7 +399,7 @@ const closeContextMenu = () => {
 
 const pathSegments = computed(() => {
   const path = fileStore.currentPath
-  const segments = [{ name: 'Home', path: '/' }]
+  const segments = [{ name: 'Mon Drive', path: '/' }]
   
   if (path === '/') return segments
 
@@ -771,19 +690,7 @@ const createNewFolder = async () => {
   }
 }
 
-const formatSize = (bytes) => {
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
-  const k = 1024
-  if (bytes === 0) return '0 Byte'
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
 
-const formatDate = (dateString) => {
-  if (!dateString) return '-'
-  const date = new Date(dateString)
-  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
 
 const closeUploadPopup = () => {
   fileStore.isUploading = false
@@ -899,7 +806,6 @@ const onDropOnParent = async (event) => {
   padding: 0.5rem 1rem;
   padding-top: 0;
   background-color: var(--card-color);
-  border-bottom: 1px solid #ccc;
   display: flex;
   justify-content: flex-start;
   align-items: center;
@@ -939,7 +845,6 @@ const onDropOnParent = async (event) => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  border-bottom: 1px solid #eee;
 }
 
 .toolbar-left {
@@ -999,68 +904,7 @@ const onDropOnParent = async (event) => {
   padding: 0 1rem;
 }
 
-.list-header {
-  display: grid;
-  grid-template-columns: 40px 2fr 1fr 150px 150px 100px;
-  padding: 0.5rem;
-  font-weight: bold;
-  border-bottom: 1px solid #ccc;
-  background-color: var(--card-color);
-  align-items: center;
-}
 
-.list-item {
-  display: grid;
-  grid-template-columns: 40px 2fr 1fr 150px 150px 100px;
-  align-items: center;
-  padding: 0.5rem;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-  user-select: none;
-  border-bottom: 1px solid #ccc;
-}
-
-.list-item:hover {
-  background-color: var(--hover-background-color);
-}
-
-.list-item .icon {
-  margin-right: 0.5rem;
-  display: flex;
-  justify-content: center;
-}
-.name-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  overflow: hidden;
-  padding-right: 1rem;
-}
-
-.name {
-  text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
-}
-
-.shared-icon {
-  margin-left: 0.5rem;
-  flex-shrink: 0;
-  text-align: right;
-  cursor: pointer;
-}
-.shared-icon:hover {
-  background-color: rgba(0, 0, 0, 0.1);
-  border-radius: 25%;
-}
-
-.list-item.no-hover:hover {
-  background-color: transparent;
-}
 .size {
   color: #5c5c5c;
   font-size: 0.9em;
@@ -1068,8 +912,7 @@ const onDropOnParent = async (event) => {
 }
 
 .list-item.selected {
-  background-color: #42b983;
-  color: white;
+  background-color: rgba(66, 185, 131, 0.2); /* Light green selection */
 }
 
 button {
@@ -1288,10 +1131,7 @@ button {
   font-weight: bold;
 }
 
-.drag-over-target {
-  background-color: rgba(66, 185, 131, 0.2) !important;
-  border: 2px dashed var(--primary-color, #42b983);
-}
+
 
 .context-menu {
   position: fixed;
@@ -1325,35 +1165,7 @@ button {
   border-top: 1px solid #eee;
 }
 
-.tag-badge {
-  background-color: #e0e0e0;
-  color: #333;
-  font-size: 0.75rem;
-  padding: 2px 6px;
-  border-radius: 10%;
-  border: 1px solid #ccc;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
 
-.remove-tag {
-  cursor: pointer;
-  color: #666;
-  font-weight: bold;
-  line-height: 1;
-  display: inline-block;
-}
-
-.remove-tag:hover {
-  color: #dc3545;
-}
-
-.tags-column {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
 
 .date-column {
   font-size: 0.9em;
