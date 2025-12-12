@@ -148,6 +148,7 @@ func main() {
 		// ROUTES PARTAGE
 		shareRoutes := protectedRoutes.Group("/shares")
 		{
+			shareRoutes.GET("/list", func(c *gin.Context) { shares.ListSharesHandler(c, db) })
 			shareRoutes.POST("/link", func(c *gin.Context) { shares.CreateShareLinkHandler(c, db) })
 			shareRoutes.GET("/check-path", func(c *gin.Context) { shares.GetActiveSharesForPathHandler(c, db) })
 			shareRoutes.GET("/file/:fileID", func(c *gin.Context) { shares.GetShareForResourceHandler(c, db) })
@@ -155,9 +156,9 @@ func main() {
 		}
 	}
 
-		// Route WebSocket (Racine)
-		router.GET("/ws", func(c *gin.Context) { ws.ConnectHandler(c, wsManager, redisClient) })
-	
-		// Démarre le serveur sur le port 8080
-		router.Run(":8080")
-	}
+	// Route WebSocket (Racine)
+	router.GET("/ws", func(c *gin.Context) { ws.ConnectHandler(c, wsManager, redisClient) })
+
+	// Démarre le serveur sur le port 8080
+	router.Run(":8080")
+}

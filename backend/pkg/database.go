@@ -12,10 +12,13 @@ import (
 
 func NewDB() *bun.DB {
 	// Remplace les valeurs par celles de ton docker-compose ou de ta configuration locale
-	dsn := "postgresql://user:password@localhost:5432/mydb?sslmode=disable"
+	dsn := "postgresql://user:password@127.0.0.1:5432/mydb?sslmode=disable"
 
 	// Ouvre la connexion SQL
-	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
+	sqldb := sql.OpenDB(pgdriver.NewConnector(
+		pgdriver.WithDSN(dsn),
+		pgdriver.WithInsecure(true),
+	))
 
 	// Crée une instance Bun
 	db := bun.NewDB(sqldb, pgdialect.New())
@@ -212,13 +215,31 @@ func GetAllFilesRecursive(db *bun.DB, userID string, rootPath string) ([]File, e
 // supprimer un fichier
 func DeleteFile(db *bun.DB, fileID int64, userID string) error {
 	ctx := context.Background()
-	_, err := db.NewDelete().Model((*File)(nil)).Where("id = ? AND user_id = ?", fileID, userID).Exec(ctx)
+
+	// Delete associated share links
+	_, err := db.NewDelete().Model((*ShareLink)(nil)).
+		Where("resource_type = ? AND resource_id = ?", "file", fileID).
+		Exec(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.NewDelete().Model((*File)(nil)).Where("id = ? AND user_id = ?", fileID, userID).Exec(ctx)
 	return err
 }
 
 func DeleteFolder(db *bun.DB, folderID int64, userID string) error {
 	ctx := context.Background()
-	_, err := db.NewDelete().Model((*Folder)(nil)).Where("id = ? AND user_id = ?", folderID, userID).Exec(ctx)
+
+	// Delete associated share links
+	_, err := db.NewDelete().Model((*ShareLink)(nil)).
+		Where("resource_type = ? AND resource_id = ?", "folder", folderID).
+		Exec(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.NewDelete().Model((*Folder)(nil)).Where("id = ? AND user_id = ?", folderID, userID).Exec(ctx)
 	return err
 }
 
