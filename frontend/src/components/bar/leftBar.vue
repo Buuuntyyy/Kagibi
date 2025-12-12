@@ -2,7 +2,9 @@
   <div class="left-bar">
     <div class="action-section">
       <button class="btn-new" @click.stop="toggleNewMenu">
-        <span class="plus-icon">+</span>
+        <svg class="plus-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="#ea4335"/>
+        </svg>
         <span>Nouveau</span>
       </button>
       <div v-if="showNewMenu" class="new-menu-dropdown" @click.stop>
@@ -16,11 +18,11 @@
     </div>
 
     <div class="menu-section">
-      <div class="menu-item active">
+      <div class="menu-item" :class="{ active: isActive('/dashboard') }" @click="navigateTo('/dashboard')">
         <span class="icon">📁</span>
         <span>Mes fichiers</span>
       </div>
-      <div class="menu-item">
+      <div class="menu-item" :class="{ active: isActive('/dashboard/shares') }" @click="navigateTo('/dashboard/shares')">
         <span class="icon">🔗</span>
         <span>Fichiers partagés</span>
       </div>
@@ -54,12 +56,15 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useFileStore } from '../../stores/files'
 import InputDialog from '../InputDialog.vue'
 
 const authStore = useAuthStore()
 const fileStore = useFileStore()
+const router = useRouter()
+const route = useRoute()
 
 const showNewMenu = ref(false)
 const fileInput = ref(null)
@@ -73,6 +78,17 @@ const inputDialog = ref({
 
 const toggleNewMenu = () => {
   showNewMenu.value = !showNewMenu.value
+}
+
+const navigateTo = (path) => {
+  router.push(path)
+}
+
+const isActive = (path) => {
+  if (path === '/dashboard') {
+    return (route.path === '/' || route.path.startsWith('/dashboard')) && !route.path.startsWith('/dashboard/shares')
+  }
+  return route.path.startsWith(path)
 }
 
 const closeNewMenu = () => {
@@ -159,50 +175,120 @@ const storagePercentage = computed(() => {
 
 <style scoped>
 .left-bar {
-  width: 250px;
+  width: 256px;
   background-color: var(--background-color);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 1rem;
-  padding-top: 0;
+  padding: 8px 16px;
   height: 100%;
   box-sizing: border-box;
+  font-family: 'Roboto', 'Segoe UI', sans-serif;
+}
+
+.action-section {
+  padding: 8px 0 16px 0;
+  position: relative;
+}
+
+.btn-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background-color: white;
+  border: none;
+  border-radius: 16px;
+  padding: 0 16px;
+  height: 56px;
+  box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 18px;
+  font-weight: 500;
+  color: #3c4043;
+  width: 100%;
+}
+
+.btn-new:hover {
+  box-shadow: 0 4px 8px 3px rgba(60,64,67,0.15);
+  background-color: #fafafa;
+}
+
+.plus-icon {
+  min-width: 24px;
+}
+
+.new-menu-dropdown {
+  position: absolute;
+  top: 60px;
+  left: 0;
+  background: white;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  z-index: 100;
+  min-width: 200px;
+  padding: 8px 0;
+}
+
+.dropdown-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #3c4043;
+}
+
+.dropdown-item:hover {
+  background-color: #f1f3f4;
 }
 
 .menu-section {
-  padding-top: 2rem;
   flex-grow: 1;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .menu-item {
   display: flex;
   align-items: center;
-  padding: 0.8rem 1rem;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 16px;
   cursor: pointer;
-  border-radius: 6px;
-  margin-bottom: 0.5rem;
-  color: #555;
-  transition: background-color 0.2s;
+  color: #3c4043;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.1s;
+  text-decoration: none;
 }
 
 .menu-item:hover {
-  background-color: #e9ecef;
+  background-color: #f1f3f4;
 }
 
 .menu-item.active {
-  background-color: #e3f2fd;
-  color: #0d6efd;
-  font-weight: 500;
+  background-color: #c2e7ff;
+  color: #001d35;
+}
+
+.menu-item.active:hover {
+  background-color: #c2e7ff;
 }
 
 .icon {
-  margin-right: 10px;
-  font-size: 1.2rem;
+  margin-right: 12px;
+  font-size: 18px;
+  width: 20px;
+  text-align: center;
+  display: flex;
+  justify-content: center;
 }
 
 .storage-section {
+  margin-top: 16px;
   background-color: var(--card-color);
   padding: 1rem;
   border-radius: 8px;
@@ -229,64 +315,5 @@ const storagePercentage = computed(() => {
   height: 100%;
   background-color: #42b983;
   border-radius: 3px;
-}
-
-.action-section {
-  margin-bottom: 1rem;
-  position: relative;
-}
-
-.btn-new {
-  width: 100%;
-  height: 120%;
-  padding: 0.8rem;
-  background-color: white;
-  border: 1px solid #ddd;
-  border-radius: 24px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  font-weight: bold;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  transition: all 0.2s;
-}
-
-.btn-new:hover {
-  background-color: #f8f9fa;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-}
-
-.plus-icon {
-  font-size: 1.2rem;
-  color: var(--primary-color, #42b983);
-}
-
-.new-menu-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  width: 100%;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  z-index: 100;
-  margin-top: 5px;
-  overflow: hidden;
-}
-
-.dropdown-item {
-  padding: 10px 15px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  transition: background 0.2s;
-}
-
-.dropdown-item:hover {
-  background-color: #f0f0f0;
 }
 </style>
