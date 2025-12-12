@@ -60,30 +60,15 @@ const sharedFiles = computed(() => items.value.filter(i => i.type === 'file'))
 
 const fetchSharedWithMe = async () => {
   loading.value = true;
-  // TODO: Call API when backend is ready
-  // const response = await api.get('/shares/with-me');
-  // items.value = response.data;
-  
-  // Mocking data for demonstration
-  items.value = [
-    {
-      id: 1,
-      name: 'Projet Alpha.pdf',
-      type: 'file',
-      owner_name: 'Alice',
-      shared_at: '2023-10-27T10:00:00Z',
-      size: 1024 * 1024 * 2.5 // 2.5 MB
-    },
-    {
-      id: 2,
-      name: 'Photos Vacances',
-      type: 'folder',
-      owner_name: 'Bob',
-      shared_at: '2023-10-26T15:30:00Z',
-      size: 0
-    }
-  ];
-  loading.value = false;
+  try {
+    const response = await api.get('/shares/with-me');
+    items.value = response.data;
+  } catch (err) {
+    console.error("Error fetching shared with me:", err);
+    error.value = "Impossible de charger les fichiers partagés avec vous.";
+  } finally {
+    loading.value = false;
+  }
 };
 
 onMounted(() => {

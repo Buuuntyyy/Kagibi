@@ -105,7 +105,7 @@ func main() {
 	}
 
 	// ROUTES PROTÉGÉES (Protégées par l'authentification JWT)
-	protectedRoutes := api.Group("/")
+	protectedRoutes := api.Group("")
 	protectedRoutes.Use(middleware.AuthMiddleware(redisClient))
 	{
 		protectedRoutes.POST("/auth/logout", func(c *gin.Context) { auth.LogoutHandler(c, redisClient) })
@@ -149,16 +149,31 @@ func main() {
 		shareRoutes := protectedRoutes.Group("/shares")
 		{
 			shareRoutes.GET("/list", func(c *gin.Context) { shares.ListSharesHandler(c, db) })
-			shareRoutes.POST("/link", func(c *gin.Context) { shares.CreateShareLinkHandler(c, db) })
+			shareRoutes.POST("/link", func(c *gin.Context) {
+				log.Println("DEBUG: Hit /shares/link route")
+				shares.CreateShareLinkHandler(c, db)
+			})
 			shareRoutes.GET("/check-path", func(c *gin.Context) { shares.GetActiveSharesForPathHandler(c, db) })
 			shareRoutes.GET("/file/:fileID", func(c *gin.Context) { shares.GetShareForResourceHandler(c, db) })
 			shareRoutes.DELETE("/link/:shareID", func(c *gin.Context) { shares.DeleteShareLinkHandler(c, db) })
+
+			// Shared With Me Routes
+			shareRoutes.GET("/with-me", func(c *gin.Context) { shares.ListImportedSharesHandler(c, db) })
+			shareRoutes.POST("/with-me", func(c *gin.Context) { shares.ImportShareHandler(c, db) })
+			shareRoutes.DELETE("/with-me/:id", func(c *gin.Context) { shares.RemoveImportedShareHandler(c, db) })
 		}
 	}
 
 	// Route WebSocket (Racine)
 	router.GET("/ws", func(c *gin.Context) { ws.ConnectHandler(c, wsManager, redisClient) })
 
+	// Route de debug
+	router.GET("/api/v1/ping", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "pong", "version": "2.2"})
+	})
+
 	// Démarre le serveur sur le port 8080
-	router.Run(":8080")
+	if err := router.Run(":8080"); err != nil {
+		log.Fatalf("Failed to run server: %v", err)
+	}
 }

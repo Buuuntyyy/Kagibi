@@ -12,7 +12,7 @@ func Migrate(db *bun.DB) error {
 	ctx := context.Background()
 
 	// Crée les tables si elles n'existent pas
-	models := []interface{}{(*User)(nil), (*File)(nil), (*Folder)(nil), (*Tag)(nil), (*ShareLink)(nil), (*ShareFileKey)(nil)}
+	models := []interface{}{(*User)(nil), (*File)(nil), (*Folder)(nil), (*Tag)(nil), (*ShareLink)(nil), (*ShareFileKey)(nil), (*ImportedShare)(nil)}
 
 	for _, model := range models {
 		// Try to create table if not exists
