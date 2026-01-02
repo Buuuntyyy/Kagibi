@@ -67,13 +67,23 @@ func main() {
 	router.Use(middleware.SecureHeaders())
 	router.Use(middleware.RateLimitMiddleware())
 
-	redisAddr := os.Getenv("REDIS_URL")
-	if redisAddr == "" {
-		redisAddr = "localhost:6379"
+	redisURL := os.Getenv("REDIS_URL")
+	var redisOptions *redis.Options
+
+	if redisURL != "" {
+		// Si une URL complète est fournie (ex: rediss://user:pass@host:port)
+		redisOptions, err = redis.ParseURL(redisURL)
+		if err != nil {
+			log.Fatalf("Invalid REDIS_URL: %v", err)
+		}
+	} else {
+		// Fallback local
+		redisOptions = &redis.Options{
+			Addr: "localhost:6379",
+		}
 	}
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: redisAddr,
-	})
+
+	redisClient := redis.NewClient(redisOptions)
 
 	if _, err := redisClient.Ping(context.Background()).Result(); err != nil {
 		log.Fatalf("Impossible de se connecter à Redis: %v", err)
