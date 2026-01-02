@@ -280,3 +280,47 @@ mon-drive/
 ├── .gitignore
 └── README.md
 ```
+
+## CI/CD et Tests
+
+Le projet intègre un pipeline d'Intégration Continue et de Déploiement Continu (CI/CD) via **GitHub Actions**, ainsi qu'une suite de tests unitaires pour le backend et le frontend.
+
+### Pipeline GitHub Actions
+Le workflow est défini dans `.github/workflows/ci.yml` et s'exécute à chaque `push` ou `pull_request` sur les branches principales. Il effectue les actions suivantes :
+
+*   **Backend (Go)** :
+    *   Installation de Go (v1.21).
+    *   Vérification du formatage du code (`go fmt`).
+    *   Exécution des tests unitaires (`go test`).
+    *   Vérification de la compilation (`go build`).
+*   **Frontend (Vue.js)** :
+    *   Installation de Node.js (v22).
+    *   Installation des dépendances (`npm ci`).
+    *   Exécution des tests unitaires (`vitest`).
+    *   Build de l'application (`npm run build`).
+
+### Tests Backend (Go)
+Les tests backend couvrent la logique métier, la sécurité et les interactions avec la base de données (mockée).
+
+*   **Technologies** : `testing` (std lib), `testify/assert`, `go-sqlmock` (pour mocker PostgreSQL), `redismock` (pour mocker Redis).
+*   **Couverture** :
+    *   **Sécurité** : Middleware d'authentification, Rate Limiting, Protection contre le Path Traversal (`utils.SecureJoin`).
+    *   **Fonctionnalités** : Création de dossiers, Renommage de fichiers (avec gestion des transactions et conflits).
+
+**Lancer les tests backend en local :**
+```bash
+cd backend
+go test -v ./...
+```
+
+### Tests Frontend (Vue.js)
+Les tests frontend vérifient le bon rendu des composants et la logique d'interface.
+
+*   **Technologies** : `Vitest`, `@vue/test-utils`, `jsdom`.
+*   **Configuration** : Environnement simulé via `jsdom` pour tester les composants Vue sans navigateur.
+
+**Lancer les tests frontend en local :**
+```bash
+cd frontend
+npm run test
+```
