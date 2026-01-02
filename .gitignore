@@ -3,3 +3,12 @@ redis-data/*
 
 backend/uploads/*
 backend/.env
+
+docker/dump.sql
+docker/.env
+docker/init.sql
+docker/.pgpass
+docker/.redispass
+docker/.s3keys
+docker/.ovhkeys
+docker/dump_inserts.sql
