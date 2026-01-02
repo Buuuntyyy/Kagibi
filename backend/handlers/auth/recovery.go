@@ -40,7 +40,7 @@ func RecoveryInitHandler(c *gin.Context, db *bun.DB) {
 	// In a real app, we might want to verify something first, but here the security is the code itself.
 	c.JSON(http.StatusOK, gin.H{
 		"encrypted_master_key_recovery": user.EncryptedMasterKeyRecovery,
-		"salt": user.RecoverySalt, // Use RecoverySalt here
+		"salt":                          user.RecoverySalt, // Use RecoverySalt here
 	})
 }
 

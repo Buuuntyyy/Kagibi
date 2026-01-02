@@ -58,7 +58,7 @@ func LoginHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 			"name":  user.Name,
 			"email": user.Email,
 		},
-		"salt": user.Salt,
+		"salt":                 user.Salt,
 		"encrypted_master_key": user.EncryptedMasterKey,
 	})
 }
