@@ -4,6 +4,9 @@ package pkg
 import (
 	"context"
 	"database/sql"
+	"log"
+	"os"
+	"time"
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
@@ -11,14 +14,34 @@ import (
 )
 
 func NewDB() *bun.DB {
-	// Remplace les valeurs par celles de ton docker-compose ou de ta configuration locale
-	dsn := "postgresql://user:password@127.0.0.1:5432/mydb?sslmode=disable"
+	// Récupère l'URL de la base de données depuis les variables d'environnement
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		// Valeur par défaut pour le développement local
+		dsn = "postgresql://user:password@127.0.0.1:5432/mydb?sslmode=disable"
+	}
+
+	// Options de connexion
+	opts := []pgdriver.Option{
+		pgdriver.WithDSN(dsn),
+		// Force l'utilisation de l'IPv4 pour éviter les problèmes de timeout IPv6 avec Supabase
+		pgdriver.WithNetwork("tcp4"),
+	}
+
+	// Si on est en local (ou si explicitement demandé), on peut désactiver SSL au niveau du driver
+	// Note: Pour Supabase, il ne faut PAS utiliser WithInsecure(true)
+	if dsn == "postgresql://user:password@127.0.0.1:5432/mydb?sslmode=disable" {
+		opts = append(opts, pgdriver.WithInsecure(true))
+	}
 
 	// Ouvre la connexion SQL
-	sqldb := sql.OpenDB(pgdriver.NewConnector(
-		pgdriver.WithDSN(dsn),
-		pgdriver.WithInsecure(true),
-	))
+	sqldb := sql.OpenDB(pgdriver.NewConnector(opts...))
+
+	// Configuration du Connection Pool
+	// Important pour les performances sur une connexion distante (évite de refaire le handshake SSL à chaque requête)
+	sqldb.SetMaxOpenConns(20)           // Maximum de connexions ouvertes
+	sqldb.SetMaxIdleConns(5)            // Garder 5 connexions inactives prêtes à l'emploi
+	sqldb.SetConnMaxLifetime(time.Hour) // Recycler les connexions toutes les heures
 
 	// Crée une instance Bun
 	db := bun.NewDB(sqldb, pgdialect.New())
@@ -69,6 +92,7 @@ func CreateFolderDB(db *bun.DB, folder *Folder) error {
 
 // Lister les fichier d'un utilisateur
 func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, []FolderWithShare, error) {
+	start := time.Now()
 	ctx := context.Background()
 	var filesPlain []File
 	var foldersPlain []Folder
@@ -84,7 +108,9 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 		if err != nil {
 			return nil, nil, err
 		}
+		log.Printf("Files query took: %v", time.Since(start))
 
+		t2 := time.Now()
 		err = db.NewSelect().Model(&foldersPlain).
 			Where("user_id = ?", userID).
 			Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
@@ -92,6 +118,7 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 		if err != nil {
 			return nil, nil, err
 		}
+		log.Printf("Folders query took: %v", time.Since(t2))
 	} else {
 		// Pour un sous-dossier (ex: /test) : on cherche les chemins qui commencent par '/test/'
 		// mais qui n'ont pas de '/' supplémentaire après.
@@ -103,7 +130,9 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 		if err != nil {
 			return nil, nil, err
 		}
+		log.Printf("Files query took: %v", time.Since(start))
 
+		t2 := time.Now()
 		err = db.NewSelect().Model(&foldersPlain).
 			Where("user_id = ?", userID).
 			Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
@@ -111,11 +140,13 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 		if err != nil {
 			return nil, nil, err
 		}
+		log.Printf("Folders query took: %v", time.Since(t2))
 	}
 
 	// --- Traitement des fichiers ---
 	filesWithShare := make([]FileWithShare, 0, len(filesPlain))
 	if len(filesPlain) > 0 {
+		t3 := time.Now()
 		fileIds := make([]int64, 0, len(filesPlain))
 		for _, f := range filesPlain {
 			fileIds = append(fileIds, f.ID)
@@ -129,6 +160,7 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 		if err != nil {
 			return nil, nil, err
 		}
+		log.Printf("File shares query took: %v", time.Since(t3))
 
 		fileLinkMap := make(map[int64]ShareLink)
 		for _, l := range fileLinks {
@@ -155,6 +187,7 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 	// --- Traitement des dossiers ---
 	foldersWithShare := make([]FolderWithShare, 0, len(foldersPlain))
 	if len(foldersPlain) > 0 {
+		t4 := time.Now()
 		folderIds := make([]int64, 0, len(foldersPlain))
 		for _, f := range foldersPlain {
 			folderIds = append(folderIds, f.ID)
@@ -168,6 +201,7 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 		if err != nil {
 			return nil, nil, err
 		}
+		log.Printf("Folder shares query took: %v", time.Since(t4))
 
 		folderLinkMap := make(map[int64]ShareLink)
 		for _, l := range folderLinks {
