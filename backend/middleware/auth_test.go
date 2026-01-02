@@ -29,7 +29,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 	t.Run("Invalid Session", func(t *testing.T) {
 		db, mock := redismock.NewClientMock()
-		
+
 		mock.ExpectGet("fake-session").SetErr(redis.Nil)
 
 		r := gin.New()
@@ -46,7 +46,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 	t.Run("Valid Session", func(t *testing.T) {
 		db, mock := redismock.NewClientMock()
-		
+
 		mock.ExpectGet("valid-session").SetVal("user-123")
 
 		r := gin.New()
