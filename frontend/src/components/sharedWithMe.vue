@@ -40,6 +40,7 @@
 import { ref, onMounted, computed } from 'vue';
 import FileTable from './file/FileTable.vue';
 import { formatSize, formatDate } from '../utils/format';
+import api from '../api';
 
 // Mock data for now as backend implementation is pending
 const items = ref([]);
@@ -62,7 +63,7 @@ const fetchSharedWithMe = async () => {
   loading.value = true;
   try {
     const response = await api.get('/shares/with-me');
-    items.value = response.data;
+    items.value = response.data || [];
   } catch (err) {
     console.error("Error fetching shared with me:", err);
     error.value = "Impossible de charger les fichiers partagés avec vous.";
