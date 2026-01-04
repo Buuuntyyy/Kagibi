@@ -1,6 +1,7 @@
 package shares
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -18,11 +19,12 @@ func ListImportedSharesHandler(c *gin.Context, db *bun.DB) {
 	var importedShares []pkg.ImportedShare
 	err := db.NewSelect().Model(&importedShares).
 		Relation("ShareLink").
-		Where("is.user_id = ?", userID).
-		Order("is.created_at DESC").
+		Where("ish.user_id = ?", userID).
+		Order("ish.created_at DESC").
 		Scan(c.Request.Context())
 
 	if err != nil {
+		log.Printf("Error fetching imported shares: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch shared with me items"})
 		return
 	}
