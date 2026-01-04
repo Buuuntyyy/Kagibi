@@ -25,7 +25,11 @@
           <td v-for="col in columns" :key="col.key" :class="col.cellClass">
             <!-- Icon -->
             <template v-if="col.key === 'icon'">
-              <span class="icon">📁</span>
+              <span class="icon">
+                <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="#5f6368"/>
+                </svg>
+              </span>
             </template>
 
             <!-- Name -->
@@ -87,7 +91,40 @@
           <td v-for="col in columns" :key="col.key" :class="col.cellClass">
              <!-- Icon -->
             <template v-if="col.key === 'icon'">
-              <span class="icon">📄</span>
+              <span class="icon">
+                <!-- PDF -->
+                <svg v-if="getFileType(file.Name) === 'pdf'" class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                   <path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z" fill="#ea4335"/>
+                </svg>
+                <!-- Word -->
+                <svg v-else-if="getFileType(file.Name) === 'word'" class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                   <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" fill="#4285f4"/>
+                </svg>
+                <!-- Excel -->
+                <svg v-else-if="getFileType(file.Name) === 'excel'" class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                   <path d="M20 2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM8 20H4v-4h4v4zm0-6H4v-4h4v4zm0-6H4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4zm6 12h-4v-4h4v4zm0-6h-4v-4h4v4zm0-6h-4V4h4v4z" fill="#0f9d58"/>
+                </svg>
+                <!-- PowerPoint -->
+                <svg v-else-if="getFileType(file.Name) === 'powerpoint'" class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                   <path d="M10 8v8l5-4-5-4zm9-5H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z" fill="#f4b400"/>
+                </svg>
+                <!-- Image -->
+                <svg v-else-if="getFileType(file.Name) === 'image'" class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                   <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" fill="#db4437"/>
+                </svg>
+                <!-- Video -->
+                <svg v-else-if="getFileType(file.Name) === 'video'" class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                   <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z" fill="#db4437"/>
+                </svg>
+                <!-- Text -->
+                <svg v-else-if="getFileType(file.Name) === 'text'" class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                   <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" fill="#5f6368"/>
+                </svg>
+                <!-- Default -->
+                <svg v-else class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                   <path d="M6 2c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6H6zm7 7V3.5L18.5 9H13z" fill="#5f6368"/>
+                </svg>
+              </span>
             </template>
 
             <!-- Name -->
@@ -184,6 +221,19 @@ const emit = defineEmits([
 ])
 
 const tagStore = useTagStore()
+
+const getFileType = (filename) => {
+  if (!filename) return 'default'
+  const ext = filename.split('.').pop().toLowerCase()
+  if (['pdf'].includes(ext)) return 'pdf'
+  if (['doc', 'docx', 'odt', 'rtf'].includes(ext)) return 'word'
+  if (['xls', 'xlsx', 'csv', 'ods'].includes(ext)) return 'excel'
+  if (['ppt', 'pptx', 'odp'].includes(ext)) return 'powerpoint'
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'tiff'].includes(ext)) return 'image'
+  if (['mp4', 'avi', 'mov', 'mkv', 'webm', 'flv', 'wmv'].includes(ext)) return 'video'
+  if (['txt', 'md', 'json', 'xml', 'log', 'ini', 'yaml', 'yml'].includes(ext)) return 'text'
+  return 'default'
+}
 
 const isSelected = (item, type) => {
   return props.selectedItems.some(i => i.ID === item.ID && i.type === type)
@@ -347,5 +397,10 @@ const onShareIconHover = (isHovering, event) => {
 .drag-over-target {
   background-color: rgba(66, 185, 131, 0.2) !important;
   border: 2px dashed var(--primary-color, #42b983);
+}
+
+.icon-svg {
+  width: 24px;
+  height: 24px;
 }
 </style>

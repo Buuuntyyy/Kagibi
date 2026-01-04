@@ -95,7 +95,7 @@ type ShareLink struct {
 }
 
 type ImportedShare struct {
-	bun.BaseModel `bun:"table:imported_shares,alias:is"`
+	bun.BaseModel `bun:"table:imported_shares,alias:ish"`
 
 	ID          int64      `bun:"id,pk,autoincrement"`
 	UserID      string     `bun:"user_id,notnull"`       // L'utilisateur qui a importé le partage
