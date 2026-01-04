@@ -2,7 +2,7 @@
   <div v-if="isOpen" class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>Partager "{{ item?.name }}"</h3>
+        <h3>Partager "{{ item?.Name || item?.name }}"</h3>
         <button @click="close" class="btn-close">×</button>
       </div>
       
@@ -41,7 +41,7 @@
             </div>
             
             <div class="share-info">
-                <p>⚠️ Toute personne disposant de ce lien pourra accéder au contenu.</p>
+                <p>⚠️ Toute personne disposant de ce lien pourra accéder au contenu <b>déchiffré</b> de manière légitime.</p>
             </div>
         </div>
       </div>
