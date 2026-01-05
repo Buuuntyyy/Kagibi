@@ -413,7 +413,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  background-color: #f9f9f9;
+  background-color: var(--background-color);
   cursor: pointer;
   transition: background-color 0.2s;
   user-select: none;
@@ -424,7 +424,7 @@ onMounted(() => {
 }
 
 .accordion-header.active {
-  background-color: #e3f2fd;
+  background-color: var(--background-color);
   color: #1976d2;
 }
 
@@ -472,7 +472,7 @@ onMounted(() => {
 }
 
 .breadcrumb-link.current {
-  color: #333;
+  color: var(--text-color);
   cursor: default;
   font-weight: bold;
   text-decoration: none;
