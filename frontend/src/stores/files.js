@@ -19,6 +19,7 @@ export const useFileStore = defineStore('files', {
       this.searchQuery = query
     },
     async fetchItems(path) {
+      this.searchQuery = ''; // Clear search query when navigating
       try {
         const safePath = path.startsWith('/') ? path : `/${path}`
         const response = await api.get(`/files/list${safePath}`)
@@ -27,6 +28,23 @@ export const useFileStore = defineStore('files', {
         this.currentPath = safePath
       } catch (error) {
         console.error('Error fetching items:', error)
+      }
+    },
+    async performSearch(query) {
+      this.searchQuery = query;
+      if (!query || query.trim() === '') {
+        return this.fetchItems(this.currentPath);
+      }
+      
+      try {
+        const response = await api.get('/files/search', {
+          params: { q: query }
+        });
+        
+        this.files = response.data.files || [];
+        this.folders = response.data.folders || [];
+      } catch (err) {
+        console.error("Search error:", err);
       }
     },
     navigateTo(folderName) {
@@ -213,7 +231,7 @@ export const useFileStore = defineStore('files', {
     } catch (error) {
       console.error('Error deleting items:', error)
     }
-  },
+    },
     async moveItems(items, destinationPath) {
       try {
         const promises = items.map(item => api.post('/files/move', {
@@ -337,6 +355,27 @@ export const useFileStore = defineStore('files', {
         console.error('Error creating share link:', error)
         throw error
       }
+    },
+    async searchFiles(query) {
+        if (!query || query.trim() === '') {
+            // Si la recherche est vide, on recharge le dossier courant
+            return this.fetchItems(this.currentPath);
+        }
+
+        try {
+            const response = await api.get(`/files/search?q=${encodeURIComponent(query)}`);
+            
+            // Mise à jour des fichiers et dossiers affichés
+            this.folders = response.data.folders || [];
+            this.files = response.data.files || [];
+        } catch (error) {
+            console.error("Search error:", error);
+        }
+    },
+    
+    setSearchQuery(query) {
+        this.searchQuery = query;
+        this.searchFiles(query);
     }
   },
 })
