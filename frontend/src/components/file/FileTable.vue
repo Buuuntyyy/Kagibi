@@ -3,8 +3,13 @@
     <table class="files-table">
       <thead>
         <tr>
-          <th v-for="col in columns" :key="col.key" :class="col.headerClass">
-            {{ col.label }}
+          <th v-for="col in columns" :key="col.key" :class="[col.headerClass, { sortable: isSortable(col.key) }]" @click="handleSort(col.key)">
+            <div class="th-content">
+              {{ col.label }}
+              <span v-if="sortKey === col.key" class="sort-icon">
+                {{ sortDirection === 'asc' ? '↑' : '↓' }}
+              </span>
+            </div>
           </th>
         </tr>
       </thead>
@@ -214,6 +219,14 @@ const props = defineProps({
       { key: 'updated', label: 'Modifié le' },
       { key: 'size', label: 'Taille' }
     ]
+  },
+  sortKey: {
+    type: String,
+    default: 'name'
+  },
+  sortDirection: {
+    type: String,
+    default: 'asc'
   }
 })
 
@@ -227,10 +240,21 @@ const emit = defineEmits([
   'folder-drag-over',
   'folder-drag-leave',
   'manage-share',
-  'remove-tag'
+  'remove-tag',
+  'sort-change'
 ])
 
 const tagStore = useTagStore()
+
+const isSortable = (key) => {
+  return ['name', 'size', 'created', 'updated'].includes(key);
+}
+
+const handleSort = (key) => {
+  if (isSortable(key)) {
+    emit('sort-change', key);
+  }
+}
 
 const getFileType = (filename) => {
   if (!filename) return 'default'
@@ -308,6 +332,25 @@ const onShareIconHover = (isHovering, event) => {
   text-transform: uppercase;
   font-size: 0.85rem;
   letter-spacing: 0.5px;
+  user-select: none;
+}
+
+.files-table th.sortable {
+  cursor: pointer;
+}
+
+.files-table th.sortable:hover {
+  background-color: var(--hover-background-color);
+}
+
+.th-content {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sort-icon {
+  font-size: 0.8em;
 }
 
 .files-table tr:last-child td {
