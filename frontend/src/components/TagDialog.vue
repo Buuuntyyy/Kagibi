@@ -1,7 +1,7 @@
 <template>
   <div v-if="isOpen" class="modal-overlay">
     <div class="modal-content">
-      <h3>Gérer les tags</h3>
+      <h3>Tags existants</h3>
       
       <div class="tags-list">
         <div 
@@ -17,7 +17,7 @@
       </div>
 
       <div class="create-tag-section">
-        <h4>Nouveau Tag</h4>
+        <h4>Créer un nouveau Tag</h4>
         <div class="input-group">
             <input v-model="newTagName" placeholder="Nom du tag" class="tag-input"/>
             <button @click="createTag" :disabled="!newTagName" class="btn-create">Créer</button>
@@ -136,7 +136,7 @@ const getContrastColor = (hexcolor) => {
 }
 
 .modal-content {
-  background-color: white;
+  background-color: var(--background-color);
   padding: 2rem;
   border-radius: 8px;
   width: 400px;
