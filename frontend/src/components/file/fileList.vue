@@ -81,104 +81,40 @@
       @remove-tag="removeTag"
     />
 
-    <div v-if="contextMenu.visible" 
-         class="context-menu" 
-         :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }">
-      <template v-if="contextMenu.item">
-        <div class="menu-item" @click="handleContextAction('download')" v-if="contextMenu.item.type === 'file'">
-          📥 Télécharger
-        </div>
-        <div class="menu-item" @click="handleContextAction('rename')">
-          ✏️ Renommer
-        </div>
-        <div class="menu-item" @click="handleContextAction('move')">
-          🚚 Déplacer
-        </div>
-        <div class="menu-item" @click="handleContextAction('share')">
-          🔗 Partager
-        </div>
-        <div class="menu-item" v-if="contextMenu.item && contextMenu.item.shared" @click="handleContextAction('get-share-link')">
-          🔎 Voir le lien de partage
-        </div>
-        <div class="menu-item" @click="handleContextAction('tags')">
-          🏷️ Tags
-        </div>
-        <div class="menu-item delete" @click="handleContextAction('delete')">
-          🗑️ Supprimer
-        </div>
-      </template>
-      <template v-else>
-        <div class="menu-item" @click="handleContextAction('add-file')">
-          📄 Ajouter un fichier
-        </div>
-        <div class="menu-item" @click="handleContextAction('create-folder')">
-          📁 Créer un dossier
-        </div>
-      </template>
-    </div>
 
-    <InputDialog 
-      v-model:isOpen="inputDialog.isOpen"
-      :title="inputDialog.title"
-      :defaultValue="inputDialog.defaultValue"
-      :placeholder="inputDialog.placeholder"
-      @confirm="handleInputConfirm"
-      @cancel="handleInputCancel"
-    />
-    <TagDialog 
-      v-model:isOpen="tagDialog.isOpen"
-      :initialTags="tagDialog.initialTags"
-      @confirm="handleTagConfirm"
-    />
-    <ShareDialog
-      :isOpen="shareDialog.isOpen"
-      :item="shareDialog.item"
-      @close="closeShareDialog"
-    />
-    <ManageShareDialog
-      :isOpen="manageShareDialog.isOpen"
-      :item="manageShareDialog.item"
-      @close="closeManageShareDialog"
-      @share-deleted="onShareDeleted"
-    />
-    <MoveDialog
-      v-if="moveDialog.isOpen"
-      @close="closeMoveDialog"
-      @move-to="onMoveTo"
-    />
   <div
     class="context-menu"
     v-if="contextMenu.visible"
     :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }">
       <template v-if="contextMenu.item">
         <div class="menu-item" @click="handleContextAction('download')" v-if="contextMenu.item.type === 'file'">
-          📥 Télécharger
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg></span> Télécharger
         </div>
         <div class="menu-item" @click="handleContextAction('rename')">
-          ✏️ Renommer
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M14.06 9.02l.92.92L5.92 19H5v-.92l9.06-9.06M17.66 3c-.25 0-.51.1-.7.29l-1.83 1.83 3.75 3.75 1.83-1.83c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.2-.2-.45-.29-.71-.29zm-3.6 3.19L3 17.25V21h3.75L17.81 9.94l-3.75-3.75z"/></svg></span> Renommer
         </div>
         <div class="menu-item" @click="handleContextAction('move')">
-          🚚 Déplacer
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 12v-3h-4v-4h4V8l5 5-5 5z"/></svg></span> Déplacer
         </div>
         <div class="menu-item" @click="handleContextAction('share')">
-          🔗 Partager
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg></span> Partager
         </div>
         <div class="menu-item" v-if="contextMenu.item && contextMenu.item.shared" @click="handleContextAction('get-share-link')">
-          🔎 Voir le lien de partage
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></span> Voir le lien de partage
         </div>
         <div class="menu-item" @click="handleContextAction('tags')">
-          🏷️ Tags
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16zM16 17H5V7h11l3.55 5L16 17z"/></svg></span> Tags
         </div>
         <div class="menu-item delete" @click="handleContextAction('delete')">
-          🗑️ Supprimer
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/></svg></span> Supprimer
         </div>
       </template>
       <template v-else>
         <div class="menu-item" @click="handleContextAction('add-file')">
-          📄 Ajouter un fichier
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15.01l1.41 1.41L11 14.83V19h2v-4.17l1.59 1.59L16 15.01 12.01 11 8 15.01z"/></svg></span> Ajouter un fichier
         </div>
         <div class="menu-item" @click="handleContextAction('create-folder')">
-          📁 Créer un dossier
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V6h5.17l2 2H20v10zm-8-4h2v2h2v-2h2v-2h-2v-2h-2v2h-2z"/></svg></span> Créer un dossier
         </div>
       </template>
     </div>
@@ -1255,7 +1191,17 @@ button {
   border-top: 1px solid #eee;
 }
 
+.menu-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
 
+.menu-item.delete .menu-icon svg {
+  fill: #dc3545;
+}
 
 .date-column {
   font-size: 0.9em;
