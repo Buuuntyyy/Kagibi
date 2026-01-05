@@ -87,6 +87,7 @@ onMounted(() => {
   text-align: center;
   padding: 20px;
   color: #888;
+  background-color: var(--background-color);
 }
 
 .error {
