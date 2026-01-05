@@ -210,6 +210,13 @@
       @close="closeMoveDialog"
       @move-to="onMoveTo"
     />
+    <DeleteConfirmDialog
+      :isOpen="deleteDialog.isOpen"
+      :itemsCount="deleteDialog.itemsCount"
+      :itemName="deleteDialog.itemName"
+      @confirm="confirmDelete"
+      @cancel="closeDeleteDialog"
+    />
   </div>
 </template>
 
@@ -226,6 +233,7 @@ import ShareDialog from '../ShareDialog.vue'
 import api from '../../api'
 import MoveDialog from '../MoveDialog.vue';
 import ManageShareDialog from '../ManageShareDialog.vue';
+import DeleteConfirmDialog from '../DeleteConfirmDialog.vue';
 import FileTable from './FileTable.vue';
 
 const router = useRouter()
@@ -288,6 +296,12 @@ const shareDialog = ref({
 const manageShareDialog = ref({
   isOpen: false,
   item: null,
+});
+
+const deleteDialog = ref({
+  isOpen: false,
+  itemsCount: 0,
+  itemName: ''
 });
 
 const moveDialog = ref({
@@ -598,31 +612,42 @@ const downloadSelectedFiles = () => {
   }
 }
 
-const deleteSelectedItems = async () => {
+const deleteSelectedItems = () => {
   if (selectedItems.value.length === 0) return;
 
-  const confirmDelete = confirm(`Êtes-vous sûr de vouloir supprimer les ${selectedItems.value.length} élément(s) sélectionné(s) ?`);
-  if (confirmDelete) {
-    const fileIDs = selectedItems.value.filter(i => i.type === 'file').map(i => i.ID);
-    const folderIDs = selectedItems.value.filter(i => i.type === 'folder').map(i => i.ID);
-    
-    if (fileIDs.length > 0) {
-        await fileStore.deleteFiles(fileIDs);
-    }
-    
-    // Delete folders one by one for now as bulk delete folders is not implemented
-    for (const folderID of folderIDs) {
-        await api.delete(`/files/folder/${folderID}`);
-    }
-    
-    // Refresh list if we deleted folders manually (deleteFiles already refreshes)
-    if (folderIDs.length > 0 && fileIDs.length === 0) {
-        fileStore.fetchItems(fileStore.currentPath);
-    }
-    
-    selectedItems.value = [] // Clear selection after deletion
+  deleteDialog.value = {
+    isOpen: true,
+    itemsCount: selectedItems.value.length,
+    itemName: selectedItems.value.length === 1 ? selectedItems.value[0].Name : ''
+  };
+};
+
+const closeDeleteDialog = () => {
+  deleteDialog.value.isOpen = false;
+};
+
+const confirmDelete = async () => {
+  closeDeleteDialog();
+  
+  const fileIDs = selectedItems.value.filter(i => i.type === 'file').map(i => i.ID);
+  const folderIDs = selectedItems.value.filter(i => i.type === 'folder').map(i => i.ID);
+  
+  if (fileIDs.length > 0) {
+      await fileStore.deleteFiles(fileIDs);
   }
-}
+  
+  // Delete folders one by one for now as bulk delete folders is not implemented
+  for (const folderID of folderIDs) {
+      await api.delete(`/files/folder/${folderID}`);
+  }
+  
+  // Refresh list if we deleted folders manually (deleteFiles already refreshes)
+  if (folderIDs.length > 0 && fileIDs.length === 0) {
+      fileStore.fetchItems(fileStore.currentPath);
+  }
+  
+  selectedItems.value = [] // Clear selection after deletion
+};
 
 const renameSelectedItem = async () => {
   if (selectedItems.value.length !== 1) return;
@@ -986,7 +1011,7 @@ button {
 }
 
 .breadcrumb-link.current {
-  color: #333;
+  color: var(--text-color);
   cursor: default;
   font-weight: bold;
   text-decoration: none;
