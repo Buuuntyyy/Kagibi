@@ -221,8 +221,9 @@
 </template>
 
 <script setup>
-import { onMounted, ref, computed, onUnmounted } from 'vue'
+import { onMounted, ref, computed, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { useFileStore } from '../../stores/files'
 import { useAuthStore } from '../../stores/auth'
 import { usePreferencesStore } from '../../stores/preferences'
@@ -246,14 +247,24 @@ const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
 const fileInput = ref(null)
 const isDragging = ref(false)
 
-const columns = ref([
-  { key: 'icon', label: '', headerClass: 'icon-col', cellClass: 'icon-col' },
-  { key: 'name', label: 'Nom', cellClass: 'name-cell' },
-  { key: 'tags', label: 'Tags' },
-  { key: 'created', label: 'Créé le' },
-  { key: 'updated', label: 'Modifié le' },
-  { key: 'size', label: 'Taille' }
-])
+const columns = computed(() => {
+  const cols = [
+    { key: 'icon', label: '', headerClass: 'icon-col', cellClass: 'icon-col' },
+    { key: 'name', label: 'Nom', cellClass: 'name-cell' },
+  ];
+
+  if (fileStore.searchQuery && fileStore.searchQuery.trim() !== '') {
+    cols.push({ key: 'path', label: 'Chemin' });
+  }
+
+  cols.push(
+    { key: 'tags', label: 'Tags' },
+    { key: 'created', label: 'Créé le' },
+    { key: 'updated', label: 'Modifié le' },
+    { key: 'size', label: 'Taille' }
+  );
+  return cols;
+})
 
 const filteredFolders = computed(() => {
   if (!fileStore.searchQuery) return fileStore.folders
