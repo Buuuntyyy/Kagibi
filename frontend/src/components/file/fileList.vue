@@ -66,6 +66,9 @@
       :files="filteredFiles"
       :selectedItems="selectedItems"
       :columns="columns"
+      :sortKey="currentSortKey"
+      :sortDirection="currentSortDirection"
+      @sort-change="handleSortChange"
       @select-item="selectItem"
       @open-folder="openFolder"
       @open-file="downloadFile"
@@ -247,6 +250,49 @@ const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
 const fileInput = ref(null)
 const isDragging = ref(false)
 
+const currentSortKey = ref('name');
+const currentSortDirection = ref('asc');
+
+const handleSortChange = (key) => {
+  if (currentSortKey.value === key) {
+    currentSortDirection.value = currentSortDirection.value === 'asc' ? 'desc' : 'asc';
+  } else {
+    currentSortKey.value = key;
+    currentSortDirection.value = 'asc';
+  }
+};
+
+const sortItems = (items) => {
+  return [...items].sort((a, b) => {
+    let valA, valB;
+
+    switch (currentSortKey.value) {
+      case 'name':
+        valA = a.Name.toLowerCase();
+        valB = b.Name.toLowerCase();
+        break;
+      case 'size':
+        valA = a.Size || 0;
+        valB = b.Size || 0;
+        break;
+      case 'created':
+        valA = new Date(a.CreatedAt).getTime();
+        valB = new Date(b.CreatedAt).getTime();
+        break;
+      case 'updated':
+        valA = new Date(a.UpdatedAt).getTime();
+        valB = new Date(b.UpdatedAt).getTime();
+        break;
+      default:
+        return 0;
+    }
+
+    if (valA < valB) return currentSortDirection.value === 'asc' ? -1 : 1;
+    if (valA > valB) return currentSortDirection.value === 'asc' ? 1 : -1;
+    return 0;
+  });
+};
+
 const columns = computed(() => {
   const cols = [
     { key: 'icon', label: '', headerClass: 'icon-col', cellClass: 'icon-col' },
@@ -267,15 +313,21 @@ const columns = computed(() => {
 })
 
 const filteredFolders = computed(() => {
-  if (!fileStore.searchQuery) return fileStore.folders
-  const query = fileStore.searchQuery.toLowerCase()
-  return fileStore.folders.filter(folder => folder.Name.toLowerCase().includes(query))
+  let folders = fileStore.folders;
+  if (fileStore.searchQuery) {
+    const query = fileStore.searchQuery.toLowerCase()
+    folders = folders.filter(folder => folder.Name.toLowerCase().includes(query))
+  }
+  return sortItems(folders);
 })
 
 const filteredFiles = computed(() => {
-  if (!fileStore.searchQuery) return fileStore.files
-  const query = fileStore.searchQuery.toLowerCase()
-  return fileStore.files.filter(file => file.Name.toLowerCase().includes(query))
+  let files = fileStore.files;
+  if (fileStore.searchQuery) {
+    const query = fileStore.searchQuery.toLowerCase()
+    files = files.filter(file => file.Name.toLowerCase().includes(query))
+  }
+  return sortItems(files);
 })
 
 const allItems = computed(() => {
