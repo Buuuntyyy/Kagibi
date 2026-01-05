@@ -8,13 +8,18 @@
       </div>
       <input 
         type="text" 
-        v-model="query" 
+        v-model="searchQuery" 
         placeholder="Rechercher dans mes fichiers" 
-        @input="updateSearch"
+        @input="handleInput"
         @focus="isFocused = true"
         @blur="isFocused = false"
       />
-      <div class="icon-wrapper filter-icon">
+      <div class="icon-wrapper filter-icon" v-if="searchQuery" @click="clearSearch">
+        <svg focusable="false" viewBox="0 0 24 24" height="24px" width="24px" fill="#5f6368">
+          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path>
+        </svg>
+      </div>
+      <div class="icon-wrapper filter-icon" v-else>
         <svg focusable="false" viewBox="0 0 24 24" height="24px" width="24px" fill="#5f6368">
           <path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"></path>
         </svg>
@@ -24,20 +29,27 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import { useFileStore } from '../../stores/files'
+import { debounce } from 'lodash';
 
-const fileStore = useFileStore()
-const query = ref(fileStore.searchQuery)
-const isFocused = ref(false)
+const fileStore = useFileStore();
+const searchQuery = ref('');
+const isFocused = ref(false);
 
-watch(() => fileStore.searchQuery, (newVal) => {
-  query.value = newVal
-})
+// Debounce pour éviter de spammer l'API à chaque frappe
+const debouncedSearch = debounce((query) => {
+  fileStore.performSearch(query);
+}, 300);
 
-const updateSearch = () => {
-  fileStore.setSearchQuery(query.value)
-}
+const handleInput = () => {
+  debouncedSearch(searchQuery.value);
+};
+
+const clearSearch = () => {
+  searchQuery.value = '';
+  fileStore.searchFiles(''); // Recharge la vue par défaut
+};
 </script>
 
 <style scoped>

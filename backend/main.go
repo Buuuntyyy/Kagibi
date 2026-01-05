@@ -139,6 +139,7 @@ func main() {
 			fileRoutes.POST("/rename", func(c *gin.Context) { files.RenameHandler(c, db, redisClient) })
 			fileRoutes.POST("/tags", func(c *gin.Context) { files.UpdateTagsHandler(c, db) })
 			fileRoutes.GET("/download/:fileID", func(c *gin.Context) { files.DownloadFileHandler(c, db) })
+			fileRoutes.GET("/search", func(c *gin.Context) { files.SearchFilesHandler(c, db) })
 		}
 
 		// ROUTES DOSSIERS
