@@ -207,7 +207,7 @@ const storagePercentage = computed(() => {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  background-color: white;
+  background-color: var(--card-color);
   border: none;
   border-radius: 16px;
   padding: 0 16px;
@@ -217,13 +217,13 @@ const storagePercentage = computed(() => {
   transition: all 0.2s ease;
   font-size: 14px;
   font-weight: 500;
-  color: #3c4043;
+  color: var(--main-text-color);
   width: 100%;
 }
 
 .btn-new:hover {
   box-shadow: 0 4px 8px 3px rgba(60,64,67,0.15);
-  background-color: #fafafa;
+  background-color: var(--hover-background-color);
 }
 
 .plus-icon {
@@ -235,7 +235,7 @@ const storagePercentage = computed(() => {
   position: absolute;
   top: 60px;
   left: 0;
-  background: white;
+  background: var(--card-color);
   border-radius: 4px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.2);
   z-index: 100;
@@ -250,11 +250,11 @@ const storagePercentage = computed(() => {
   align-items: center;
   gap: 12px;
   font-size: 14px;
-  color: #3c4043;
+  color: var(--main-text-color);
 }
 
 .dropdown-item:hover {
-  background-color: #f1f3f4;
+  background-color: var(--hover-background-color);
 }
 
 .menu-section {
@@ -271,7 +271,7 @@ const storagePercentage = computed(() => {
   padding: 0 12px 0 16px;
   border-radius: 16px;
   cursor: pointer;
-  color: #3c4043;
+  color: var(--main-text-color);
   font-size: 14px;
   font-weight: 500;
   transition: background-color 0.1s;
@@ -279,7 +279,7 @@ const storagePercentage = computed(() => {
 }
 
 .menu-item:hover {
-  background-color: #f1f3f4;
+  background-color: var(--hover-background-color);
 }
 
 .menu-item.active {
@@ -312,7 +312,7 @@ const storagePercentage = computed(() => {
   justify-content: space-between;
   font-size: 0.85rem;
   margin-bottom: 0.5rem;
-  color: #666;
+  color: var(--secondary-text-color);
 }
 
 .storage-bar {
