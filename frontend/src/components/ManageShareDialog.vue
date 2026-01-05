@@ -185,15 +185,17 @@ const close = () => {
     display: block;
     margin-bottom: 0.5rem;
     font-size: 0.9rem;
-    color: #5f6368;
+    color: var(--secondary-text-color);
 }
 
 .form-control {
     width: 100%;
     padding: 8px 12px;
-    border: 1px solid #dadce0;
+    border: 1px solid var(--border-color);
     border-radius: 4px;
     font-size: 0.9rem;
+    background-color: var(--card-color);
+    color: var(--main-text-color);
 }
 
 .modal-overlay {
@@ -211,7 +213,7 @@ const close = () => {
 }
 
 .modal-content {
-  background: white;
+  background: var(--card-color);
   padding: 0;
   border-radius: 12px;
   width: 480px;
@@ -227,14 +229,14 @@ const close = () => {
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .modal-header h3 {
   margin: 0;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #202124;
+  color: var(--main-text-color);
 }
 
 .btn-close {
@@ -242,7 +244,7 @@ const close = () => {
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #5f6368;
+  color: var(--secondary-text-color);
   padding: 0;
   line-height: 1;
 }
@@ -260,7 +262,7 @@ const close = () => {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: #5f6368;
+  color: var(--secondary-text-color);
 }
 
 .not-shared-state {
@@ -273,7 +275,7 @@ const close = () => {
 }
 
 .sub-text {
-  color: #5f6368;
+  color: var(--secondary-text-color);
   margin-bottom: 1.5rem;
   font-size: 0.9rem;
 }
@@ -288,7 +290,7 @@ const close = () => {
   display: block;
   font-size: 0.85rem;
   font-weight: 500;
-  color: #5f6368;
+  color: var(--secondary-text-color);
   margin-bottom: 0.5rem;
 }
 
@@ -300,27 +302,28 @@ const close = () => {
 .link-container input {
   flex-grow: 1;
   padding: 10px 12px;
-  border: 1px solid #dadce0;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
-  background-color: #f8f9fa;
-  color: #3c4043;
+  background-color: var(--background-color);
+  color: var(--main-text-color);
   font-size: 0.9rem;
   outline: none;
 }
 
 .link-container input:focus {
-  border-color: #1a73e8;
-  background-color: white;
+  border-color: var(--primary-color);
+  background-color: var(--card-color);
 }
 
 .share-info {
-  background-color: #e8f0fe;
-  color: #1967d2;
+  background-color: var(--background-color);
+  color: var(--primary-color);
   padding: 12px;
   border-radius: 4px;
   font-size: 0.85rem;
   display: flex;
   align-items: center;
+  border: 1px solid var(--primary-color);
 }
 
 .share-info p {
@@ -329,11 +332,11 @@ const close = () => {
 
 .modal-footer {
   padding: 16px 24px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  background-color: #f8f9fa;
+  background-color: var(--background-color);
 }
 
 button {
@@ -347,57 +350,57 @@ button {
 }
 
 .btn-primary {
-  background-color: #1a73e8;
+  background-color: var(--primary-color);
   color: white;
 }
 
 .btn-primary:hover {
-  background-color: #1765cc;
+  background-color: var(--accent-color);
   box-shadow: 0 1px 2px rgba(60,64,67,0.3);
 }
 
 .btn-secondary {
-  background-color: white;
-  border: 1px solid #dadce0;
-  color: #3c4043;
+  background-color: var(--card-color);
+  border: 1px solid var(--border-color);
+  color: var(--main-text-color);
 }
 
 .btn-secondary:hover {
-  background-color: #f1f3f4;
-  border-color: #dadce0;
+  background-color: var(--hover-background-color);
+  border-color: var(--border-color);
 }
 
 .btn-copy {
-  background-color: white;
-  border: 1px solid #dadce0;
-  color: #1a73e8;
+  background-color: var(--card-color);
+  border: 1px solid var(--border-color);
+  color: var(--primary-color);
   min-width: 80px;
 }
 
 .btn-copy:hover {
-  background-color: #f1f3f4;
+  background-color: var(--hover-background-color);
 }
 
 .btn-copy.copied {
-  background-color: #e6f4ea;
-  color: #137333;
+  background-color: var(--success-color);
+  color: white;
   border-color: transparent;
 }
 
 .btn-delete {
   background-color: transparent;
-  color: #d93025;
+  color: var(--error-color);
   margin-right: auto; /* Push to left */
 }
 
 .btn-delete:hover {
-  background-color: #fce8e6;
+  background-color: var(--hover-background-color);
 }
 
 .spinner {
-  border: 3px solid rgba(0, 0, 0, 0.1);
+  border: 3px solid var(--border-color);
   border-radius: 50%;
-  border-top: 3px solid #1a73e8;
+  border-top: 3px solid var(--primary-color);
   width: 20px;
   height: 20px;
   animation: spin 1s linear infinite;
