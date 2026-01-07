@@ -92,6 +92,9 @@ func main() {
 	// Start S3 Worker
 	workers.StartWorker(redisClient)
 
+	// Start Cleanup Worker (Expired shares, etc.)
+	workers.StartCleanupWorker(db)
+
 	// Initialize WebSocket Manager
 	wsManager := wsPkg.NewManager()
 
