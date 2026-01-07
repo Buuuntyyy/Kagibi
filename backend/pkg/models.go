@@ -44,16 +44,18 @@ func (File) TableName() string { return "files" }
 // `bun:"-"` indique à bun de ne pas essayer de mapper ces champs.
 type FileWithShare struct {
 	File
-	Shared     bool    `bun:"-" json:"shared"`
-	ShareToken *string `bun:"-" json:"share_token,omitempty"`
-	ShareID    *int64  `bun:"-" json:"share_id,omitempty"`
+	Shared     bool       `bun:"-" json:"shared"`
+	ShareToken *string    `bun:"-" json:"share_token,omitempty"`
+	ShareID    *int64     `bun:"-" json:"share_id,omitempty"`
+	ExpiresAt  *time.Time `bun:"-" json:"expires_at,omitempty"`
 }
 
 type FolderWithShare struct {
 	Folder
-	Shared     bool    `bun:"-" json:"shared"`
-	ShareToken *string `bun:"-" json:"share_token,omitempty"`
-	ShareID    *int64  `bun:"-" json:"share_id,omitempty"`
+	Shared     bool       `bun:"-" json:"shared"`
+	ShareToken *string    `bun:"-" json:"share_token,omitempty"`
+	ShareID    *int64     `bun:"-" json:"share_id,omitempty"`
+	ExpiresAt  *time.Time `bun:"-" json:"expires_at,omitempty"`
 }
 
 type ShareFileKey struct {
