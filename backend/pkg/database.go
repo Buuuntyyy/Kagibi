@@ -178,6 +178,7 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 					fw.ShareToken = &tok
 					id := l.ID
 					fw.ShareID = &id
+					fw.ExpiresAt = l.ExpiresAt
 				}
 			}
 			filesWithShare = append(filesWithShare, fw)
@@ -219,6 +220,7 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 					fw.ShareToken = &tok
 					id := l.ID
 					fw.ShareID = &id
+					fw.ExpiresAt = l.ExpiresAt
 				}
 			}
 			foldersWithShare = append(foldersWithShare, fw)

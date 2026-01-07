@@ -41,6 +41,7 @@
             </div>
             
             <div class="share-info">
+                <p v-if="localExpiresAt">⏳ Ce lien expirera le : <b>{{ formattedExpiration }}</b></p>
                 <p>⚠️ Toute personne disposant de ce lien pourra accéder au contenu <b>déchiffré</b> de manière légitime.</p>
             </div>
         </div>
@@ -75,16 +76,23 @@ const expiresAt = ref(null);
 // Local state to handle immediate updates without waiting for parent refresh
 const localShareToken = ref(null);
 const localShareId = ref(null);
+const localExpiresAt = ref(null);
 
 // Reset local state when item changes
 watch(() => props.item, (newItem) => {
     if (newItem) {
         localShareToken.value = newItem.share_token || newItem.ShareToken;
         localShareId.value = newItem.share_id || newItem.ShareID;
+        localExpiresAt.value = newItem.expires_at || newItem.ExpiresAt; // Populate expiration
     }
 }, { immediate: true });
 
 const isShared = computed(() => !!localShareToken.value);
+
+const formattedExpiration = computed(() => {
+  if (!localExpiresAt.value) return null;
+  return new Date(localExpiresAt.value).toLocaleString();
+});
 
 const shareUrl = computed(() => {
   if (localShareToken.value) {
@@ -115,6 +123,7 @@ const createShare = async () => {
         
         // Update local state
         localShareToken.value = result.token;
+        localExpiresAt.value = expirationDate;
         // If backend returns ID, use it. If not, we might need to refresh.
         // Assuming result has token.
         
