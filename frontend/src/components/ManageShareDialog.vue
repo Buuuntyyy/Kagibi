@@ -116,7 +116,13 @@ const createShare = async () => {
         // Convert expiresAt to ISO string if present
         let expirationDate = null;
         if (expiresAt.value) {
-            expirationDate = new Date(expiresAt.value).toISOString();
+            const selectedDate = new Date(expiresAt.value);
+            if (selectedDate <= new Date()) {
+                alert("La date d'expiration doit être dans le futur.");
+                loading.value = false;
+                return;
+            }
+            expirationDate = selectedDate.toISOString();
         }
 
         const result = await fileStore.createShareLink(itemId, props.item.type, expirationDate);
