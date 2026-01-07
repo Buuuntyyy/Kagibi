@@ -48,6 +48,11 @@ func CreateShareLinkHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	if req.ExpiresAt != nil && req.ExpiresAt.Before(time.Now()) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Expiration date must be in the future"})
+		return
+	}
+
 	log.Printf("CreateShareLink: ResourceID=%d Type=%s FileKeys=%d", req.ResourceID, req.ResourceType, len(req.FileKeys))
 
 	// Verify ownership and get path
