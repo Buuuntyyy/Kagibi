@@ -7,6 +7,7 @@ import (
 	"safercloud/backend/handlers/auth"
 	"safercloud/backend/handlers/files"
 	"safercloud/backend/handlers/folders"
+	"safercloud/backend/handlers/friends"
 	"safercloud/backend/handlers/shares"
 	"safercloud/backend/handlers/tags"
 	"safercloud/backend/handlers/users"
@@ -98,6 +99,8 @@ func main() {
 	// Initialize WebSocket Manager
 	wsManager := wsPkg.NewManager()
 
+	friendHandler := friends.NewFriendHandler(db, wsManager)
+
 	api := router.Group("/api/v1")
 	// ROUTES PUBLIQUES (Non protégées par l'authentification)
 	publicRoutes := api.Group("/auth")
@@ -157,6 +160,16 @@ func main() {
 			tagRoutes.GET("/", tags.ListTagsHandler(db))
 			tagRoutes.POST("/", tags.CreateTagHandler(db))
 			tagRoutes.DELETE("/:id", tags.DeleteTagHandler(db))
+		}
+
+		// ROUTES AMIS
+		friendRoutes := protectedRoutes.Group("/friends")
+		{
+			friendRoutes.GET("", friendHandler.ListFriends)
+			friendRoutes.POST("", friendHandler.AddFriend)
+			friendRoutes.DELETE("/:id", friendHandler.RemoveFriend)
+			friendRoutes.PUT("/:id/accept", friendHandler.AcceptFriend)
+			friendRoutes.DELETE("/:id/reject", friendHandler.RejectFriend)
 		}
 
 		// ROUTES PARTAGE
