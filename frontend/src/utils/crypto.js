@@ -290,3 +290,149 @@ export async function deriveKeyFromToken(token) {
         ["encrypt", "decrypt"]
     );
 }
+
+// --- Asymmetric Encryption (RSA-OAEP) Implementation ---
+
+/**
+ * Generate a new RSA Key Pair for user identity and sharing
+ * @returns {Promise<CryptoKeyPair>}
+ */
+export async function generateRSAKeyPair() {
+    return window.crypto.subtle.generateKey(
+        {
+            name: "RSA-OAEP",
+            modulusLength: 4096, // High security
+            publicExponent: new Uint8Array([1, 0, 1]),
+            hash: "SHA-256",
+        },
+        true,
+        ["encrypt", "decrypt"]
+    );
+}
+
+/**
+ * Export a key to PEM format string
+ */
+export async function exportKeyToPEM(key, type = 'spki') {
+    const exported = await window.crypto.subtle.exportKey(type, key);
+    const exportedAsString = String.fromCharCode(...new Uint8Array(exported));
+    const exportedAsBase64 = btoa(exportedAsString);
+    const pemHeader = type === 'spki' ? '-----BEGIN PUBLIC KEY-----' : '-----BEGIN PRIVATE KEY-----';
+    const pemFooter = type === 'spki' ? '-----END PUBLIC KEY-----' : '-----END PRIVATE KEY-----';
+    
+    return `${pemHeader}\n${exportedAsBase64}\n${pemFooter}`;
+}
+
+/**
+ * Import a PEM formatted key string back to CryptoKey
+ */
+export async function importKeyFromPEM(pemData, type = 'spki') {
+    // Remove headers and newlines
+    const pemHeader = type === 'spki' ? '-----BEGIN PUBLIC KEY-----' : '-----BEGIN PRIVATE KEY-----';
+    const pemFooter = type === 'spki' ? '-----END PUBLIC KEY-----' : '-----END PRIVATE KEY-----';
+    
+    // Simple basic cleanup, robust enough for our generated keys
+    const pemContents = pemData.replace(/-----BEGIN [A-Z ]+-----/g, "")
+                               .replace(/-----END [A-Z ]+-----/g, "")
+                               .replace(/\s/g, "");
+                               
+    const binaryDerString = atob(pemContents);
+    const binaryDer = new Uint8Array(binaryDerString.length);
+    for (let i = 0; i < binaryDerString.length; i++) {
+        binaryDer[i] = binaryDerString.charCodeAt(i);
+    }
+
+    return window.crypto.subtle.importKey(
+        type,
+        binaryDer.buffer,
+        {
+            name: "RSA-OAEP",
+            hash: "SHA-256",
+        },
+        true,
+        type === 'spki' ? ["encrypt"] : ["decrypt"]
+    );
+}
+
+/**
+ * Encrypt a symmetric key (raw bytes) with a recipient's Public RSA Key
+ */
+export async function encryptKeyWithPublicKey(symmetricKeyRaw, publicKey) {
+    const encryptedBuffer = await window.crypto.subtle.encrypt(
+        {
+            name: "RSA-OAEP"
+        },
+        publicKey,
+        symmetricKeyRaw
+    );
+    return sodium.to_base64(new Uint8Array(encryptedBuffer));
+}
+
+/**
+ * Decrypt a symmetric key with the user's Private RSA Key
+ */
+export async function decryptKeyWithPrivateKey(encryptedKeyBase64, privateKey) {
+    const encryptedKeyBuffer = sodium.from_base64(encryptedKeyBase64);
+    
+    const decryptedBuffer = await window.crypto.subtle.decrypt(
+        {
+            name: "RSA-OAEP"
+        },
+        privateKey,
+        encryptedKeyBuffer
+    );
+    
+    return new Uint8Array(decryptedBuffer);
+}
+
+/**
+ * Encrypt the RSA Private Key with the User's Master Key (AES-GCM) for storage
+ */
+export async function encryptPrivateKey(privateKey, masterKey) {
+    const exportedPrivate = await window.crypto.subtle.exportKey("pkcs8", privateKey);
+    const iv = window.crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+    
+    const encryptedContent = await window.crypto.subtle.encrypt(
+        {
+            name: "AES-GCM",
+            iv: iv,
+        },
+        masterKey,
+        exportedPrivate
+    );
+
+    const combined = new Uint8Array(iv.byteLength + encryptedContent.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(encryptedContent), iv.byteLength);
+
+    return sodium.to_base64(combined);
+}
+
+/**
+ * Decrypt the RSA Private Key using the User's Master Key
+ */
+export async function decryptPrivateKey(encryptedPrivateKeyBase64, masterKey) {
+    const combined = sodium.from_base64(encryptedPrivateKeyBase64);
+    const iv = combined.slice(0, IV_LENGTH);
+    const data = combined.slice(IV_LENGTH);
+
+    const decryptedBuffer = await window.crypto.subtle.decrypt(
+        {
+            name: "AES-GCM",
+            iv: iv,
+        },
+        masterKey,
+        data
+    );
+
+    return window.crypto.subtle.importKey(
+        "pkcs8",
+        decryptedBuffer,
+        {
+            name: "RSA-OAEP",
+            hash: "SHA-256",
+        },
+        true,
+        ["decrypt"]
+    );
+}

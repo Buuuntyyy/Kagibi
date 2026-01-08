@@ -20,7 +20,9 @@ type User struct {
 	StorageUsed                int64     `bun:"storage_used,notnull,default:0" json:"storage_used"`
 	StorageLimit               int64     `bun:"storage_limit,notnull,default:16106127360" json:"storage_limit"` // Default 15GB
 	Plan                       string    `bun:"plan,notnull,default:'free'" json:"plan"`
-	FriendCode                 string    `bun:"friend_code,unique,notnull" json:"friend_code"` // Short unique code for friends
+	FriendCode                 string    `bun:"friend_code,unique,notnull" json:"friend_code"`      // Short unique code for friends
+	PublicKey                  string    `bun:"public_key" json:"public_key"`                       // RSA Public Key (Standard PEM format)
+	EncryptedPrivateKey        string    `bun:"encrypted_private_key" json:"encrypted_private_key"` // RSA Private Key (Encrypted with MasterKey)
 	CreatedAt                  time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt                  time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 }
@@ -65,6 +67,23 @@ type FolderWithShare struct {
 	ShareToken *string    `bun:"-" json:"share_token,omitempty"`
 	ShareID    *int64     `bun:"-" json:"share_id,omitempty"`
 	ExpiresAt  *time.Time `bun:"-" json:"expires_at,omitempty"`
+}
+
+type FileShare struct {
+	ID               int64     `bun:"id,pk,autoincrement"`
+	FileID           int64     `bun:"file_id,notnull"`
+	SharedWithUserID string    `bun:"shared_with_user_id,notnull"`
+	EncryptedKey     string    `bun:"encrypted_key,notnull"` // File Key Encrypted with recipient's Public Key
+	Permission       string    `bun:"permission,notnull,default:'read'"`
+	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+}
+
+type FolderShare struct {
+	ID               int64     `bun:"id,pk,autoincrement"`
+	FolderID         int64     `bun:"folder_id,notnull"`
+	SharedWithUserID string    `bun:"shared_with_user_id,notnull"`
+	Permission       string    `bun:"permission,notnull,default:'read'"`
+	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 }
 
 type ShareFileKey struct {
