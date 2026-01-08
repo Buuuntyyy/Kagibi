@@ -8,6 +8,7 @@ import (
 	"safercloud/backend/handlers/files"
 	"safercloud/backend/handlers/folders"
 	"safercloud/backend/handlers/friends"
+	"safercloud/backend/handlers/keys"
 	"safercloud/backend/handlers/shares"
 	"safercloud/backend/handlers/tags"
 	"safercloud/backend/handlers/users"
@@ -44,13 +45,12 @@ func main() {
 	// Initialise la connexion à la base de données
 	db := pkg.NewDB()
 
-	// Exécute les migrations
-	err := pkg.Migrate(db)
-	if err != nil {
-		log.Fatalf("Failed to migrate: %v", err)
-	}
-
-	log.Println("Migrations executed successfully!")
+	// Exécute les migrations - DÉSACTIVÉ POUR SUPABASE (Gestion manuelle du schéma)
+	// err := pkg.Migrate(db)
+	// if err != nil {
+	// 	log.Fatalf("Failed to migrate: %v", err)
+	// }
+	// log.Println("Migrations executed successfully!")
 
 	// Crée une instance de Gin (equivalent à Express.js en Node.js)
 	router := gin.Default()
@@ -73,6 +73,7 @@ func main() {
 
 	if redisURL != "" {
 		// Si une URL complète est fournie (ex: rediss://user:pass@host:port)
+		var err error
 		redisOptions, err = redis.ParseURL(redisURL)
 		if err != nil {
 			log.Fatalf("Invalid REDIS_URL: %v", err)
@@ -131,6 +132,14 @@ func main() {
 		userRoutes.GET("/", func(c *gin.Context) { users.ListUsersHandler(c, db) })
 		userRoutes.GET("/me", func(c *gin.Context) { users.MeHandler(c, db) })
 		userRoutes.POST("/change-password", func(c *gin.Context) { users.UpdatePasswordHandler(c, db) })
+		userRoutes.POST("/keys", func(c *gin.Context) {
+			// Lazy load to avoid cycle, or just call handler directly
+			// assuming 'keys' pkg doesn't import main
+			// Actually need to import it. I will fix imports later if needed.
+			// For now let's assume 'keys' package is available.
+			// Ideally should be "safercloud/backend/handlers/keys"
+			keys.UpdateKeysHandler(c, db)
+		})
 
 		// ROUTES FICHIERS
 		fileRoutes := protectedRoutes.Group("/files")
@@ -180,6 +189,7 @@ func main() {
 				log.Println("DEBUG: Hit /shares/link route")
 				shares.CreateShareLinkHandler(c, db)
 			})
+			shareRoutes.POST("/direct", func(c *gin.Context) { shares.CreateDirectShareHandler(c, db, wsManager) })
 			shareRoutes.GET("/check-path", func(c *gin.Context) { shares.GetActiveSharesForPathHandler(c, db) })
 			shareRoutes.GET("/file/:fileID", func(c *gin.Context) { shares.GetShareForResourceHandler(c, db) })
 			shareRoutes.DELETE("/link/:shareID", func(c *gin.Context) { shares.DeleteShareLinkHandler(c, db) })

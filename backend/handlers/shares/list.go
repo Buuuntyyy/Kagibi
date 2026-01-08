@@ -79,5 +79,34 @@ func ListSharesHandler(c *gin.Context, db *bun.DB) {
 		})
 	}
 
+	// 2. Direct File Shares
+	// Fetch all files owned by me that have shares
+	var fileShares []pkg.FileShare
+	// Complex query: Join files to filter by owner = me
+	err = db.NewSelect().Model(&fileShares).
+		Join("JOIN files ON files.id = file_share.file_id").
+		Where("files.user_id = ?", userID).
+		Scan(c.Request.Context())
+
+	if err == nil {
+		for _, fs := range fileShares {
+			var f pkg.File
+			db.NewSelect().Model(&f).Where("id = ?", fs.FileID).Scan(c.Request.Context())
+
+			var friend pkg.User
+			db.NewSelect().Model(&friend).Where("id = ?", fs.SharedWithUserID).Scan(c.Request.Context())
+
+			response = append(response, ShareResponse{
+				ID:           fs.ID,
+				Token:        "DIRECT", // Marker
+				Link:         "Shared with " + friend.Name,
+				ResourceType: "file",
+				ResourceName: f.Name,
+				Views:        0,
+				CreatedAt:    fs.CreatedAt,
+			})
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"shares": response})
 }
