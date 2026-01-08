@@ -61,7 +61,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import FileTable from './file/FileTable.vue';
 import { formatSize, formatDate } from '../utils/format';
@@ -78,6 +78,10 @@ const router = useRouter();
 const items = ref([]);
 const loading = ref(false);
 const error = ref(null);
+
+watch(() => fileStore.shareUpdateTrigger, () => {
+    fetchSharedWithMe();
+});
 
 const contextMenu = ref({
   visible: false,
