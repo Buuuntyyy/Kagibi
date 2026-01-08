@@ -17,6 +17,7 @@ type FriendResponse struct {
 	Email     string `json:"email"`               // Maybe hide this if privacy concerned, but usually visible to friends
 	Status    string `json:"status"`              // pending_sent, pending_received, accepted
 	RequestID int64  `json:"requestId,omitempty"` // ID of the friendship row, useful for cancelling/accepting
+	PublicKey string `json:"public_key"`          // NEW: Required for encrypted sharing
 }
 
 type FriendHandler struct {
@@ -79,6 +80,7 @@ func (h *FriendHandler) ListFriends(c *gin.Context) {
 				Email:     otherUser.Email,
 				Status:    status,
 				RequestID: requestID,
+				PublicKey: otherUser.PublicKey,
 			})
 		}
 	}
