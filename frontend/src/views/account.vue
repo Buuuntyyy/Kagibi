@@ -5,132 +5,150 @@
       <button @click="router.push('/dashboard')" class="btn-back">Retour au Dashboard</button>
     </div>
 
-    <div class="content-grid">
-      <!-- Profile Info Card -->
-      <div class="card profile-card">
-        <div class="card-header">
-          <h3>Informations Personnelles</h3>
+    <!-- Top Card: Personal Information -->
+    <div class="card profile-card">
+      <div class="card-header">
+        <h3>Informations Personnelles</h3>
+      </div>
+      <div class="card-body profile-body">
+         <div class="profile-avatar">
+            {{ getInitials(authStore.user?.name) }}
+         </div>
+         <div class="profile-details">
+            <div class="info-row">
+              <span class="label">Nom d'utilisateur</span>
+              <span class="value">{{ authStore.user?.name || 'Chargement...' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Email</span>
+              <span class="value">{{ authStore.user?.email || 'Chargement...' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Membre depuis</span>
+              <span class="value">{{ formatDate(authStore.user?.created_at) }}</span>
+            </div>
+         </div>
+      </div>
+    </div>
+
+    <!-- Accordion Sections -->
+    <div class="accordion-container">
+      
+      <!-- Change Username -->
+      <div class="accordion-item" :class="{ 'active': activeSection === 'username' }">
+        <button class="accordion-header" @click="toggleSection('username')">
+          <span class="accordion-title">Modifier le nom d'utilisateur</span>
+          <span class="accordion-icon">▼</span>
+        </button>
+        <div class="accordion-content" v-show="activeSection === 'username'">
+           <div class="content-wrapper">
+              <form @submit.prevent="handleUpdateUsername">
+                <div class="form-group">
+                  <label for="newUsername">Nouveau nom d'utilisateur</label>
+                  <input 
+                    type="text" 
+                    id="newUsername" 
+                    v-model="usernameForm.newName" 
+                    placeholder="Entrez votre nouveau nom"
+                    required
+                  />
+                </div>
+                <button type="submit" class="btn-primary">Sauvegarder</button>
+              </form>
+           </div>
         </div>
-        <div class="card-body">
-          <div class="info-group">
-            <label>Nom d'utilisateur</label>
-            <div class="info-value">{{ authStore.user?.name || 'Chargement...' }}</div>
-          </div>
-          <div class="info-group">
-            <label>Email</label>
-            <div class="info-value">{{ authStore.user?.email || 'Chargement...' }}</div>
-          </div>
-          <div class="info-group">
-            <label>Membre depuis</label>
-            <div class="info-value">{{ formatDate(authStore.user?.created_at) }}</div>
+      </div>
+
+      <!-- Change Password -->
+      <div class="accordion-item" :class="{ 'active': activeSection === 'password' }">
+        <button class="accordion-header" @click="toggleSection('password')">
+          <span class="accordion-title">Changer le mot de passe</span>
+          <span class="accordion-icon">▼</span>
+        </button>
+        <div class="accordion-content" v-show="activeSection === 'password'">
+          <div class="content-wrapper">
+            <form @submit.prevent="handleUpdatePassword">
+                <div class="form-group">
+                  <label for="currentPassword">Mot de passe actuel</label>
+                  <input 
+                    type="password" 
+                    id="currentPassword" 
+                    v-model="passwordForm.current" 
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="newPassword">Nouveau mot de passe</label>
+                  <input 
+                    type="password" 
+                    id="newPassword" 
+                    v-model="passwordForm.new" 
+                    required
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="confirmPassword">Confirmer le nouveau mot de passe</label>
+                  <input 
+                    type="password" 
+                    id="confirmPassword" 
+                    v-model="passwordForm.confirm" 
+                    required
+                  />
+                </div>
+                <button type="submit" class="btn-primary">Mettre à jour le mot de passe</button>
+              </form>
           </div>
         </div>
       </div>
 
-      <!-- Change Username Card -->
-      <div class="card">
-        <div class="card-header">
-          <h3>Modifier le nom d'utilisateur</h3>
-        </div>
-        <div class="card-body">
-          <form @submit.prevent="handleUpdateUsername">
-            <div class="form-group">
-              <label for="newUsername">Nouveau nom d'utilisateur</label>
-              <input 
-                type="text" 
-                id="newUsername" 
-                v-model="usernameForm.newName" 
-                placeholder="Entrez votre nouveau nom"
-                required
-              />
-            </div>
-            <button type="submit" class="btn-primary">Sauvegarder</button>
-          </form>
-        </div>
-      </div>
+      <!-- Preferences -->
+      <div class="accordion-item" :class="{ 'active': activeSection === 'preferences' }">
+        <button class="accordion-header" @click="toggleSection('preferences')">
+          <span class="accordion-title">Préférences d'Interface</span>
+          <span class="accordion-icon">▼</span>
+        </button>
+        <div class="accordion-content" v-show="activeSection === 'preferences'">
+           <div class="content-wrapper">
+              <div class="prefs-grid">
+                <div class="pref-item">
+                  <div class="pref-info">
+                    <label class="pref-label">Menu Contextuel (Clic-droit)</label>
+                    <span class="pref-desc">Affiche un menu d'actions rapides au clic-droit sur un fichier.</span>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" v-model="preferenceStore.enableContextMenu">
+                    <span class="slider round"></span>
+                  </label>
+                </div>
 
-      <!-- Change Password Card -->
-      <div class="card">
-        <div class="card-header">
-          <h3>Changer le mot de passe</h3>
-        </div>
-        <div class="card-body">
-          <form @submit.prevent="handleUpdatePassword">
-            <div class="form-group">
-              <label for="currentPassword">Mot de passe actuel</label>
-              <input 
-                type="password" 
-                id="currentPassword" 
-                v-model="passwordForm.current" 
-                required
-              />
-            </div>
-            <div class="form-group">
-              <label for="newPassword">Nouveau mot de passe</label>
-              <input 
-                type="password" 
-                id="newPassword" 
-                v-model="passwordForm.new" 
-                required
-              />
-            </div>
-            <div class="form-group">
-              <label for="confirmPassword">Confirmer le nouveau mot de passe</label>
-              <input 
-                type="password" 
-                id="confirmPassword" 
-                v-model="passwordForm.confirm" 
-                required
-              />
-            </div>
-            <button type="submit" class="btn-primary">Mettre à jour le mot de passe</button>
-          </form>
-        </div>
-      </div>
-
-      <div class="card profile-card"> <!-- J'utilise profile-card pour qu'elle prenne toute la largeur -->
-        <div class="card-header">
-          <h3>Préférences d'Interface</h3>
-        </div>
-        <div class="card-body">
-          <div class="prefs-grid">
-            
-            <div class="pref-item">
-              <div class="pref-info">
-                <label class="pref-label">Menu Contextuel (Clic-droit)</label>
-                <span class="pref-desc">Affiche un menu d'actions rapides au clic-droit sur un fichier.</span>
+                <div class="pref-item">
+                  <div class="pref-info">
+                    <label class="pref-label">Barre d'actions</label>
+                    <span class="pref-desc">Affiche la barre d'outils (boutons Renommer, Supprimer...) au dessus de la liste.</span>
+                  </div>
+                  <label class="switch">
+                    <input type="checkbox" v-model="preferenceStore.showToolBar">
+                    <span class="slider round"></span>
+                  </label>
+                </div>
               </div>
-              <label class="switch">
-                <input type="checkbox" v-model="preferenceStore.enableContextMenu">
-                <span class="slider round"></span>
-              </label>
-            </div>
-
-            <div class="pref-item">
-              <div class="pref-info">
-                <label class="pref-label">Barre d'actions</label>
-                <span class="pref-desc">Affiche la barre d'outils (boutons Renommer, Supprimer...) au dessus de la liste.</span>
-              </div>
-              <label class="switch">
-                <input type="checkbox" v-model="preferenceStore.showToolBar">
-                <span class="slider round"></span>
-              </label>
-            </div>
-
-          </div>
+           </div>
         </div>
       </div>
 
-      <!-- Legal Information Card -->
-      <div class="card profile-card">
-        <div class="card-header">
-          <h3>Informations Légales</h3>
-        </div>
-        <div class="card-body">
-          <div class="legal-links">
-            <router-link to="/cgu" class="legal-link">Conditions Générales d'Utilisation (CGU)</router-link>
-            <router-link to="/privacy" class="legal-link">Politique de Confidentialité</router-link>
-          </div>
+      <!-- Legal -->
+      <div class="accordion-item" :class="{ 'active': activeSection === 'legal' }">
+        <button class="accordion-header" @click="toggleSection('legal')">
+          <span class="accordion-title">Informations Légales</span>
+          <span class="accordion-icon">▼</span>
+        </button>
+        <div class="accordion-content" v-show="activeSection === 'legal'">
+           <div class="content-wrapper">
+              <div class="legal-links">
+                <router-link to="/cgu" class="legal-link">Conditions Générales d'Utilisation (CGU)</router-link>
+                <router-link to="/privacy" class="legal-link">Politique de Confidentialité</router-link>
+              </div>
+           </div>
         </div>
       </div>
 
@@ -147,6 +165,12 @@ import { usePreferencesStore } from '../stores/preferences'
 const router = useRouter()
 const authStore = useAuthStore()
 const preferenceStore = usePreferencesStore()
+
+const activeSection = ref(null)
+
+const toggleSection = (section) => {
+  activeSection.value = activeSection.value === section ? null : section
+}
 
 const usernameForm = ref({
   newName: ''
@@ -167,6 +191,11 @@ onMounted(async () => {
     usernameForm.value.newName = authStore.user.name
   }
 })
+
+const getInitials = (name) => {
+  if (!name) return '?'
+  return name.substring(0, 2).toUpperCase()
+}
 
 const formatDate = (dateString) => {
   if (!dateString) return '-'
@@ -210,9 +239,10 @@ const handleUpdatePassword = async () => {
 
 <style scoped>
 .account-container {
-  max-width: 1000px;
+  max-width: 800px;
   margin: 0 auto;
   padding: 2rem;
+  color: var(--main-text-color);
 }
 
 .header {
@@ -224,81 +254,156 @@ const handleUpdatePassword = async () => {
 
 .page-title {
   font-size: 2rem;
-  color: #333;
+  color: var(--main-text-color);
   margin: 0;
 }
 
 .btn-back {
   padding: 0.5rem 1rem;
-  background-color: #f0f0f0;
-  border: 1px solid #ccc;
+  background-color: var(--card-color);
+  border: 1px solid var(--border-color);
+  color: var(--main-text-color);
   border-radius: 4px;
   cursor: pointer;
   font-weight: 500;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
 }
 
 .btn-back:hover {
-  background-color: #e0e0e0;
+  background-color: var(--hover-background-color);
+  border-color: var(--secondary-text-color);
 }
 
-.content-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 2rem;
-}
-
-@media (min-width: 768px) {
-  .content-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .profile-card {
-    grid-column: span 2;
-  }
-}
-
+/* Card Styling */
 .card {
-  background: white;
+  background: var(--card-color);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
   overflow: hidden;
-  border: 1px solid #eee;
+  border: 1px solid var(--border-color);
+  margin-bottom: 2rem;
 }
 
 .card-header {
-  background-color: #f8f9fa;
+  background-color: var(--background-color);
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .card-header h3 {
   margin: 0;
   font-size: 1.1rem;
-  color: #444;
+  color: var(--main-text-color);
 }
 
-.card-body {
-  padding: 1.5rem;
+.profile-body {
+  display: flex;
+  align-items: center;
+  padding: 2rem;
+  gap: 2rem;
 }
 
-.info-group {
-  margin-bottom: 1rem;
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background-color: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: bold;
 }
 
-.info-group label {
-  display: block;
-  font-size: 0.85rem;
-  color: #666;
-  margin-bottom: 0.25rem;
+.profile-details {
+  flex: 1;
 }
 
-.info-value {
-  font-size: 1.1rem;
-  color: #333;
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-row .label {
+  color: var(--secondary-text-color);
   font-weight: 500;
 }
 
+.info-row .value {
+  color: var(--main-text-color);
+  font-weight: 600;
+}
+
+/* Accordion Styling */
+.accordion-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.accordion-item {
+  background: var(--card-color);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+
+.accordion-item.active {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  border-color: var(--primary-color);
+}
+
+.accordion-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--main-text-color);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.accordion-header:hover {
+  background-color: var(--hover-background-color);
+}
+
+.accordion-icon {
+  font-size: 0.8rem;
+  transition: transform 0.3s;
+}
+
+.accordion-item.active .accordion-icon {
+  transform: rotate(180deg);
+}
+
+.accordion-content {
+  border-top: 1px solid var(--border-color);
+  background-color: var(--background-color);
+  animation: slideDown 0.3s ease-out;
+}
+
+.content-wrapper {
+  padding: 1.5rem;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Form Shared Styles */
 .form-group {
   margin-bottom: 1rem;
 }
@@ -306,29 +411,30 @@ const handleUpdatePassword = async () => {
 .form-group label {
   display: block;
   margin-bottom: 0.5rem;
-  color: #555;
+  color: var(--secondary-text-color);
   font-weight: 500;
 }
 
 .form-group input {
   width: 100%;
-  padding: 0.6rem;
-  border: 1px solid #ddd;
+  padding: 0.8rem;
+  background-color: var(--card-color);
+  color: var(--main-text-color);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   font-size: 1rem;
-  box-sizing: border-box; /* Important for padding not to affect width */
+  box-sizing: border-box;
 }
 
 .form-group input:focus {
-  border-color: var(--primary-color, #42b983);
+  border-color: var(--primary-color);
   outline: none;
-  box-shadow: 0 0 0 2px rgba(66, 185, 131, 0.2);
 }
 
 .btn-primary {
   width: 100%;
-  padding: 0.75rem;
-  background-color: var(--primary-color, #42b983);
+  padding: 0.8rem;
+  background-color: var(--primary-color);
   color: white;
   border: none;
   border-radius: 4px;
@@ -339,44 +445,34 @@ const handleUpdatePassword = async () => {
 }
 
 .btn-primary:hover {
-  background-color: #3aa876;
+  background-color: var(--accent-color);
 }
 
-.prefs-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
+/* Prefs */
 .pref-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .pref-item:last-child {
   border-bottom: none;
-  padding-bottom: 0;
 }
 
-.pref-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.pref-label {
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 0.25rem;
+.pref-info label {
+  display: block;
+  font-weight: 600;
+  color: var(--main-text-color);
 }
 
 .pref-desc {
   font-size: 0.85rem;
-  color: #888;
+  color: var(--secondary-text-color);
 }
 
+/* Switch */
 .switch {
   position: relative;
   display: inline-block;
@@ -385,78 +481,57 @@ const handleUpdatePassword = async () => {
   flex-shrink: 0;
 }
 
-.switch input { 
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
+.switch input { opacity: 0; width: 0; height: 0; }
 
 .slider {
   position: absolute;
   cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #ccc;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: var(--secondary-text-color);
   transition: .4s;
+  border-radius: 34px;
 }
 
 .slider:before {
   position: absolute;
   content: "";
-  height: 16px;
-  width: 16px;
-  left: 4px;
-  bottom: 4px;
+  height: 16px; width: 16px;
+  left: 4px; bottom: 4px;
   background-color: white;
   transition: .4s;
-}
-
-input:checked + .slider {
-  background-color: var(--primary-color, #42b983);
-}
-
-input:focus + .slider {
-  box-shadow: 0 0 1px var(--primary-color, #42b983);
-}
-
-input:checked + .slider:before {
-  transform: translateX(26px);
-}
-
-.slider.round {
-  border-radius: 34px;
-}
-
-.slider.round:before {
   border-radius: 50%;
 }
 
+input:checked + .slider { background-color: var(--primary-color); }
+input:checked + .slider:before { transform: translateX(26px); }
+
+/* Legal Links */
 .legal-links {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.5rem;
 }
 
 .legal-link {
-  color: var(--primary-color, #42b983);
-  text-decoration: none;
-  font-weight: 500;
-  padding: 0.5rem;
+  padding: 1rem;
+  background-color: var(--card-color);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
-  transition: background-color 0.2s;
+  color: var(--primary-color);
+  font-weight: 500;
   display: flex;
   align-items: center;
+  text-decoration: none;
 }
 
 .legal-link:hover {
-  background-color: #f0fdf4;
-  text-decoration: underline;
+  background-color: var(--hover-background-color);
 }
 
-.legal-link::before {
-  content: "📄";
-  margin-right: 10px;
+@media (max-width: 600px) {
+  .profile-body {
+    flex-direction: column;
+    text-align: center;
+  }
 }
 </style>
