@@ -30,14 +30,35 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 
 	file, err := pkg.GetFile(db, fileID, userID)
 	if err != nil {
+		// If not found as owner, check if shared with user
+		var fileShare pkg.FileShare
+		errShare := db.NewSelect().Model(&fileShare).
+			Where("file_id = ? AND shared_with_user_id = ?", fileID, userID).
+			Scan(c.Request.Context())
+
+		if errShare == nil {
+			// It is shared! Fetch the file information without owner restriction to get the path/ownerID
+			// file is already *pkg.File (pointer), so we pass it directly to Model()
+			err = db.NewSelect().Model(file).Where("id = ?", fileID).Scan(c.Request.Context())
+		}
+	}
+
+	if err != nil {
 		// Log l'erreur pour le débogage côté serveur
 		log.Printf("Error getting file from DB. FileID: %d, UserID: %s, Error: %v", fileID, userID, err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "File not found or permission denied"})
 		return
 	}
 
-	// S3 Key construction
-	s3Key := fmt.Sprintf("users/%s%s", userID, file.Path)
+	// Double check: if it was a share, ensure we actually found the file
+	if file.ID == 0 {
+		log.Printf("File with ID %d not found (even after share check)", fileID)
+		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+		return
+	}
+
+	// S3 Key construction: Use file.UserID (Owner) instead of userID (Requester)
+	s3Key := fmt.Sprintf("users/%s%s", file.UserID, file.Path)
 
 	// Get object from S3
 	output, err := s3storage.Client.GetObject(c.Request.Context(), &s3.GetObjectInput{
