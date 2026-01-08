@@ -830,7 +830,6 @@ const onDropOnParent = async (event) => {
 
 .path-banner {
   padding: 0.5rem 1rem;
-  padding-top: 0;
   background-color: var(--card-color);
   display: flex;
   justify-content: flex-start;
