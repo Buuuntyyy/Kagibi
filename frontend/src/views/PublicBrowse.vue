@@ -39,8 +39,15 @@ onMounted(() => {
 <style scoped>
 .public-browse-container {
   padding: 2rem;
-  max-width: 1000px;
+  width: 60%;
   margin: 0 auto;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1200px) {
+  .public-browse-container {
+    width: 90%;
+  }
 }
 
 .loading-spinner, .error-message {

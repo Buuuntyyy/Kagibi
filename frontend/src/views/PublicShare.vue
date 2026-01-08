@@ -11,8 +11,16 @@
     
     <div v-else class="share-card">
       <div class="file-icon">
-        <span v-if="shareInfo.resource_type === 'folder'">📁</span>
-        <span v-else>📄</span>
+        <span v-if="shareInfo.resource_type === 'folder'">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="#5f6368"/>
+          </svg>
+        </span>
+        <span v-else>
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" fill="#1976d2"/>
+          </svg>
+        </span>
       </div>
       
       <h2 class="file-name">{{ shareInfo.resource_name }}</h2>
@@ -123,38 +131,47 @@ const downloadFile = async () => {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background-color: #f5f7fa;
+  background-color: var(--background-color);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: var(--main-text-color);
 }
 
 .share-card {
-  background: white;
+  background: var(--card-color);
   padding: 40px;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   text-align: center;
   max-width: 500px;
   width: 90%;
+  border: 1px solid var(--border-color);
 }
 
 .file-icon {
-  font-size: 64px;
   margin-bottom: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.icon-svg {
+  width: 64px;
+  height: 64px;
 }
 
 .file-name {
   margin: 0 0 20px;
-  color: #333;
+  color: var(--main-text-color);
   word-break: break-all;
 }
 
 .file-details {
-  color: #666;
+  color: var(--secondary-text-color);
   margin-bottom: 30px;
   text-align: left;
-  background: #f9f9f9;
+  background: var(--background-color);
   padding: 15px;
   border-radius: 8px;
+  border: 1px solid var(--border-color);
 }
 
 .file-details p {
@@ -162,24 +179,24 @@ const downloadFile = async () => {
 }
 
 .btn-download {
-  background-color: #4CAF50;
+  background-color: var(--primary-color);
   color: white;
   border: none;
   padding: 12px 30px;
   font-size: 16px;
-  border-radius: 25px;
+  border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.3s, transform 0.2s;
   width: 100%;
 }
 
 .btn-download:hover {
-  background-color: #45a049;
+  background-color: var(--accent-color);
   transform: translateY(-2px);
 }
 
 .error-message {
   text-align: center;
-  color: #d32f2f;
+  color: var(--error-color);
 }
 </style>
