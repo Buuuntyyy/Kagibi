@@ -79,15 +79,10 @@ export const useWebSocketStore = defineStore('websocket', {
           // If action indicates share update, refetch files
           if (message.payload.action === 'share_created' || message.payload.action === 'share_revoked' || message.payload.action === 'share_received' || message.payload.action === 'share_revoked_by_recipient') {
              // We need to refresh the current file list if we are inspecting files
-             const fileStore = useFileStore();
-             // Refetch current view
-             // Note: fileStore is a store definition, we need the active instance
-             // However, accessing store outside of setup/component works if pinia is active.
-             // But inside store action it's cleaner to import useFileStore.
-             // Wait, useWebSocketStore is a store too, so we can use other stores.
              import('./files').then(m => {
                  const fs = m.useFileStore();
                  fs.fetchItems(fs.currentPath);
+                 fs.notifyShareUpdate();
              });
           }
           break;
