@@ -20,8 +20,17 @@ type User struct {
 	StorageUsed                int64     `bun:"storage_used,notnull,default:0" json:"storage_used"`
 	StorageLimit               int64     `bun:"storage_limit,notnull,default:16106127360" json:"storage_limit"` // Default 15GB
 	Plan                       string    `bun:"plan,notnull,default:'free'" json:"plan"`
+	FriendCode                 string    `bun:"friend_code,unique,notnull" json:"friend_code"` // Short unique code for friends
 	CreatedAt                  time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt                  time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
+}
+
+type Friendship struct {
+	ID        int64     `bun:"id,pk,autoincrement"`
+	UserID1   string    `bun:"user_id_1,notnull"` // Initiator
+	UserID2   string    `bun:"user_id_2,notnull"` // Recipient
+	Status    string    `bun:"status,notnull"`    // 'pending', 'accepted'
+	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 }
 
 type File struct {
