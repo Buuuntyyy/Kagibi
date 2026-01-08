@@ -152,6 +152,7 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 			fileIds = append(fileIds, f.ID)
 		}
 
+		// Check for Public Links (ShareLink)
 		var fileLinks []ShareLink
 		err = db.NewSelect().Model(&fileLinks).
 			Where("resource_type = ?", "file").
@@ -160,6 +161,16 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 		if err != nil {
 			return nil, nil, err
 		}
+
+		// Check for Direct Shares (FileShare)
+		var directFileShares []FileShare
+		err = db.NewSelect().Model(&directFileShares).
+			Where("file_id IN (?)", bun.In(fileIds)).
+			Scan(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		log.Printf("File shares query took: %v", time.Since(t3))
 
 		fileLinkMap := make(map[int64]ShareLink)
@@ -169,8 +180,16 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 			}
 		}
 
+		// Create a set of IDs that are directly shared
+		directShareMap := make(map[int64]bool)
+		for _, s := range directFileShares {
+			directShareMap[s.FileID] = true
+		}
+
 		for _, f := range filesPlain {
 			fw := FileWithShare{File: f}
+
+			// Check Public Link
 			if l, ok := fileLinkMap[f.ID]; ok {
 				fw.Shared = true
 				if l.OwnerID == userID {
@@ -181,6 +200,14 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 					fw.ExpiresAt = l.ExpiresAt
 				}
 			}
+
+			// Check Direct Share (Union)
+			if directShareMap[f.ID] {
+				fw.Shared = true
+				// We don't overwrite ShareToken/ShareID here because those are for the "Link" tab mainly,
+				// but marking Shared=true is enough to trigger the UI icon.
+			}
+
 			filesWithShare = append(filesWithShare, fw)
 		}
 	}
@@ -194,6 +221,7 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 			folderIds = append(folderIds, f.ID)
 		}
 
+		// Check Public Links
 		var folderLinks []ShareLink
 		err = db.NewSelect().Model(&folderLinks).
 			Where("resource_type = ?", "folder").
@@ -202,6 +230,16 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 		if err != nil {
 			return nil, nil, err
 		}
+
+		// Check Direct Shares
+		var directFolderShares []FolderShare
+		err = db.NewSelect().Model(&directFolderShares).
+			Where("folder_id IN (?)", bun.In(folderIds)).
+			Scan(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		log.Printf("Folder shares query took: %v", time.Since(t4))
 
 		folderLinkMap := make(map[int64]ShareLink)
@@ -211,8 +249,14 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 			}
 		}
 
+		directFolderMap := make(map[int64]bool)
+		for _, s := range directFolderShares {
+			directFolderMap[s.FolderID] = true
+		}
+
 		for _, f := range foldersPlain {
 			fw := FolderWithShare{Folder: f}
+
 			if l, ok := folderLinkMap[f.ID]; ok {
 				fw.Shared = true
 				if l.OwnerID == userID {
@@ -223,6 +267,11 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 					fw.ExpiresAt = l.ExpiresAt
 				}
 			}
+
+			if directFolderMap[f.ID] {
+				fw.Shared = true
+			}
+
 			foldersWithShare = append(foldersWithShare, fw)
 		}
 	}

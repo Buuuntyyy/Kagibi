@@ -100,11 +100,11 @@
                         class="btn-sm"
                         :class="[
                           isFriendShared(friend.id) 
-                            ? 'btn-success' 
+                            ? 'btn-danger' 
                             : 'btn-outline'
                         ]">
                         <span v-if="sharing[friend.id]">...</span>
-                        <span v-else-if="isFriendShared(friend.id)">Partagé</span>
+                        <span v-else-if="isFriendShared(friend.id)">Arrêter</span>
                         <span v-else>Envoyer</span>
                     </button>
                  </div>
@@ -172,6 +172,37 @@ watch(() => props.item, (newItem) => {
     }
 }, { immediate: true });
 
+// Fetch direct shares when Friends tab is active
+watch(activeTab, (newTab) => {
+    if (newTab === 'friends' && props.item) {
+        fetchDirectShares();
+    }
+});
+
+const fetchDirectShares = async () => {
+    try {
+        const resourceType = (props.item.type === 'folder' || props.item.is_dir) ? 'folder' : 'file';
+        const resourceId = props.item.ID || props.item.id;
+        
+        const response = await api.get('/shares/direct', {
+            params: {
+                resource_id: resourceId,
+                resource_type: resourceType
+            }
+        });
+        
+        const sharedWithArg = response.data.shared_with || [];
+        const statusMap = {};
+        sharedWithArg.forEach(uid => {
+            statusMap[uid] = true;
+        });
+        sharedStatus.value = statusMap;
+        
+    } catch (e) {
+        console.error("Error fetching direct shares:", e);
+    }
+}
+
 onMounted(() => {
     if (friends.value.length === 0) {
         friendStore.fetchFriends();
@@ -219,6 +250,7 @@ const createShare = async () => {
         const result = await fileStore.createShareLink(itemId, props.item.type, expirationDate);
         
         localShareToken.value = result.token;
+        localShareId.value = result.id; // Capture ID for subsequent deletion
         localExpiresAt.value = expirationDate;
         
         emit('share-created'); 
@@ -276,6 +308,38 @@ const isFriendShared = (friendId) => {
 const shareWithFriend = async (friend) => {
     if (!props.item || !friend.public_key) return;
     
+    // Check if already shared, if so -> Revoke logic
+    if (isFriendShared(friend.id)) {
+        if (!confirm(`Arrêter le partage avec ${friend.name} ?`)) return;
+
+        sharing.value[friend.id] = true;
+        try {
+            const resourceType = (props.item.type === 'folder' || props.item.is_dir) ? 'folder' : 'file';
+            const resourceId = props.item.ID || props.item.id;
+
+            await api.delete(`/shares/direct`, {
+                params: {
+                    resource_id: resourceId,
+                    resource_type: resourceType,
+                    friend_id: friend.id
+                }
+            });
+
+            sharedStatus.value[friend.id] = false;
+        } catch(e) {
+            console.error("Revoke failed:", e);
+            // If 404, assume already deleted and update UI
+            if (e.response && e.response.status === 404) {
+                 sharedStatus.value[friend.id] = false;
+            } else {
+                 alert("Erreur lors de la suppression du partage.");
+            }
+        } finally {
+            sharing.value[friend.id] = false;
+        }
+        return;
+    }
+
     sharing.value[friend.id] = true;
     try {
         await sodium.ready;
@@ -559,6 +623,16 @@ button {
 
 .btn-delete:hover {
   background-color: var(--hover-background-color);
+}
+
+.btn-danger {
+  background-color: var(--error-color);
+  color: white;
+  border: 1px solid var(--error-color);
+}
+
+.btn-danger:hover {
+  background-color: #d32f2f;
 }
 
 .spinner {

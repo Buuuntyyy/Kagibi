@@ -190,6 +190,8 @@ func main() {
 				shares.CreateShareLinkHandler(c, db)
 			})
 			shareRoutes.POST("/direct", func(c *gin.Context) { shares.CreateDirectShareHandler(c, db, wsManager) })
+			shareRoutes.GET("/direct", func(c *gin.Context) { shares.ListDirectSharesForResourceHandler(c, db) })
+			shareRoutes.DELETE("/direct", func(c *gin.Context) { shares.RemoveDirectShareHandler(c, db, wsManager) })
 			shareRoutes.GET("/check-path", func(c *gin.Context) { shares.GetActiveSharesForPathHandler(c, db) })
 			shareRoutes.GET("/file/:fileID", func(c *gin.Context) { shares.GetShareForResourceHandler(c, db) })
 			shareRoutes.DELETE("/link/:shareID", func(c *gin.Context) { shares.DeleteShareLinkHandler(c, db) })
@@ -197,7 +199,7 @@ func main() {
 			// Shared With Me Routes
 			shareRoutes.GET("/with-me", func(c *gin.Context) { shares.ListImportedSharesHandler(c, db) })
 			shareRoutes.POST("/with-me", func(c *gin.Context) { shares.ImportShareHandler(c, db) })
-			shareRoutes.DELETE("/with-me/:id", func(c *gin.Context) { shares.RemoveImportedShareHandler(c, db) })
+			shareRoutes.DELETE("/with-me/:id", func(c *gin.Context) { shares.RemoveImportedShareHandler(c, db, wsManager) })
 		}
 	}
 
