@@ -6,6 +6,8 @@ import SharedElements from '../components/sharedElements.vue'
 import FileBrowser from '../components/FileBrowser.vue'
 import PublicShare from '../views/PublicShare.vue'
 import PublicBrowse from '../views/PublicBrowse.vue'
+import TermsOfService from '../views/TermsOfService.vue'
+import PrivacyPolicy from '../views/PrivacyPolicy.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -13,6 +15,16 @@ const routes = [
     path: '/login',
     name: 'Login',
     component: Login,
+  },
+  {
+    path: '/cgu',
+    name: 'TermsOfService',
+    component: TermsOfService,
+  },
+  {
+    path: '/privacy',
+    name: 'PrivacyPolicy',
+    component: PrivacyPolicy,
   },
   {
     path: '/dashboard',

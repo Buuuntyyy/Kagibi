@@ -120,6 +120,20 @@
           </div>
         </div>
       </div>
+
+      <!-- Legal Information Card -->
+      <div class="card profile-card">
+        <div class="card-header">
+          <h3>Informations Légales</h3>
+        </div>
+        <div class="card-body">
+          <div class="legal-links">
+            <router-link to="/cgu" class="legal-link">Conditions Générales d'Utilisation (CGU)</router-link>
+            <router-link to="/privacy" class="legal-link">Politique de Confidentialité</router-link>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </template>
@@ -417,5 +431,32 @@ input:checked + .slider:before {
 
 .slider.round:before {
   border-radius: 50%;
+}
+
+.legal-links {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.legal-link {
+  color: var(--primary-color, #42b983);
+  text-decoration: none;
+  font-weight: 500;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.legal-link:hover {
+  background-color: #f0fdf4;
+  text-decoration: underline;
+}
+
+.legal-link::before {
+  content: "📄";
+  margin-right: 10px;
 }
 </style>
