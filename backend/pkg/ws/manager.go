@@ -62,6 +62,7 @@ type MessageType string
 
 const (
 	MsgStorageUpdate MessageType = "storage_update"
+	MsgFriendUpdate  MessageType = "friend_update"
 )
 
 // Message structure pour les données JSON

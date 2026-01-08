@@ -8,6 +8,7 @@ import PublicShare from '../views/PublicShare.vue'
 import PublicBrowse from '../views/PublicBrowse.vue'
 import TermsOfService from '../views/TermsOfService.vue'
 import PrivacyPolicy from '../views/PrivacyPolicy.vue'
+import FriendsView from '../views/FriendsView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -40,6 +41,11 @@ const routes = [
         path: 'shares',
         name: 'SharedElements',
         component: SharedElements
+      },
+      {
+        path: 'friends',
+        name: 'Friends',
+        component: FriendsView
       }
     ]
   },

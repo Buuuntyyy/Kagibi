@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { useAuthStore } from './auth'
+import { useFriendStore } from './friends'
 
 export const useWebSocketStore = defineStore('websocket', {
   state: () => ({
@@ -74,6 +75,11 @@ export const useWebSocketStore = defineStore('websocket', {
           if (authStore.user) {
             authStore.user.storage_used = message.payload.storage_used;
           }
+          break;
+        case 'friend_update':
+          console.log('Friend update received:', message.payload);
+          const friendStore = useFriendStore();
+          friendStore.fetchFriends();
           break;
         default:
           console.warn('Unknown WebSocket message type:', message.type);
