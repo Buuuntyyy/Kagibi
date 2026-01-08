@@ -24,6 +24,8 @@ type RegisterRequest struct {
 	EncryptedMasterKeyRecovery string `json:"encrypted_master_key_recovery" validate:"required"`
 	RecoveryHash               string `json:"recovery_hash" validate:"required"`
 	RecoverySalt               string `json:"recovery_salt" validate:"required"`
+	PublicKey                  string `json:"public_key"`
+	EncryptedPrivateKey        string `json:"encrypted_private_key"`
 }
 
 func RegisterHandler(c *gin.Context, db *bun.DB) {
@@ -56,6 +58,8 @@ func RegisterHandler(c *gin.Context, db *bun.DB) {
 		EncryptedMasterKeyRecovery: req.EncryptedMasterKeyRecovery,
 		RecoveryHash:               req.RecoveryHash,
 		RecoverySalt:               req.RecoverySalt,
+		PublicKey:                  req.PublicKey,
+		EncryptedPrivateKey:        req.EncryptedPrivateKey,
 	}
 
 	// Crée l'utilisateur

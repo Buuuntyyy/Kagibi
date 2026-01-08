@@ -1,15 +1,57 @@
 import { defineStore } from 'pinia'
 import api from '../api'
 import router from '../router'
-import { deriveKeyFromPassword, generateSalt, generateMasterKey, wrapMasterKey, unwrapMasterKey, generateRecoveryCode, deriveKeyFromRecoveryCode, hashRecoveryCode } from '../utils/crypto'
+import { 
+  deriveKeyFromPassword, generateSalt, generateMasterKey, wrapMasterKey, unwrapMasterKey, 
+  generateRecoveryCode, deriveKeyFromRecoveryCode, hashRecoveryCode,
+  generateRSAKeyPair, exportKeyToPEM, importKeyFromPEM, encryptPrivateKey, decryptPrivateKey 
+} from '../utils/crypto'
 import sodium from 'libsodium-wrappers-sumo'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     isAuthenticated: false,
     user: null,
+    masterKey: null,
+    privateKey: null, // RSA Private Key (Unwrapped)
+    publicKey: null,  // RSA Public Key (CryptoKey)
   }),
   actions: {
+    // --- Key Management Helpers ---
+    async ensureRSAKeys(masterKey) {
+       if (!this.user) return;
+       
+       // Si l'utilisateur n'a pas encore de clés (migration ou nouvel utilisateur)
+       if (!this.user.public_key || !this.user.encrypted_private_key) {
+           console.log("Generating RSA keys for user...");
+           const keyPair = await generateRSAKeyPair();
+           
+           const publicKeyPEM = await exportKeyToPEM(keyPair.publicKey, 'spki');
+           // Encrypt private key with Master Key
+           const encryptedPrivateKey = await encryptPrivateKey(keyPair.privateKey, masterKey);
+           
+           // Send to server
+           await api.post('/users/keys', {
+               public_key: publicKeyPEM,
+               encrypted_private_key: encryptedPrivateKey
+           });
+           
+           this.user.public_key = publicKeyPEM;
+           this.user.encrypted_private_key = encryptedPrivateKey;
+           this.privateKey = keyPair.privateKey;
+           this.publicKey = keyPair.publicKey;
+       } else {
+           // Decrypt existing private key
+           try {
+               this.privateKey = await decryptPrivateKey(this.user.encrypted_private_key, masterKey);
+               this.publicKey = await importKeyFromPEM(this.user.public_key, 'spki'); // Load public key object too
+           } catch (e) {
+               console.error("Failed to decrypt RSA Private Key:", e);
+               // Handle error (maybe re-generate? Careful with data loss)
+           }
+       }
+    },
+
     async login(credentials) {
       try {
         const authentication_response = await api.post('/auth/login', credentials, {
@@ -33,6 +75,10 @@ export const useAuthStore = defineStore('auth', {
           } catch (e) {
             console.error("Failed to persist master key", e);
           }
+
+          // Generate/Load RSA Keys (New functionality)
+          await this.fetchUser(); // Get latest user data including keys
+          await this.ensureRSAKeys(this.masterKey);
           
         } else {
           this.masterKey = null;
@@ -70,6 +116,11 @@ export const useAuthStore = defineStore('auth', {
       const recoveryKek = await deriveKeyFromRecoveryCode(recoveryCode, salt);
       const wrappedMasterKeyRecovery = await wrapMasterKey(masterKey, recoveryKek);
 
+      // Generate RSA Keys for new user
+      const keyPair = await generateRSAKeyPair();
+      const publicKeyPEM = await exportKeyToPEM(keyPair.publicKey, 'spki');
+      const encryptedPrivateKey = await encryptPrivateKey(keyPair.privateKey, masterKey);
+
       const payload = {
         name: username,
         email: email,
@@ -78,7 +129,9 @@ export const useAuthStore = defineStore('auth', {
         encrypted_master_key: wrappedMasterKey,
         encrypted_master_key_recovery: wrappedMasterKeyRecovery,
         recovery_hash: recoveryHash,
-        recovery_salt: saltHex // Use same salt initially
+        recovery_salt: saltHex, // Use same salt initially
+        public_key: publicKeyPEM,
+        encrypted_private_key: encryptedPrivateKey
       };
       await api.post('/auth/register', payload)
       
@@ -120,6 +173,11 @@ export const useAuthStore = defineStore('auth', {
               console.error("Failed to restore master key from session", e);
             }
           }
+        }
+
+        // Restore RSA keys if master key is available
+        if (this.masterKey) {
+             await this.ensureRSAKeys(this.masterKey);
         }
 
         return true
