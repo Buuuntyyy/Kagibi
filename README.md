@@ -1,6 +1,10 @@
 # SaferCloud
 
-SaferCloud est une solution de stockage cloud sécurisée, open-source et auto-hébergeable, inspirée par Google Drive. Elle met l'accent sur la confidentialité des données grâce à une architecture "Zero-Knowledge" (chiffrement de bout en bout).
+SaferCloud est une solution de stockage cloud sécurisée, open-source, inspirée par Google Drive. Elle met l'accent sur la confidentialité des données grâce à une architecture "Zero-Knowledge" (chiffrement de bout en bout).
+Aucune donnée personnelle n'est stockée, à l'exception de l'adresse mail renseignée lors de l'inscription à la plateforme.
+- Une adresse mail jetable peut être utilisée pour s'inscrire ; le cas échéant nous ne pourrons pas communiquer avec vous par mail les informations importantes.
+- L'utilisation d'un alias est recommandée.
+- L'authentification par fournisseur (Google, Apple, Github) est possible, mais ce choix doit être éclairé.
 
 ## 🚀 Fonctionnalités
 
@@ -12,8 +16,8 @@ SaferCloud est une solution de stockage cloud sécurisée, open-source et auto-h
 *   **Tags** : Système de tags pour classer les fichiers.
 
 ### Partage & Collaboration
-*   **Partage Utilisateur** : Partage sécurisé de fichiers avec d'autres utilisateurs de la plateforme.
-*   **Liens Publics** : Génération de liens de partage accessibles publiquement (avec expiration optionnelle).
+*   **Partage Utilisateur** : Partage sécurisé de fichiers avec d'autres utilisateurs de la plateforme, via nom d'utilisateur unique.
+*   **Liens Publics** : Génération de liens de partage accessibles publiquement (avec expiration optionnelle et mot de passe optionnel).
 *   **Permissions** : Gestion fine des droits d'accès.
 
 ### Interface Utilisateur (UI/UX)
@@ -42,8 +46,9 @@ SaferCloud utilise une architecture **Zero-Knowledge**, ce qui signifie que le s
 *   **Chiffrement AES-GCM** : Le contenu du fichier est chiffré par blocs (chunks de 1MB) utilisant **AES-GCM** via l'API Web Crypto du navigateur.
 *   **Web Workers** : Le chiffrement/déchiffrement s'effectue dans des threads séparés (Web Workers) pour ne pas bloquer l'interface.
 
-### 3. Partage Sécurisé
-*   Lorsqu'un fichier est partagé, la clé du fichier est déchiffrée par le propriétaire, puis rechiffrée avec la clé publique (ou clé maître partagée) du destinataire. Cela garantit que seul le destinataire légitime peut accéder au contenu.
+### 3. Partages
+*   **Partages privés** : Lorsqu'un fichier est partagé, la clé du fichier est déchiffrée par le propriétaire, puis rechiffrée avec la clé publique (ou clé maître partagée) du destinataire. Cela garantit que seul le destinataire légitime peut accéder au contenu.
+*   **Partages publics** : Lorsque vous créé un lien de partage d'un répertoire ou d'un fichier, n'importe quel utilisateur possédant le lien pourra accéder au partage (mécanisme analogue à Google). **Veillez à garder le lien strictement privé.**
 
 ---
 
