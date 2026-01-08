@@ -137,10 +137,26 @@ const fetchShares = async () => {
 };
 
 const deleteShare = async (id) => {
-  if (!confirm("Voulez-vous vraiment supprimer ce lien de partage ? Le lien ne fonctionnera plus.")) return;
+  if (!confirm("Voulez-vous vraiment supprimer ce partage ?")) return;
   
+  // Find the item to check if it's a direct share
+  const item = shares.value.find(s => s.id === id);
+  if (!item) return;
+
   try {
-    await api.delete(`/shares/link/${id}`);
+    if (item.token === 'DIRECT') {
+        // Direct Share deletion
+        await api.delete(`/shares/direct`, {
+            params: {
+                id: id,
+                resource_type: item.resource_type
+            }
+        });
+    } else {
+        // Public Link deletion
+        await api.delete(`/shares/link/${id}`);
+    }
+    
     shares.value = shares.value.filter(s => s.id !== id);
   } catch (err) {
     console.error("Error deleting share:", err);

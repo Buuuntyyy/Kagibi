@@ -93,6 +93,7 @@ func CreateShareLinkHandler(c *gin.Context, db *bun.DB) {
 		c.JSON(http.StatusConflict, gin.H{
 			"error": "A share link for this resource already exists",
 			"token": existingShare.Token,
+			"id":    existingShare.ID,
 			"link":  fmt.Sprintf("/s/%s", existingShare.Token),
 		})
 		return
@@ -148,6 +149,7 @@ func CreateShareLinkHandler(c *gin.Context, db *bun.DB) {
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Link created",
 		"token":   token,
+		"id":      shareLink.ID,
 		"link":    fmt.Sprintf("/s/%s", token), // Frontend URL format
 	})
 }
