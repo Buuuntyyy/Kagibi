@@ -13,8 +13,12 @@ export const useFileStore = defineStore('files', {
     isUploading: false,
     uploadingFileName: '',
     searchQuery: '',
+    shareUpdateTrigger: 0,
   }),
   actions: {
+    notifyShareUpdate() {
+        this.shareUpdateTrigger++;
+    },
     setSearchQuery(query) {
       this.searchQuery = query
     },

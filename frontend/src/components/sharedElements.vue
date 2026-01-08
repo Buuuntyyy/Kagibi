@@ -89,13 +89,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, reactive } from 'vue';
+import { ref, onMounted, computed, reactive, watch } from 'vue';
 import api from '../api';
 import FileTable from './file/FileTable.vue';
 import SharedWithMe from './sharedWithMe.vue';
 import { usePreferencesStore } from '../stores/preferences';
+import { useFileStore } from '../stores/files';
 
 const preferenceStore = usePreferencesStore();
+const fileStore = useFileStore();
 const shares = ref([]);
 const loading = ref(true);
 const error = ref(null);
@@ -103,6 +105,11 @@ const error = ref(null);
 const sections = reactive({
   'my-shares': true,
   'shared-with-me': false
+});
+
+// Watch for file store updates (triggered via WebSocket)
+watch(() => fileStore.shareUpdateTrigger, () => {
+    fetchShares();
 });
 
 const toggleSection = (section) => {
