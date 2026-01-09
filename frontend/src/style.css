@@ -14,13 +14,27 @@
   --accent-color: #2980b9;
   --main-text-color: #2c3e50;
   --secondary-text-color: #7f8c8d;
-  --background-color: #f8f9fa;
+  
+  /* OPTION ACTUELLE : Blue-Grey Contrasté (Idéal pour cartes blanches) 
+  --background-color: #eceff1;
+  --hover-background-color: #cfd8dc;
+  */
+
+  /* OPTION DOUCE : Bleu-Gris Très Léger */
+  --background-color: #f5f7fa; 
+  --hover-background-color: #e6e9ef;
+  
+
+  /* OPTION CHAUDE : Gris Papier
+  --background-color: #fdfdfc;
+  --hover-background-color: #f0f0ed;
+  */
+
   --card-color: #ffffff;
   --border-color: #e0e0e0;
   --error-color: #e74c3c;
   --success-color: #27ae60;
   --warning-color: #f39c12;
-  --hover-background-color: #e0e0e0;
   color-scheme: light;
 }
 
