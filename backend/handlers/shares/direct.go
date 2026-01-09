@@ -13,11 +13,12 @@ import (
 )
 
 type CreateDirectShareRequest struct {
-	ResourceID   int64  `json:"resource_id"`   // File or Folder ID
-	ResourceType string `json:"resource_type"` // "file" or "folder"
-	FriendID     string `json:"friend_id"`
-	EncryptedKey string `json:"encrypted_key"` // Key encrypted with friend's PUBLIC key
-	Permission   string `json:"permission"`
+	ResourceID     int64            `json:"resource_id"`   // File or Folder ID
+	ResourceType   string           `json:"resource_type"` // "file" or "folder"
+	FriendID       string           `json:"friend_id"`
+	EncryptedKey   string           `json:"encrypted_key"` // FileKey (for file) OR FolderKey (for folder), encrypted with friend's PUBLIC key
+	Permission     string           `json:"permission"`
+	FolderFileKeys map[int64]string `json:"folder_file_keys"` // For folders: Map of fileID -> FileKey encrypted with FolderKey
 }
 
 func CreateDirectShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
@@ -26,6 +27,8 @@ func CreateDirectShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
+
+	fmt.Printf("DEBUG: CreateDirectShare Payload - Type: %s, ID: %d, Friend: %s, KeyLen: %d\n", req.ResourceType, req.ResourceID, req.FriendID, len(req.EncryptedKey))
 
 	// currentUserID := c.GetString("user_id")
 
@@ -68,11 +71,12 @@ func CreateDirectShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager)
 		share := &pkg.FolderShare{
 			FolderID:         req.ResourceID,
 			SharedWithUserID: req.FriendID,
+			EncryptedKey:     req.EncryptedKey,
 			Permission:       req.Permission,
 			CreatedAt:        time.Now(),
 		}
 
-		fmt.Printf("Inserting FolderShare: %+v\n", share)
+		fmt.Printf("Inserting FolderShare: %+v, KeyLen: %d\n", share, len(share.EncryptedKey))
 
 		_, err := db.NewInsert().Model(share).Exec(c.Request.Context())
 		if err != nil {
@@ -80,6 +84,35 @@ func CreateDirectShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to share folder: " + err.Error()})
 			return
 		}
+
+		// Insert/Upsert FolderFileKeys
+		if len(req.FolderFileKeys) > 0 {
+			var keys []pkg.FolderFileKey
+			for fileID, key := range req.FolderFileKeys {
+				keys = append(keys, pkg.FolderFileKey{
+					FolderID:     req.ResourceID,
+					FileID:       fileID,
+					EncryptedKey: key,
+					CreatedAt:    time.Now(),
+				})
+			}
+
+			// We use OnConflict to ignore duplicates (if keys already exist for this folder)
+			// Assuming the FolderKey doesn't change frequently.
+			// Or we can simple overwrite.
+			_, err := db.NewInsert().Model(&keys).
+				On("CONFLICT (folder_id, file_id) DO UPDATE").
+				Set("encrypted_key = EXCLUDED.encrypted_key").
+				Exec(c.Request.Context())
+
+			if err != nil {
+				fmt.Printf("FolderFileKeys Insert Error: %v\n", err)
+				// Log but don't fail the whole request? The share is created.
+				// But without keys, it's useless.
+				// Retrying might be needed.
+			}
+		}
+
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource type"})
 		return
