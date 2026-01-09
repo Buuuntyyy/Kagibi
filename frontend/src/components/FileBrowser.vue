@@ -5,15 +5,12 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
 import { useFileStore } from '../stores/files'
 import FileList from './file/fileList.vue'
 
 const fileStore = useFileStore()
 
-onMounted(() => {
-  fileStore.fetchItems('/')
-})
+// FileList already handles fetching initial items
 </script>
 
 <style scoped>
