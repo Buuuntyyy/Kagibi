@@ -38,11 +38,11 @@ const logout = () => {
 
 <style scoped>
 nav {
-  height: 3vh;
+  height: 60px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
+  padding: 0 1rem;
   background-color: var(--background-color);
   color: var(--main-text-color);
   position: fixed;
@@ -50,6 +50,7 @@ nav {
   left: 0;
   right: 0;
   z-index: 1000;
+  box-sizing: border-box;
   /* border-bottom: 1px solid var(--border-color); */
 }
 
