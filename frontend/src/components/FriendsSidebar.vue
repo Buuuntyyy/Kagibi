@@ -183,6 +183,8 @@ const confirmRemove = (friend) => {
   background: var(--background-color);
   border-right: 1px solid var(--border-color);
   box-sizing: border-box;
+  font-family: inherit;
+  color: var(--main-text-color);
 }
 
 .sidebar-header {
@@ -196,6 +198,7 @@ const confirmRemove = (friend) => {
 .sidebar-header h3 {
   margin: 0;
   font-size: 1.1rem;
+  color: var(--main-text-color);
 }
 
 .close-btn {
@@ -203,6 +206,17 @@ const confirmRemove = (friend) => {
   border: none;
   cursor: pointer;
   color: var(--secondary-text-color);
+  padding: 4px;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  background-color: var(--hover-background-color);
+  color: var(--main-text-color);
 }
 
 .sidebar-tabs {
@@ -215,15 +229,23 @@ const confirmRemove = (friend) => {
   padding: 0.8rem;
   background: none;
   border: none;
+  border-radius: 0; /* Override global button radius */
   cursor: pointer;
   color: var(--secondary-text-color);
   border-bottom: 2px solid transparent;
   position: relative;
+  transition: all 0.2s;
+}
+
+.sidebar-tabs button:hover {
+    background-color: var(--hover-background-color);
+    color: var(--main-text-color);
 }
 
 .sidebar-tabs button.active {
   color: var(--primary-color);
   border-bottom-color: var(--primary-color);
+  background-color: transparent;
 }
 
 .badge-dot {
@@ -246,7 +268,7 @@ const confirmRemove = (friend) => {
 .friends-list {
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 0.4rem;
 }
 
 .friend-item {
@@ -255,10 +277,11 @@ const confirmRemove = (friend) => {
   gap: 0.8rem;
   padding: 0.5rem;
   border-radius: 8px;
+  transition: background-color 0.2s;
 }
 
 .friend-item:hover {
-  background: var(--hover-color);
+  background: var(--hover-background-color);
 }
 
 .friend-avatar {
@@ -286,6 +309,7 @@ const confirmRemove = (friend) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--main-text-color);
 }
 
 .email {
@@ -297,15 +321,22 @@ const confirmRemove = (friend) => {
 }
 
 .btn-icon.delete {
-    color: #e74c3c;
+    color: var(--error-color);
     opacity: 0;
     background: none;
     border: none;
     cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: opacity 0.2s, background-color 0.2s;
 }
 
 .friend-item:hover .btn-icon.delete {
     opacity: 1;
+}
+
+.btn-icon.delete:hover {
+  background-color: rgba(231, 76, 60, 0.1);
 }
 
 /* ADD */
@@ -319,6 +350,7 @@ const confirmRemove = (friend) => {
   border: 1px solid var(--border-color);
   margin-bottom: 1rem;
   font-family: monospace;
+  color: var(--main-text-color);
 }
 
 .divider {
@@ -332,10 +364,16 @@ const confirmRemove = (friend) => {
   padding: 0.6rem;
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: var(--background-color);
+  background: var(--card-color);
   color: var(--main-text-color);
   margin-bottom: 0.5rem;
   box-sizing: border-box;
+  font-family: inherit;
+}
+
+.input-sidebar:focus {
+  outline: 2px solid var(--primary-color);
+  border-color: transparent;
 }
 
 .btn-full {
@@ -346,22 +384,34 @@ const confirmRemove = (friend) => {
   border: none;
   border-radius: 6px;
   cursor: pointer;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+
+.btn-full:hover {
+  opacity: 0.9;
+}
+
+.btn-full:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .msg {
   font-size: 0.8rem;
   margin-top: 0.5rem;
 }
-.msg.success { color: #2ecc71; }
-.msg.error { color: #e74c3c; }
+.msg.success { color: var(--success-color); }
+.msg.error { color: var(--error-color); }
 
 /* PENDING */
 .section-label {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
     color: var(--secondary-text-color);
     margin-bottom: 0.5rem;
     font-weight: bold;
+    letter-spacing: 0.05em;
 }
 
 .mt { margin-top: 1.5rem; }
@@ -377,13 +427,13 @@ const confirmRemove = (friend) => {
 .req-item.col {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.8rem;
 }
 
 .req-header {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.8rem;
 }
 
 .req-actions {
@@ -398,10 +448,16 @@ const confirmRemove = (friend) => {
     border-radius: 4px;
     font-size: 0.8rem;
     cursor: pointer;
+    font-weight: 500;
+    transition: opacity 0.2s;
 }
 
-.btn-small.accept { background: var(--primary-color); color: white; }
-.btn-small.reject { background: #e74c3c; color: white; }
+.btn-small:hover {
+  opacity: 0.9;
+}
+
+.btn-small.accept { background: var(--success-color); color: white; }
+.btn-small.reject { background: var(--error-color); color: white; }
 
 .empty-state {
     text-align: center;
@@ -409,11 +465,33 @@ const confirmRemove = (friend) => {
     padding: 2rem 0;
     font-size: 0.9rem;
 }
+
 .btn-text {
   background: none;
   border: none;
   color: var(--primary-color);
   cursor: pointer;
   text-decoration: underline;
+  padding: 0;
+  font-size: inherit;
+}
+
+h4 {
+  margin-top: 0;
+  margin-bottom: 0.8rem;
+  color: var(--main-text-color);
+  font-size: 0.95rem;
+}
+
+/* Scrollbar styling for sidebar */
+.tab-content::-webkit-scrollbar {
+  width: 6px;
+}
+.tab-content::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: 3px;
+}
+.tab-content::-webkit-scrollbar-track {
+  background-color: transparent;
 }
 </style>
