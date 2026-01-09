@@ -45,6 +45,8 @@
       </div>
     </div>
     
+    <RecentlyOpened />
+
     <!-- Upload Progress Popup -->
     <div v-if="fileStore.isUploading" class="upload-popup">
       <div class="popup-header">
@@ -173,6 +175,7 @@ import { useFileStore } from '../../stores/files'
 import { useAuthStore } from '../../stores/auth'
 import { usePreferencesStore } from '../../stores/preferences'
 import { useTagStore } from '../../stores/tags'
+import RecentlyOpened from './RecentlyOpened.vue'
 import InputDialog from '../InputDialog.vue'
 import TagDialog from '../TagDialog.vue'
 import ShareDialog from '../ShareDialog.vue'
@@ -465,6 +468,10 @@ onMounted(() => {
   document.addEventListener('click', closeContextMenu)
 })
 
+watch(() => fileStore.currentPath, () => {
+  selectedItems.value = []
+})
+
 onUnmounted(() => {
   document.removeEventListener('click', closeContextMenu)
 })
@@ -611,6 +618,14 @@ const isSelected = (item, type) => {
 }
 
 const openFolder = (folderName) => {
+  // Add to history
+  const fullPath = fileStore.currentPath === '/' ? '/' + folderName : fileStore.currentPath + '/' + folderName;
+  fileStore.addToHistory({ 
+      name: folderName, 
+      path: fullPath, 
+      type: 'folder' 
+  });
+
   selectedItems.value = [] // Deselect items when navigating
   fileStore.navigateTo(folderName)
 }
@@ -721,6 +736,7 @@ const updateTags = async () => {
 }
 
 const downloadFile = (file) => {
+  fileStore.addToHistory({ ...file, type: 'file' });
   fileStore.downloadFile(file.ID, file.Name, file.MimeType);
 }
 

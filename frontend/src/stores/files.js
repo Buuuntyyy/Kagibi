@@ -14,8 +14,27 @@ export const useFileStore = defineStore('files', {
     uploadingFileName: '',
     searchQuery: '',
     shareUpdateTrigger: 0,
+    recentFolders: JSON.parse(localStorage.getItem('recentFolders')) || [],
+    recentFiles: JSON.parse(localStorage.getItem('recentFiles')) || [],
   }),
   actions: {
+    addToHistory(item) {
+        if (item.type === 'folder') {
+            // Remove existing if present
+            this.recentFolders = this.recentFolders.filter(f => f.path !== item.path)
+            // Add to top
+            this.recentFolders.unshift(item)
+            // Limit to 5
+            if (this.recentFolders.length > 5) this.recentFolders.pop()
+            localStorage.setItem('recentFolders', JSON.stringify(this.recentFolders))
+        } else {
+            // Remove existing if present (check ID)
+            this.recentFiles = this.recentFiles.filter(f => f.ID !== item.ID)
+            this.recentFiles.unshift(item)
+            if (this.recentFiles.length > 5) this.recentFiles.pop()
+            localStorage.setItem('recentFiles', JSON.stringify(this.recentFiles))
+        }
+    },
     notifyShareUpdate() {
         this.shareUpdateTrigger++;
     },
