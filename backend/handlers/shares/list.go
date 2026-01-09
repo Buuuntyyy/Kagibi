@@ -108,5 +108,32 @@ func ListSharesHandler(c *gin.Context, db *bun.DB) {
 		}
 	}
 
+	// 3. Direct Folder Shares
+	var folderShares []pkg.FolderShare
+	err = db.NewSelect().Model(&folderShares).
+		Join("JOIN folders ON folders.id = folder_share.folder_id").
+		Where("folders.user_id = ?", userID).
+		Scan(c.Request.Context())
+
+	if err == nil {
+		for _, fs := range folderShares {
+			var f pkg.Folder
+			db.NewSelect().Model(&f).Where("id = ?", fs.FolderID).Scan(c.Request.Context())
+
+			var friend pkg.User
+			db.NewSelect().Model(&friend).Where("id = ?", fs.SharedWithUserID).Scan(c.Request.Context())
+
+			response = append(response, ShareResponse{
+				ID:           fs.ID,
+				Token:        "DIRECT", // Marker
+				Link:         "Shared with " + friend.Name,
+				ResourceType: "folder",
+				ResourceName: f.Name,
+				Views:        0,
+				CreatedAt:    fs.CreatedAt,
+			})
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"shares": response})
 }

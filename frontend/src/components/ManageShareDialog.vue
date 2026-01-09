@@ -68,10 +68,6 @@
         <!-- === FRIENDS SHARE TAB === -->
         <div v-else-if="activeTab === 'friends'" class="friends-tab">
             
-            <div v-if="!item?.encrypted_key && (item?.type === 'folder' || item?.is_dir)" class="warning-box">
-                <strong>Partiel :</strong> Le partage de dossier partage l'accès mais pas les clés des fichiers internes pour le moment.
-            </div>
-
             <div v-if="friends.length === 0" class="empty-friends">
                 Vous n'avez pas encore d'amis. 
                 <br>
@@ -127,12 +123,16 @@ import { useFileStore } from '../stores/files';
 import { useFriendStore } from '../stores/friends';
 import { useAuthStore } from '../stores/auth';
 import api from '../api';
-import { decryptKeyWithPrivateKey, importKeyFromPEM, encryptKeyWithPublicKey } from '../utils/crypto';
+import { decryptKeyWithPrivateKey, importKeyFromPEM, encryptKeyWithPublicKey, generateMasterKey } from '../utils/crypto';
 import sodium from 'libsodium-wrappers-sumo';
 
 const props = defineProps({
   isOpen: Boolean,
   item: Object,
+  initialTab: {
+    type: String,
+    default: 'link'
+  }
 });
 
 const emit = defineEmits(['close', 'share-deleted', 'share-created']);
@@ -141,7 +141,7 @@ const friendStore = useFriendStore();
 const authStore = useAuthStore();
 
 // UI State
-const activeTab = ref('link'); // 'link' or 'friends'
+const activeTab = ref(props.initialTab || 'link'); // 'link' or 'friends'
 const loading = ref(false);
 
 // Link Share State
@@ -167,7 +167,7 @@ watch(() => props.item, (newItem) => {
         localExpiresAt.value = newItem.expires_at || newItem.ExpiresAt; // Populate expiration
         
         // Reset tab
-        activeTab.value = 'link';
+        activeTab.value = props.initialTab || 'link';
         sharedStatus.value = {};
     }
 }, { immediate: true });
@@ -345,6 +345,7 @@ const shareWithFriend = async (friend) => {
         await sodium.ready;
         
         let encryptedKeyForFriend = "";
+        let folderFileKeys = {};
         // props.item can be file or folder. Check type.
         const resourceType = (props.item.type === 'folder' || props.item.is_dir) ? 'folder' : 'file';
 
@@ -354,6 +355,10 @@ const shareWithFriend = async (friend) => {
 
              if (!itemEncryptedKey) {
                   throw new Error("Clé du fichier manquante. Impossible de partager.");
+             }
+             
+             if (!authStore.masterKey) {
+                  throw new Error("Clé Maître non disponible (Session expirée ?). Veuillez vous reconnecter.");
              }
              
              if (!authStore.privateKey) {
@@ -372,6 +377,114 @@ const shareWithFriend = async (friend) => {
 
              const friendPublicKey = await importKeyFromPEM(friend.public_key, 'spki');
              encryptedKeyForFriend = await encryptKeyWithPublicKey(fileKeyRawBuffer, friendPublicKey);
+        } else if (resourceType === 'folder') {
+            // --- FOLDER SHARING LOGIC ---
+            if (!authStore.masterKey) {
+                  throw new Error("Clé Maître non disponible (Session expirée ?). Veuillez vous reconnecter.");
+            }
+
+            let folderKeyRaw;
+            let folderKeyCrypto;
+            const itemId = props.item.ID || props.item.id;
+            
+            // Check if folder already has a key (in props or we fetch/update it)
+            // Note: Currently frontend might not have updated 'encrypted_key' if we just generated it. 
+            // We blindly trust props.item or check logic.
+            const existingEncKey = props.item.EncryptedKey || props.item.encrypted_key;
+
+            if (existingEncKey) {
+                 // Decrypt existing folder key
+                 const folderKeyEncryptedBytes = sodium.from_base64(existingEncKey);
+                 const iv = folderKeyEncryptedBytes.slice(0, 12);
+                 const data = folderKeyEncryptedBytes.slice(12);
+                 folderKeyRaw = await window.crypto.subtle.decrypt(
+                     { name: "AES-GCM", iv: iv },
+                     authStore.masterKey,
+                     data
+                 );
+                 // Import as CryptoKey
+                 folderKeyCrypto = await window.crypto.subtle.importKey(
+                    "raw", 
+                    folderKeyRaw, 
+                    { name: "AES-GCM" }, 
+                    false, 
+                    ["encrypt", "decrypt"]
+                 );
+            } else {
+                 // Generate NEW Folder Key
+                 folderKeyCrypto = await generateMasterKey(); // Returns AES-GCM CryptoKey
+                 folderKeyRaw = await window.crypto.subtle.exportKey("raw", folderKeyCrypto);
+                 
+                 // Encrypt with Master Key and Save to Backend
+                 const iv = window.crypto.getRandomValues(new Uint8Array(12));
+                 const encryptedFolderKeyBuffer = await window.crypto.subtle.encrypt(
+                    { name: "AES-GCM", iv: iv },
+                    authStore.masterKey,
+                    folderKeyRaw
+                 );
+                 
+                 const combined = new Uint8Array(iv.byteLength + encryptedFolderKeyBuffer.byteLength);
+                 combined.set(iv);
+                 combined.set(new Uint8Array(encryptedFolderKeyBuffer), iv.byteLength);
+                 const encryptedKeyBase64 = sodium.to_base64(combined);
+
+                 // Persist to backend
+                 await api.put(`/folders/${itemId}/key`, {
+                     encrypted_key: encryptedKeyBase64
+                 });
+                 
+                 // Update local prop item
+                 if (props.item) {
+                    props.item.encrypted_key = encryptedKeyBase64;
+                    props.item.EncryptedKey = encryptedKeyBase64;
+                 }
+            }
+
+            // Encrypt Folder Key for Friend
+             const friendPublicKey = await importKeyFromPEM(friend.public_key, 'spki');
+             encryptedKeyForFriend = await encryptKeyWithPublicKey(folderKeyRaw, friendPublicKey);
+
+            // Fetch files in folder to share their keys
+            // Construct path: if item.path is root "/", folder path is just "/Name"
+            const itemPath = props.item.Path || props.item.path || '';
+            let folderPath = (itemPath === '/' ? '' : itemPath) + '/' + (props.item.Name || props.item.name);
+            
+            const listRes = await api.get(`/files/list${folderPath}`);
+            const files = listRes.data.files || [];
+            
+            for (const file of files) {
+                const fEncKey = file.EncryptedKey || file.encrypted_key;
+                if (!fEncKey) continue;
+
+                try {
+                    // Decrypt File Key (Master -> File)
+                    const fKeyEncBytes = sodium.from_base64(fEncKey);
+                    const ivF = fKeyEncBytes.slice(0, 12);
+                    const dataF = fKeyEncBytes.slice(12);
+                    
+                    const fileKeyRaw = await window.crypto.subtle.decrypt(
+                        { name: "AES-GCM", iv: ivF },
+                        authStore.masterKey,
+                        dataF
+                    );
+                    
+                    // Encrypt File Key with FOLDER Key
+                    const ivFK = window.crypto.getRandomValues(new Uint8Array(12));
+                    const encFKey = await window.crypto.subtle.encrypt(
+                        { name: "AES-GCM", iv: ivFK },
+                        folderKeyCrypto,
+                        fileKeyRaw
+                    );
+                    
+                    const combinedFK = new Uint8Array(ivFK.byteLength + encFKey.byteLength);
+                    combinedFK.set(ivFK);
+                    combinedFK.set(new Uint8Array(encFKey), ivFK.byteLength);
+
+                    folderFileKeys[file.ID || file.id] = sodium.to_base64(combinedFK);
+                } catch(err) {
+                    console.warn(`Failed to process key for file ${file.Name}:`, err);
+                }
+            }
         }
         
         await api.post('/shares/direct', {
@@ -379,7 +492,8 @@ const shareWithFriend = async (friend) => {
             resource_type: resourceType,
             friend_id: friend.id,
             encrypted_key: encryptedKeyForFriend,
-            permission: 'read'
+            permission: 'read',
+            folder_file_keys: folderFileKeys
         });
 
         sharedStatus.value[friend.id] = true;
