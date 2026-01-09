@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -94,85 +95,84 @@ func CreateFolderDB(db *bun.DB, folder *Folder) error {
 func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, []FolderWithShare, error) {
 	start := time.Now()
 	ctx := context.Background()
-	var filesPlain []File
-	var foldersPlain []Folder
-	var err error
+	var wg sync.WaitGroup
 
-	if path == "/" {
-		// Pour la racine : on cherche les chemins qui commencent par '/' mais qui n'ont pas de deuxième '/'.
-		// Ex: '/test' (OK), '/image.jpg' (OK), mais pas '/test/doc.pdf' (NON)
-		err = db.NewSelect().Model(&filesPlain).
-			Where("user_id = ?", userID).
-			Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
-			Scan(ctx)
+	var filesWithShare []FileWithShare
+	var foldersWithShare []FolderWithShare
+	var errFiles, errFolders error
+
+	wg.Add(2)
+
+	// --- 1. Files Goroutine ---
+	go func() {
+		defer wg.Done()
+		var filesPlain []File
+		var err error
+
+		// 1.1 Fetch Files
+		if path == "/" {
+			err = db.NewSelect().Model(&filesPlain).
+				Where("user_id = ?", userID).
+				Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
+				Scan(ctx)
+		} else {
+			searchPrefix := path + "/"
+			err = db.NewSelect().Model(&filesPlain).
+				Where("user_id = ?", userID).
+				Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
+				Scan(ctx)
+		}
+
 		if err != nil {
-			return nil, nil, err
-		}
-		log.Printf("Files query took: %v", time.Since(start))
-
-		t2 := time.Now()
-		err = db.NewSelect().Model(&foldersPlain).
-			Where("user_id = ?", userID).
-			Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
-			Scan(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		log.Printf("Folders query took: %v", time.Since(t2))
-	} else {
-		// Pour un sous-dossier (ex: /test) : on cherche les chemins qui commencent par '/test/'
-		// mais qui n'ont pas de '/' supplémentaire après.
-		searchPrefix := path + "/"
-		err = db.NewSelect().Model(&filesPlain).
-			Where("user_id = ?", userID).
-			Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
-			Scan(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		log.Printf("Files query took: %v", time.Since(start))
-
-		t2 := time.Now()
-		err = db.NewSelect().Model(&foldersPlain).
-			Where("user_id = ?", userID).
-			Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
-			Scan(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		log.Printf("Folders query took: %v", time.Since(t2))
-	}
-
-	// --- Traitement des fichiers ---
-	filesWithShare := make([]FileWithShare, 0, len(filesPlain))
-	if len(filesPlain) > 0 {
-		t3 := time.Now()
-		fileIds := make([]int64, 0, len(filesPlain))
-		for _, f := range filesPlain {
-			fileIds = append(fileIds, f.ID)
+			errFiles = err
+			return
 		}
 
-		// Check for Public Links (ShareLink)
+		if len(filesPlain) == 0 {
+			filesWithShare = []FileWithShare{}
+			return
+		}
+
+		// 1.2 Fetch Shares (Parallel)
+		fileIds := make([]int64, len(filesPlain))
+		for i, f := range filesPlain {
+			fileIds[i] = f.ID
+		}
+
 		var fileLinks []ShareLink
-		err = db.NewSelect().Model(&fileLinks).
-			Where("resource_type = ?", "file").
-			Where("resource_id IN (?)", bun.In(fileIds)).
-			Scan(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// Check for Direct Shares (FileShare)
 		var directFileShares []FileShare
-		err = db.NewSelect().Model(&directFileShares).
-			Where("file_id IN (?)", bun.In(fileIds)).
-			Scan(ctx)
-		if err != nil {
-			return nil, nil, err
+		var errLink, errDirect error
+		var wgShares sync.WaitGroup
+
+		wgShares.Add(2)
+
+		go func() {
+			defer wgShares.Done()
+			errLink = db.NewSelect().Model(&fileLinks).
+				Where("resource_type = ?", "file").
+				Where("resource_id IN (?)", bun.In(fileIds)).
+				Scan(ctx)
+		}()
+
+		go func() {
+			defer wgShares.Done()
+			errDirect = db.NewSelect().Model(&directFileShares).
+				Where("file_id IN (?)", bun.In(fileIds)).
+				Scan(ctx)
+		}()
+
+		wgShares.Wait()
+
+		if errLink != nil {
+			errFiles = errLink
+			return
+		}
+		if errDirect != nil {
+			errFiles = errDirect
+			return
 		}
 
-		log.Printf("File shares query took: %v", time.Since(t3))
-
+		// 1.3 Construct Result
 		fileLinkMap := make(map[int64]ShareLink)
 		for _, l := range fileLinks {
 			if _, ok := fileLinkMap[l.ResourceID]; !ok {
@@ -180,16 +180,14 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 			}
 		}
 
-		// Create a set of IDs that are directly shared
 		directShareMap := make(map[int64]bool)
 		for _, s := range directFileShares {
 			directShareMap[s.FileID] = true
 		}
 
-		for _, f := range filesPlain {
+		filesWithShare = make([]FileWithShare, len(filesPlain))
+		for i, f := range filesPlain {
 			fw := FileWithShare{File: f}
-
-			// Check Public Link
 			if l, ok := fileLinkMap[f.ID]; ok {
 				fw.Shared = true
 				if l.OwnerID == userID {
@@ -200,48 +198,83 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 					fw.ExpiresAt = l.ExpiresAt
 				}
 			}
-
-			// Check Direct Share (Union)
 			if directShareMap[f.ID] {
 				fw.Shared = true
-				// We don't overwrite ShareToken/ShareID here because those are for the "Link" tab mainly,
-				// but marking Shared=true is enough to trigger the UI icon.
 			}
-
-			filesWithShare = append(filesWithShare, fw)
+			filesWithShare[i] = fw
 		}
-	}
+	}()
 
-	// --- Traitement des dossiers ---
-	foldersWithShare := make([]FolderWithShare, 0, len(foldersPlain))
-	if len(foldersPlain) > 0 {
-		t4 := time.Now()
-		folderIds := make([]int64, 0, len(foldersPlain))
-		for _, f := range foldersPlain {
-			folderIds = append(folderIds, f.ID)
+	// --- 2. Folders Goroutine ---
+	go func() {
+		defer wg.Done()
+		var foldersPlain []Folder
+		var err error
+
+		// 2.1 Fetch Folders
+		if path == "/" {
+			err = db.NewSelect().Model(&foldersPlain).
+				Where("user_id = ?", userID).
+				Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
+				Scan(ctx)
+		} else {
+			searchPrefix := path + "/"
+			err = db.NewSelect().Model(&foldersPlain).
+				Where("user_id = ?", userID).
+				Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
+				Scan(ctx)
 		}
 
-		// Check Public Links
+		if err != nil {
+			errFolders = err
+			return
+		}
+
+		if len(foldersPlain) == 0 {
+			foldersWithShare = []FolderWithShare{}
+			return
+		}
+
+		// 2.2 Fetch Shares (Parallel)
+		folderIds := make([]int64, len(foldersPlain))
+		for i, f := range foldersPlain {
+			folderIds[i] = f.ID
+		}
+
 		var folderLinks []ShareLink
-		err = db.NewSelect().Model(&folderLinks).
-			Where("resource_type = ?", "folder").
-			Where("resource_id IN (?)", bun.In(folderIds)).
-			Scan(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// Check Direct Shares
 		var directFolderShares []FolderShare
-		err = db.NewSelect().Model(&directFolderShares).
-			Where("folder_id IN (?)", bun.In(folderIds)).
-			Scan(ctx)
-		if err != nil {
-			return nil, nil, err
+		var errLink, errDirect error
+		var wgShares sync.WaitGroup
+
+		wgShares.Add(2)
+
+		go func() {
+			defer wgShares.Done()
+			errLink = db.NewSelect().Model(&folderLinks).
+				Where("resource_type = ?", "folder").
+				Where("resource_id IN (?)", bun.In(folderIds)).
+				Scan(ctx)
+		}()
+
+		go func() {
+			defer wgShares.Done()
+			errDirect = db.NewSelect().Model(&directFolderShares).
+				Where("folder_id IN (?)", bun.In(folderIds)).
+				Scan(ctx)
+		}()
+
+		wgShares.Wait()
+
+		if errLink != nil {
+			errFolders = errLink
+			return
+		}
+		if errDirect != nil {
+			errFolders = errDirect
+			return
 		}
 
-		log.Printf("Folder shares query took: %v", time.Since(t4))
-
+		// 2.3 Construct Result
 		folderLinkMap := make(map[int64]ShareLink)
 		for _, l := range folderLinks {
 			if _, ok := folderLinkMap[l.ResourceID]; !ok {
@@ -254,9 +287,9 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 			directFolderMap[s.FolderID] = true
 		}
 
-		for _, f := range foldersPlain {
+		foldersWithShare = make([]FolderWithShare, len(foldersPlain))
+		for i, f := range foldersPlain {
 			fw := FolderWithShare{Folder: f}
-
 			if l, ok := folderLinkMap[f.ID]; ok {
 				fw.Shared = true
 				if l.OwnerID == userID {
@@ -267,13 +300,22 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 					fw.ExpiresAt = l.ExpiresAt
 				}
 			}
-
 			if directFolderMap[f.ID] {
 				fw.Shared = true
 			}
-
-			foldersWithShare = append(foldersWithShare, fw)
+			foldersWithShare[i] = fw
 		}
+	}()
+
+	wg.Wait()
+
+	log.Printf("ListItemsByUser total time: %v", time.Since(start))
+
+	if errFiles != nil {
+		return nil, nil, errFiles
+	}
+	if errFolders != nil {
+		return nil, nil, errFolders
 	}
 
 	return filesWithShare, foldersWithShare, nil
