@@ -45,12 +45,12 @@ func main() {
 	// Initialise la connexion à la base de données
 	db := pkg.NewDB()
 
-	// Exécute les migrations - DÉSACTIVÉ POUR SUPABASE (Gestion manuelle du schéma)
-	// err := pkg.Migrate(db)
-	// if err != nil {
-	// 	log.Fatalf("Failed to migrate: %v", err)
-	// }
-	// log.Println("Migrations executed successfully!")
+	// Exécute les migrations
+	err := pkg.Migrate(db)
+	if err != nil {
+		log.Printf("Failed to migrate: %v", err) // Printf instead of Fatalf strictly for safety in this context
+	}
+	log.Println("Migrations executed successfully!")
 
 	// Crée une instance de Gin (equivalent à Express.js en Node.js)
 	router := gin.Default()
@@ -161,6 +161,7 @@ func main() {
 		folderRoutes := protectedRoutes.Group("/folders")
 		{
 			folderRoutes.POST("/create", func(c *gin.Context) { folders.CreateHandler(c, db) })
+			folderRoutes.PUT("/:id/key", func(c *gin.Context) { folders.UpdateFolderKeyHandler(c, db) })
 		}
 
 		// ROUTES TAGS
@@ -194,6 +195,7 @@ func main() {
 			shareRoutes.DELETE("/direct", func(c *gin.Context) { shares.RemoveDirectShareHandler(c, db, wsManager) })
 			shareRoutes.GET("/check-path", func(c *gin.Context) { shares.GetActiveSharesForPathHandler(c, db) })
 			shareRoutes.GET("/file/:fileID", func(c *gin.Context) { shares.GetShareForResourceHandler(c, db) })
+			shareRoutes.GET("/direct/folder/:folderID/content", func(c *gin.Context) { shares.GetSharedFolderContentHandler(c, db) })
 			shareRoutes.DELETE("/link/:shareID", func(c *gin.Context) { shares.DeleteShareLinkHandler(c, db) })
 
 			// Shared With Me Routes

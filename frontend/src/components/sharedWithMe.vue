@@ -3,10 +3,18 @@
     <div v-if="loading" class="loading">
       <div class="spinner"></div> Chargement...
     </div>
-    <div v-else-if="error" class="error">{{ error }}</div>
-    <div v-else-if="items.length === 0" class="empty">
-      <p>Aucun fichier partagé avec vous.</p>
+    
+    <div v-if="currentFolder" class="folder-header">
+         <button @click="navigateUp" class="back-btn">⬅ Retour</button>
+         <span class="current-path">Dossier: {{ currentFolder.name }}</span>
     </div>
+
+    <div v-if="error" class="error">{{ error }}</div>
+    <div v-else-if="!loading && items.length === 0" class="empty">
+      <p v-if="currentFolder">Dossier vide.</p>
+      <p v-else>Aucun fichier partagé avec vous.</p>
+    </div>
+    
     <FileTable 
       v-else 
       :folders="sharedFolders"
@@ -17,7 +25,7 @@
       @open-file="handleOpenFile"
     >
       <template #shared_name="{ item }">
-        <span class="file-link" @click.stop="handleOpenFile(item)" :title="item.name">{{ item.name }}</span>
+        <span class="file-link" @click.stop="handleItemClick(item)" :title="item.Name || item.name">{{ item.Name || item.name }}</span>
       </template>
 
 
@@ -79,8 +87,16 @@ const items = ref([]);
 const loading = ref(false);
 const error = ref(null);
 
+const currentFolder = ref(null);
+const currentFolderKey = ref(null); // Key of the root shared folder (decrypted)
+const folderStack = ref([]);
+
 watch(() => fileStore.shareUpdateTrigger, () => {
-    fetchSharedWithMe();
+    if (currentFolder.value) {
+        fetchFolderContent(currentFolder.value.resource_id);
+    } else {
+        fetchSharedWithMe();
+    }
 });
 
 const contextMenu = ref({
@@ -94,13 +110,33 @@ const columns = [
   { key: 'icon', label: '', headerClass: 'icon-col', cellClass: 'icon-col' },
   { key: 'shared_name', label: 'Nom', cellClass: 'name-cell' },
   { key: 'owner', label: 'Propriétaire' },
-  { key: 'shared_at', label: 'Partagé le' },
   { key: 'size', label: 'Taille' },
   { key: 'actions', label: 'Actions' }
 ]
 
-const sharedFolders = computed(() => items.value.filter(i => i.type === 'folder'))
-const sharedFiles = computed(() => items.value.filter(i => i.type === 'file'))
+const sharedFolders = computed(() => {
+    return items.value
+        .filter(i => i.type === 'folder')
+        .map(f => ({
+            ...f,
+            // Ensure standard props for FileTable if coming from fetchSharedWithMe
+            Name: f.Name || f.name,
+            ID: f.ID || f.resource_id,
+            shared: false
+        }));
+});
+
+const sharedFiles = computed(() => {
+    return items.value
+        .filter(i => i.type === 'file')
+        .map(f => ({
+            ...f,
+            Name: f.Name || f.name,
+            ID: f.ID || f.resource_id,
+            Size: f.Size || f.size,
+            MimeType: f.MimeType || f.mime_type
+        }));
+});
 
 const fetchSharedWithMe = async () => {
   loading.value = true;
@@ -119,7 +155,10 @@ const fetchSharedWithMe = async () => {
         // Determine if direct share for context actions
         is_direct: !!share.file_id || !!share.folder_id,
         // Helper specifically for download
-        resource_id: share.file_id || share.folder_id
+        resource_id: share.file_id || share.folder_id,
+        // Map Name/ID early too
+        Name: share.name,
+        ID: share.file_id || share.folder_id
     }));
   } catch (err) {
     console.error("Error fetching shared with me:", err);
@@ -129,18 +168,117 @@ const fetchSharedWithMe = async () => {
   }
 };
 
-const handleContextMenu = (event, item, type) => {
-  event.preventDefault();
-  contextMenu.value = {
-    visible: true,
-    x: event.clientX,
-    y: event.clientY,
-    item: { ...item, type }
-  };
-};
+const fetchFolderContent = async (folderID) => {
+    loading.value = true;
+    try {
+        const response = await api.get(`/shares/direct/folder/${folderID}/content`);
+        const data = response.data;
+        
+        const files = (data.files || []).map(f => ({
+            ...f,
+            type: 'file',
+            resource_id: f.ID, // Standardize ID
+            encrypted_key: f.encrypted_key,
+            Name: f.Name,
+            Size: f.Size,
+            ID: f.ID
+        }));
+        
+        const folders = (data.folders || []).map(f => ({
+            ...f,
+            type: 'folder',
+            resource_id: f.ID,
+            Name: f.Name,
+            ID: f.ID
+        }));
+        
+        items.value = [...folders, ...files];
+    } catch (err) {
+        console.error("Error fetching folder content:", err);
+        error.value = "Impossible d'ouvrir le dossier.";
+    } finally {
+        loading.value = false;
+    }
+}
 
-const closeContextMenu = () => {
-    contextMenu.value.visible = false;
+const handleItemClick = (item) => {
+    if (item.type === 'folder') {
+        handleOpenFolder(item);
+    } else {
+        handleOpenFile(item);
+    }
+}
+
+const navigateUp = () => {
+    if (folderStack.value.length > 0) {
+        const parent = folderStack.value.pop();
+        currentFolder.value = parent;
+        if (parent) {
+             fetchFolderContent(parent.resource_id);
+        } else {
+             // Back to root
+             currentFolderKey.value = null; // Clear key
+             fetchSharedWithMe();
+        }
+    } else {
+        // Should not happen if button is only visible when currentFolder != null
+        currentFolder.value = null;
+        currentFolderKey.value = null;
+        fetchSharedWithMe();
+    }
+}
+
+const handleOpenFolder = async (folder) => {
+    if (!folder) {
+        console.warn("handleOpenFolder called with undefined folder");
+        return;
+    }
+    try {
+        // If we are at root, we need to decrypt the folder key
+        if (!currentFolder.value) {
+             if (!folder.encrypted_key) {
+                 alert("Clé de dossier manquante");
+                 return;
+             }
+             
+             // Decrypt Root Folder Key
+            await sodium.ready;
+            const rsaPrivateKey = authStore.privateKey;
+            if (!rsaPrivateKey) throw new Error("Private key not ready");
+            
+            const encryptedKeyBytes = sodium.from_base64(folder.encrypted_key);
+            const folderKeyRaw = await window.crypto.subtle.decrypt(
+                { name: "RSA-OAEP" },
+                rsaPrivateKey,
+                encryptedKeyBytes
+            );
+            
+            // Import as AES-GCM for file decryption later
+            currentFolderKey.value = await window.crypto.subtle.importKey(
+                "raw", 
+                folderKeyRaw,
+                "AES-GCM",
+                true,
+                ["decrypt"]
+            );
+        }
+        
+        // Push current state to stack (if not null, i.e. we are going deeper)
+        // actually we store the *previous* folder in stack
+        folderStack.value.push(currentFolder.value);
+        currentFolder.value = folder;
+        
+        await fetchFolderContent(folder.resource_id);
+    } catch (e) {
+        console.error("Failed to open folder:", e);
+        alert("Erreur lors de l'ouverture du dossier (Déchiffrement): " + e.message);
+        // Reset navigation if failed
+        if (folderStack.value.length > 0) {
+             // pop back?
+             folderStack.value.pop();
+             currentFolder.value = null; 
+        }
+    }
 }
 
 const handleContextAction = async (action) => {
@@ -149,9 +287,10 @@ const handleContextAction = async (action) => {
 
     if (action === 'download') {
         if (item.type === 'file') {
-             await downloadSharedFile(item);
+                await downloadSharedFile(item);
         }
-    } else if (action === 'delete') {
+    }
+    else if (action === 'delete') {
          if (confirm("Voulez-vous retirer ce partage de votre liste ?")) {
              try {
                 let url = `/shares/with-me/${item.id}`;
@@ -173,13 +312,6 @@ const handleContextAction = async (action) => {
          }
     }
     closeContextMenu();
-}
-
-const handleOpenFolder = (folderName) => {
-    // Navigate to shared folder view? 
-    // Usually implies recursively listing contents.
-    // For now: Alert not implemented
-    alert("Ouverture de dossier partagé pas encore implémentée complètement.");
 }
 
 const handleOpenFile = (item) => {
@@ -206,100 +338,70 @@ const downloadSharedFile = async (item) => {
         }
 
         // 1. Decrypt the Share Key
-        // The item.encrypted_key is the FileKey encrypted with MY Public Key.
-        if (!item.encrypted_key) {
-            throw new Error("Clé de chiffrement manquante pour ce partage. S'il s'agit d'un ancien partage, veuillez demander à l'expéditeur de le partager à nouveau.");
-        }
+        // The item.encrypted_key is the FileKey encrypted with MY Public Key (if direct share)
+        // OR encrypted with the Folder Key (if inside a shared folder)
         
         await sodium.ready;
-        
-        // Decrypt User Private Key first if not ready (AuthStore handles this usually)
-        if (!authStore.privateKey) {
-             throw new Error("Clé privée non disponible.");
+        let fileKeyCrypto;
+
+        if (currentFolderKey.value) {
+             // We are inside a shared folder
+             if (!item.encrypted_key) throw new Error("Clé manquante pour le fichier");
+             
+             // Decrypt using AES-GCM (FolderKey)
+             const encryptedBytes = sodium.from_base64(item.encrypted_key);
+             // Assume IV is first 12 bytes
+             const iv = encryptedBytes.slice(0, 12);
+             const data = encryptedBytes.slice(12);
+             
+             try {
+                const fileKeyRaw = await window.crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv: iv },
+                    currentFolderKey.value,
+                    data
+                );
+                fileKeyCrypto = await window.crypto.subtle.importKey("raw", fileKeyRaw, "AES-GCM", true, ["decrypt"]);
+             } catch (e) {
+                 throw new Error("Echec du déchiffrement de la clé du fichier (AES-GCM).");
+             }
+
+        } else {
+            // Root Share (Direct)
+            if (!item.encrypted_key) {
+                throw new Error("Clé de chiffrement manquante.");
+            }
+            
+            // Decrypt User Private Key first if not ready
+            if (!authStore.privateKey) {
+                 throw new Error("Clé privée non disponible.");
+            }
+
+            const encryptedKeyBytes = sodium.from_base64(item.encrypted_key);
+            const rsaPrivateKey = authStore.privateKey; // CryptoKey
+
+            const fileKeyRawBuffer = await window.crypto.subtle.decrypt(
+                { name: "RSA-OAEP" },
+                rsaPrivateKey,
+                encryptedKeyBytes
+            );
+            
+            fileKeyCrypto = await window.crypto.subtle.importKey(
+                "raw", 
+                fileKeyRawBuffer,
+                "AES-GCM",
+                true,
+                ["decrypt"]
+            );
         }
 
-        // Decrypt the Shared Key using my Private Key
-        // item.encrypted_key is base64.
-        // We use our RSA Private Key to decrypt it.
-        const encryptedKeyBytes = sodium.from_base64(item.encrypted_key);
-        
-        // Use WebCrypto for RSA-OAEP decryption
-        // Need to import private key to WebCrypto format if stored as PEM/other
-        // authStore.privateKey is usually the PEM string or CryptoKey? 
-        // Let's assume authStore stores the CryptoKey object for private key if loaded, 
-        // OR we re-import it. 
-        // Checked authStore: it stores 'privateKey' as ... wait, let's check authStore usage.
-        // Actually authStore keeps encrypted_private_key string.
-        // The decrypted private key is usually kept in memory or session?
-        // Let's assume we use the helper 'decryptKeyWithPrivateKey' if available or do it manually.
-        
-        // wait, `decryptKeyWithPrivateKey` is for symmetric.
-        // We need RSA decryption.
-        
-        // In DirectShareModal we encrpyted with:
-        // window.crypto.subtle.encrypt({ name: "RSA-OAEP" }, publicKey, rawData)
-        
-        // So here we need:
-        // window.crypto.subtle.decrypt({ name: "RSA-OAEP" }, privateKey, encryptedData)
-        
-        // We need the private key object.
-        // If authStore doesn't expose it, we might need to derive it again or hopefully it is cached.
-        
-        // RE-CHECK: AuthStore usually keeps 'masterKey' (AES-GCM).
-        // The RSA Private Key is stored ENCRYPTED in DB.
-        // on login, we decrypt RSA Priv Key using Master Key.
-        
-        const rsaPrivateKey = authStore.privateKey; // Uses the correct store property
-        if (!rsaPrivateKey) {
-             throw new Error("Clé RSA privée non chargée. Reconnectez-vous.");
-        }
-
-        const fileKeyRawBuffer = await window.crypto.subtle.decrypt(
-            { name: "RSA-OAEP" },
-            rsaPrivateKey,
-            encryptedKeyBytes
-        );
-
-        // 2. We have the File Key (Raw). Now download and decrypt the file content.
-        // We can reuse fileStore.downloadFile but we need to pass the key explicitly 
-        // OR manually fetch blob and decrypt.
-        // fileStore.downloadFile expects file ID and looks up key in store... which won't work here.
-        
-        // We need a custom download function for shared files where we supply the key.
-        
+        // 2. Download and Decrypt Content
         const response = await api.get(`/files/download/${item.resource_id}`, { responseType: 'blob' });
-        
-        // 3. Decrypt Content
-        // File content is encrypted with params (IV + Data).
-        // Key is fileKeyRawBuffer.
-        
-        // Convert Blob to ArrayBuffer
-        const encryptedFileBytes = await response.data.arrayBuffer();
-        
-        // Extract Nonce (24 bytes for XChaCha20, or 12 for AES-GCM?)
-        // Backend uses: stream.NewEncrypter(key, make([]byte, 12)) for AES-GCM usually?
-        // Let's check backend pkg/s3storage or upload handler.
-        // Assumptions: AES-GCM standard (12 byte IV appended or prepended).
-        // Let's assume standard format used in project: IV + Ciphertext.
-        
-        // WAIT: Browser decryption usually uses window.crypto.subtle (AES-GCM).
-        
-        // Let's import the File Key for AES-GCM
-        const fileKeyCrypto = await window.crypto.subtle.importKey(
-            "raw", 
-            fileKeyRawBuffer,
-            "AES-GCM",
-            true,
-            ["decrypt"]
-        );
-        
-        // 4. Decrypt Content using Worker (Handles chunked files correctly)
-        // Convert ArrayBuffer to Blob for the worker helper
+        const encryptedFileBytes = await response.data.arrayBuffer(); // This is the encrypted file
         const encryptedBlob = new Blob([encryptedFileBytes]);
         
         const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, item.mime_type || 'application/octet-stream');
         
-        // 5. Trigger Download
+        // 3. Trigger Download
         const url = window.URL.createObjectURL(decryptedBlob);
         const a = document.createElement('a');
         a.href = url;
@@ -352,5 +454,32 @@ onMounted(() => {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+.folder-header {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  background: var(--surface-color);
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 10px;
+}
+
+.back-btn {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+  margin-right: 15px;
+  color: var(--text-color);
+}
+
+.back-btn:hover {
+  background: var(--hover-color);
+}
+
+.current-path {
+  font-weight: bold;
 }
 </style>

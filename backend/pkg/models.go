@@ -82,8 +82,16 @@ type FolderShare struct {
 	ID               int64     `bun:"id,pk,autoincrement"`
 	FolderID         int64     `bun:"folder_id,notnull"`
 	SharedWithUserID string    `bun:"shared_with_user_id,notnull"`
+	EncryptedKey     string    `bun:"encrypted_key"` // FolderKey encrypted with Recipient's Public Key
 	Permission       string    `bun:"permission,notnull,default:'read'"`
 	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+}
+
+type FolderFileKey struct {
+	FolderID     int64     `bun:"folder_id,pk"`
+	FileID       int64     `bun:"file_id,pk"`
+	EncryptedKey string    `bun:"encrypted_key,notnull"` // FileKey encrypted with FolderKey
+	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 }
 
 type ShareFileKey struct {
@@ -93,12 +101,13 @@ type ShareFileKey struct {
 }
 
 type Folder struct {
-	ID        int64     `bun:"id,pk,autoincrement"`
-	Name      string    `bun:"name,notnull"`
-	Path      string    `bun:"path,notnull"` // Chemin relatif (ex: "/dossier1")
-	UserID    string    `bun:"user_id,notnull"`
-	Tags      []string  `bun:"tags,array"` // Tags
-	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	ID           int64     `bun:"id,pk,autoincrement"`
+	Name         string    `bun:"name,notnull"`
+	Path         string    `bun:"path,notnull"` // Chemin relatif (ex: "/dossier1")
+	UserID       string    `bun:"user_id,notnull"`
+	EncryptedKey string    `bun:"encrypted_key"` // FolderKey encrypted with MasterKey
+	Tags         []string  `bun:"tags,array"`    // Tags
+	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 }
 
 type Tag struct {

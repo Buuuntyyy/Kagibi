@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"fmt"
 
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/ws"
@@ -42,7 +43,7 @@ func ListImportedSharesHandler(c *gin.Context, db *bun.DB) {
 		Link         string    `json:"link,omitempty"`
 		FileID       int64     `json:"file_id,omitempty"`       // IMPORTANT: For Direct File Share
 		FolderID     int64     `json:"folder_id,omitempty"`     // IMPORTANT: For Direct Folder Share
-		EncryptedKey string    `json:"encrypted_key,omitempty"` // IMPORTANT: For Direct File Share
+		EncryptedKey string    `json:"encrypted_key"`           // IMPORTANT: For Direct File Share (Removed omitempty to debug)
 	}
 
 	var response []SharedWithMeResponse
@@ -126,8 +127,37 @@ func ListImportedSharesHandler(c *gin.Context, db *bun.DB) {
 		}
 	}
 
-	// 3. Fetch Direct Folder Shares (Similar logic)
-	// ... (Implementation for folders skipped for brevity, follows same pattern)
+	// 3. Fetch Direct Folder Shares
+	var folderShares []pkg.FolderShare
+	err = db.NewSelect().Model(&folderShares).
+		Where("shared_with_user_id = ?", userID).
+		Scan(c.Request.Context())
+
+	if err == nil {
+		for _, fs := range folderShares {
+			fmt.Printf("DEBUG READ: ShareID: %d, FolderID: %d, KeyLen: %d\n", fs.ID, fs.FolderID, len(fs.EncryptedKey))
+			var folder pkg.Folder
+			if err := db.NewSelect().Model(&folder).Where("id = ?", fs.FolderID).Scan(c.Request.Context()); err == nil {
+				var owner pkg.User
+				ownerName := "Unknown"
+				if err := db.NewSelect().Model(&owner).Where("id = ?", folder.UserID).Scan(c.Request.Context()); err == nil {
+					ownerName = owner.Name
+				}
+
+				response = append(response, SharedWithMeResponse{
+					ID:           fs.ID, // Use Share ID
+					ResourceType: "folder",
+					Name:         folder.Name,
+					OwnerName:    ownerName,
+					SharedAt:     fs.CreatedAt,
+					Size:         0,               // Folders don't track size directly here
+					FolderID:     folder.ID,       // Needed for frontend
+					EncryptedKey: fs.EncryptedKey, // Needed for decryption
+					Link:         "",
+				})
+			}
+		}
+	}
 
 	c.JSON(http.StatusOK, response)
 }
