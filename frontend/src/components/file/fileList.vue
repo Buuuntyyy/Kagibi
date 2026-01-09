@@ -142,14 +142,9 @@
     <ManageShareDialog
       :isOpen="manageShareDialog.isOpen"
       :item="manageShareDialog.item"
+      :initialTab="manageShareDialog.initialTab"
       @close="closeManageShareDialog"
       @share-deleted="onShareDeleted"
-      @share-created="onShareCreated"
-    />
-    <DirectShareModal
-      :isOpen="directShareDialog.isOpen"
-      :file="directShareDialog.file"
-      @close="closeDirectShareDialog"
       @share-created="onShareCreated"
     />
     <MoveDialog
@@ -182,7 +177,6 @@ import ShareDialog from '../ShareDialog.vue'
 import api from '../../api'
 import MoveDialog from '../MoveDialog.vue';
 import ManageShareDialog from '../ManageShareDialog.vue';
-import DirectShareModal from '../DirectShareModal.vue';
 import DeleteConfirmDialog from '../DeleteConfirmDialog.vue';
 import FileTable from './FileTable.vue';
 
@@ -302,14 +296,10 @@ const shareDialog = ref({
   item: null
 })
 
-const directShareDialog = ref({
-  isOpen: false,
-  file: null
-})
-
 const manageShareDialog = ref({
   isOpen: false,
   item: null,
+  initialTab: 'link'
 });
 
 const deleteDialog = ref({
@@ -322,28 +312,17 @@ const moveDialog = ref({
   isOpen: false,
 });
 
-const openManageShareDialog = (item, type = 'file') => {
+const openManageShareDialog = (item, type = 'file', initialTab = 'link') => {
   manageShareDialog.value = {
     isOpen: true,
     item: { ...item, type: type },
+    initialTab: initialTab
   };
 };
 
 const closeManageShareDialog = () => {
   manageShareDialog.value.isOpen = false;
   manageShareDialog.value.item = null;
-};
-
-const openDirectShareDialog = (item) => {
-  directShareDialog.value = {
-    isOpen: true,
-    file: item
-  };
-};
-
-const closeDirectShareDialog = () => {
-  directShareDialog.value.isOpen = false;
-  directShareDialog.value.file = null;
 };
 
 const onShareCreated = () => {
@@ -559,7 +538,7 @@ const handleContextAction = (action) => {
       openShareDialog(item)
       break
     case 'direct-share':
-      openDirectShareDialog(item)
+      openManageShareDialog(item, item.type, 'friends')
       break
     case 'get-share-link':
       if (item.type === 'file' && item.share_token) {
@@ -617,7 +596,8 @@ const isSelected = (item, type) => {
   return selectedItems.value.some(i => i.ID === item.ID && i.type === type);
 }
 
-const openFolder = (folderName) => {
+const openFolder = (folder) => {
+  const folderName = folder.Name || folder.name;
   // Add to history
   const fullPath = fileStore.currentPath === '/' ? '/' + folderName : fileStore.currentPath + '/' + folderName;
   fileStore.addToHistory({ 

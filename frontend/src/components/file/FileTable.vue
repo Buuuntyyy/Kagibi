@@ -19,7 +19,7 @@
              class="list-item folder-item" 
              :class="{ selected: isSelected(folder, 'folder') }"
              @click="$emit('select-item', folder, 'folder', $event)"
-             @dblclick="$emit('open-folder', folder.Name)"
+             @dblclick="$emit('open-folder', folder)"
              @contextmenu.prevent.stop="$emit('context-menu', $event, folder, 'folder')"
              draggable="true"
              @dragstart="$emit('drag-start', folder, 'folder', $event)"

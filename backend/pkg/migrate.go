@@ -22,6 +22,7 @@ func Migrate(db *bun.DB) error {
 		(*ImportedShare)(nil),
 		(*FileShare)(nil),
 		(*FolderShare)(nil),
+		(*FolderFileKey)(nil),
 	}
 
 	for _, model := range models {
@@ -44,10 +45,22 @@ func Migrate(db *bun.DB) error {
 		return fmt.Errorf("failed to add encrypted_key column to files: %w", err)
 	}
 
+	// Add encrypted_key to folders
+	_, err = db.ExecContext(ctx, `ALTER TABLE "folders" ADD COLUMN IF NOT EXISTS "encrypted_key" VARCHAR;`)
+	if err != nil {
+		return fmt.Errorf("failed to add encrypted_key column to folders: %w", err)
+	}
+
 	// Add encrypted_key to share_links
 	_, err = db.ExecContext(ctx, `ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "encrypted_key" VARCHAR;`)
 	if err != nil {
 		return fmt.Errorf("failed to add encrypted_key column to share_links: %w", err)
+	}
+
+	// Add encrypted_key to folder_shares
+	_, err = db.ExecContext(ctx, `ALTER TABLE "folder_shares" ADD COLUMN IF NOT EXISTS "encrypted_key" VARCHAR;`)
+	if err != nil {
+		return fmt.Errorf("failed to add encrypted_key column to folder_shares: %w", err)
 	}
 
 	// Update existing rows to have a default path if it's empty
