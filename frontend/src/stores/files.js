@@ -3,12 +3,18 @@ import api from '../api'
 import { useAuthStore } from './auth'
 import { encryptFile, decryptFile, generateMasterKey, wrapMasterKey, unwrapMasterKey, deriveKeyFromToken } from '../utils/crypto'
 import { encryptChunkWorker, decryptChunkedFileWorker, CHUNK_SIZE } from '../utils/crypto'
+import sodium from 'libsodium-wrappers-sumo'
 
 export const useFileStore = defineStore('files', {
   state: () => ({
     files: [],
     folders: [],
     currentPath: '/',
+    // Shared Mode State
+    viewMode: 'drive', // 'drive' or 'shared'
+    sharedKey: null, // CryptoKey (AES-GCM) for the current shared root
+    sharedBreadcrumbs: [], // Array of { id, name }
+    
     uploadProgress: 0,
     isUploading: false,
     uploadingFileName: '',
@@ -42,6 +48,27 @@ export const useFileStore = defineStore('files', {
       this.searchQuery = query
     },
     async fetchItems(path) {
+      // If we are in shared mode and fetchItems('/') is called, switch back to drive mode
+      if (path === '/' && this.viewMode === 'shared') {
+          this.viewMode = 'drive';
+          this.sharedKey = null;
+          this.sharedBreadcrumbs = [];
+      }
+
+      // If in shared mode, ignore normal fetch (or maybe redirect to fetchShared?)
+      // But typically fetchItems is called with a path string. 
+      // Shared navigation uses IDs.
+      if (this.viewMode === 'shared') {
+          // If path is passed, it might be an error or legacy call. 
+          // We'll ignore it unless it's strictly root which we handled above.
+          // Or maybe we treat it as "refresh current".
+          if (this.sharedBreadcrumbs.length > 0) {
+              const current = this.sharedBreadcrumbs[this.sharedBreadcrumbs.length - 1];
+              return this.fetchSharedFolderContent(current.id);
+          }
+          return;
+      }
+
       this.searchQuery = ''; // Clear search query when navigating
       try {
         const safePath = path.startsWith('/') ? path : `/${path}`
@@ -53,6 +80,117 @@ export const useFileStore = defineStore('files', {
         console.error('Error fetching items:', error)
       }
     },
+    
+    // --- SHARED MODE ACTIONS ---
+    async openSharedRoot(shareItem) {
+        const authStore = useAuthStore();
+        this.viewMode = 'shared';
+        this.sharedBreadcrumbs = [{ id: shareItem.resource_id, name: shareItem.name || shareItem.Name }];
+        
+        try {
+            await sodium.ready;
+            
+            // Decrypt the Shared Folder Key
+            // Assuming direct share logic (RSA) similar to SharedWithMe.vue
+            if (!shareItem.encrypted_key) {
+                console.error("Shared folder has no key");
+                alert("Dossier partagé verrouillé (clé manquante).");
+                return;
+            }
+
+             // We only support Direct Share (RSA) for now at root
+            if (!authStore.privateKey) {
+                 throw new Error("Clé privée non disponible.");
+            }
+
+            const encryptedKeyBytes = sodium.from_base64(shareItem.encrypted_key);
+            const rsaPrivateKey = authStore.privateKey; // CryptoKey
+
+            const folderKeyRaw = await window.crypto.subtle.decrypt(
+                { name: "RSA-OAEP" },
+                rsaPrivateKey,
+                encryptedKeyBytes
+            );
+            
+            // Import as AES-GCM for file decryption later
+            this.sharedKey = await window.crypto.subtle.importKey(
+                "raw", 
+                folderKeyRaw,
+                "AES-GCM",
+                true,
+                ["decrypt"]
+            );
+
+            // Fetch Content
+            await this.fetchSharedFolderContent(shareItem.resource_id);
+
+        } catch (e) {
+            console.error("Error opening shared folder:", e);
+            alert("Erreur lors de l'ouverture du dossier partagé.");
+            this.viewMode = 'drive';
+        }
+    },
+
+    async navigateShared(folderId, folderName) {
+        if (this.viewMode !== 'shared') return;
+        
+        // Push to breadcrumbs
+        this.sharedBreadcrumbs.push({ id: folderId, name: folderName });
+        await this.fetchSharedFolderContent(folderId);
+    },
+
+    async navigateSharedUp() {
+        if (this.viewMode !== 'shared') return;
+        if (this.sharedBreadcrumbs.length <= 1) {
+            // Exit shared mode if asking to go up from root
+            this.viewMode = 'drive';
+            this.fetchItems('/');
+            return;
+        }
+
+        this.sharedBreadcrumbs.pop();
+        const current = this.sharedBreadcrumbs[this.sharedBreadcrumbs.length - 1];
+        await this.fetchSharedFolderContent(current.id);
+    },
+
+    async navigateSharedTo(index) {
+         if (this.viewMode !== 'shared') return;
+         // Slice breadcrumbs to index+1
+         this.sharedBreadcrumbs = this.sharedBreadcrumbs.slice(0, index + 1);
+         const current = this.sharedBreadcrumbs[this.sharedBreadcrumbs.length - 1];
+         await this.fetchSharedFolderContent(current.id);
+    },
+
+    async fetchSharedFolderContent(folderID) {
+        try {
+            const response = await api.get(`/shares/direct/folder/${folderID}/content`);
+            const data = response.data;
+            
+            // Normalize to match standard file structure (PascalCase for component compat)
+            this.files = (data.files || []).map(f => ({
+                ...f,
+                EncryptedKey: f.encrypted_key, // Key specifically for this file (encrypted with FolderKey)
+                Name: f.Name || f.name,
+                ID: f.ID || f.id,
+                Size: f.Size || f.size,
+                file_id: f.ID || f.id // Ensure we have something component might look for
+            }));
+            
+            this.folders = (data.folders || []).map(f => ({
+                ...f,
+                Name: f.Name,
+                ID: f.ID
+            }));
+            
+            // We do NOT update currentPath string because it is path-based and we are ID-based
+            // FileList.vue will need to read sharedBreadcrumbs instead
+            
+        } catch (error) {
+            console.error("Error fetching shared folder content:", error);
+            alert("Erreur de chargement du contenu.");
+        }
+    },
+
     async performSearch(query) {
       this.searchQuery = query;
       if (!query || query.trim() === '') {
@@ -71,6 +209,9 @@ export const useFileStore = defineStore('files', {
       }
     },
     navigateTo(folderName) {
+        if (this.viewMode === 'shared') {
+             return; // ID-based navigation handled by components
+        }
         let newPath = this.currentPath
         if (newPath.endsWith('/')) {
             newPath += folderName
@@ -80,6 +221,10 @@ export const useFileStore = defineStore('files', {
         this.fetchItems(newPath)
     },
     navigateUp() {
+        if (this.viewMode === 'shared') {
+            this.navigateSharedUp();
+            return;
+        }
         if (this.currentPath === '/') return
         const parts = this.currentPath.split('/').filter(p => p)
         parts.pop()
@@ -88,6 +233,57 @@ export const useFileStore = defineStore('files', {
     },
     async downloadFile(fileId, fileName, mimeType='application/octet-stream') {
       const authStore = useAuthStore();
+      
+      // SHARED MODE DOWNLOAD
+      if (this.viewMode === 'shared') {
+          await sodium.ready;
+          const file = this.files.find(f => f.ID === fileId);
+          if (!file || !this.sharedKey) return;
+          
+          if (!file.EncryptedKey) {
+             alert("Clé de fichier manquante");
+             return;
+          }
+
+          try {
+             // Decrypt File Key (using Folder Key)
+             const encryptedBytes = sodium.from_base64(file.EncryptedKey);
+             // Assume IV is first 12 bytes
+             const iv = encryptedBytes.slice(0, 12);
+             const data = encryptedBytes.slice(12);
+             
+             const fileKeyRaw = await window.crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: iv },
+                this.sharedKey, // The Folder Key
+                data
+             );
+             
+             const fileKeyCrypto = await window.crypto.subtle.importKey("raw", fileKeyRaw, "AES-GCM", true, ["decrypt"]);
+             
+             // Download content
+             const response = await api.get(`/files/download/${fileId}`, { responseType: 'blob' });
+             
+             // Decrypt content
+             const encryptedFileBytes = await response.data.arrayBuffer();
+             const encryptedBlob = new Blob([encryptedFileBytes]);
+             const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, mimeType);
+             
+             // Save
+             const url = window.URL.createObjectURL(decryptedBlob);
+             const a = document.createElement('a');
+             a.href = url;
+             a.download = fileName;
+             document.body.appendChild(a);
+             a.click();
+             window.URL.revokeObjectURL(url);
+             document.body.removeChild(a);
+          } catch (e) {
+              console.error("Shared download error", e);
+              alert("Erreur téléchargement partagé: " + e.message);
+          }
+          return;
+      }
+
       if (!authStore.masterKey) return;
 
       // Find the file in the store to get encrypted_key
