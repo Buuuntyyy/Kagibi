@@ -79,7 +79,20 @@ const isPdf = computed(() => {
     if (props.fileName && props.fileName.toLowerCase().endsWith('.pdf')) return true;
     return false;
 });
-const isImage = computed(() => props.mimeType && props.mimeType.startsWith('image/'));
+const isImage = computed(() => {
+    if (props.mimeType && props.mimeType.startsWith('image/')) return true;
+    if (props.fileName) {
+        const lowerName = props.fileName.toLowerCase();
+        return lowerName.endsWith('.jpg') || 
+               lowerName.endsWith('.jpeg') || 
+               lowerName.endsWith('.png') || 
+               lowerName.endsWith('.gif') || 
+               lowerName.endsWith('.webp') || 
+               lowerName.endsWith('.bmp') ||
+               lowerName.endsWith('.svg');
+    }
+    return false;
+});
 
 watch(() => props.fileUrl, () => {
     page.value = 1;

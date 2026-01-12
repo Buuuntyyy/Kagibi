@@ -172,6 +172,16 @@ func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client, wsMana
 
 		// Note: We do NOT remove tempFilePath here. The worker will remove it after successful upload.
 
+		previewIDStr := c.PostForm("preview_id")
+		var previewID *int64
+		if previewIDStr != "" {
+			pid, _ := strconv.ParseInt(previewIDStr, 10, 64)
+			previewID = &pid
+		}
+
+		isPreviewStr := c.PostForm("is_preview")
+		isPreview := isPreviewStr == "true"
+
 		fileRecord := &pkg.File{
 			Name:         fileHeader.Filename,
 			Path:         fullPathDB,
@@ -179,6 +189,8 @@ func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client, wsMana
 			MimeType:     fileHeader.Header.Get("Content-Type"),
 			UserID:       userID,
 			EncryptedKey: encryptedKey,
+			PreviewID:    previewID,
+			IsPreview:    isPreview,
 		}
 
 		// Vérifier si le fichier existe deja

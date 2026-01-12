@@ -3,6 +3,7 @@ import api from '../api'
 import { useAuthStore } from './auth'
 import { encryptFile, decryptFile, generateMasterKey, wrapMasterKey, unwrapMasterKey, deriveKeyFromToken } from '../utils/crypto'
 import { encryptChunkWorker, decryptChunkedFileWorker, CHUNK_SIZE } from '../utils/crypto'
+import { generatePreview } from '../utils/previewGenerator'
 import sodium from 'libsodium-wrappers-sumo'
 
 export const useFileStore = defineStore('files', {
@@ -246,11 +247,13 @@ export const useFileStore = defineStore('files', {
       const authStore = useAuthStore();
       
       // Attempt to correct MIME type based on extension if generic
-      if ((!mimeType || mimeType === 'application/octet-stream') && fileName) {
+      if ((!mimeType || mimeType.includes('application/octet-stream')) && fileName) {
           const ext = fileName.split('.').pop().toLowerCase();
           if (ext === 'pdf') mimeType = 'application/pdf';
           else if (['jpg', 'jpeg'].includes(ext)) mimeType = 'image/jpeg';
           else if (ext === 'png') mimeType = 'image/png';
+          else if (ext === 'bmp') mimeType = 'image/bmp';
+          else if (ext === 'svg') mimeType = 'image/svg+xml';
           else if (ext === 'gif') mimeType = 'image/gif';
           else if (ext === 'webp') mimeType = 'image/webp';
           else if (ext === 'txt') mimeType = 'text/plain';
@@ -337,13 +340,27 @@ export const useFileStore = defineStore('files', {
 
       // Find the file in the store to get encrypted_key
       const file = this.files.find(f => f.ID === fileId);
+      
+      let targetFileId = fileId;
+      let targetEncryptedKey = file ? file.EncryptedKey : null;
+      let finalMimeType = mimeType;
+
+      // Use Preview file if available and requested
+      if (preview && file && file.preview) {
+          console.log("Using optimized preview:", file.preview.ID);
+          targetFileId = file.preview.ID;
+          targetEncryptedKey = file.preview.EncryptedKey;
+          // Previews are usually JPEGs
+          finalMimeType = file.preview.MimeType || 'image/jpeg';
+      }
+
       let fileKey = authStore.masterKey; // Default to masterKey for old files
 
-      if (file && file.EncryptedKey) {
+      if (targetEncryptedKey) {
           // Decrypt the file key
           if (preview) this.preview.status = 'Préparation de la clé...';
           try {
-              fileKey = await unwrapMasterKey(file.EncryptedKey, authStore.masterKey);
+              fileKey = await unwrapMasterKey(targetEncryptedKey, authStore.masterKey);
           } catch (e) {
               console.error("Failed to decrypt file key", e);
               alert("Erreur de déchiffrement de la clé du fichier.");
@@ -355,11 +372,11 @@ export const useFileStore = defineStore('files', {
       try {
         // 1. Télécharger le blob chiffré
         if (preview) this.preview.status = 'Téléchargement du contenu chiffré...';
-        const response = await api.get(`/files/download/${fileId}`, { responseType: 'blob' });
+        const response = await api.get(`/files/download/${targetFileId}`, { responseType: 'blob' });
         
         // 2. Déchiffrer via Worker
         if (preview) this.preview.status = 'Déchiffrement local...';
-        const decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, mimeType);
+        const decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, finalMimeType);
 
         // 3. Sauvegarder ou Prévisualiser
         const url = window.URL.createObjectURL(decryptedBlob);
@@ -368,7 +385,7 @@ export const useFileStore = defineStore('files', {
              this.preview = {
                 show: true,
                 url: url,
-                type: mimeType,
+                type: finalMimeType,
                 name: fileName,
                 loading: false,
                 status: ''
@@ -388,11 +405,29 @@ export const useFileStore = defineStore('files', {
         if (preview) this.preview.show = false;
       }
     },
-    async uploadFile(file) {
+    async uploadFile(file, isPreview = false, previewID = null) {
       const authStore = useAuthStore()
       if (!authStore.isAuthenticated || !authStore.masterKey) {
         console.error('User not authenticated. Cannot upload file.')
         return
+      }
+
+      // 1. Generate Preview if main file and supported
+      if (!isPreview && !previewID) {
+          const previewBlob = await generatePreview(file);
+          if (previewBlob) {
+             console.log("Uploading preview...");
+             const previewName = "(preview) " + (file.name || "file") + ".jpg";
+             const previewFile = new File([previewBlob], previewName, { type: "image/jpeg" });
+             try {
+                const previewResult = await this.uploadFile(previewFile, true);
+                if (previewResult && previewResult.ID) {
+                    previewID = previewResult.ID;
+                }
+             } catch (e) {
+                 console.warn("Failed to upload preview", e);
+             }
+          }
       }
 
       // Generate a unique key for this file
@@ -424,6 +459,7 @@ export const useFileStore = defineStore('files', {
 
       let chunkIndex = 0;
       let offset = 0;
+      let lastResponse = null;
       this.isUploading = true;
       this.uploadProgress = 0;
       this.uploadingFileName = file.name;
@@ -458,9 +494,16 @@ export const useFileStore = defineStore('files', {
               formData.append('share_keys', JSON.stringify(shareKeysMap));
           }
 
+          if (isPreview) {
+              formData.append('is_preview', 'true');
+          }
+          if (previewID) {
+              formData.append('preview_id', previewID.toString());
+          }
+
           console.log(`Uploading chunk ${chunkIndex + 1} / ${totalChunks}...`);
 
-          await api.post('/files/upload', formData, {
+          lastResponse = await api.post('/files/upload', formData, {
             headers: {
               'Content-Type': 'multipart/form-data',
             },
@@ -483,13 +526,19 @@ export const useFileStore = defineStore('files', {
           console.log(`Uploaded chunk ${chunkIndex} / ${totalChunks}`);
         } 
 
-        this.fetchItems(this.currentPath)
+        if (!isPreview) {
+            this.fetchItems(this.currentPath)
+        }
         
         // Reset progress after a short delay
         setTimeout(() => {
-            this.isUploading = false;
-            this.uploadProgress = 0;
+            if (!isPreview) { // Only reset if main file
+                this.isUploading = false;
+                this.uploadProgress = 0;
+            }
         }, 1000);
+
+        return lastResponse?.data?.file;
 
       } catch (error) {
         console.error("Erreur upload:", error);
