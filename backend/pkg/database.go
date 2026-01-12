@@ -112,14 +112,18 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 		// 1.1 Fetch Files
 		if path == "/" {
 			err = db.NewSelect().Model(&filesPlain).
-				Where("user_id = ?", userID).
-				Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
+				Relation("Preview").
+				Where("?TableAlias.user_id = ?", userID).
+				Where("?TableAlias.is_preview = ?", false).
+				Where("?TableAlias.path LIKE '/%' AND ?TableAlias.path NOT LIKE '%/%/%'").
 				Scan(ctx)
 		} else {
 			searchPrefix := path + "/"
 			err = db.NewSelect().Model(&filesPlain).
-				Where("user_id = ?", userID).
-				Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
+				Relation("Preview").
+				Where("?TableAlias.user_id = ?", userID).
+				Where("?TableAlias.is_preview = ?", false).
+				Where("?TableAlias.path LIKE ? AND ?TableAlias.path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
 				Scan(ctx)
 		}
 

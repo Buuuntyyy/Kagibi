@@ -38,12 +38,15 @@ type Friendship struct {
 type File struct {
 	ID           int64     `bun:"id,pk,autoincrement"`
 	Name         string    `bun:"name,notnull"`
-	Path         string    `bun:"path,notnull"`      // Chemin relatif (ex: "/dossier1/fichier.txt")
-	Size         int64     `bun:"size,notnull"`      // Taille en octets
-	MimeType     string    `bun:"mime_type,notnull"` // Ex: "application/pdf"
-	UserID       string    `bun:"user_id,notnull"`   // Propriétaire du fichier
-	EncryptedKey string    `bun:"encrypted_key"`     // Clé du fichier chiffrée avec la MasterKey (pour les nouveaux fichiers)
-	Tags         []string  `bun:"tags,array"`        // Tags
+	Path         string    `bun:"path,notnull"`                                     // Chemin relatif (ex: "/dossier1/fichier.txt")
+	Size         int64     `bun:"size,notnull"`                                     // Taille en octets
+	MimeType     string    `bun:"mime_type,notnull"`                                // Ex: "application/pdf"
+	UserID       string    `bun:"user_id,notnull"`                                  // Propriétaire du fichier
+	EncryptedKey string    `bun:"encrypted_key"`                                    // Clé du fichier chiffrée avec la MasterKey (pour les nouveaux fichiers)
+	Tags         []string  `bun:"tags,array"`                                       // Tags
+	PreviewID    *int64    `bun:"preview_id" json:"preview_id"`                     // ID du fichier de prévisualisation (miniature/compressé)
+	Preview      *File     `bun:"rel:belongs-to,join:preview_id=id" json:"preview"` // Metadata du fichier preview
+	IsPreview    bool      `bun:"is_preview,default:false" json:"is_preview"`       // Indique si c'est un fichier de prévisualisation (masqué par défaut)
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt    time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 }
