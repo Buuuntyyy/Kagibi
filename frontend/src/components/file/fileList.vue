@@ -87,6 +87,9 @@
     v-if="contextMenu.visible"
     :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }">
       <template v-if="contextMenu.item">
+        <div class="menu-item" @click="handleContextAction('preview')" v-if="contextMenu.item.type === 'file'">
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></span> Aperçu
+        </div>
         <div class="menu-item" @click="handleContextAction('download')" v-if="contextMenu.item.type === 'file'">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg></span> Télécharger
         </div>
@@ -157,6 +160,15 @@
       @confirm="confirmDelete"
       @cancel="closeDeleteDialog"
     />
+    <FilePreview
+      :visible="fileStore.preview.show"
+      :fileUrl="fileStore.preview.url"
+      :fileName="fileStore.preview.name"
+      :mimeType="fileStore.preview.type"
+      :loading="fileStore.preview.loading"
+      :status="fileStore.preview.status"
+      @close="fileStore.preview.show = false"
+    />
   </div>
 </template>
 
@@ -175,6 +187,7 @@ import api from '../../api'
 import MoveDialog from '../MoveDialog.vue';
 import ManageShareDialog from '../ManageShareDialog.vue';
 import DeleteConfirmDialog from '../DeleteConfirmDialog.vue';
+import FilePreview from './FilePreview.vue';
 import FileTable from './FileTable.vue';
 
 const router = useRouter()
@@ -550,7 +563,12 @@ const handleContextAction = (action) => {
   switch (action){
     case 'download':
       if (item.type === 'file') {
-        fileStore.downloadFile(item.ID, item.Name, item.MimeType)
+        fileStore.downloadFile(item.ID, item.Name, item.MimeType, false) // Force download
+      }
+      break
+    case 'preview':
+      if (item.type === 'file') {
+        fileStore.downloadFile(item.ID, item.Name, item.MimeType, true) // Force preview
       }
       break
     case 'rename':
@@ -754,7 +772,19 @@ const updateTags = async () => {
 
 const downloadFile = (file) => {
   fileStore.addToHistory({ ...file, type: 'file' });
-  fileStore.downloadFile(file.ID, file.Name, file.MimeType);
+  
+  const previewTypes = [
+    'application/pdf', 
+    'image/jpeg', 
+    'image/png', 
+    'image/gif', 
+    'image/webp',
+    'text/plain',
+    'application/json'
+  ];
+  
+  const isPreviewable = previewTypes.includes(file.MimeType);
+  fileStore.downloadFile(file.ID, file.Name, file.MimeType, isPreviewable);
 }
 
 const triggerFileInput = () => {

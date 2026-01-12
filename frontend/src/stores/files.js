@@ -18,6 +18,17 @@ export const useFileStore = defineStore('files', {
     uploadProgress: 0,
     isUploading: false,
     uploadingFileName: '',
+    
+    // Preview State
+    preview: {
+      show: false,
+      url: null,
+      type: null,
+      name: null,
+      loading: false,
+      status: ''
+    },
+
     searchQuery: '',
     shareUpdateTrigger: 0,
     recentFolders: JSON.parse(localStorage.getItem('recentFolders')) || [],
@@ -231,12 +242,36 @@ export const useFileStore = defineStore('files', {
         const newPath = '/' + parts.join('/')
         this.fetchItems(newPath)
     },
-    async downloadFile(fileId, fileName, mimeType='application/octet-stream') {
+    async downloadFile(fileId, fileName, mimeType='application/octet-stream', preview = false) {
       const authStore = useAuthStore();
       
+      // Attempt to correct MIME type based on extension if generic
+      if ((!mimeType || mimeType === 'application/octet-stream') && fileName) {
+          const ext = fileName.split('.').pop().toLowerCase();
+          if (ext === 'pdf') mimeType = 'application/pdf';
+          else if (['jpg', 'jpeg'].includes(ext)) mimeType = 'image/jpeg';
+          else if (ext === 'png') mimeType = 'image/png';
+          else if (ext === 'gif') mimeType = 'image/gif';
+          else if (ext === 'webp') mimeType = 'image/webp';
+          else if (ext === 'txt') mimeType = 'text/plain';
+      }
+
+      // Reset preview state if starting a new preview
+      if (preview) {
+        this.preview = { 
+            show: true, 
+            url: null, 
+            type: mimeType, 
+            name: fileName,
+            loading: true,
+            status: 'Initialisation...'
+        };
+      }
+
       // SHARED MODE DOWNLOAD
       if (this.viewMode === 'shared') {
           await sodium.ready;
+          if (preview) this.preview.status = 'Récupération de la clé...';
           const file = this.files.find(f => f.ID === fileId);
           if (!file || !this.sharedKey) return;
           
@@ -261,25 +296,39 @@ export const useFileStore = defineStore('files', {
              const fileKeyCrypto = await window.crypto.subtle.importKey("raw", fileKeyRaw, "AES-GCM", true, ["decrypt"]);
              
              // Download content
+             if (preview) this.preview.status = 'Téléchargement du fichier chiffré...';
              const response = await api.get(`/files/download/${fileId}`, { responseType: 'blob' });
              
              // Decrypt content
+             if (preview) this.preview.status = 'Déchiffrement (Client-Side)...';
              const encryptedFileBytes = await response.data.arrayBuffer();
              const encryptedBlob = new Blob([encryptedFileBytes]);
              const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, mimeType);
              
-             // Save
+             // Save or Preview
              const url = window.URL.createObjectURL(decryptedBlob);
-             const a = document.createElement('a');
-             a.href = url;
-             a.download = fileName;
-             document.body.appendChild(a);
-             a.click();
-             window.URL.revokeObjectURL(url);
-             document.body.removeChild(a);
+             if (preview) {
+                 this.preview = {
+                    show: true,
+                    url: url,
+                    type: mimeType,
+                    name: fileName,
+                    loading: false, // Done
+                    status: ''
+                 };
+             } else {
+                 const a = document.createElement('a');
+                 a.href = url;
+                 a.download = fileName;
+                 document.body.appendChild(a);
+                 a.click();
+                 window.URL.revokeObjectURL(url);
+                 document.body.removeChild(a);
+             }
           } catch (e) {
               console.error("Shared download error", e);
               alert("Erreur téléchargement partagé: " + e.message);
+              if (preview) this.preview.show = false;
           }
           return;
       }
@@ -292,34 +341,51 @@ export const useFileStore = defineStore('files', {
 
       if (file && file.EncryptedKey) {
           // Decrypt the file key
+          if (preview) this.preview.status = 'Préparation de la clé...';
           try {
               fileKey = await unwrapMasterKey(file.EncryptedKey, authStore.masterKey);
           } catch (e) {
               console.error("Failed to decrypt file key", e);
               alert("Erreur de déchiffrement de la clé du fichier.");
+              if (preview) this.preview.show = false;
               return;
           }
       }
 
       try {
         // 1. Télécharger le blob chiffré
+        if (preview) this.preview.status = 'Téléchargement du contenu chiffré...';
         const response = await api.get(`/files/download/${fileId}`, { responseType: 'blob' });
         
         // 2. Déchiffrer via Worker
+        if (preview) this.preview.status = 'Déchiffrement local...';
         const decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, mimeType);
 
-        // 3. Sauvegarder
+        // 3. Sauvegarder ou Prévisualiser
         const url = window.URL.createObjectURL(decryptedBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', fileName);
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => { link.remove(); window.URL.revokeObjectURL(url); }, 100);
+        
+        if (preview) {
+             this.preview = {
+                show: true,
+                url: url,
+                type: mimeType,
+                name: fileName,
+                loading: false,
+                status: ''
+             };
+        } else {
+             const link = document.createElement('a');
+             link.href = url;
+             link.setAttribute('download', fileName);
+             document.body.appendChild(link);
+             link.click();
+             setTimeout(() => { link.remove(); window.URL.revokeObjectURL(url); }, 100);
+        }
 
       } catch (error) {
         console.error("Erreur download:", error);
         alert("Erreur lors du téléchargement.");
+        if (preview) this.preview.show = false;
       }
     },
     async uploadFile(file) {
