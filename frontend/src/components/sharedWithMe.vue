@@ -70,7 +70,7 @@
 
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import FileTable from './file/FileTable.vue';
 import { formatSize, formatDate } from '../utils/format';
 import api from '../api';
@@ -83,6 +83,7 @@ import sodium from 'libsodium-wrappers-sumo';
 const fileStore = useFileStore();
 const authStore = useAuthStore();
 const router = useRouter();
+const route = useRoute();
 const items = ref([]);
 const loading = ref(false);
 const error = ref(null);
@@ -160,6 +161,16 @@ const fetchSharedWithMe = async () => {
         Name: share.name,
         ID: share.file_id || share.folder_id
     }));
+
+    // Auto-open folder if requested via query param
+    const targetFolderId = route.query.folderId;
+    if (targetFolderId && !currentFolder.value) {
+        const target = items.value.find(i => i.resource_id === targetFolderId && i.type === 'folder');
+        if (target) {
+            handleOpenFolder(target);
+        }
+    }
+
   } catch (err) {
     console.error("Error fetching shared with me:", err);
     error.value = "Impossible de charger les fichiers partagés avec vous.";

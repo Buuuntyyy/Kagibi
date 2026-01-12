@@ -34,7 +34,7 @@ const login = async () => {
   try {
     const success = await authStore.login({email: email.value, password: password.value})
     if (success) {
-      router.push({ name: 'Dashboard' })
+      router.push({ name: 'Home' })
     } else {
       error.value = 'Identifiants invalides'
     }

@@ -72,7 +72,7 @@ const finishRegistration = async () => {
     // Après une inscription réussie, connecter automatiquement l'utilisateur
     const loginSuccess = await authStore.login({email: email.value, password: password.value})
     if (loginSuccess) {
-      router.push({ name: 'Dashboard' })
+      router.push({ name: 'Home' })
     } else {
       error.value = 'Erreur lors de la connexion automatique après inscription.'
     }
