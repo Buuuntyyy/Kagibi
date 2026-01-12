@@ -9,6 +9,7 @@ import PublicBrowse from '../views/PublicBrowse.vue'
 import TermsOfService from '../views/TermsOfService.vue'
 import PrivacyPolicy from '../views/PrivacyPolicy.vue'
 import FriendsView from '../views/FriendsView.vue'
+import HomeView from '../views/HomeView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -34,7 +35,16 @@ const routes = [
     children: [
       {
         path: '',
-        name: 'Dashboard',
+        redirect: '/dashboard/home'
+      },
+      {
+        path: 'home',
+        name: 'Home',
+        component: HomeView
+      },
+      {
+        path: 'files',
+        name: 'MyFiles',
         component: FileBrowser
       },
       {
@@ -67,7 +77,7 @@ const routes = [
   },
   {
     path: '/',
-    redirect: '/dashboard',
+    redirect: '/dashboard/home',
   },
 ]
 
@@ -90,7 +100,7 @@ router.beforeEach(async (to, from, next) => {
   if (to.meta.requiresAuth && !isAuthenticated) {
     next('/login')
   } else if (to.name === 'Login' && isAuthenticated) {
-    next('/dashboard')
+    next('/dashboard/home')
   } else {
     next()
   }

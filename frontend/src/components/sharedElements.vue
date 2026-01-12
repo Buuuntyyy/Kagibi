@@ -90,12 +90,14 @@
 
 <script setup>
 import { ref, onMounted, computed, reactive, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import api from '../api';
 import FileTable from './file/FileTable.vue';
 import SharedWithMe from './sharedWithMe.vue';
 import { usePreferencesStore } from '../stores/preferences';
 import { useFileStore } from '../stores/files';
 
+const route = useRoute();
 const preferenceStore = usePreferencesStore();
 const fileStore = useFileStore();
 const shares = ref([]);
@@ -106,6 +108,15 @@ const sections = reactive({
   'my-shares': true,
   'shared-with-me': false
 });
+
+// Auto-open section if query param is present
+const checkQueryAndOpenSection = () => {
+  if (route.query.folderId || route.query.section === 'shared-with-me') {
+    sections['my-shares'] = false;
+    sections['shared-with-me'] = true;
+  }
+};
+
 
 // Watch for file store updates (triggered via WebSocket)
 watch(() => fileStore.shareUpdateTrigger, () => {
@@ -198,6 +209,7 @@ const isExpired = (dateString) => {
 };
 
 onMounted(() => {
+  checkQueryAndOpenSection();
   fetchShares();
 });
 </script>

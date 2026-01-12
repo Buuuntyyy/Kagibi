@@ -1,12 +1,12 @@
 package shares
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"safercloud/backend/pkg"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -14,6 +14,8 @@ import (
 
 // GetSharedFolderContentHandler lists files and subfolders within a shared folder
 func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
+	startTotal := time.Now()
+
 	userIDInterface, _ := c.Get("user_id")
 	userID := userIDInterface.(string)
 
@@ -33,6 +35,7 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	// 2. Verify Access
+	startAuth := time.Now()
 	// Access is granted if:
 	// A) The folder is directly shared with the user
 	// B) The folder is a subfolder of a folder shared with the user
@@ -51,57 +54,39 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 
 	if hasDirectShare {
 		// Use the direct share key
-		// We need to fetch it to get the permission maybe?
-		// For now assume read access.
+		_ = db.NewSelect().Model(&effectiveShare).
+			Where("folder_id = ? AND shared_with_user_id = ?", targetFolderID, userID).
+			Scan(c.Request.Context())
 	} else {
 		// Check recursive share via Path
-		// Find all folder shares for this user
-		var shares []pkg.FolderShare
-		err := db.NewSelect().Model(&shares).
+		// Optimization: Fetch all folder shares AND their associated Folder definitions in one query.
+		type FolderShareWithFolder struct {
+			pkg.FolderShare
+			Folder *pkg.Folder `bun:"rel:belongs-to,join:folder_id=id"`
+		}
+
+		var sharesWithFolders []FolderShareWithFolder
+		err := db.NewSelect().
+			Model(&sharesWithFolders).
+			Relation("Folder").
 			Where("shared_with_user_id = ?", userID).
 			Scan(c.Request.Context())
 
 		if err == nil {
-			for _, s := range shares {
-				var sharedFolder pkg.Folder
-				if err := db.NewSelect().Model(&sharedFolder).Where("id = ?", s.FolderID).Scan(c.Request.Context()); err == nil {
-					// Check if targetFolder is inside sharedFolder
-					// Logic: targetPath must start with sharedPath + "/"
-					if strings.HasPrefix(targetFolder.Path, sharedFolder.Path+"/") {
-						isAuthorized = true
-						effectiveShare = s
-						// Note: for subfolders, we assume the client already has the Root Folder Key.
-						// The files in subfolders are encrypted with the Root Folder Key?
-						// Wait, let's verify encryption scheme.
-						// Usually each folder might have a key?
-						// OR all files in the hierarchy share the "Root Folder Key" via FolderFileKey table?
-
-						// Check pkg/models.go: FolderFileKey has (FolderID, FileID).
-						// "FolderID" here refers to the *Shared Folder ID* or the *Parent ID*?
-						// "FolderFileKey: FileKey encrypted with FolderKey"
-						// If I share folder A (id=1). File A/B.txt (id=2).
-						// FolderFileKey (FolderID=1, FileID=2).
-
-						// If I have subfolder A/Sub (id=3). File A/Sub/C.txt (id=4).
-						// Is there a FolderFileKey(FolderID=1, FileID=4)?
-						// OR FolderFileKey(FolderID=3, FileID=4)?
-
-						// If it's the latter, then the user needs the key for folder 3.
-						// But how do they get key for folder 3?
-						// "Folders" usually don't have encryption keys themselves (they are just logical grouping).
-						// The "Folder Key" is a concept generated at the moment of sharing.
-						// Usually, one "Share" = one "Symmetric Key" for that share context.
-						// And ALL files inside that tree are encrypted with that Share Key.
-
-						// So we expect FolderFileKey(RootSharedFolderID, FileID).
-						// So we need to find the "Root Shared Folder" that covers this target folder.
-						effectiveShare = s
-						break
-					}
+			for _, s := range sharesWithFolders {
+				if s.Folder == nil {
+					continue
+				}
+				// Check if targetFolder is inside sharedFolder
+				if strings.HasPrefix(targetFolder.Path, s.Folder.Path+"/") {
+					isAuthorized = true
+					effectiveShare = s.FolderShare
+					break
 				}
 			}
 		}
 	}
+	log.Printf("[Perf] Auth Check took %v", time.Since(startAuth))
 
 	if !isAuthorized {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
@@ -109,34 +94,18 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	// 3. List Content
-	// Identical logic to "ListItemsByUser" but filtered by Path and Owner
-	// AND we need to attach the correct EncryptedKey.
-
+	startList := time.Now()
 	ownerID := targetFolder.UserID
 	currentPath := targetFolder.Path
 
-	// Fetch Subfolders
-	// Subfolders are folders where Path is exactly "currentPath + / + name" (no deeper)
-	// Actually we can use the same logic as pkg.ListItemsByUser if we could constrain it.
-	// But let's write a targeted query.
-
 	// Subfolders
 	var subFolders []pkg.Folder
-	// We want folders where:
-	// 1. user_id = ownerID
-	// 2. path LIKE currentPath + "/%"
-	// 3. AND path NOT LIKE currentPath + "/%/%" (direct children only)
-	// PostgreSQL: path ~ '^{currentPath}/[^/]+$'
-
-	safePath := strings.ReplaceAll(currentPath, "'", "''")
-	// Make sure we handle root logic if needed, but here targetFolder is usually not root.
-	// If path is "/test", children are "/test/x". Regex: ^/test/[^/]+$
-
-	regex := fmt.Sprintf("^%s/[^/]+$", safePath)
+	// Optimized: Use LIKE instead of Regex for performance
 
 	err = db.NewSelect().Model(&subFolders).
 		Where("user_id = ?", ownerID).
-		Where("path ~ ?", regex).
+		Where("path LIKE ?", currentPath+"/%").
+		Where("path NOT LIKE ?", currentPath+"/%/%").
 		Scan(c.Request.Context())
 
 	if err != nil {
@@ -147,59 +116,67 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 	var files []pkg.File
 	err = db.NewSelect().Model(&files).
 		Where("user_id = ?", ownerID).
-		Where("path ~ ?", regex).
+		Where("path LIKE ?", currentPath+"/%").
+		Where("path NOT LIKE ?", currentPath+"/%/%").
 		Scan(c.Request.Context())
 
 	if err != nil {
 		log.Printf("Error listing files: %v", err)
 	}
+	log.Printf("[Perf] Content Listing took %v", time.Since(startList))
 
 	// 4. Attach Keys for Files
-	// We need to return the version of EncryptedKey that is usable by the user.
-	// That is the one from FolderFileKey table linked to the "effectiveShare.FolderID".
-
-	// If effectiveShare.FolderID is not set (e.g. logic above was fuzzy), we have a problem.
-	// We assume effectiveShare IS set if authorized.
-
+	startKeys := time.Now()
 	rootSharedFolderID := effectiveShare.FolderID
 	if rootSharedFolderID == 0 && hasDirectShare {
 		rootSharedFolderID = targetFolderID
 	}
 
+	// Optimization: Bulk fetch keys
+	var fileIDs []int64
+	for _, f := range files {
+		fileIDs = append(fileIDs, f.ID)
+	}
+
+	keyMap := make(map[int64]string)
+
+	if len(fileIDs) > 0 {
+		var keys []pkg.FolderFileKey
+		err := db.NewSelect().Model(&keys).
+			Where("folder_id = ?", rootSharedFolderID).
+			Where("file_id IN (?)", bun.In(fileIDs)).
+			Scan(c.Request.Context())
+
+		if err != nil {
+			log.Printf("Error fetching file keys: %v", err)
+		} else {
+			for _, k := range keys {
+				keyMap[k.FileID] = k.EncryptedKey
+			}
+		}
+	}
+
 	type FileWithKey struct {
 		pkg.File
-		EncryptedKey string `json:"encrypted_key"` // Overwrite with correct key
+		EncryptedKey string `json:"encrypted_key"`
 	}
 
 	var filesWithKeys []FileWithKey
 
 	for _, f := range files {
-		// Find key in FolderFileKey
-		var ffk pkg.FolderFileKey
-		err := db.NewSelect().Model(&ffk).
-			Where("folder_id = ? AND file_id = ?", rootSharedFolderID, f.ID).
-			Scan(c.Request.Context())
-
-		key := ""
-		if err == nil {
-			key = ffk.EncryptedKey
-		} else {
-			// This file might have been added AFTER the share was created.
-			// If so, the owner might not have generated a key for it yet in the context of this share.
-			// Or the system ensures keys are created.
-			// For now, leave empty (client will fail to decrypt).
-		}
-
+		key := keyMap[f.ID]
 		filesWithKeys = append(filesWithKeys, FileWithKey{
 			File:         f,
 			EncryptedKey: key,
 		})
 	}
+	log.Printf("[Perf] Key Processing took %v", time.Since(startKeys))
+	log.Printf("[Perf] Total Handler took %v", time.Since(startTotal))
 
 	c.JSON(http.StatusOK, gin.H{
 		"folders":        subFolders,
 		"files":          filesWithKeys,
-		"root_share_id":  effectiveShare.ID, // Might be useful
+		"root_share_id":  effectiveShare.ID,
 		"root_folder_id": rootSharedFolderID,
 	})
 }
