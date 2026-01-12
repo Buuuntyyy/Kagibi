@@ -84,7 +84,13 @@ func DownloadFileFromSharedFolderHandler(c *gin.Context, db *bun.DB) {
 	// Headers
 	c.Header("Content-Description", "File Transfer")
 	c.Header("Content-Transfer-Encoding", "binary")
-	c.Header("Content-Disposition", "attachment; filename=\""+file.Name+"\"")
+
+	disposition := "attachment"
+	if c.Query("inline") == "true" {
+		disposition = "inline"
+	}
+	c.Header("Content-Disposition", disposition+"; filename=\""+file.Name+"\"")
+
 	c.Header("Content-Type", "application/octet-stream")
 	if file.MimeType != "" {
 		c.Header("Content-Type", file.MimeType)
