@@ -88,7 +88,7 @@ export const useAuthStore = defineStore('auth', {
         this.isAuthenticated = true;
 
         await this.fetchUser();
-        router.push({ name: 'Dashboard' });
+        router.push({ name: 'Home' });
         return true
       } catch (error) {
         console.error("Login failed:", error)
@@ -152,7 +152,7 @@ export const useAuthStore = defineStore('auth', {
     },
     async checkAuth() {
       try {
-        const response = await api.get('/users/me');
+        const response = await api.get('/users/me'); 
         this.isAuthenticated = true;
         this.user = response.data;
         

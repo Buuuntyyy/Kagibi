@@ -4,6 +4,7 @@ package pkg
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/uptrace/bun"
 )
@@ -67,6 +68,26 @@ func Migrate(db *bun.DB) error {
 	_, err = db.ExecContext(ctx, `UPDATE "share_links" SET "path" = '' WHERE "path" IS NULL;`)
 	if err != nil {
 		return fmt.Errorf("failed to update existing paths in share_links: %w", err)
+	}
+
+	// --- ADD INDICES FOR PERFORMANCE ---
+
+	// Index for listing files (User + Path)
+	_, err = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_files_user_path ON files (user_id, path);`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_files_user_path: %v", err)
+	}
+
+	// Index for listing folders (User + Path)
+	_, err = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_folders_user_path ON folders (user_id, path);`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_folders_user_path: %v", err)
+	}
+
+	// Index for finding shared folders (SharedWithUserID)
+	_, err = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_folder_shares_user ON folder_shares (shared_with_user_id);`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_folder_shares_user: %v", err)
 	}
 
 	return nil
