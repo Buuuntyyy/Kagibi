@@ -18,6 +18,7 @@ import (
 	"safercloud/backend/pkg/s3storage"
 	"safercloud/backend/pkg/workers"
 	wsPkg "safercloud/backend/pkg/ws"
+	"strings"
 
 	"time"
 
@@ -57,7 +58,19 @@ func main() {
 
 	// Configure et utilise le middleware CORS
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"http://localhost:5173"} // Remplacez par l'URL de votre frontend si nécessaire
+
+	// Définit les origines autorisées via variable d'environnement (pour la prod)
+	// ou par défaut (pour le dev)
+	allowedOriginsEnv := os.Getenv("ALLOWED_ORIGINS")
+	if allowedOriginsEnv != "" {
+		config.AllowOrigins = strings.Split(allowedOriginsEnv, ",")
+	} else {
+		config.AllowOrigins = []string{
+			"http://localhost:5173",
+			"http://localhost:3000",
+		}
+	}
+
 	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
 	config.ExposeHeaders = []string{"Content-Length"}
