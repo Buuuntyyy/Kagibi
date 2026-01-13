@@ -97,6 +97,13 @@ type FolderFileKey struct {
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 }
 
+type FolderFolderKey struct {
+	ParentFolderID int64     `bun:"parent_folder_id,pk"` // The Root Shared Folder
+	SubFolderID    int64     `bun:"sub_folder_id,pk"`    // The Subfolder
+	EncryptedKey   string    `bun:"encrypted_key,notnull"` // SubfolderKey encrypted with ParentFolderKey
+	CreatedAt      time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+}
+
 type ShareFileKey struct {
 	ShareID      int64  `bun:"share_id,pk"`
 	FileID       int64  `bun:"file_id,pk"`
