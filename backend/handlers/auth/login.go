@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
+	"os"
 	"safercloud/backend/pkg"
 	"time"
 
@@ -49,7 +50,12 @@ func LoginHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 		return
 	}
 
-	c.SetCookie("session_id", sessionID, 3600*24, "/", "localhost", true, true)
+	domain := os.Getenv("COOKIE_DOMAIN")
+	if domain == "" {
+		domain = "localhost"
+	}
+
+	c.SetCookie("session_id", sessionID, 3600*24, "/", domain, true, true)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Connexion réussie",
