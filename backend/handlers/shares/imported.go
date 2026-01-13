@@ -1,10 +1,10 @@
 package shares
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
-	"fmt"
 
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/ws"
@@ -41,9 +41,9 @@ func ListImportedSharesHandler(c *gin.Context, db *bun.DB) {
 		SharedAt     time.Time `json:"shared_at"`
 		Size         int64     `json:"size"`
 		Link         string    `json:"link,omitempty"`
-		FileID       int64     `json:"file_id,omitempty"`       // IMPORTANT: For Direct File Share
-		FolderID     int64     `json:"folder_id,omitempty"`     // IMPORTANT: For Direct Folder Share
-		EncryptedKey string    `json:"encrypted_key"`           // IMPORTANT: For Direct File Share (Removed omitempty to debug)
+		FileID       int64     `json:"file_id,omitempty"`   // IMPORTANT: For Direct File Share
+		FolderID     int64     `json:"folder_id,omitempty"` // IMPORTANT: For Direct Folder Share
+		EncryptedKey string    `json:"encrypted_key"`       // IMPORTANT: For Direct File Share (Removed omitempty to debug)
 	}
 
 	var response []SharedWithMeResponse
