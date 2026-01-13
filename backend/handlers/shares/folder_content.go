@@ -72,7 +72,10 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 			Where("shared_with_user_id = ?", userID).
 			Scan(c.Request.Context())
 
-		if err == nil {
+		if err != nil {
+			log.Printf("Error fetching Recursive Shares for User %s: %v", userID, err)
+		} else {
+			log.Printf("DEBUG: Found %d shared folders for user %s", len(sharesWithFolders), userID)
 			for _, s := range sharesWithFolders {
 				if s.Folder == nil {
 					continue
@@ -82,12 +85,12 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 				// Example: Shared=/A, Target=/A/B. Target starts with /A/ ? Yes.
 				// Special Case: Root share matches exactly? Handled by Direct Share Check implicitly?
 				// But what if I share /A with user, and user browses /A ? 'hasDirectShare' is true.
-				
+
 				prefix := s.Folder.Path
 				if !strings.HasSuffix(prefix, "/") {
 					prefix += "/"
 				}
-				
+
 				// DEBUG LOG
 				log.Printf("DEBUG: Checking Prefix. Target: '%s', SharedPrefix: '%s'", targetFolder.Path, prefix)
 
