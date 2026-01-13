@@ -349,26 +349,36 @@ func GetFolderContentRecursive(db *bun.DB, userID string, rootPath string) ([]Fi
 	var files []File
 	var folders []Folder
 
-	searchPrefix := rootPath
-	if searchPrefix != "/" {
-		searchPrefix += "/"
-	}
+	// Logic correction: searchPrefix + "%" only matches subdirectories if it ends with /
+	// We want direct children (path = rootPath) AND recursive children (path LIKE rootPath/%)
 
 	// Files
-	err := db.NewSelect().Model(&files).
-		Where("user_id = ?", userID).
-		Where("path LIKE ?", searchPrefix+"%").
-		Scan(ctx)
+	qFiles := db.NewSelect().Model(&files).Where("user_id = ?", userID)
+	if rootPath == "/" {
+		qFiles.Where("path LIKE ?", "/%")
+	} else {
+		// Parenthesis are important for OR
+		qFiles.WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
+			return q.Where("path = ?", rootPath).
+				WhereOr("path LIKE ?", rootPath+"/%")
+		})
+	}
+	err := qFiles.Scan(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Folders (Excluding the root folder itself if it matches the path exactly, although path usually doesn't match subpath like)
-	// Actually we want everything inside.
-	err = db.NewSelect().Model(&folders).
-		Where("user_id = ?", userID).
-		Where("path LIKE ?", searchPrefix+"%").
-		Scan(ctx)
+	// Folders 
+	qFolders := db.NewSelect().Model(&folders).Where("user_id = ?", userID)
+	if rootPath == "/" {
+		qFolders.Where("path LIKE ?", "/%")
+	} else {
+		qFolders.WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
+			return q.Where("path = ?", rootPath).
+				WhereOr("path LIKE ?", rootPath+"/%")
+		})
+	}
+	err = qFolders.Scan(ctx)
 
 	return files, folders, err
 }
