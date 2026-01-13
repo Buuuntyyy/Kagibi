@@ -62,6 +62,13 @@ export const useFriendStore = defineStore('friends', {
       } catch (err) {
         console.error(err)
       }
+    },
+
+    updatePresence(payload) {
+        const friend = this.friends.find(f => f.id === payload.user_id || f.user_id === payload.user_id);
+        if (friend) {
+            friend.online = payload.online;
+        }
     }
   }
 })

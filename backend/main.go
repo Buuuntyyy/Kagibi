@@ -206,7 +206,7 @@ func main() {
 	}
 
 	// Route WebSocket (Racine)
-	router.GET("/ws", func(c *gin.Context) { ws.ConnectHandler(c, wsManager, redisClient) })
+	router.GET("/ws", func(c *gin.Context) { ws.ConnectHandler(c, wsManager, redisClient, db) })
 
 	// Route de debug
 	router.GET("/api/v1/ping", func(c *gin.Context) {

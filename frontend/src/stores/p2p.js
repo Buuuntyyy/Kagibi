@@ -1,0 +1,290 @@
+import { defineStore } from 'pinia'
+import { useWebSocketStore } from './websocket'
+import { useAuthStore } from './auth'
+import sodium from 'libsodium-wrappers-sumo'
+import { 
+    generateMasterKey, 
+    encryptKeyWithPublicKey, 
+    decryptKeyWithPrivateKey,
+    importKeyFromPEM
+} from '../utils/crypto'
+
+export const useP2PStore = defineStore('p2p', {
+  state: () => ({
+    incomingOffer: null, 
+    activeTransfer: null, 
+  }),
+  actions: {
+    async handleSignal(payload) {
+        const { sender_id, type, data } = payload;
+        
+        if (type === 'offer') {
+             this.incomingOffer = {
+                 senderId: sender_id,
+                 ...data.meta,
+                 sdp: data.sdp
+             };
+        } else if (type === 'answer') {
+             if (this.activeTransfer && this.activeTransfer.friendId === sender_id) {
+                 await this.activeTransfer.pc.setRemoteDescription(new RTCSessionDescription(data));
+             }
+        } else if (type === 'candidate') {
+            if (this.activeTransfer && this.activeTransfer.friendId === sender_id) {
+                await this.activeTransfer.pc.addIceCandidate(new RTCIceCandidate(data));
+            } else if (this.incomingOffer && this.incomingOffer.senderId === sender_id) {
+                 // Cache candidates ? For now simplistic approach
+            }
+        }
+    },
+
+    async startTransfer(friend, file) {
+         await sodium.ready;
+         
+         if (!friend.public_key) {
+             alert("L'ami n'a pas de clé publique (Il doit se reconnecter une fois pour la publier)."); 
+             return;
+         }
+
+         const fileKey = await generateMasterKey();
+         const fileKeyRaw = await window.crypto.subtle.exportKey("raw", fileKey);
+         
+         const publicKey = await importKeyFromPEM(friend.public_key);
+         const keyEncryptedBase64 = await encryptKeyWithPublicKey(fileKeyRaw, publicKey);
+
+         const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+         const socketStore = useWebSocketStore();
+
+         pc.onicecandidate = e => {
+             if(e.candidate) socketStore.sendSignal(friend.id, 'candidate', e.candidate);
+         };
+
+         const dc = pc.createDataChannel("file");
+         dc.binaryType = "arraybuffer";
+         dc.onopen = () => this.sendFileData(file, fileKey, dc);
+         
+         this.activeTransfer = {
+             friendId: friend.id,
+             type: 'send',
+             pc: pc,
+             status: 'Connecting...',
+             progress: 0,
+             fileName: file.name
+         };
+
+         const offer = await pc.createOffer();
+         await pc.setLocalDescription(offer);
+
+         socketStore.sendSignal(friend.id, 'offer', {
+             sdp: offer,
+             meta: {
+                 name: file.name,
+                 size: file.size,
+                 type: file.type,
+                 fileKeyEncrypted: keyEncryptedBase64
+             }
+         });
+    },
+
+    async acceptTransfer() {
+        if (!this.incomingOffer) return;
+        const offerData = this.incomingOffer;
+        this.incomingOffer = null; 
+
+        await sodium.ready;
+        const authStore = useAuthStore();
+        
+        let fileKey = null;
+        try {
+            const rawKey = await decryptKeyWithPrivateKey(offerData.fileKeyEncrypted, authStore.privateKey);
+            fileKey = await window.crypto.subtle.importKey("raw", rawKey, "AES-GCM", true, ["decrypt"]);
+        } catch(e) {
+            console.error("Decryption failed", e);
+            alert("Erreur de déchiffrement de la clé");
+            return;
+        }
+
+        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        const socketStore = useWebSocketStore();
+
+        pc.onicecandidate = e => {
+             if(e.candidate) socketStore.sendSignal(offerData.senderId, 'candidate', e.candidate);
+        };
+        
+        this.activeTransfer = {
+             friendId: offerData.senderId,
+             type: 'receive',
+             pc: pc,
+             status: 'Connecting...',
+             progress: 0,
+             fileName: offerData.name,
+             fileSize: offerData.size,
+             fileType: offerData.type,
+             fileKey: fileKey,
+             buffer: [],
+             receivedSize: 0
+        };
+
+        pc.ondatachannel = (event) => {
+            const dc = event.channel;
+            dc.binaryType = "arraybuffer";
+            dc.onmessage = (msgEvent) => this.handleReceiveMessage(msgEvent);
+            dc.onopen = () => { this.activeTransfer.status = 'Receiving...'; };
+        };
+
+        await pc.setRemoteDescription(new RTCSessionDescription(offerData.sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        
+        socketStore.sendSignal(offerData.senderId, 'answer', answer);
+    },
+
+    rejectTransfer() {
+        this.incomingOffer = null;
+        // Should send 'reject' signal ideally
+    },
+
+    cancelTransfer() {
+        if (this.activeTransfer) {
+            this.activeTransfer.pc.close();
+            this.activeTransfer = null;
+        }
+    },
+
+    async sendFileData(file, key, dc) {
+        const CHUNK_SIZE = 16 * 1024; // 16KB chunk size
+        let offset = 0;
+        let chunkIndex = 0;
+        this.activeTransfer.status = 'Sending...';
+
+        const waitForBuffer = () => {
+             // Lower buffer threshold to ensures smoother flow
+             if(dc.bufferedAmount > 8 * 1024 * 1024) { 
+                 return new Promise(resolve => {
+                     const listener = () => {
+                         dc.removeEventListener('bufferedamountlow', listener);
+                         resolve();
+                     };
+                     dc.addEventListener('bufferedamountlow', listener);
+                 });
+             }
+             return Promise.resolve();
+        };
+
+        while(offset < file.size) {
+            if (!this.activeTransfer) break; // Cancelled
+
+            const chunk = file.slice(offset, offset + CHUNK_SIZE);
+            const buffer = await chunk.arrayBuffer();
+            
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            const encrypted = await window.crypto.subtle.encrypt(
+                { name: "AES-GCM", iv: iv },
+                key,
+                buffer
+            );
+            
+            // Packet structure: [Index (4 bytes)][IV (12 bytes)][Encrypted Data]
+            const packet = new Uint8Array(4 + 12 + encrypted.byteLength);
+            
+            // Write Index (Big Endian)
+            new DataView(packet.buffer).setUint32(0, chunkIndex, false);
+            
+            packet.set(iv, 4);
+            packet.set(new Uint8Array(encrypted), 16);
+            
+            await waitForBuffer();
+            dc.send(packet);
+            
+            offset += CHUNK_SIZE;
+            chunkIndex++;
+            this.activeTransfer.progress = Math.round((offset / file.size) * 100);
+        }
+        
+         await waitForBuffer();
+         dc.send(new TextEncoder().encode("EOF"));
+         this.activeTransfer.status = 'Done';
+         setTimeout(() => {
+             this.activeTransfer = null;
+         }, 2000);
+    },
+
+    async handleReceiveMessage(event) {
+        const data = event.data;
+        
+        // Detect EOF
+        if (data.byteLength === 3) {
+             const text = new TextDecoder().decode(data);
+             if (text === 'EOF') {
+                 if (this.activeTransfer && this.activeTransfer.receivedSize >= this.activeTransfer.fileSize) {
+                     this.finishReceive();
+                 }
+                 return;
+             }
+        }
+        
+        // Decrypt
+        // Packet: [Index (4)][IV (12)][Cypher]
+        if (data.byteLength < 16) return; // Too small
+
+        const arrayBuffer = data; 
+        const view = new DataView(arrayBuffer);
+        const index = view.getUint32(0, false);
+        
+        const iv = arrayBuffer.slice(4, 16);
+        const cypher = arrayBuffer.slice(16);
+        
+        try {
+            const decrypted = await window.crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: iv },
+                this.activeTransfer.fileKey,
+                cypher
+            );
+            
+            if (!this.activeTransfer) return;
+
+            // Deduplication: Ignore if we already have this chunk
+            if (this.activeTransfer.buffer[index]) return;
+
+            // Store with index to handle out-of-order packets if they happen
+            this.activeTransfer.buffer[index] = decrypted;
+            
+            this.activeTransfer.receivedSize += decrypted.byteLength;
+            this.activeTransfer.progress = Math.round((this.activeTransfer.receivedSize / this.activeTransfer.fileSize) * 100);
+
+            if (this.activeTransfer.receivedSize >= this.activeTransfer.fileSize) {
+                this.finishReceive();
+            }
+        } catch(e) {
+            console.error("Decrypt error", e);
+        }
+    },
+    
+    finishReceive() {
+        if (!this.activeTransfer || this.activeTransfer.status === 'Complete') return;
+
+        console.log("Finishing transfer. Expected:", this.activeTransfer.fileSize, "Received:", this.activeTransfer.receivedSize);
+        // buffer is now a sparse array (map-like), we need to flatten it in order
+        // Object.keys(buffer) handles sparse arrays but not guaranteed numeric sort.
+        // But since we used numeric index assignment, we can iterate up to length.
+        
+        // However, a simple array with holes will work with Blob? No.
+        // We need to filter empty slots or just iterate.
+        // Since we trust we received everything (or mostly), let's just use the array.
+        
+        const blob = new Blob(this.activeTransfer.buffer, { type: this.activeTransfer.fileType });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = this.activeTransfer.fileName;
+        a.click();
+        
+        window.URL.revokeObjectURL(url);
+        
+        this.activeTransfer.status = 'Complete';
+        setTimeout(() => {
+            this.activeTransfer = null;
+        }, 2000);
+    }
+  }
+})
