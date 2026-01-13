@@ -88,6 +88,9 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 					prefix += "/"
 				}
 				
+				// DEBUG LOG
+				log.Printf("DEBUG: Checking Prefix. Target: '%s', SharedPrefix: '%s'", targetFolder.Path, prefix)
+
 				if strings.HasPrefix(targetFolder.Path, prefix) {
 					isAuthorized = true
 					effectiveShare = s.FolderShare
@@ -99,7 +102,7 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 	log.Printf("[Perf] Auth Check took %v", time.Since(startAuth))
 
 	if !isAuthorized {
-		log.Printf("Access Denied to FolderID %d for UserID %s. DirectShared: %v", targetFolderID, userID, hasDirectShare)
+		log.Printf("Access Denied (v2 Check) to FolderID %d for UserID %s. DirectShared: %v", targetFolderID, userID, hasDirectShare)
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
 	}
