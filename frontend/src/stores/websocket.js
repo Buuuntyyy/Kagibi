@@ -16,9 +16,16 @@ export const useWebSocketStore = defineStore('websocket', {
         return;
       }
 
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = 'localhost:8080'; // En prod, utiliser window.location.host ou une variable d'env
-      const url = `${protocol}//${host}/ws`;
+      let url;
+      // 1. Priorité : Variable d'environnement explicite pour le WebSocket
+      if (import.meta.env.VITE_WS_URL) {
+          url = import.meta.env.VITE_WS_URL;
+      } else {
+          // 2. Fallback Dev : Localhost
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          const host = 'localhost:8080'; 
+          url = `${protocol}//${host}/ws`;
+      }
 
       console.log(`Connecting to WebSocket at ${url}...`);
       
