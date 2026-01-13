@@ -23,26 +23,50 @@ export const useP2PStore = defineStore('p2p', {
              this.incomingOffer = {
                  senderId: sender_id,
                  ...data.meta,
-                 sdp: data.sdp
+                 sdp: data.sdp,
+                 transferId: data.transferId // New unique ID
              };
              // Clear queue for new offer
              this.candidateQueue = []; 
         } else if (type === 'answer') {
              if (this.activeTransfer && this.activeTransfer.friendId === sender_id) {
-                 await this.activeTransfer.pc.setRemoteDescription(new RTCSessionDescription(data));
+                 // Check transfer ID
+                 if (data.transferId && this.activeTransfer.transferId && data.transferId !== this.activeTransfer.transferId) {
+                      console.warn("Ignoring answer for old transfer session");
+                      return;
+                 }
+                 
+                 const sdpInit = data.transferId ? data.sdp : data;
+                 await this.activeTransfer.pc.setRemoteDescription(new RTCSessionDescription(sdpInit));
              }
         } else if (type === 'candidate') {
+            // Check if candidate belongs to the current session (Transfer ID Check)
+            const candidateTransferId = data.transferId;
+            const candidatePayload = candidateTransferId ? data.candidate : data;
+
             if (this.activeTransfer && this.activeTransfer.friendId === sender_id) {
+                // Must match active transfer ID if we have one
+                if (this.activeTransfer.transferId && candidateTransferId && this.activeTransfer.transferId !== candidateTransferId) {
+                    console.warn("Ignoring candidate for old transfer session", candidateTransferId);
+                    return;
+                }
+                
                 // Active connection, add immediately
                 try {
-                    await this.activeTransfer.pc.addIceCandidate(new RTCIceCandidate(data));
+                    await this.activeTransfer.pc.addIceCandidate(new RTCIceCandidate(candidatePayload));
                 } catch(e) {
                     console.error("Error adding candidate", e);
                 }
             } else if (this.incomingOffer && this.incomingOffer.senderId === sender_id) {
+                 // Check against incoming offer ID
+                 if (this.incomingOffer.transferId && candidateTransferId && this.incomingOffer.transferId !== candidateTransferId) {
+                      console.warn("Ignoring queued candidate for mismatched session");
+                      return;
+                 }
+
                  // Pending offer, queue candidate
                  console.log("Queuing candidate for pending offer");
-                 this.candidateQueue.push(data);
+                 this.candidateQueue.push(candidatePayload);
             }
         }
     },
@@ -63,9 +87,17 @@ export const useP2PStore = defineStore('p2p', {
 
          const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
          const socketStore = useWebSocketStore();
+         
+         // Generate unique transfer ID (Polyfill for older browsers)
+         const transferId = (crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
 
          pc.onicecandidate = e => {
-             if(e.candidate) socketStore.sendSignal(friend.id, 'candidate', e.candidate);
+             if(e.candidate) {
+                 socketStore.sendSignal(friend.id, 'candidate', {
+                     candidate: e.candidate,
+                     transferId: transferId
+                 });
+             }
          };
 
          const dc = pc.createDataChannel("file");
@@ -78,7 +110,8 @@ export const useP2PStore = defineStore('p2p', {
              pc: pc,
              status: 'Connecting...',
              progress: 0,
-             fileName: file.name
+             fileName: file.name,
+             transferId: transferId
          };
 
          const offer = await pc.createOffer();
@@ -86,6 +119,7 @@ export const useP2PStore = defineStore('p2p', {
 
          socketStore.sendSignal(friend.id, 'offer', {
              sdp: offer,
+             transferId: transferId,
              meta: {
                  name: file.name,
                  size: file.size,
@@ -98,6 +132,8 @@ export const useP2PStore = defineStore('p2p', {
     async acceptTransfer() {
         if (!this.incomingOffer) return;
         const offerData = this.incomingOffer;
+        // Don't nullify yet, keep ref for transferId check if needed? 
+        // Actually we copy it to activeTransfer.
         this.incomingOffer = null; 
 
         await sodium.ready;
@@ -122,8 +158,18 @@ export const useP2PStore = defineStore('p2p', {
         });
         const socketStore = useWebSocketStore();
 
+        // We don't necessarily need to send transferId back for candidates, but good practice.
+        // Or we assume candidates from receiver belong to the same session implicitly.
+        // Let's attach the same ID.
+        const transferId = offerData.transferId;
+
         pc.onicecandidate = e => {
-             if(e.candidate) socketStore.sendSignal(offerData.senderId, 'candidate', e.candidate);
+             if(e.candidate) {
+                 socketStore.sendSignal(offerData.senderId, 'candidate', {
+                     candidate: e.candidate,
+                     transferId: transferId
+                 });
+             }
         };
         
         this.activeTransfer = {
@@ -137,8 +183,10 @@ export const useP2PStore = defineStore('p2p', {
              fileType: offerData.type,
              fileKey: fileKey,
              buffer: [],
-             receivedSize: 0
+             receivedSize: 0,
+             transferId: transferId
         };
+
 
         pc.ondatachannel = (event) => {
             const dc = event.channel;
@@ -163,7 +211,10 @@ export const useP2PStore = defineStore('p2p', {
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         
-        socketStore.sendSignal(offerData.senderId, 'answer', answer);
+        socketStore.sendSignal(offerData.senderId, 'answer', {
+            sdp: answer,
+            transferId: transferId
+        });
     },
 
     rejectTransfer() {
