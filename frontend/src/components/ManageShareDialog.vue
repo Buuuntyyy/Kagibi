@@ -449,9 +449,12 @@ const shareWithFriend = async (friend) => {
             const itemPath = props.item.Path || props.item.path || '';
             let folderPath = (itemPath === '/' ? '' : itemPath) + '/' + (props.item.Name || props.item.name);
             
-            const listRes = await api.get(`/files/list${folderPath}`);
+            // Fetch ALL content recursively (Files AND Folders)
+            const listRes = await api.get(`/files/list-recursive?path=${encodeURIComponent(folderPath)}`);
             const files = listRes.data.files || [];
+            const subFolders = listRes.data.folders || [];
             
+            // 1. Process Files
             for (const file of files) {
                 const fEncKey = file.EncryptedKey || file.encrypted_key;
                 if (!fEncKey) continue;
@@ -485,18 +488,66 @@ const shareWithFriend = async (friend) => {
                     console.warn(`Failed to process key for file ${file.Name}:`, err);
                 }
             }
-        }
-        
-        await api.post('/shares/direct', {
-            resource_id: props.item.ID || props.item.id,
-            resource_type: resourceType,
-            friend_id: friend.id,
-            encrypted_key: encryptedKeyForFriend,
-            permission: 'read',
-            folder_file_keys: folderFileKeys
-        });
 
-        sharedStatus.value[friend.id] = true;
+            // 2. Process Subfolders
+            const folderFolderKeys = {};
+            for (const folder of subFolders) {
+                 const fEncKey = folder.EncryptedKey || folder.encrypted_key;
+                 if (!fEncKey) continue;
+
+                 try {
+                     // Decrypt Folder Key (Master -> Folder)
+                     const fKeyEncBytes = sodium.from_base64(fEncKey);
+                     const ivF = fKeyEncBytes.slice(0, 12);
+                     const dataF = fKeyEncBytes.slice(12);
+                     
+                     const subFolderKeyRaw = await window.crypto.subtle.decrypt(
+                         { name: "AES-GCM", iv: ivF },
+                         authStore.masterKey,
+                         dataF
+                     );
+                     
+                     // Encrypt SubFolder Key with PARENT FOLDER Key
+                     const ivFK = window.crypto.getRandomValues(new Uint8Array(12));
+                     const encFKey = await window.crypto.subtle.encrypt(
+                         { name: "AES-GCM", iv: ivFK },
+                         folderKeyCrypto,
+                         subFolderKeyRaw
+                     );
+                     
+                     const combinedFK = new Uint8Array(ivFK.byteLength + encFKey.byteLength);
+                     combinedFK.set(ivFK);
+                     combinedFK.set(new Uint8Array(encFKey), ivFK.byteLength);
+ 
+                     folderFolderKeys[folder.ID || folder.id] = sodium.to_base64(combinedFK);
+                 } catch(err) {
+                     console.warn(`Failed to process key for folder ${folder.Name}:`, err);
+                 }
+            }
+        
+            await api.post('/shares/direct', {
+                resource_id: props.item.ID || props.item.id,
+                resource_type: resourceType,
+                friend_id: friend.id,
+                encrypted_key: encryptedKeyForFriend,
+                permission: 'read',
+                folder_file_keys: folderFileKeys,
+                folder_folder_keys: folderFolderKeys
+            });
+
+            sharedStatus.value[friend.id] = true;
+
+        } else {
+             // File Share
+             await api.post('/shares/direct', {
+                resource_id: props.item.ID || props.item.id,
+                resource_type: resourceType,
+                friend_id: friend.id,
+                encrypted_key: encryptedKeyForFriend,
+                permission: 'read',
+            });
+            sharedStatus.value[friend.id] = true;
+        }
 
     } catch (e) {
         console.error("Partage échoué:", e);
@@ -505,6 +556,7 @@ const shareWithFriend = async (friend) => {
         sharing.value[friend.id] = false;
     }
 }
+
 
 const close = () => {
   emit('close');

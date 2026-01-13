@@ -19,6 +19,7 @@ type CreateDirectShareRequest struct {
 	EncryptedKey   string           `json:"encrypted_key"` // FileKey (for file) OR FolderKey (for folder), encrypted with friend's PUBLIC key
 	Permission     string           `json:"permission"`
 	FolderFileKeys map[int64]string `json:"folder_file_keys"` // For folders: Map of fileID -> FileKey encrypted with FolderKey
+	FolderFolderKeys map[int64]string `json:"folder_folder_keys"` // For folders: Map of subFolderID -> SubFolderKey encrypted with FolderKey
 }
 
 func CreateDirectShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
@@ -110,6 +111,28 @@ func CreateDirectShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager)
 				// Log but don't fail the whole request? The share is created.
 				// But without keys, it's useless.
 				// Retrying might be needed.
+			}
+		}
+
+		// Insert/Upsert FolderFolderKeys (Recursively shared subfolder keys)
+		if len(req.FolderFolderKeys) > 0 {
+			var folderKeys []pkg.FolderFolderKey
+			for subFolderID, key := range req.FolderFolderKeys {
+				folderKeys = append(folderKeys, pkg.FolderFolderKey{
+					ParentFolderID: req.ResourceID,
+					SubFolderID:    subFolderID,
+					EncryptedKey:   key,
+					CreatedAt:      time.Now(),
+				})
+			}
+
+			_, err := db.NewInsert().Model(&folderKeys).
+				On("CONFLICT (parent_folder_id, sub_folder_id) DO UPDATE").
+				Set("encrypted_key = EXCLUDED.encrypted_key").
+				Exec(c.Request.Context())
+
+			if err != nil {
+				fmt.Printf("Error inserting FolderFolderKeys: %v\n", err)
 			}
 		}
 

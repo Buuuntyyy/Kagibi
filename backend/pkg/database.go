@@ -343,6 +343,36 @@ func GetAllFilesRecursive(db *bun.DB, userID string, rootPath string) ([]File, e
 	return files, err
 }
 
+// GetFolderContentRecursive retrieves all files AND folders in a folder and its subfolders
+func GetFolderContentRecursive(db *bun.DB, userID string, rootPath string) ([]File, []Folder, error) {
+	ctx := context.Background()
+	var files []File
+	var folders []Folder
+
+	searchPrefix := rootPath
+	if searchPrefix != "/" {
+		searchPrefix += "/"
+	}
+
+	// Files
+	err := db.NewSelect().Model(&files).
+		Where("user_id = ?", userID).
+		Where("path LIKE ?", searchPrefix+"%").
+		Scan(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Folders (Excluding the root folder itself if it matches the path exactly, although path usually doesn't match subpath like)
+	// Actually we want everything inside.
+	err = db.NewSelect().Model(&folders).
+		Where("user_id = ?", userID).
+		Where("path LIKE ?", searchPrefix+"%").
+		Scan(ctx)
+
+	return files, folders, err
+}
+
 // supprimer un fichier
 func DeleteFile(db *bun.DB, fileID int64, userID string) error {
 	ctx := context.Background()

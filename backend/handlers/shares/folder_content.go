@@ -125,20 +125,20 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 	}
 	log.Printf("[Perf] Content Listing took %v", time.Since(startList))
 
-	// 4. Attach Keys for Files
+	// 4. Attach Keys for Files AND SUBFOLDERS
 	startKeys := time.Now()
 	rootSharedFolderID := effectiveShare.FolderID
 	if rootSharedFolderID == 0 && hasDirectShare {
 		rootSharedFolderID = targetFolderID
 	}
 
-	// Optimization: Bulk fetch keys
+	// Optimization: Bulk fetch keys for files
 	var fileIDs []int64
 	for _, f := range files {
 		fileIDs = append(fileIDs, f.ID)
 	}
 
-	keyMap := make(map[int64]string)
+	fileKeyMap := make(map[int64]string)
 
 	if len(fileIDs) > 0 {
 		var keys []pkg.FolderFileKey
@@ -151,7 +151,7 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 			log.Printf("Error fetching file keys: %v", err)
 		} else {
 			for _, k := range keys {
-				keyMap[k.FileID] = k.EncryptedKey
+				fileKeyMap[k.FileID] = k.EncryptedKey
 			}
 		}
 	}
@@ -164,17 +164,58 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 	var filesWithKeys []FileWithKey
 
 	for _, f := range files {
-		key := keyMap[f.ID]
+		key := fileKeyMap[f.ID]
 		filesWithKeys = append(filesWithKeys, FileWithKey{
 			File:         f,
 			EncryptedKey: key,
 		})
 	}
+
+	// Optimization: Bulk fetch keys for subfolders
+	var subFolderIDs []int64
+	for _, f := range subFolders {
+		subFolderIDs = append(subFolderIDs, f.ID)
+	}
+
+	folderKeyMap := make(map[int64]string)
+	if len(subFolderIDs) > 0 {
+		var keys []pkg.FolderFolderKey
+		err := db.NewSelect().Model(&keys).
+			Where("parent_folder_id = ?", rootSharedFolderID).
+			Where("sub_folder_id IN (?)", bun.In(subFolderIDs)).
+			Scan(c.Request.Context())
+			
+		if err != nil {
+			log.Printf("Error fetching folder keys: %v", err)
+		} else {
+			for _, k := range keys {
+				folderKeyMap[k.SubFolderID] = k.EncryptedKey
+			}
+		}
+	}
+
+	type FolderWithKey struct {
+		pkg.Folder
+		EncryptedKey string `json:"encrypted_key"`
+	}
+
+	var foldersWithKeys []FolderWithKey
+	for _, f := range subFolders {
+		key := folderKeyMap[f.ID]
+		// Fallback: If no shared key found, and it's a direct share,
+		// maybe the client can try decrypting the original key? 
+		// But usually we need the explicit shared key.
+		foldersWithKeys = append(foldersWithKeys, FolderWithKey{
+			Folder:       f,
+			EncryptedKey: key,
+		})
+	}
+
 	log.Printf("[Perf] Key Processing took %v", time.Since(startKeys))
 	log.Printf("[Perf] Total Handler took %v", time.Since(startTotal))
 
 	c.JSON(http.StatusOK, gin.H{
-		"folders":        subFolders,
+		"folders":        foldersWithKeys,
 		"files":          filesWithKeys,
 		"root_share_id":  effectiveShare.ID,
 		"root_folder_id": rootSharedFolderID,
