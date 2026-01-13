@@ -61,8 +61,9 @@ func (m *Manager) Unregister(userID string, conn *websocket.Conn) {
 type MessageType string
 
 const (
-	MsgStorageUpdate MessageType = "storage_update"
-	MsgFriendUpdate  MessageType = "friend_update"
+	MsgStorageUpdate  MessageType = "storage_update"
+	MsgFriendUpdate   MessageType = "friend_update"
+	MsgPresenceUpdate MessageType = "presence_update"
 )
 
 // Message structure pour les données JSON
