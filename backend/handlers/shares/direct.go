@@ -13,12 +13,12 @@ import (
 )
 
 type CreateDirectShareRequest struct {
-	ResourceID     int64            `json:"resource_id"`   // File or Folder ID
-	ResourceType   string           `json:"resource_type"` // "file" or "folder"
-	FriendID       string           `json:"friend_id"`
-	EncryptedKey   string           `json:"encrypted_key"` // FileKey (for file) OR FolderKey (for folder), encrypted with friend's PUBLIC key
-	Permission     string           `json:"permission"`
-	FolderFileKeys map[int64]string `json:"folder_file_keys"` // For folders: Map of fileID -> FileKey encrypted with FolderKey
+	ResourceID       int64            `json:"resource_id"`   // File or Folder ID
+	ResourceType     string           `json:"resource_type"` // "file" or "folder"
+	FriendID         string           `json:"friend_id"`
+	EncryptedKey     string           `json:"encrypted_key"` // FileKey (for file) OR FolderKey (for folder), encrypted with friend's PUBLIC key
+	Permission       string           `json:"permission"`
+	FolderFileKeys   map[int64]string `json:"folder_file_keys"`   // For folders: Map of fileID -> FileKey encrypted with FolderKey
 	FolderFolderKeys map[int64]string `json:"folder_folder_keys"` // For folders: Map of subFolderID -> SubFolderKey encrypted with FolderKey
 }
 
