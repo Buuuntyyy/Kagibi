@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	
+
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/s3storage"
 
@@ -52,26 +52,28 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 					pkg.FolderShare
 					Folder *pkg.Folder `bun:"rel:belongs-to,join:folder_id=id"`
 				}
-		
+
 				var sharesWithFolders []FolderShareWithFolder
 				errFolderShare := db.NewSelect().
 					Model(&sharesWithFolders).
 					Relation("Folder").
 					Where("shared_with_user_id = ?", userID).
 					Scan(c.Request.Context())
-				
+
 				if errFolderShare == nil {
 					for _, s := range sharesWithFolders {
 						if s.Folder == nil {
 							continue
 						}
-						
+
 						folderPath := s.Folder.Path
 						// Ensure folder path ends with / for prefix check (unless root)
 						if folderPath != "/" && len(folderPath) > 0 && folderPath[len(folderPath)-1] != '/' {
 							folderPath += "/"
 						}
-						if folderPath == "" { folderPath = "/" }
+						if folderPath == "" {
+							folderPath = "/"
+						}
 
 						// Check if tempFile.Path starts with folderPath
 						// Case 1: Subfolder match
@@ -84,7 +86,7 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 
 						if match {
 							// Found a parent shared folder
-							err = nil // Clear error
+							err = nil        // Clear error
 							file = &tempFile // Assign valid pointer
 							log.Printf("Debug: Download allowed via recursive share. File: %s, SharedFolder: %s", tempFile.Path, s.Folder.Path)
 							break
