@@ -13,6 +13,7 @@ export const useP2PStore = defineStore('p2p', {
   state: () => ({
     incomingOffer: null, 
     activeTransfer: null, 
+    candidateQueue: [] // Store candidates that arrive before acceptance
   }),
   actions: {
     async handleSignal(payload) {
@@ -24,15 +25,24 @@ export const useP2PStore = defineStore('p2p', {
                  ...data.meta,
                  sdp: data.sdp
              };
+             // Clear queue for new offer
+             this.candidateQueue = []; 
         } else if (type === 'answer') {
              if (this.activeTransfer && this.activeTransfer.friendId === sender_id) {
                  await this.activeTransfer.pc.setRemoteDescription(new RTCSessionDescription(data));
              }
         } else if (type === 'candidate') {
             if (this.activeTransfer && this.activeTransfer.friendId === sender_id) {
-                await this.activeTransfer.pc.addIceCandidate(new RTCIceCandidate(data));
+                // Active connection, add immediately
+                try {
+                    await this.activeTransfer.pc.addIceCandidate(new RTCIceCandidate(data));
+                } catch(e) {
+                    console.error("Error adding candidate", e);
+                }
             } else if (this.incomingOffer && this.incomingOffer.senderId === sender_id) {
-                 // Cache candidates ? For now simplistic approach
+                 // Pending offer, queue candidate
+                 console.log("Queuing candidate for pending offer");
+                 this.candidateQueue.push(data);
             }
         }
     },
@@ -103,7 +113,13 @@ export const useP2PStore = defineStore('p2p', {
             return;
         }
 
-        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        const pc = new RTCPeerConnection({ 
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' }
+            ] 
+        });
         const socketStore = useWebSocketStore();
 
         pc.onicecandidate = e => {
@@ -132,6 +148,18 @@ export const useP2PStore = defineStore('p2p', {
         };
 
         await pc.setRemoteDescription(new RTCSessionDescription(offerData.sdp));
+        
+        // Flush queued candidates
+        console.log(`Flushing ${this.candidateQueue.length} queued candidates`);
+        for (const candidateData of this.candidateQueue) {
+            try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidateData));
+            } catch(e) {
+                console.error("Error flushing candidate", e);
+            }
+        }
+        this.candidateQueue = []; // Clear queue
+
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         
