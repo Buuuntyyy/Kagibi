@@ -61,6 +61,7 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 		// Check recursive share via Path
 		// Optimization: Fetch all folder shares AND their associated Folder definitions in one query.
 		type FolderShareWithFolder struct {
+			bun.BaseModel `bun:"table:folder_shares"`
 			pkg.FolderShare
 			Folder *pkg.Folder `bun:"rel:belongs-to,join:folder_id=id"`
 		}
