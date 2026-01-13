@@ -129,17 +129,23 @@ func notifyPresence(userID string, isOnline bool, manager *wsPkg.Manager, db *bu
 			friendID = f.UserID2
 		}
 
-		if manager.IsUserOnline(friendID) {
-			manager.SendToUser(friendID, wsPkg.Message{
-				Type: "presence_update",
-				Payload: map[string]interface{}{
-					"user_id":   userID,
-					"online":    isOnline,
-					"timestamp": time.Now(),
-				},
-			}.Type, map[string]interface{}{
-				"user_id": userID,
-				"online":  isOnline,
+		isFriendOnline := manager.IsUserOnline(friendID)
+
+		if isFriendOnline {
+			// 1. Inform neighbor that I am here (or leaving)
+			manager.SendToUser(friendID, wsPkg.MsgPresenceUpdate, map[string]interface{}{
+				"user_id":   userID,
+				"online":    isOnline,
+				"timestamp": time.Now(),
+			})
+		}
+
+		// 2. If I'm arriving, I need to know if neighbor is here
+		if isOnline && isFriendOnline {
+			manager.SendToUser(userID, wsPkg.MsgPresenceUpdate, map[string]interface{}{
+				"user_id":   friendID, // The friend is online
+				"online":    true,
+				"timestamp": time.Now(),
 			})
 		}
 	}
