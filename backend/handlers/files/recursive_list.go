@@ -30,6 +30,9 @@ func ListAllFilesRecursiveHandler(c *gin.Context, db *bun.DB) {
 	if len(files) > 0 {
 		fmt.Printf("First file: ID=%d Name=%s EncryptedKeyLen=%d\n", files[0].ID, files[0].Name, len(files[0].EncryptedKey))
 	}
+	if len(folders) > 0 {
+		fmt.Printf("First folder: ID=%d Name=%s EncryptedKeyLen=%d\n", folders[0].ID, folders[0].Name, len(folders[0].EncryptedKey))
+	}
 
 	c.JSON(http.StatusOK, gin.H{"files": files, "folders": folders})
 }
