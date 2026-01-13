@@ -19,17 +19,17 @@ func ListAllFilesRecursiveHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	files, err := pkg.GetAllFilesRecursive(db, userID, path)
+	files, folders, err := pkg.GetFolderContentRecursive(db, userID, path)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Log for debugging
-	fmt.Printf("RecursiveList: Path=%s UserID=%s Found=%d files\n", path, userID, len(files))
+	fmt.Printf("RecursiveList: Path=%s UserID=%s Found=%d files, %d folders\n", path, userID, len(files), len(folders))
 	if len(files) > 0 {
 		fmt.Printf("First file: ID=%d Name=%s EncryptedKeyLen=%d\n", files[0].ID, files[0].Name, len(files[0].EncryptedKey))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"files": files})
+	c.JSON(http.StatusOK, gin.H{"files": files, "folders": folders})
 }
