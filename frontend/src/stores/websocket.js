@@ -67,7 +67,7 @@ export const useWebSocketStore = defineStore('websocket', {
       }
     },
 
-    handleMessage(message) {
+    async handleMessage(message) {
       const authStore = useAuthStore();
       
       switch (message.type) {
@@ -91,9 +91,37 @@ export const useWebSocketStore = defineStore('websocket', {
           const friendStore = useFriendStore();
           friendStore.fetchFriends();
           break;
+        case 'presence_update':
+          // Payload: { user_id, online }
+          // We can update FriendStore directly
+          const fs = useFriendStore();
+          fs.updatePresence(message.payload);
+          break;
+        case 'p2p_signal':
+          // { sender_id, type, data }
+          import('./p2p').then(m => {
+              const p2pStore = m.useP2PStore();
+              p2pStore.handleSignal(message.payload);
+          });
+          break;
         default:
           console.warn('Unknown WebSocket message type:', message.type);
       }
+    },
+    
+    sendSignal(targetId, type, data) {
+        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+            console.error("Cannot send signal: WebSocket not connected");
+            return;
+        }
+        this.socket.send(JSON.stringify({
+            type: "p2p_signal",
+            payload: {
+                target_id: targetId,
+                type: type,
+                data: data
+            }
+        }));
     }
   }
 })
