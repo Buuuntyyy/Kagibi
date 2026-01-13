@@ -38,6 +38,8 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 
 		if errShare == nil {
 			// It is shared!
+			// Re-allocate file because GetFile returned nil
+			file = new(pkg.File)
 			err = db.NewSelect().Model(file).Where("id = ?", fileID).Scan(c.Request.Context())
 		} else {
 			// Check if file is inside a Shared Folder
@@ -46,6 +48,7 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 			if errFetch := db.NewSelect().Model(&tempFile).Where("id = ?", fileID).Scan(c.Request.Context()); errFetch == nil {
 				// Search for any FolderShare that covers this file's path
 				type FolderShareWithFolder struct {
+					bun.BaseModel `bun:"table:folder_shares"`
 					pkg.FolderShare
 					Folder *pkg.Folder `bun:"rel:belongs-to,join:folder_id=id"`
 				}
@@ -59,12 +62,31 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 				
 				if errFolderShare == nil {
 					for _, s := range sharesWithFolders {
-						if s.Folder != nil && len(tempFile.Path) > len(s.Folder.Path) && 
-						   tempFile.Path[0:len(s.Folder.Path)] == s.Folder.Path &&
-						   (tempFile.Path[len(s.Folder.Path)] == '/') {
+						if s.Folder == nil {
+							continue
+						}
+						
+						folderPath := s.Folder.Path
+						// Ensure folder path ends with / for prefix check (unless root)
+						if folderPath != "/" && len(folderPath) > 0 && folderPath[len(folderPath)-1] != '/' {
+							folderPath += "/"
+						}
+						if folderPath == "" { folderPath = "/" }
+
+						// Check if tempFile.Path starts with folderPath
+						// Case 1: Subfolder match
+						match := false
+						if len(tempFile.Path) >= len(folderPath) && tempFile.Path[0:len(folderPath)] == folderPath {
+							match = true
+						}
+						// Case 2: Exact match (file is arguably not IN a folder logicwise if paths are identical, but file paths include filename)
+						// Files always have unique paths including filename.
+
+						if match {
 							// Found a parent shared folder
 							err = nil // Clear error
-							*file = tempFile // Assign to main file variable
+							file = &tempFile // Assign valid pointer
+							log.Printf("Debug: Download allowed via recursive share. File: %s, SharedFolder: %s", tempFile.Path, s.Folder.Path)
 							break
 						}
 					}
