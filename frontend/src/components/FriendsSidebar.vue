@@ -43,18 +43,27 @@
       </div>
       <div v-else class="friends-list">
         <div v-for="friend in friendStore.acceptedFriends" :key="friend.id" class="friend-item">
-          <div class="friend-avatar">{{ getInitials(friend.name) }}</div>
+          <div class="friend-avatar">
+              {{ getInitials(friend.name) }}
+              <span v-if="friend.online" class="status-indicator"></span>
+          </div>
           <div class="friend-info">
             <div class="name">{{ friend.name }}</div>
             <div class="email" :title="friend.email">{{ friend.email }}</div>
           </div>
-          <button @click="confirmRemove(friend)" class="btn-icon delete" title="Supprimer">
-             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M18 6L6 18M6 6l12 12"></path>
-            </svg>
-          </button>
+          <div class="actions">
+            <button v-if="friend.online" @click="triggerP2PSend(friend)" class="btn-icon p2p-btn" title="Envoyer fichier (P2P)">
+                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+            <button @click="confirmRemove(friend)" class="btn-icon delete" title="Supprimer">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"></path>
+                </svg>
+            </button>
+          </div>
         </div>
       </div>
+      <input type="file" ref="p2pFileInput" style="display: none" @change="handleP2PFileSelect" />
     </div>
 
     <!-- ADD TAB -->
@@ -121,11 +130,13 @@
 import { ref, onMounted } from 'vue'
 import { useFriendStore } from '../stores/friends'
 import { useAuthStore } from '../stores/auth'
+import { useP2PStore } from '../stores/p2p'
 
 defineEmits(['close'])
 
 const friendStore = useFriendStore()
 const authStore = useAuthStore()
+const p2pStore = useP2PStore()
 
 const activeTab = ref('list')
 const friendCodeInput = ref('')
@@ -133,6 +144,8 @@ const submitting = ref(false)
 const addMessage = ref('')
 const addMessageType = ref('')
 const copied = ref(false)
+const p2pFileInput = ref(null)
+const selectedFriendForP2P = ref(null)
 
 onMounted(() => {
   friendStore.fetchFriends()
@@ -140,6 +153,20 @@ onMounted(() => {
       authStore.fetchUser()
   }
 })
+
+const triggerP2PSend = (friend) => {
+    selectedFriendForP2P.value = friend;
+    p2pFileInput.value.click();
+}
+
+const handleP2PFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (file && selectedFriendForP2P.value) {
+        p2pStore.startTransfer(selectedFriendForP2P.value, file);
+        // Reset input
+        event.target.value = '';
+    }
+}
 
 const getInitials = (name) => {
   return name ? name.substring(0, 2).toUpperCase() : '?'
@@ -493,5 +520,34 @@ h4 {
 }
 .tab-content::-webkit-scrollbar-track {
   background-color: transparent;
+}
+
+.friend-avatar {
+    position: relative;
+}
+
+.status-indicator {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 12px;
+    height: 12px;
+    background-color: #42b983;
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.p2p-btn {
+    color: var(--primary-color);
+}
+
+.p2p-btn:hover {
+    background-color: rgba(66, 185, 131, 0.1);
 }
 </style>

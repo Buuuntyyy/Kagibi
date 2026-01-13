@@ -71,6 +71,44 @@ type Message struct {
 	Payload interface{} `json:"payload"`
 }
 
+// IsUserOnline vérifie si un utilisateur est connecté
+func (m *Manager) IsUserOnline(userID string) bool {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	conns, ok := m.clients[userID]
+	return ok && len(conns) > 0
+}
+
+// SendSignal route un message de signalisation P2P d'un utilisateur à un autre
+func (m *Manager) SendSignal(senderID, targetID string, signalType string, payload interface{}) {
+	m.lock.RLock()
+	conns, ok := m.clients[targetID]
+	m.lock.RUnlock()
+
+	if !ok || len(conns) == 0 {
+		return // Target offline
+	}
+
+	msg := Message{
+		Type: "p2p_signal",
+		Payload: map[string]interface{}{
+			"sender_id": senderID,
+			"type":      signalType,
+			"data":      payload,
+		},
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("WS Error: Failed to marshal signal: %v", err)
+		return
+	}
+
+	for _, conn := range conns {
+		conn.WriteMessage(websocket.TextMessage, data)
+	}
+}
+
 // SendToUser envoie un message à toutes les connexions actives d'un utilisateur
 func (m *Manager) SendToUser(userID string, msgType MessageType, payload interface{}) {
 	m.lock.RLock()
