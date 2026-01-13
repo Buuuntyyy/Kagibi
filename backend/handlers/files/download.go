@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-
+	
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/s3storage"
 
@@ -30,16 +30,46 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 
 	file, err := pkg.GetFile(db, fileID, userID)
 	if err != nil {
-		// If not found as owner, check if shared with user
+		// If not found as owner, check if shared with user (Direct File Share)
 		var fileShare pkg.FileShare
 		errShare := db.NewSelect().Model(&fileShare).
 			Where("file_id = ? AND shared_with_user_id = ?", fileID, userID).
 			Scan(c.Request.Context())
 
 		if errShare == nil {
-			// It is shared! Fetch the file information without owner restriction to get the path/ownerID
-			// file is already *pkg.File (pointer), so we pass it directly to Model()
+			// It is shared!
 			err = db.NewSelect().Model(file).Where("id = ?", fileID).Scan(c.Request.Context())
+		} else {
+			// Check if file is inside a Shared Folder
+			// Retrieve file info first to get the path
+			var tempFile pkg.File
+			if errFetch := db.NewSelect().Model(&tempFile).Where("id = ?", fileID).Scan(c.Request.Context()); errFetch == nil {
+				// Search for any FolderShare that covers this file's path
+				type FolderShareWithFolder struct {
+					pkg.FolderShare
+					Folder *pkg.Folder `bun:"rel:belongs-to,join:folder_id=id"`
+				}
+		
+				var sharesWithFolders []FolderShareWithFolder
+				errFolderShare := db.NewSelect().
+					Model(&sharesWithFolders).
+					Relation("Folder").
+					Where("shared_with_user_id = ?", userID).
+					Scan(c.Request.Context())
+				
+				if errFolderShare == nil {
+					for _, s := range sharesWithFolders {
+						if s.Folder != nil && len(tempFile.Path) > len(s.Folder.Path) && 
+						   tempFile.Path[0:len(s.Folder.Path)] == s.Folder.Path &&
+						   (tempFile.Path[len(s.Folder.Path)] == '/') {
+							// Found a parent shared folder
+							err = nil // Clear error
+							*file = tempFile // Assign to main file variable
+							break
+						}
+					}
+				}
+			}
 		}
 	}
 
