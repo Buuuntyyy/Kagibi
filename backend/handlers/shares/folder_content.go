@@ -184,7 +184,7 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 			Where("parent_folder_id = ?", rootSharedFolderID).
 			Where("sub_folder_id IN (?)", bun.In(subFolderIDs)).
 			Scan(c.Request.Context())
-			
+
 		if err != nil {
 			log.Printf("Error fetching folder keys: %v", err)
 		} else {
@@ -203,7 +203,7 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 	for _, f := range subFolders {
 		key := folderKeyMap[f.ID]
 		// Fallback: If no shared key found, and it's a direct share,
-		// maybe the client can try decrypting the original key? 
+		// maybe the client can try decrypting the original key?
 		// But usually we need the explicit shared key.
 		foldersWithKeys = append(foldersWithKeys, FolderWithKey{
 			Folder:       f,
