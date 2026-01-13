@@ -306,6 +306,7 @@ const isFriendShared = (friendId) => {
 }
 
 const shareWithFriend = async (friend) => {
+    console.log("Starting shareWithFriend for:", friend.name);
     if (!props.item || !friend.public_key) return;
     
     // Check if already shared, if so -> Revoke logic
@@ -343,11 +344,13 @@ const shareWithFriend = async (friend) => {
     sharing.value[friend.id] = true;
     try {
         await sodium.ready;
+        console.log("Sodium ready. Resource type check...");
         
         let encryptedKeyForFriend = "";
         let folderFileKeys = {};
         // props.item can be file or folder. Check type.
         const resourceType = (props.item.type === 'folder' || props.item.is_dir) ? 'folder' : 'file';
+        console.log("ResourceType detected:", resourceType);
 
         if (resourceType === 'file') {
              // Handle case sensitivity from Go backend (PascalCase) vs potentially camelCase
@@ -391,6 +394,7 @@ const shareWithFriend = async (friend) => {
             // Note: Currently frontend might not have updated 'encrypted_key' if we just generated it. 
             // We blindly trust props.item or check logic.
             const existingEncKey = props.item.EncryptedKey || props.item.encrypted_key;
+            console.log("Existing Folder Key found:", !!existingEncKey);
 
             if (existingEncKey) {
                  // Decrypt existing folder key
@@ -402,6 +406,7 @@ const shareWithFriend = async (friend) => {
                      authStore.masterKey,
                      data
                  );
+                 console.log("Folder key decrypted successfully.");
                  // Import as CryptoKey
                  folderKeyCrypto = await window.crypto.subtle.importKey(
                     "raw", 
@@ -411,6 +416,7 @@ const shareWithFriend = async (friend) => {
                     ["encrypt", "decrypt"]
                  );
             } else {
+                 console.log("No existing key, generating new one...");
                  // Generate NEW Folder Key
                  folderKeyCrypto = await generateMasterKey(); // Returns AES-GCM CryptoKey
                  folderKeyRaw = await window.crypto.subtle.exportKey("raw", folderKeyCrypto);
@@ -448,16 +454,21 @@ const shareWithFriend = async (friend) => {
             // Construct path: if item.path is root "/", folder path is just "/Name"
             const itemPath = props.item.Path || props.item.path || '';
             let folderPath = (itemPath === '/' ? '' : itemPath) + '/' + (props.item.Name || props.item.name);
+            console.log("Fetching recursive list for path:", folderPath);
             
             // Fetch ALL content recursively (Files AND Folders)
             const listRes = await api.get(`/files/list-recursive?path=${encodeURIComponent(folderPath)}`);
             const files = listRes.data.files || [];
             const subFolders = listRes.data.folders || [];
+            console.log(`Recursive list returned: ${files.length} files, ${subFolders.length} folders.`);
             
             // 1. Process Files
             for (const file of files) {
                 const fEncKey = file.EncryptedKey || file.encrypted_key;
-                if (!fEncKey) continue;
+                if (!fEncKey) {
+                    console.warn(`File ${file.Name} has no key, skipping.`);
+                    continue;
+                }
 
                 try {
                     // Decrypt File Key (Master -> File)
@@ -493,7 +504,10 @@ const shareWithFriend = async (friend) => {
             const folderFolderKeys = {};
             for (const folder of subFolders) {
                  const fEncKey = folder.EncryptedKey || folder.encrypted_key;
-                 if (!fEncKey) continue;
+                 if (!fEncKey) {
+                    console.warn(`Folder ${folder.Name} has no key, skipping.`);
+                    continue;
+                 }
 
                  try {
                      // Decrypt Folder Key (Master -> Folder)
@@ -525,6 +539,7 @@ const shareWithFriend = async (friend) => {
                  }
             }
         
+            console.log(`Sending share request. FileKeys: ${Object.keys(folderFileKeys).length}, FolderKeys: ${Object.keys(folderFolderKeys).length}`);
             await api.post('/shares/direct', {
                 resource_id: props.item.ID || props.item.id,
                 resource_type: resourceType,
@@ -534,6 +549,7 @@ const shareWithFriend = async (friend) => {
                 folder_file_keys: folderFileKeys,
                 folder_folder_keys: folderFolderKeys
             });
+            console.log("Share request successful.");
 
             sharedStatus.value[friend.id] = true;
 
