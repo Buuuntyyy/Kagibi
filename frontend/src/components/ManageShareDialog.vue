@@ -451,9 +451,36 @@ const shareWithFriend = async (friend) => {
              encryptedKeyForFriend = await encryptKeyWithPublicKey(folderKeyRaw, friendPublicKey);
 
             // Fetch files in folder to share their keys
-            // Construct path: if item.path is root "/", folder path is just "/Name"
-            const itemPath = props.item.Path || props.item.path || '';
-            let folderPath = (itemPath === '/' ? '' : itemPath) + '/' + (props.item.Name || props.item.name);
+            // Construct path: 
+            // The item (folder) has a Path property which is its PARENT folder.
+            // If item.Path is '/', the folder's path is "/Name".
+            // If item.Path is '/Parent', the folder's path is "/Parent/Name".
+            
+            console.log("DEBUG: props.item props:", props.item);
+            
+            // NOTE: props.item often comes from the File list where keys match the Go struct or JSON response.
+            // Go Struct: Name, Path.
+            const itemName = props.item.Name || props.item.name;
+            let itemParentPath = props.item.Path || props.item.path || '';
+            
+            // Normalize path separator
+            // If empty, assume root "/"
+            if (!itemParentPath) itemParentPath = '/';
+            
+            // NOTE: There is a potential bug where the frontend object already contains the FULL path in 'path' property
+            // if it was modified by the store logic.
+            // However, usually API returns 'Path' as parent.
+            // Let's verify if 'itemParentPath' ends with 'itemName'.
+            
+            let folderPath;
+            if (itemParentPath.endsWith('/' + itemName)) {
+                // Heuristic: It looks like 'path' is already the full path. Use it as is.
+                folderPath = itemParentPath;
+                console.warn("Detected Path might be full path. Using as is:", folderPath);
+            } else {
+                folderPath = (itemParentPath === '/' ? '' : itemParentPath) + '/' + itemName;
+            }
+            
             console.log("Fetching recursive list for path:", folderPath);
             
             // Fetch ALL content recursively (Files AND Folders)
