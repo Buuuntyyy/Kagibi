@@ -78,7 +78,17 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 					continue
 				}
 				// Check if targetFolder is inside sharedFolder
-				if strings.HasPrefix(targetFolder.Path, s.Folder.Path+"/") {
+				// Logic: path starts with SharedFolder.Path + "/"
+				// Example: Shared=/A, Target=/A/B. Target starts with /A/ ? Yes.
+				// Special Case: Root share matches exactly? Handled by Direct Share Check implicitly?
+				// But what if I share /A with user, and user browses /A ? 'hasDirectShare' is true.
+				
+				prefix := s.Folder.Path
+				if !strings.HasSuffix(prefix, "/") {
+					prefix += "/"
+				}
+				
+				if strings.HasPrefix(targetFolder.Path, prefix) {
 					isAuthorized = true
 					effectiveShare = s.FolderShare
 					break
@@ -89,6 +99,7 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 	log.Printf("[Perf] Auth Check took %v", time.Since(startAuth))
 
 	if !isAuthorized {
+		log.Printf("Access Denied to FolderID %d for UserID %s. DirectShared: %v", targetFolderID, userID, hasDirectShare)
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
 	}
