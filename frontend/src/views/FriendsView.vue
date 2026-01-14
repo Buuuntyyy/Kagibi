@@ -57,6 +57,18 @@
         <h3>Mon Code Ami</h3>
         <div class="my-code-box">
           <span class="code">{{ authStore.user?.friend_code || 'Génération...' }}</span>
+          
+          <div class="info-container">
+             <button class="btn-info" @click.stop="showInfoTooltip = !showInfoTooltip">
+                 <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" class="info-icon">
+                    <path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/>
+                </svg>
+             </button>
+             <div v-if="showInfoTooltip" class="info-tooltip">
+                <p>Ceci est votre identifiant unique. Partagez-le avec vos connaissances pour qu'ils puissent vous ajouter à leurs amis et partager des fichiers de manière sécurisée.</p>
+             </div>
+          </div>
+
           <button @click="copyCode" class="btn-copy">
             {{ copied ? 'Copié !' : 'Copier' }}
           </button>
@@ -121,7 +133,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useFriendStore } from '../stores/friends'
 import { useAuthStore } from '../stores/auth'
 
@@ -134,6 +146,11 @@ const submitting = ref(false)
 const addMessage = ref('')
 const addMessageType = ref('')
 const copied = ref(false)
+const showInfoTooltip = ref(false)
+
+const closeInfoTooltip = () => {
+  if(showInfoTooltip.value) showInfoTooltip.value = false;
+}
 
 onMounted(() => {
   friendStore.fetchFriends()
@@ -141,6 +158,11 @@ onMounted(() => {
   if (!authStore.user?.friend_code) {
       authStore.fetchUser()
   }
+  window.addEventListener('click', closeInfoTooltip)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('click', closeInfoTooltip)
 })
 
 const getInitials = (name) => {
@@ -496,5 +518,54 @@ const confirmRemove = (friend) => {
     color: var(--secondary-text-color);
     font-style: italic;
     font-size: 0.9rem;
+}
+
+.info-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.btn-info {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--secondary-text-color);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    transition: color 0.2s;
+}
+
+.btn-info:hover {
+    color: var(--primary-color);
+}
+
+.info-tooltip {
+  position: absolute;
+  top: 140%; /* Below the icon */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 260px;
+  background-color: #333;
+  color: white;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  z-index: 100;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  line-height: 1.4;
+}
+
+.info-tooltip::after {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  margin-left: -6px;
+  border-width: 6px;
+  border-style: solid;
+  border-color: transparent transparent #333 transparent;
 }
 </style>
