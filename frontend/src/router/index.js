@@ -9,6 +9,7 @@ import PublicBrowse from '../views/PublicBrowse.vue'
 import TermsOfService from '../views/TermsOfService.vue'
 import PrivacyPolicy from '../views/PrivacyPolicy.vue'
 import FriendsView from '../views/FriendsView.vue'
+import P2PView from '../views/P2PView.vue'
 import HomeView from '../views/HomeView.vue'
 import { useAuthStore } from '../stores/auth'
 
@@ -56,6 +57,11 @@ const routes = [
         path: 'friends',
         name: 'Friends',
         component: FriendsView
+      },
+      {
+        path: 'p2p',
+        name: 'P2P',
+        component: P2PView
       }
     ]
   },
