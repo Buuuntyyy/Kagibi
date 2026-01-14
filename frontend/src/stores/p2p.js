@@ -139,6 +139,21 @@ export const useP2PStore = defineStore('p2p', {
         await sodium.ready;
         const authStore = useAuthStore();
         
+        // --- GUARD: Check Keys ---
+        if (!authStore.privateKey) {
+            console.warn("Private key missing in store. Attempting re-restoration...");
+            if (authStore.masterKey) {
+                await authStore.ensureRSAKeys(authStore.masterKey);
+            }
+            // Double check
+            if (!authStore.privateKey) {
+                console.error("Critical: User has no decrypted private RSA key. Cannot accept transfer.");
+                alert("Erreur de sécurité : Votre clé de chiffrement n'est pas disponible. Essayez de recharger la page ou de vous reconnecter.");
+                return;
+            }
+        }
+        // -------------------------
+
         let fileKey = null;
         try {
             const rawKey = await decryptKeyWithPrivateKey(offerData.fileKeyEncrypted, authStore.privateKey);

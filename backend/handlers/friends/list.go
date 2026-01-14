@@ -18,6 +18,7 @@ type FriendResponse struct {
 	Status    string `json:"status"`              // pending_sent, pending_received, accepted
 	RequestID int64  `json:"requestId,omitempty"` // ID of the friendship row, useful for cancelling/accepting
 	PublicKey string `json:"public_key"`          // NEW: Required for encrypted sharing
+	Online    bool   `json:"online"`              // REALTIME STATUS
 }
 
 type FriendHandler struct {
@@ -74,6 +75,11 @@ func (h *FriendHandler) ListFriends(c *gin.Context) {
 		var otherUser pkg.User
 		err := h.DB.NewSelect().Model(&otherUser).Where("id = ?", otherUserID).Scan(c.Request.Context())
 		if err == nil {
+			isOnline := false
+			if h.WS != nil {
+				isOnline = h.WS.IsUserOnline(otherUser.ID)
+			}
+
 			results = append(results, FriendResponse{
 				ID:        otherUser.ID,
 				Name:      otherUser.Name,
@@ -81,6 +87,7 @@ func (h *FriendHandler) ListFriends(c *gin.Context) {
 				Status:    status,
 				RequestID: requestID,
 				PublicKey: otherUser.PublicKey,
+				Online:    isOnline,
 			})
 		}
 	}
