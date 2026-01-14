@@ -1,4 +1,5 @@
 <template>
+  <div class="left-bar-container">
   <div class="left-bar">
     <div class="action-section">
       <button class="btn-new" @click.stop="toggleNewMenu">
@@ -49,17 +50,41 @@
         </svg>
         <span>Fichiers partagés</span>
       </div>
-      <div class="menu-item" :class="{ active: isFriendsOpen }" @click="$emit('toggle-friends')">
-        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" fill="currentColor"/>
+      <div class="menu-item" :class="{ active: isActive('/dashboard/p2p') }" @click="navigateTo('/dashboard/p2p')">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+             <line x1="22" y1="2" x2="11" y2="13"></line>
+             <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
         </svg>
-        <span>Amis</span>
+        <span>Peer-to-peer</span>
       </div>
-      <div class="menu-item" @click="$emit('toggle-friends')">
-        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" fill="currentColor"/>
-        </svg>
-        <span>Peer-to-Peer</span>
+      
+      <!-- Friends Accordion -->
+      <div class="friends-accordion" :class="{ open: friendsOpen }">
+        <div class="menu-item" @click="toggleFriendsAccordion">
+            <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" fill="currentColor"/>
+            </svg>
+            <span>Amis</span>
+            <svg class="arrow-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+            </svg>
+        </div>
+        <div class="accordion-content" v-if="friendsOpen">
+            <div class="friend-header" v-if="authStore.user && authStore.user.friend_code">
+                <span class="my-code" @click="copyFriendCode" title="Copier mon code">{{ authStore.user.friend_code }}</span>
+                <button class="add-friend-btn" @click.stop="toggleAddFriendMenu" title="Ajouter un ami">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                    </svg>
+                </button>
+                
+                <div v-if="showAddFriendMenu" class="add-friend-popup" @click.stop>
+                    <input id="add-friend-input" v-model="newFriendId" placeholder="Code ami..." @keydown.enter="addFriend" />
+                    <button @click="addFriend" class="confirm-add">OK</button>
+                </div>
+            </div>
+            <FriendsSidebar />
+        </div>
       </div>
     </div>
 
@@ -72,16 +97,19 @@
         <div class="storage-fill" :style="{ width: storagePercentage + '%' }"></div>
       </div>
     </div>
+  </div>
 
     <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" />
-    <InputDialog 
-      v-model:isOpen="inputDialog.isOpen"
-      :title="inputDialog.title"
-      :defaultValue="inputDialog.defaultValue"
-      :placeholder="inputDialog.placeholder"
-      @confirm="handleInputConfirm"
-      @cancel="handleInputCancel"
-    />
+    <div class="dialogs">
+      <InputDialog 
+        v-model:isOpen="inputDialog.isOpen"
+        :title="inputDialog.title"
+        :defaultValue="inputDialog.defaultValue"
+        :placeholder="inputDialog.placeholder"
+        @confirm="handleInputConfirm"
+        @cancel="handleInputCancel"
+      />
+    </div>
   </div>
 </template>
 
@@ -90,21 +118,64 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useFileStore } from '../../stores/files'
+import { useFriendStore } from '../../stores/friends'
 import InputDialog from '../InputDialog.vue'
+import FriendsSidebar from '../FriendsSidebar.vue'
 
 const props = defineProps({
-  isFriendsOpen: Boolean
+  // No props needed now for layout control
 })
-
-const emit = defineEmits(['toggle-friends'])
 
 const authStore = useAuthStore()
 const fileStore = useFileStore()
+const friendStore = useFriendStore()
 const router = useRouter()
 const route = useRoute()
 
 const showNewMenu = ref(false)
+const friendsOpen = ref(true) // Default open or closed
 const fileInput = ref(null)
+const showAddFriendMenu = ref(false)
+const newFriendId = ref('')
+
+const closeAddFriendMenu = () => {
+    if (showAddFriendMenu.value) {
+        showAddFriendMenu.value = false
+    }
+}
+
+const toggleAddFriendMenu = () => {
+  showAddFriendMenu.value = !showAddFriendMenu.value
+  if (showAddFriendMenu.value) {
+    setTimeout(() => document.getElementById('add-friend-input')?.focus(), 100)
+  }
+}
+
+onMounted(() => {
+    window.addEventListener('click', closeAddFriendMenu)
+})
+
+onUnmounted(() => {
+    window.removeEventListener('click', closeAddFriendMenu)
+})
+
+const addFriend = async () => {
+  if (!newFriendId.value) return;
+  try {
+    await friendStore.sendRequest(newFriendId.value)
+    showAddFriendMenu.value = false
+    newFriendId.value = ''
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+const copyFriendCode = () => {
+    if (authStore.user?.friend_code) {
+        navigator.clipboard.writeText(authStore.user.friend_code)
+    }
+}
+
 const inputDialog = ref({
   isOpen: false,
   title: '',
@@ -115,6 +186,10 @@ const inputDialog = ref({
 
 const toggleNewMenu = () => {
   showNewMenu.value = !showNewMenu.value
+}
+
+const toggleFriendsAccordion = () => {
+    friendsOpen.value = !friendsOpen.value
 }
 
 const navigateTo = (path) => {
@@ -189,7 +264,7 @@ const triggerCreateFolder = async () => {
 
 const triggerP2P = () => {
     showNewMenu.value = false;
-    emit('toggle-friends');
+    router.push('/dashboard/p2p')
 }
 
 const formatSize = (bytes) => {
@@ -344,6 +419,11 @@ const storagePercentage = computed(() => {
   margin-bottom: 0.5rem;
   color: var(--secondary-text-color);
 }
+.storage-fill {
+  height: 100%;
+  background-color: var(--primary-color, #1a73e8); /* Default blue if var not set */
+  transition: width 0.3s ease;
+}
 
 .storage-bar {
   height: 6px;
@@ -352,9 +432,166 @@ const storagePercentage = computed(() => {
   overflow: hidden;
 }
 
-.storage-fill {
-  height: 100%;
-  background-color: #42b983;
-  border-radius: 3px;
+.friends-accordion {
+  display: flex;
+  flex-direction: column;
+}
+
+.friends-accordion .menu-item {
+  justify-content: space-between;
+}
+
+.friends-accordion .menu-item span {
+    flex-grow: 1;
+}
+
+.arrow-icon {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.3s ease;
+}
+
+.friends-accordion.open .arrow-icon {
+  transform: rotate(180deg);
+}
+
+.accordion-content {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideDown 0.3s ease-out;
+}
+
+.btn-text-small {
+  background: none;
+  border: none;
+  color: var(--secondary-text-color); /* Was primary color, now more subtle */
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 8px 16px;
+  text-align: left;
+  width: 100%;
+  margin-left: 4px;
+  transition: color 0.2s;
+}
+
+.btn-text-small:hover {
+  color: var(--main-text-color);
+  text-decoration: none; /* Removed underline */
+}
+
+.accordion-actions {
+    border-top: 1px solid var(--border-color);
+    margin-top: 4px;
+}
+
+.friend-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 20px; /* Aligned with typical menu item padding */
+    background-color: transparent; /* Cleaner look */
+    font-size: 0.85rem;
+    position: relative;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 4px;
+}
+
+.my-code {
+    font-family: monospace;
+    background: rgba(0,0,0,0.05);
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    user-select: all;
+    color: var(--main-text-color);
+    font-size: 0.8rem;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+}
+
+.my-code:hover {
+    background: rgba(0,0,0,0.08);
+    border-color: var(--border-color);
+}
+
+.add-friend-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border-radius: 50%;
+    color: var(--secondary-text-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    line-height: 1;
+    transition: all 0.2s;
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+.add-friend-btn:hover {
+    color: var(--primary-color);
+    background-color: var(--hover-background-color, rgba(0,0,0,0.05));
+}
+
+.add-friend-popup {
+    position: absolute;
+    top: 36px; /* Just below the header */
+    left: 10px; /* Align left */
+    right: 10px; /* Stretch to right - padding */
+    background: var(--card-color);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    padding: 12px;
+    border-radius: 8px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.add-friend-popup input {
+    width: 100%;
+    padding: 8px;
+    font-size: 0.9rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--input-background);
+    color: var(--main-text-color);
+    box-sizing: border-box; /* Important for width 100% */
+}
+
+.confirm-add {
+    width: 100%;
+    font-size: 0.85rem;
+    padding: 6px 0;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.left-bar-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.dialogs {
+    position: absolute;
 }
 </style>
