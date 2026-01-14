@@ -14,16 +14,18 @@ import { API_BASE_URL } from '../api'
 
 // Fonction utilitaire pour récupérer la config ICE depuis le backend
 async function fetchICEConfig() {
+    console.log("[P2P] Fetching ICE Config (v2 - Secure)..."); // Debug marker
     try {
         const token = localStorage.getItem('token');
         const response = await axios.get(`${API_BASE_URL}/ice-config`, {
             headers: { Authorization: `Bearer ${token}` }
         });
         if (response.data && response.data.iceServers) {
+            console.log("[P2P] Retrived ICE Servers:", response.data.iceServers);
             return { iceServers: response.data.iceServers };
         }
     } catch (e) {
-        console.error("Failed to fetch ICE config via API, falling back to STUN only", e);
+        console.error("[P2P] Failed to fetch ICE config via API, falling back to STUN only", e);
     }
     // Fallback sécurité si l'API échoue
     return {
