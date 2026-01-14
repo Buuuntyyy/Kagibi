@@ -4,11 +4,15 @@
     <router-view />
   </main>
   <P2PTransferDialog />
+  <WarnDialog />
+  <DeleteConfirmDialog />
 </template>
 
 <script setup>
 import Navbar from './components/layout/navbar.vue'
 import P2PTransferDialog from './components/P2PTransferDialog.vue'
+import WarnDialog from './components/WarnDialog.vue'
+import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
 import { useThemeStore } from './stores/theme'
 import { useAuthStore } from './stores/auth'
 import { useWebSocketStore } from './stores/websocket'

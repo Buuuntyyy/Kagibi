@@ -153,13 +153,6 @@
       @close="closeMoveDialog"
       @move-to="onMoveTo"
     />
-    <DeleteConfirmDialog
-      :isOpen="deleteDialog.isOpen"
-      :itemsCount="deleteDialog.itemsCount"
-      :itemName="deleteDialog.itemName"
-      @confirm="confirmDelete"
-      @cancel="closeDeleteDialog"
-    />
     <FilePreview
       :visible="fileStore.preview.show"
       :fileUrl="fileStore.preview.url"
@@ -178,6 +171,7 @@ import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useFileStore } from '../../stores/files'
 import { useAuthStore } from '../../stores/auth'
+import { useUIStore } from '../../stores/ui'
 import { usePreferencesStore } from '../../stores/preferences'
 import { useTagStore } from '../../stores/tags'
 import InputDialog from '../InputDialog.vue'
@@ -186,12 +180,12 @@ import ShareDialog from '../ShareDialog.vue'
 import api from '../../api'
 import MoveDialog from '../MoveDialog.vue';
 import ManageShareDialog from '../ManageShareDialog.vue';
-import DeleteConfirmDialog from '../DeleteConfirmDialog.vue';
 import FilePreview from './FilePreview.vue';
 import FileTable from './FileTable.vue';
 
 const router = useRouter()
 const authStore = useAuthStore()
+const uiStore = useUIStore()
 const fileStore = useFileStore()
 const preferenceStore = usePreferencesStore()
 const tagStore = useTagStore()
@@ -310,12 +304,6 @@ const manageShareDialog = ref({
   isOpen: false,
   item: null,
   initialTab: 'link'
-});
-
-const deleteDialog = ref({
-  isOpen: false,
-  itemsCount: 0,
-  itemName: ''
 });
 
 const moveDialog = ref({
@@ -691,38 +679,31 @@ const downloadSelectedFiles = () => {
 const deleteSelectedItems = () => {
   if (selectedItems.value.length === 0) return;
 
-  deleteDialog.value = {
-    isOpen: true,
+  uiStore.requestDeleteConfirmation({
+    title: "Supprimer les éléments",
+    itemName: selectedItems.value.length === 1 ? selectedItems.value[0].Name : null,
     itemsCount: selectedItems.value.length,
-    itemName: selectedItems.value.length === 1 ? selectedItems.value[0].Name : ''
-  };
-};
-
-const closeDeleteDialog = () => {
-  deleteDialog.value.isOpen = false;
-};
-
-const confirmDelete = async () => {
-  closeDeleteDialog();
-  
-  const fileIDs = selectedItems.value.filter(i => i.type === 'file').map(i => i.ID);
-  const folderIDs = selectedItems.value.filter(i => i.type === 'folder').map(i => i.ID);
-  
-  if (fileIDs.length > 0) {
-      await fileStore.deleteFiles(fileIDs);
-  }
-  
-  // Delete folders one by one for now as bulk delete folders is not implemented
-  for (const folderID of folderIDs) {
-      await api.delete(`/files/folder/${folderID}`);
-  }
-  
-  // Refresh list if we deleted folders manually (deleteFiles already refreshes)
-  if (folderIDs.length > 0 && fileIDs.length === 0) {
-      fileStore.fetchItems(fileStore.currentPath);
-  }
-  
-  selectedItems.value = [] // Clear selection after deletion
+    onConfirm: async () => {
+      const fileIDs = selectedItems.value.filter(i => i.type === 'file').map(i => i.ID);
+      const folderIDs = selectedItems.value.filter(i => i.type === 'folder').map(i => i.ID);
+      
+      if (fileIDs.length > 0) {
+          await fileStore.deleteFiles(fileIDs);
+      }
+      
+      // Delete folders one by one for now as bulk delete folders is not implemented
+      for (const folderID of folderIDs) {
+          await api.delete(`/files/folder/${folderID}`);
+      }
+      
+      // Refresh list if we deleted folders manually (deleteFiles already refreshes)
+      if (folderIDs.length > 0 && fileIDs.length === 0) {
+          fileStore.fetchItems(fileStore.currentPath);
+      }
+      
+      selectedItems.value = [] // Clear selection after deletion
+    }
+  });
 };
 
 const renameSelectedItem = async () => {
