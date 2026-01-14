@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { useWebSocketStore } from './websocket'
 import { useAuthStore } from './auth'
+import { useUIStore } from './ui'
 import sodium from 'libsodium-wrappers-sumo'
 import { 
     generateMasterKey, 
@@ -87,6 +88,20 @@ export const useP2PStore = defineStore('p2p', {
 
          const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
          const socketStore = useWebSocketStore();
+         const uiStore = useUIStore();
+
+         pc.oniceconnectionstatechange = () => {
+             if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+                 console.error("ICE Connection Failed/Disconnected");
+                 uiStore.showError(
+                     "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
+                     "Échec de Connexion"
+                 );
+                 if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
+                     this.activeTransfer.status = 'Error';
+                 }
+             }
+         };
          
          // Generate unique transfer ID (Polyfill for older browsers)
          const transferId = (crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
@@ -172,11 +187,25 @@ export const useP2PStore = defineStore('p2p', {
             ] 
         });
         const socketStore = useWebSocketStore();
+        const uiStore = useUIStore();
 
         // We don't necessarily need to send transferId back for candidates, but good practice.
         // Or we assume candidates from receiver belong to the same session implicitly.
         // Let's attach the same ID.
         const transferId = offerData.transferId;
+
+        pc.oniceconnectionstatechange = () => {
+             if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+                 console.error("ICE Connection Failed/Disconnected");
+                 uiStore.showError(
+                     "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
+                     "Échec de Connexion"
+                 );
+                 if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
+                     this.activeTransfer.status = 'Error';
+                 }
+             }
+        };
 
         pc.onicecandidate = e => {
              if(e.candidate) {
