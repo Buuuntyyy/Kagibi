@@ -1,10 +1,32 @@
 <template>
   <div class="friends-preview-list">
       <div v-if="friendStore.loading" class="loading">Chargement...</div>
-      <div v-else-if="friendsCount === 0" class="empty-state">
+      <div v-else-if="!hasFriendsOrRequests" class="empty-state">
         <p class="empty-text">Aucun ami</p>
       </div>
       <div v-else class="friends-list-compact">
+        <!-- PENDING REQUESTS -->
+        <div v-if="friendStore.pendingReceived.length > 0" class="pending-section">
+           <div class="section-label">DEMANDES ({{ friendStore.pendingReceived.length }})</div>
+           <div v-for="req in friendStore.pendingReceived" :key="req.id" class="pending-item">
+              <div class="pending-header">
+                  <div class="avatar-compact small">
+                      {{ getInitials(req.name) }}
+                  </div>
+                  <div class="pending-info">
+                      <span class="pending-name">{{ req.name }}</span>
+                      <span class="pending-sub">Vous demande en ami</span>
+                  </div>
+              </div>
+              <div class="pending-actions">
+                  <button @click="friendStore.acceptRequest(req.requestId)" class="btn-xs accept">Accepter</button>
+                  <button @click="friendStore.rejectRequest(req.requestId)" class="btn-xs reject">Refuser</button>
+              </div>
+           </div>
+           <div class="divider-mini"></div>
+        </div>
+
+        <!-- ACCEPTED FRIENDS -->
         <div v-for="friend in friendStore.acceptedFriends" :key="friend.id" class="friend-item-compact">
           <div class="avatar-compact">
               {{ getInitials(friend.name) }}
@@ -36,7 +58,9 @@ onMounted(() => {
     friendStore.fetchFriends();
 })
 
-const friendsCount = computed(() => friendStore.acceptedFriends.length)
+const hasFriendsOrRequests = computed(() => {
+    return friendStore.acceptedFriends.length > 0 || friendStore.pendingReceived.length > 0
+})
 
 const getInitials = (name) => {
   if (!name) return '?'
@@ -66,6 +90,93 @@ const deleteFriend = (friend) => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.pending-section {
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.section-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--secondary-text-color);
+    padding: 0 4px;
+    margin-top: 4px;
+}
+
+.pending-item {
+    background-color: var(--card-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pending-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.avatar-compact.small {
+    width: 24px;
+    height: 24px;
+    font-size: 0.75rem;
+}
+
+.pending-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.pending-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pending-sub {
+    font-size: 0.7rem;
+    color: var(--secondary-text-color);
+}
+
+.pending-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.btn-xs {
+    flex: 1;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    padding: 4px 0;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.btn-xs.accept {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.btn-xs.reject {
+    background-color: #f1f3f4;
+    color: #333;
+}
+
+.divider-mini {
+    height: 1px;
+    background-color: var(--border-color);
+    margin: 4px 8px;
 }
 
 .friend-item-compact {
