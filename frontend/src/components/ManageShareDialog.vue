@@ -122,6 +122,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useFileStore } from '../stores/files';
 import { useFriendStore } from '../stores/friends';
 import { useAuthStore } from '../stores/auth';
+import { useUIStore } from '../stores/ui';
 import api from '../api';
 import { decryptKeyWithPrivateKey, importKeyFromPEM, encryptKeyWithPublicKey, generateMasterKey } from '../utils/crypto';
 import sodium from 'libsodium-wrappers-sumo';
@@ -139,6 +140,7 @@ const emit = defineEmits(['close', 'share-deleted', 'share-created']);
 const fileStore = useFileStore();
 const friendStore = useFriendStore();
 const authStore = useAuthStore();
+const uiStore = useUIStore();
 
 // UI State
 const activeTab = ref(props.initialTab || 'link'); // 'link' or 'friends'
@@ -283,20 +285,24 @@ const deleteShare = async () => {
       return;
   }
   
-  if (confirm('Êtes-vous sûr de vouloir arrêter le partage ? Le lien ne fonctionnera plus.')) {
-    loading.value = true;
-    try {
-      await api.delete(`/shares/link/${idToDelete}`);
-      localShareToken.value = null;
-      localShareId.value = null;
-      emit('share-deleted');
-    } catch (error) {
-      console.error('Erreur lors de la suppression du partage:', error);
-      alert('Impossible de supprimer le partage.');
-    } finally {
-        loading.value = false;
-    }
-  }
+  uiStore.requestDeleteConfirmation({
+      title: "Arrêter le partage",
+      message: "Êtes-vous sûr de vouloir arrêter le partage ? Le lien ne fonctionnera plus.",
+      onConfirm: async () => {
+        loading.value = true;
+        try {
+            await api.delete(`/shares/link/${idToDelete}`);
+            localShareToken.value = null;
+            localShareId.value = null;
+            emit('share-deleted');
+        } catch (error) {
+            console.error('Erreur lors de la suppression du partage:', error);
+            alert('Impossible de supprimer le partage.');
+        } finally {
+            loading.value = false;
+        }
+      }
+  });
 };
 
 // --- Friends Sharing Methods ---
@@ -311,33 +317,37 @@ const shareWithFriend = async (friend) => {
     
     // Check if already shared, if so -> Revoke logic
     if (isFriendShared(friend.id)) {
-        if (!confirm(`Arrêter le partage avec ${friend.name} ?`)) return;
+        uiStore.requestDeleteConfirmation({
+           title: "Arrêter le partage",
+           message: `Arrêter le partage avec ${friend.name} ?`,
+           onConfirm: async () => {
+             sharing.value[friend.id] = true;
+             try {
+                const resourceType = (props.item.type === 'folder' || props.item.is_dir) ? 'folder' : 'file';
+                const resourceId = props.item.ID || props.item.id;
 
-        sharing.value[friend.id] = true;
-        try {
-            const resourceType = (props.item.type === 'folder' || props.item.is_dir) ? 'folder' : 'file';
-            const resourceId = props.item.ID || props.item.id;
+                await api.delete(`/shares/direct`, {
+                    params: {
+                        resource_id: resourceId,
+                        resource_type: resourceType,
+                        friend_id: friend.id
+                    }
+                });
 
-            await api.delete(`/shares/direct`, {
-                params: {
-                    resource_id: resourceId,
-                    resource_type: resourceType,
-                    friend_id: friend.id
+                sharedStatus.value[friend.id] = false;
+             } catch(e) {
+                console.error("Revoke failed:", e);
+                // If 404, assume already deleted and update UI
+                if (e.response && e.response.status === 404) {
+                     sharedStatus.value[friend.id] = false;
+                } else {
+                     alert("Erreur lors de la suppression du partage.");
                 }
-            });
-
-            sharedStatus.value[friend.id] = false;
-        } catch(e) {
-            console.error("Revoke failed:", e);
-            // If 404, assume already deleted and update UI
-            if (e.response && e.response.status === 404) {
-                 sharedStatus.value[friend.id] = false;
-            } else {
-                 alert("Erreur lors de la suppression du partage.");
-            }
-        } finally {
-            sharing.value[friend.id] = false;
-        }
+             } finally {
+                sharing.value[friend.id] = false;
+             }
+           }
+        });
         return;
     }
 

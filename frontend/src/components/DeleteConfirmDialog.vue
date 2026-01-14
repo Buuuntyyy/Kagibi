@@ -1,16 +1,16 @@
 <template>
-  <div v-if="isOpen" class="modal-overlay" @click.self="cancel">
+  <div v-if="uiStore.deleteDialog.visible" class="modal-overlay" @click.self="cancel">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>{{ title || (itemsCount > 1 ? 'Supprimer les éléments ?' : 'Supprimer l\'élément ?') }}</h3>
+        <h3>{{ uiStore.deleteDialog.title || (itemsCount > 1 ? 'Supprimer les éléments ?' : 'Supprimer l\'élément ?') }}</h3>
         <button @click="cancel" class="btn-close">×</button>
       </div>
       
       <div class="modal-body">
-        <p v-if="message">{{ message }}</p>
+        <p v-if="uiStore.deleteDialog.message">{{ uiStore.deleteDialog.message }}</p>
         <template v-else>
           <p v-if="itemsCount === 1">
-            Êtes-vous sûr de vouloir supprimer <strong>"{{ itemName }}"</strong> ?
+            Êtes-vous sûr de vouloir supprimer <strong>"{{ uiStore.deleteDialog.itemName }}"</strong> ?
           </p>
           <p v-else>
             Êtes-vous sûr de vouloir supprimer ces <strong>{{ itemsCount }} éléments</strong> ?
@@ -28,34 +28,22 @@
 </template>
 
 <script setup>
-defineProps({
-  isOpen: Boolean,
-  itemsCount: {
-    type: Number,
-    default: 1
-  },
-  itemName: {
-    type: String,
-    default: ''
-  },
-  title: {
-    type: String,
-    default: ''
-  },
-  message: {
-    type: String,
-    default: ''
-  }
-});
+import { computed } from 'vue'
+import { useUIStore } from '../stores/ui'
 
-const emit = defineEmits(['confirm', 'cancel']);
+const uiStore = useUIStore()
+
+const itemsCount = computed(() => uiStore.deleteDialog.itemsCount || 1)
 
 const confirm = () => {
-  emit('confirm');
+  if (uiStore.deleteDialog.onConfirm) {
+      uiStore.deleteDialog.onConfirm()
+  }
+  uiStore.closeDeleteDialog()
 };
 
 const cancel = () => {
-  emit('cancel');
+  uiStore.closeDeleteDialog()
 };
 </script>
 
@@ -72,18 +60,20 @@ const cancel = () => {
   align-items: center;
   z-index: 321000;
   animation: fadeIn 0.2s ease;
+  backdrop-filter: blur(2px);
 }
 
 .modal-content {
-  background: var(--card-color);
+  background: var(--card-color, #1e1e1e);
   padding: 0;
   border-radius: 12px;
   width: 400px;
   max-width: 90%;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border: 1px solid var(--border-color, #333);
 }
 
 .modal-header {
@@ -91,14 +81,15 @@ const cancel = () => {
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color, #333);
+  background: rgba(255, 82, 82, 0.05); /* Slight red tint for delete context */
 }
 
 .modal-header h3 {
   margin: 0;
   font-size: 1.1rem;
   font-weight: 600;
-  color: var(--main-text-color);
+  color: var(--main-text-color, #eee);
 }
 
 .btn-close {
@@ -106,7 +97,7 @@ const cancel = () => {
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: var(--secondary-text-color);
+  color: var(--secondary-text-color, #aaa);
   padding: 0;
   line-height: 1;
 }
@@ -114,58 +105,54 @@ const cancel = () => {
 .modal-body {
   padding: 24px;
   text-align: center;
-  color: var(--main-text-color);
-}
-
-.warning-icon {
-  font-size: 3rem;
-  margin-bottom: 1rem;
+  color: var(--main-text-color, #eee);
 }
 
 .sub-text {
-  color: var(--secondary-text-color);
+  color: var(--secondary-text-color, #aaa);
   font-size: 0.9rem;
-  margin-top: 0.5rem;
+  margin-top: 1rem;
 }
 
 .modal-footer {
   padding: 16px 24px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-color, #333);
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  background-color: var(--background-color);
+  background-color: var(--background-color, #121212);
 }
 
 button {
   padding: 8px 16px;
-  border-radius: 4px;
+  border-radius: 6px;
   border: 1px solid transparent;
   cursor: pointer;
   font-weight: 500;
   font-size: 0.9rem;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
 }
 
 .btn-secondary {
-  background-color: var(--card-color);
-  border: 1px solid var(--border-color);
-  color: var(--main-text-color);
+  background-color: transparent;
+  border: 1px solid var(--border-color, #444);
+  color: var(--main-text-color, #ccc);
 }
 
 .btn-secondary:hover {
-  background-color: var(--hover-background-color);
-  border-color: var(--border-color);
+  background-color: rgba(255,255,255,0.05);
+  border-color: #666;
 }
 
 .btn-delete {
-  background-color: var(--error-color);
+  background-color: #f44336; /* Error Red */
   color: white;
+  border: 1px solid #d32f2f;
 }
 
 .btn-delete:hover {
-  background-color: #c0392b; /* Darker red */
-  box-shadow: 0 1px 2px rgba(60,64,67,0.3);
+  background-color: #d32f2f;
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
 }
 
 @keyframes fadeIn {
