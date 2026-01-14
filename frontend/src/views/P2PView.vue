@@ -10,7 +10,6 @@
     <div class="p2p-layout">
         <!-- LEFT: Current User -->
         <div class="user-zone" ref="userZoneRef">
-            <div class="zone-label">MON COMPTE</div>
             <div class="large-avatar pulse-effect">
                 {{ getInitials(authStore.user?.name) }}
             </div>
@@ -87,11 +86,37 @@
                 <p class="user-name">{{ selectedFriend.name }}</p>
             </div>
 
-            <!-- Case: Friends List -->
+            <!-- Case: Friends List (Orbit) -->
+            <div v-else-if="viewMode === 'orbit'" class="friends-orbit-container">
+                <div class="orbit-center-text clickable-text" @click="viewMode = 'list'" title="Passer en vue liste">
+                    Avec qui<br>partager ?
+                </div>
+
+                <div v-if="onlineFriends.length === 0" class="empty-orbit-msg">
+                    Personne...
+                </div>
+                
+                <div 
+                    v-for="(friend, index) in onlineFriends" 
+                    :key="friend.id" 
+                    class="orbit-item"
+                    :style="getOrbitPosition(index, onlineFriends.length)"
+                    @click="selectFriend(friend)"
+                >
+                    <div class="orbit-avatar" :style="getFloatStyle()">
+                        {{ getInitials(friend.name) }}
+                        <div class="orbit-status"></div>
+                    </div>
+                    <span class="orbit-name">{{ friend.name }}</span>
+                </div>
+            </div>
+
+            <!-- Case: Friends List (Vertical) -->
             <div v-else class="friends-list-box">
-                <div class="list-header zone-label">
-                    <span>AMIS EN LIGNE</span>
-                    <span class="count">{{ onlineFriends.length }}</span>
+                <div class="list-header">
+                    <div class="zone-label clickable-text" @click="viewMode = 'orbit'" title="Retour à l'orbite">
+                        AMIS EN LIGNE ({{ onlineFriends.length }}) ↺
+                    </div>
                 </div>
                 
                 <div v-if="onlineFriends.length === 0" class="empty-list">
@@ -136,6 +161,7 @@ const friendsZoneRef = ref(null)
 const selectedFriend = ref(null)
 const selectedFile = ref(null)
 const dragOver = ref(false)
+const viewMode = ref('orbit') // 'orbit' | 'list'
 
 const canSend = computed(() => !!selectedFile.value && !!selectedFriend.value)
 
@@ -163,6 +189,32 @@ const getInitials = (name) => {
 const truncate = (str) => {
     if (str.length > 15) return str.substring(0, 12) + '...'
     return str
+}
+
+// --- Orbit Logic ---
+const getOrbitPosition = (index, total) => {
+    if (total === 0) return {}
+    const radius = 120 // Distance from center
+    const centerX = 150 // Container width/2 (adjust based on CSS)
+    const centerY = 150 // Container height/2
+    const angle = (index / total) * 2 * Math.PI - (Math.PI / 2) // Start top
+    
+    const x = centerX + radius * Math.cos(angle) - 35 // -35 = half avatar size (70px)
+    const y = centerY + radius * Math.sin(angle) - 35
+    
+    return {
+        left: `${x}px`,
+        top: `${y}px`
+    }
+}
+
+const getFloatStyle = () => {
+    const duration = 3 + Math.random() * 2 // 3-5s
+    const delay = Math.random() * -5
+    return {
+        animationDuration: `${duration}s`,
+        animationDelay: `${delay}s`
+    }
 }
 
 // --- Interaction Logic ---
@@ -341,10 +393,26 @@ const updateParticles = () => {
                  particles.push(spawnParticle(friendRect, centerRect, COLOR_GREEN_DARK, 'right'))
             }
         } else {
-            // Spawn from List (Randomly along the right box)
-            const boxEl = friendsZoneRef.value.querySelector('.friends-list-box')
-            if (boxEl) {
-                const boxRect = getRelRect(boxEl)
+            // Spawn from List or Orbit
+            const orbitEl = friendsZoneRef.value.querySelector('.friends-orbit-container')
+            const listEl = friendsZoneRef.value.querySelector('.friends-list-box')
+
+            if (orbitEl) {
+                const boxRect = getRelRect(orbitEl)
+                // Spawn source: Random position inside the orbit container
+                const angle = Math.random() * Math.PI * 2
+                const r = 100 // Approximation
+                const sx = boxRect.left + boxRect.width/2 + r * Math.cos(angle)
+                const sy = boxRect.top + boxRect.height/2 + r * Math.sin(angle)
+                
+                // Target: Center
+                const tx = centerRect.left + centerRect.width/2
+                const ty = centerRect.top + centerRect.height/2
+                
+                particles.push(new Particle(sx, sy, tx, ty, getRandomPastelDark(), 'right-list'))
+
+            } else if (listEl) {
+                const boxRect = getRelRect(listEl)
                 // Spawn source: Left edge of the box
                 const sy = boxRect.top + Math.random() * boxRect.height
                 const sx = boxRect.left + 20 
@@ -353,8 +421,7 @@ const updateParticles = () => {
                 const tx = centerRect.left + centerRect.width/2
                 const ty = centerRect.top + centerRect.height/2
                 
-                // Multicolor
-                particles.push(new Particle(sx, sy, tx, ty, getRandomPastelDark(), 'right-list'))
+                particles.push(new Particle(sx, sy, tx, ty, getRandomPastelDark(), 'right-list')) 
             }
         }
     }
@@ -526,29 +593,12 @@ watch(onlineFriends, () => {
     display: flex;
     flex-direction: column;
     align-items: center;
-    color: white;
+    justify-content: center;
+    height: 100%;
 }
 
-.action-label {
-    margin-top: 1rem;
-    color: var(--secondary-text-color);
-    font-size: 0.9rem;
-    min-height: 1.5em;
-}
-
-.filename {
-    font-size: 0.8rem;
-    word-break: break-all;
-    max-width: 100px;
-}
-
-/* Friends Zone */
-.friends-list-box {
-    width: 280px;
-    display: flex;
-    flex-direction: column;
-}
-zone-label {
+/* Common label style restored */
+.zone-label {
     font-weight: 600;
     color: var(--secondary-text-color);
     font-size: 0.8rem;
@@ -559,30 +609,34 @@ zone-label {
     text-align: center;
 }
 
-.list-header {
-    padding: 0 4px; /* Reduced padding since margin is on zone-label */
-    display: flex;
-    justify-content: space-between;
-    align-items: centercase;
-    letter-spacing: 0.5px;
+.clickable-text {
+    cursor: pointer;
+    transition: color 0.2s;
+}
+.clickable-text:hover {
+    color: var(--primary-color);
 }
 
-.count {
-    background: rgba(0,0,0,0.05);
-    color: var(--main-text-color);
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 700;
+/* LIST MODE STYLES RE-ADDED */
+.friends-list-box {
+    width: 280px;
+    display: flex;
+    flex-direction: column;
+}
+
+.list-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .scrollable-list {
     max-height: 400px;
     overflow-y: auto;
-    padding: 10px; /* More padding for hover effects */
+    padding: 10px;
     display: flex;
     flex-direction: column;
-    gap: 4px; /* Reduced gap since rows have margins or padding */
+    gap: 4px;
 }
 
 .friend-row {
@@ -638,6 +692,150 @@ zone-label {
     box-shadow: 0 0 0 2px var(--card-color);
 }
 
+.orbit-center-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    font-weight: 700;
+    color: var(--secondary-text-color);
+    width: 120px;
+    z-index: 21; /* Above particles/items if needed, but allow clicks */
+    font-size: 0.9rem;
+    pointer-events: auto; /* Enable click */
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.orbit-center-text:hover {
+    color: var(--primary-color);
+    font-size: 0.8rem;
+    word-break: break-all;
+    max-width: 100px;
+}
+
+/* Friends Zone */
+.friends-orbit-container {
+    width: 300px;
+    height: 300px;
+    position: relative;
+    /* border: 1px dashed var(--border-color); /* Debug */
+    border-radius: 50%; /* Optional circular boundary */
+}
+
+.orbit-center-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    font-weight: 700;
+    color: var(--secondary-text-color);
+    width: 140px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    border-radius: 50%;
+    font-size: 0.9rem;
+    pointer-events: auto;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s ease;
+}
+
+.orbit-center-text:hover {
+    color: var(--primary-color);
+    /* background removed to avoid oval shape */
+    transform: translate(-50%, -50%) scale(1.1);
+    text-shadow: 0 0 15px rgba(255,255,255,0.8);
+}
+
+.empty-orbit-msg {
+    position: absolute;
+    bottom: 20px;
+    left: 0; right: 0;
+    text-align: center;
+    color: #999;
+}
+
+.orbit-item {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    z-index: 10;
+    width: 70px; /* Helper for centering logic */
+    /* Transition for layout changes */
+    transition: top 0.5s ease, left 0.5s ease;
+}
+
+.orbit-avatar {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    border: 3px solid white;
+    position: relative;
+    
+    /* Animation definition */
+    animation-name: orbitFloat;
+    animation-iteration-count: infinite;
+    animation-timing-function: ease-in-out;
+}
+
+.orbit-avatar:hover {
+    transform: scale(1.15);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+    z-index: 20;
+    border-color: var(--primary-color);
+}
+
+.orbit-name {
+    margin-top: 5px;
+    background: rgba(255,255,255,0.9);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--main-text-color);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    white-space: nowrap;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.orbit-item:hover .orbit-name {
+    opacity: 1;
+    background: white;
+}
+
+.orbit-status {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 14px;
+    height: 14px;
+    background: #4caf50;
+    border: 2px solid white;
+    border-radius: 50%;
+}
+
+@keyframes orbitFloat {
+    0% { transform: translate(0, 0); }
+    50% { transform: translate(0, -6px); }
+    100% { transform: translate(0, 0); }
+}
 .selected-friend-view {
     display: flex;
     flex-direction: column;
