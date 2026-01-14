@@ -34,6 +34,8 @@ export const useFileStore = defineStore('files', {
     shareUpdateTrigger: 0,
     recentFolders: JSON.parse(localStorage.getItem('recentFolders')) || [],
     recentFiles: JSON.parse(localStorage.getItem('recentFiles')) || [],
+    // Used to coordinate navigation from Suggestions
+    pendingNavigatePath: null,
   }),
   actions: {
     addToHistory(item) {
@@ -60,6 +62,11 @@ export const useFileStore = defineStore('files', {
       this.searchQuery = query
     },
     async fetchItems(path) {
+        // If a pending navigation is set, consume it and use that path
+        if (this.pendingNavigatePath) {
+          path = this.pendingNavigatePath;
+          this.pendingNavigatePath = null;
+        }
       // If we are in shared mode and fetchItems('/') is called, switch back to drive mode
       if (path === '/' && this.viewMode === 'shared') {
           this.viewMode = 'drive';

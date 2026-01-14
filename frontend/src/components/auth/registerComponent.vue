@@ -57,7 +57,8 @@ const submit = async () => {
     recoveryCode.value = code
   } catch (err) {
     console.error(err)
-    error.value = 'Erreur lors de l\'inscription'
+    // Show backend error message if available
+    error.value = err.message || "Erreur lors de l'inscription"
   } finally {
     loading.value = false
   }

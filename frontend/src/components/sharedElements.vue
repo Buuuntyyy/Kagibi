@@ -58,7 +58,6 @@
 
             <template #link="{ item }">
               <div class="link-actions">
-                <a :href="item.link" target="_blank" class="open-link">Ouvrir</a>
                 <button @click.stop="copyLink(item.link)" class="icon-btn" title="Copier le lien">
                   📋
                 </button>
@@ -434,16 +433,12 @@ onMounted(() => {
   flex-grow: 1;
   padding: 0 1rem;
 }
-
-.accordion-item {
+.accordion-header {
   border: 1px solid #eee;
   border-radius: 8px;
   margin-bottom: 1rem;
   overflow: hidden;
-  background-color: white;
-}
-
-.accordion-header {
+  background-color: var(--card-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -455,7 +450,7 @@ onMounted(() => {
 }
 
 .accordion-header:hover {
-  background-color: #f0f0f0;
+  background-color: var(--hover-background-color);
 }
 
 .accordion-header.active {

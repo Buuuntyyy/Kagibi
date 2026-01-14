@@ -166,7 +166,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, computed, onUnmounted, watch } from 'vue'
+import { onMounted, ref, computed, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useFileStore } from '../../stores/files'
@@ -463,11 +463,18 @@ const navigateToPath = (path) => {
   fileStore.fetchItems(path)
 }
 
-onMounted(() => {
-  // Only fetch root if we are NOT in shared mode.
-  // This prevents resetting viewMode when coming from HomeView -> FileShared
-  if (fileStore.viewMode !== 'shared') {
-    fileStore.fetchItems('/')
+onMounted(async () => {
+  // If a pending navigation path is set (from Suggestions), use it
+  if (fileStore.pendingNavigatePath) {
+    await nextTick(); // Ensure everything is mounted
+    fileStore.fetchItems(fileStore.pendingNavigatePath)
+    fileStore.pendingNavigatePath = null;
+  } else {
+    // Only fetch root if we are NOT in shared mode.
+    // This prevents resetting viewMode when coming from HomeView -> FileShared
+    if (fileStore.viewMode !== 'shared') {
+      fileStore.fetchItems('/')
+    }
   }
   tagStore.fetchTags()
   document.addEventListener('click', closeContextMenu)
