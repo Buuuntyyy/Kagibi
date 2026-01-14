@@ -71,12 +71,25 @@
         </div>
         <div class="accordion-content" v-if="friendsOpen">
             <div class="friend-header" v-if="authStore.user && authStore.user.friend_code">
-                <span class="my-code" @click="copyFriendCode" title="Copier mon code">{{ authStore.user.friend_code }}</span>
-                <button class="add-friend-btn" @click.stop="toggleAddFriendMenu" title="Ajouter un ami">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                <div class="code-wrapper">
+                  <span class="my-code" @click="copyFriendCode" title="Copier mon code">{{ authStore.user.friend_code }}</span>
+                  <div class="info-container-left">
+                     <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="info-icon" @click.stop="toggleLeftInfo">
+                        <path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/>
                     </svg>
-                </button>
+                    <div v-if="showLeftInfo" class="info-tooltip-mini">
+                        Identifiant unique à partager pour être ajouté en ami.
+                    </div>
+                  </div>
+                </div>
+
+                <div class="header-actions">
+                  <button class="add-friend-btn" @click.stop="toggleAddFriendMenu" title="Ajouter un ami">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                          <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                      </svg>
+                  </button>
+                </div>
                 
                 <div v-if="showAddFriendMenu" class="add-friend-popup" @click.stop>
                     <input id="add-friend-input" v-model="newFriendId" placeholder="Code ami..." @keydown.enter="addFriend" />
@@ -137,11 +150,19 @@ const friendsOpen = ref(true) // Default open or closed
 const fileInput = ref(null)
 const showAddFriendMenu = ref(false)
 const newFriendId = ref('')
+const showLeftInfo = ref(false)
 
 const closeAddFriendMenu = () => {
     if (showAddFriendMenu.value) {
         showAddFriendMenu.value = false
     }
+    if (showLeftInfo.value) {
+        showLeftInfo.value = false
+    }
+}
+
+const toggleLeftInfo = () => {
+    showLeftInfo.value = !showLeftInfo.value
 }
 
 const toggleAddFriendMenu = () => {
@@ -367,6 +388,8 @@ const storagePercentage = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  position: relative;
+  z-index: 5;
 }
 
 .menu-item {
@@ -456,7 +479,7 @@ const storagePercentage = computed(() => {
 }
 
 .accordion-content {
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   animation: slideDown 0.3s ease-out;
@@ -489,12 +512,51 @@ const storagePercentage = computed(() => {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 20px; /* Aligned with typical menu item padding */
+    padding: 8px 16px; /* Aligned with typical menu item padding */
     background-color: transparent; /* Cleaner look */
     font-size: 0.85rem;
     position: relative;
     border-bottom: 1px solid var(--border-color);
     margin-bottom: 4px;
+}
+
+.code-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.info-container-left {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.info-icon {
+    color: var(--secondary-text-color);
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.info-icon:hover {
+    opacity: 1;
+    color: var(--primary-color);
+}
+
+.info-tooltip-mini {
+    position: absolute;
+    top: 20px;
+    left: 0;
+    width: 180px;
+    background-color: #333;
+    color: white;
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    z-index: 200;
+    line-height: 1.3;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
 }
 
 .my-code {
