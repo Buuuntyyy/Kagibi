@@ -19,28 +19,18 @@
           </button>
         </div>
       </div>
-      
-      <DeleteConfirmDialog 
-        :isOpen="showDeleteConfirm" 
-        :title="'Suppression ami'"
-        :message="friendToDelete ? `Voulez-vous vraiment supprimer ${friendToDelete.name} de votre liste d'amis ?` : ''"
-        @confirm="confirmDelete"
-        @cancel="cancelDelete" 
-      />
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useFriendStore } from '../stores/friends'
-import DeleteConfirmDialog from './DeleteConfirmDialog.vue'
+import { useUIStore } from '../stores/ui'
 
 const authStore = useAuthStore()
 const friendStore = useFriendStore()
-
-const showDeleteConfirm = ref(false)
-const friendToDelete = ref(null)
+const uiStore = useUIStore()
 
 onMounted(() => {
     friendStore.fetchFriends();
@@ -54,20 +44,13 @@ const getInitials = (name) => {
 }
 
 const deleteFriend = (friend) => {
-    friendToDelete.value = friend
-    showDeleteConfirm.value = true
-}
-
-const confirmDelete = async () => {
-    if (friendToDelete.value) {
-        await friendStore.removeFriend(friendToDelete.value.id)
-    }
-    cancelDelete()
-}
-
-const cancelDelete = () => {
-    showDeleteConfirm.value = false
-    friendToDelete.value = null
+    uiStore.requestDeleteConfirmation({
+        title: 'Suppression ami',
+        message: `Voulez-vous vraiment supprimer ${friend.name} de votre liste d'amis ?`,
+        onConfirm: async () => {
+             await friendStore.removeFriend(friend.id)
+        }
+    })
 }
 </script>
 
