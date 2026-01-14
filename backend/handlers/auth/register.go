@@ -1,7 +1,9 @@
 package auth
 
 import (
+	"crypto/rand"
 	"log"
+	"math/big"
 	"net/http"
 	"safercloud/backend/pkg"
 	"strings"
@@ -26,6 +28,16 @@ type RegisterRequest struct {
 	RecoverySalt               string `json:"recovery_salt" validate:"required"`
 	PublicKey                  string `json:"public_key"`
 	EncryptedPrivateKey        string `json:"encrypted_private_key"`
+}
+
+func generateFriendCode() string {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	code := make([]byte, 8)
+	for i := range code {
+		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		code[i] = charset[num.Int64()]
+	}
+	return "#" + string(code)
 }
 
 func RegisterHandler(c *gin.Context, db *bun.DB) {
@@ -58,6 +70,7 @@ func RegisterHandler(c *gin.Context, db *bun.DB) {
 		EncryptedMasterKeyRecovery: req.EncryptedMasterKeyRecovery,
 		RecoveryHash:               req.RecoveryHash,
 		RecoverySalt:               req.RecoverySalt,
+		FriendCode:                 generateFriendCode(),
 		PublicKey:                  req.PublicKey,
 		EncryptedPrivateKey:        req.EncryptedPrivateKey,
 	}
