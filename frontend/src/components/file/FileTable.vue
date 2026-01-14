@@ -314,15 +314,31 @@ const onShareIconHover = (isHovering, event) => {
 
 .files-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: collapse; /* Keep collapse for alignment, but we remove borders */
   min-width: 800px;
 }
 
 .files-table th, .files-table td {
-  padding: 15px 20px;
+  padding: 10px 10px; /* Reduced padding (~10-20%) from 15px 20px */
   text-align: left;
-  border-bottom: 1px solid var(--border-color);
+  /* border-bottom: 1px solid var(--border-color); Removed full width border */
+  border-bottom: none;
   color: var(--main-text-color);
+  font-size: 0.9rem; /* Slightly reduced font size */
+}
+
+/* Add custom separator lines that don't touch edges */
+.files-table thead tr,
+.files-table tbody tr {
+  background-image: linear-gradient(to right, transparent 15px, var(--border-color) 15px, var(--border-color) calc(100% - 15px), transparent calc(100% - 15px));
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  background-position: bottom;
+}
+
+/* Remove line for the last item in the list */
+.files-table tbody tr:last-child {
+  background-image: none;
 }
 
 .files-table th {
@@ -330,7 +346,7 @@ const onShareIconHover = (isHovering, event) => {
   color: var(--main-text-color);
   font-weight: 600;
   text-transform: uppercase;
-  font-size: 0.85rem;
+  font-size: 0.75rem; /* Reduced header font size */
   letter-spacing: 0.5px;
   user-select: none;
 }
@@ -353,6 +369,7 @@ const onShareIconHover = (isHovering, event) => {
   font-size: 0.8em;
 }
 
+/* Redundant now that we handle background-image on tr, but good to keep clean */
 .files-table tr:last-child td {
   border-bottom: none;
 }
@@ -376,7 +393,7 @@ const onShareIconHover = (isHovering, event) => {
 }
 
 .icon-col {
-  width: 40px;
+  width: 32px; /* Reduced from 40px */
   text-align: center;
 }
 
@@ -390,7 +407,7 @@ const onShareIconHover = (isHovering, event) => {
   align-items: center;
   justify-content: space-between;
   overflow: hidden;
-  padding-right: 1rem;
+  padding-right: 0.8rem; /* Reduced padding */
 }
 
 .name {
@@ -453,7 +470,7 @@ const onShareIconHover = (isHovering, event) => {
 }
 
 .icon-svg {
-  width: 24px;
-  height: 24px;
+  width: 20px; /* Reduced from 24px */
+  height: 20px;
 }
 </style>
