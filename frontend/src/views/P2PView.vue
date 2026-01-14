@@ -18,8 +18,6 @@
 
         <!-- CENTER: Action Button -->
         <div class="center-zone" ref="centerZoneRef">
-             <!-- Spacer for alignment -->
-             <div class="zone-label" style="opacity: 0">ACTION</div>
             <input type="file" id="p2p-file-input" @change="handleFileSelect" style="display: none" />
             
             <div style="position: relative">
@@ -31,7 +29,12 @@
                     @dragleave.prevent="dragOver = false" 
                     @drop.prevent="handleDrop"
                 >
-                    <div v-if="!selectedFile" class="plus-icon">+</div>
+                    <div v-if="!selectedFile" class="plus-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </div>
                     
                     <div v-else-if="!canSend" class="file-state">
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" class="file-icon">
@@ -71,7 +74,6 @@
             
             <!-- Case: Friend Selected -->
             <div v-if="selectedFriend" class="selected-friend-view">
-                <div class="zone-label">DESTINATAIRE</div>
                 <div style="position: relative;">
                     <div class="large-avatar friend-avatar pulse-effect">
                         {{ getInitials(selectedFriend.name) }}
@@ -488,10 +490,11 @@ watch(onlineFriends, () => {
 .p2p-layout {
     flex: 1;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-evenly;
     position: relative;
     z-index: 2;
+    padding-top: 40px;
 }
 
 /* --- ZONES --- */
@@ -499,8 +502,16 @@ watch(onlineFriends, () => {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     min-width: 200px;
+}
+
+.user-zone {
+    margin-top: 30px;
+}
+
+.friends-zone {
+    margin-top: 30px;
 }
 
 /* User Zone */
@@ -565,7 +576,6 @@ watch(onlineFriends, () => {
 }
 
 .plus-icon {
-    font-size: 4.5rem;
     color: var(--secondary-text-color);
 }
 
