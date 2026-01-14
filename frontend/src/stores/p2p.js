@@ -9,6 +9,30 @@ import {
     decryptKeyWithPrivateKey,
     importKeyFromPEM
 } from '../utils/crypto'
+import axios from 'axios'
+import { API_BASE_URL } from '../api'
+
+// Fonction utilitaire pour récupérer la config ICE depuis le backend
+async function fetchICEConfig() {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_BASE_URL}/ice-config`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        if (response.data && response.data.iceServers) {
+            return { iceServers: response.data.iceServers };
+        }
+    } catch (e) {
+        console.error("Failed to fetch ICE config via API, falling back to STUN only", e);
+    }
+    // Fallback sécurité si l'API échoue
+    return {
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+    };
+}
 
 export const useP2PStore = defineStore('p2p', {
   state: () => ({
@@ -86,7 +110,11 @@ export const useP2PStore = defineStore('p2p', {
          const publicKey = await importKeyFromPEM(friend.public_key);
          const keyEncryptedBase64 = await encryptKeyWithPublicKey(fileKeyRaw, publicKey);
 
-         const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+         // Fetch ICE Config from backend
+         const rtcConfig = await fetchICEConfig();
+         console.log("Using RTC Config:", rtcConfig);
+
+         const pc = new RTCPeerConnection(rtcConfig);
          const socketStore = useWebSocketStore();
          const uiStore = useUIStore();
 
@@ -179,13 +207,9 @@ export const useP2PStore = defineStore('p2p', {
             return;
         }
 
-        const pc = new RTCPeerConnection({ 
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' }
-            ] 
-        });
+        // Fetch ICE Config from backend
+        const rtcConfig = await fetchICEConfig();
+        const pc = new RTCPeerConnection(rtcConfig);
         const socketStore = useWebSocketStore();
         const uiStore = useUIStore();
 
