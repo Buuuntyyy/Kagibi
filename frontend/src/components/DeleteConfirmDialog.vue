@@ -2,20 +2,20 @@
   <div v-if="isOpen" class="modal-overlay" @click.self="cancel">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>Supprimer {{ itemsCount > 1 ? 'les éléments' : 'l\'élément' }} ?</h3>
+        <h3>{{ title || (itemsCount > 1 ? 'Supprimer les éléments ?' : 'Supprimer l\'élément ?') }}</h3>
         <button @click="cancel" class="btn-close">×</button>
       </div>
       
       <div class="modal-body">
-        <div class="warning-icon">
-          ⚠️
-        </div>
-        <p v-if="itemsCount === 1">
-          Êtes-vous sûr de vouloir supprimer <strong>"{{ itemName }}"</strong> ?
-        </p>
-        <p v-else>
-          Êtes-vous sûr de vouloir supprimer ces <strong>{{ itemsCount }} éléments</strong> ?
-        </p>
+        <p v-if="message">{{ message }}</p>
+        <template v-else>
+          <p v-if="itemsCount === 1">
+            Êtes-vous sûr de vouloir supprimer <strong>"{{ itemName }}"</strong> ?
+          </p>
+          <p v-else>
+            Êtes-vous sûr de vouloir supprimer ces <strong>{{ itemsCount }} éléments</strong> ?
+          </p>
+        </template>
         <p class="sub-text">Cette action est irréversible.</p>
       </div>
 
@@ -35,6 +35,14 @@ defineProps({
     default: 1
   },
   itemName: {
+    type: String,
+    default: ''
+  },
+  title: {
+    type: String,
+    default: ''
+  },
+  message: {
     type: String,
     default: ''
   }
@@ -62,7 +70,7 @@ const cancel = () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  z-index: 321000;
   animation: fadeIn 0.2s ease;
 }
 
