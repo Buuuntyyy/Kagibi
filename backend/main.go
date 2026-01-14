@@ -221,6 +221,9 @@ func main() {
 	// Route WebSocket (Racine)
 	router.GET("/ws", func(c *gin.Context) { ws.ConnectHandler(c, wsManager, redisClient, db) })
 
+	// Route de configuration ICE (WebRTC)
+	protectedRoutes.GET("/ice-config", ws.GetICEConfigHandler)
+
 	// Route de debug
 	router.GET("/api/v1/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "pong", "version": "2.2"})
