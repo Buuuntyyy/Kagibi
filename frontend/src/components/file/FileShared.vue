@@ -12,13 +12,14 @@
         <span>Chargement...</span>
       </div>
       <div v-else-if="sharedItems.length > 0" class="cards-row">
-        <div 
-          v-for="(item, index) in sharedItems" 
-          :key="index" 
-          class="recent-card"
-          :class="item.type"
-          @click="openItem(item)"
-        >
+            <div 
+              v-for="(item, index) in sharedItems" 
+              :key="index" 
+              class="recent-card"
+              :class="[item.type, { selected: selectedIndex === index }]"
+              @click="selectItem(item, index, $event)"
+              @dblclick="openItem(item)"
+            >
           <div class="icon-wrapper">
              <!-- Folder Icon -->
             <svg v-if="item.type === 'folder'" viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
@@ -60,6 +61,8 @@ const fileStore = useFileStore()
 const isOpen = ref(true)
 const loading = ref(true)
 const sharedItems = ref([])
+const selectedIndex = ref(null)
+const selectedItem = ref(null)
 
 const toggleAccordion = () => {
   isOpen.value = !isOpen.value
@@ -102,6 +105,13 @@ const openItem = async (item) => {
     }
     await downloadSharedFile(item);
   }
+}
+
+const selectItem = (item, index, event) => {
+  // Prevent propagation if nested clickable elements
+  if (event) event.stopPropagation()
+  selectedIndex.value = index
+  selectedItem.value = item
 }
 
 const downloadSharedFile = async (item) => {
@@ -286,6 +296,12 @@ onMounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.recent-card.selected {
+  border-color: var(--primary-color, #42b983);
+  box-shadow: 0 6px 18px rgba(66,185,131,0.12);
+  transform: translateY(-2px);
 }
 
 .empty-state {

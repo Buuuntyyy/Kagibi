@@ -135,8 +135,16 @@ export const useAuthStore = defineStore('auth', {
         public_key: publicKeyPEM,
         encrypted_private_key: encryptedPrivateKey
       };
-      await api.post('/auth/register', payload)
-      
+      try {
+        await api.post('/auth/register', payload)
+      } catch (err) {
+        // Surface backend error message if available
+        if (err.response && err.response.data && err.response.data.error) {
+          throw new Error(err.response.data.error)
+        } else {
+          throw new Error("Erreur lors de l'inscription")
+        }
+      }
       return recoveryCode; // Return code so UI can display it
     },
     async logout() {
