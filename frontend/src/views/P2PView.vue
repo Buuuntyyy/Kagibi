@@ -487,14 +487,45 @@ watch(onlineFriends, () => {
     z-index: 2;
 }
 
-.p2p-layout {
-    flex: 1;
+.orbit-center-text {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 180px;
+    height: 180px;
+    transform: translate(-50%, -50%);
     display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-weight: 700;
+    color: var(--secondary-text-color);
+    z-index: 100;
+    border-radius: 50%;
+    font-size: 1.1rem;
+    pointer-events: auto;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s ease;
+    margin: 0;
+    padding: 0;
+    background: none;
+}
+.orbit-center-text:hover {
+    color: var(--primary-color);
+    transform: translate(-50%, -50%) scale(1.1);
+    text-shadow: 0 0 15px rgba(255,255,255,0.8);
+}
+.p2p-layout {
+    display: flex;
+    flex-direction: row;
     align-items: flex-start;
-    justify-content: space-evenly;
+    justify-content: space-around;
+    gap: 2rem;
+    height: calc(100% - 80px); /* Adjust for header */
     position: relative;
     z-index: 2;
-    padding-top: 40px;
 }
 
 /* --- ZONES --- */
@@ -507,7 +538,11 @@ watch(onlineFriends, () => {
 }
 
 .user-zone {
-    margin-top: 30px;
+    margin-top: 120px;
+}
+
+.center-zone {
+    margin-top: 90px;
 }
 
 .friends-zone {
@@ -632,6 +667,7 @@ watch(onlineFriends, () => {
     width: 280px;
     display: flex;
     flex-direction: column;
+    margin-top: 140px;
 }
 
 .list-header {
@@ -735,14 +771,16 @@ watch(onlineFriends, () => {
 
 .orbit-center-text {
     position: absolute;
-    top: 50%;
     left: 50%;
+    top: 50%;
+    /* Correction: translateY(-50%) only, to keep vertical center regardless of text height */
     transform: translate(-50%, -50%);
     text-align: center;
     font-weight: 700;
     color: var(--secondary-text-color);
-    width: 140px;
-    height: 140px;
+    width: 180px; /* Match .action-circle width */
+    height: auto;
+    min-height: 64px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -754,6 +792,10 @@ watch(onlineFriends, () => {
     text-transform: uppercase;
     letter-spacing: 1px;
     transition: all 0.2s ease;
+    /* Ensure the text stays at the same vertical center as the action-circle */
+    /* Remove any margin or padding that could offset it */
+    margin: 0;
+    padding: 0;
 }
 
 .orbit-center-text:hover {
@@ -852,6 +894,7 @@ watch(onlineFriends, () => {
     align-items: center;
     position: relative;
     animation: fadeIn 0.3s;
+    margin-top: 90px;
     /* Removed card styling to match User zone exactly */
 }
 
@@ -938,9 +981,11 @@ watch(onlineFriends, () => {
         flex-direction: column;
         gap: 2rem;
     }
-    .user-zone { order: 1; }
+    .user-zone { order: 1; margin-top: 30px; }
     .center-zone { order: 2; margin: 2rem 0; }
-    .friends-zone { order: 3; }
+    .friends-zone { order: 3; margin-top: 30px; }
+    .friends-list-box { margin-top: 0; }
+    .selected-friend-view { margin-top: 0; }
     
     .friends-list-box {
         height: 200px;
