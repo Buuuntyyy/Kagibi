@@ -67,9 +67,19 @@ const combinedRecents = computed(() => {
   return [...folders, ...files];
 })
 
-const openItem = (item) => {
+import { useRouter } from 'vue-router'
+const router = useRouter()
+
+const openItem = async (item) => {
   if (item.type === 'folder') {
-    fileStore.fetchItems(item.path)
+    // Set a pending navigation path so FileList.vue will use it after mount
+    fileStore.pendingNavigatePath = item.path;
+    if (router.currentRoute.value.path !== '/dashboard/files') {
+      await router.push('/dashboard/files')
+    } else {
+      // If already on files, trigger navigation immediately
+      fileStore.fetchItems(item.path)
+    }
     fileStore.addToHistory(item)
   } else {
     fileStore.downloadFile(item.ID, item.Name)
