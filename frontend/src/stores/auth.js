@@ -21,6 +21,8 @@ export const useAuthStore = defineStore('auth', {
     async ensureRSAKeys(masterKey) {
        if (!this.user) return;
        
+       await sodium.ready; // Ensure sodium is ready before base64 ops
+
        // Si l'utilisateur n'a pas encore de clés (migration ou nouvel utilisateur)
        if (!this.user.public_key || !this.user.encrypted_private_key) {
            console.log("Generating RSA keys for user...");
@@ -152,8 +154,10 @@ export const useAuthStore = defineStore('auth', {
     },
     async checkAuth() {
       try {
+        await sodium.ready; // Ensure sodium is ready for key restoration
+
         const response = await api.get('/users/me'); 
-        this.isAuthenticated = true;
+        // Load user data first
         this.user = response.data;
         
         // Restore master key from session if available
@@ -179,6 +183,9 @@ export const useAuthStore = defineStore('auth', {
         if (this.masterKey) {
              await this.ensureRSAKeys(this.masterKey);
         }
+
+        // Set authenticated only after keys are potentially restored
+        this.isAuthenticated = true;
 
         return true
 
