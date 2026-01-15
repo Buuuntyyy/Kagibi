@@ -30,12 +30,36 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import LoginComponent from '../components/auth/loginComponent.vue'
 import RegisterComponent from '../components/auth/registerComponent.vue'
 import RecoveryComponent from '../components/auth/recoveryComponent.vue'
+import { useFileStore } from '../stores/files'
+import { useAuthStore } from '../stores/auth'
 
 const mode = ref('login') // 'login', 'register', 'recovery'
+const fileStore = useFileStore()
+const authStore = useAuthStore()
+
+onMounted(() => {
+  // Nettoyage des données de la session précédente pour éviter les fuites de données entre comptes
+  fileStore.recentFolders = []
+  fileStore.recentFiles = []
+  fileStore.folders = []
+  fileStore.files = []
+  fileStore.currentPath = '/'
+
+  // Force la suppression du cache local pour éviter la persistance des données (fichiers suggérés) après un rafraîchissement
+  localStorage.removeItem('files')
+  localStorage.removeItem('file')
+
+  // Sécurité : Suppression explicite des clés et tokens de la mémoire et du stockage
+  authStore.privateKey = null
+  authStore.publicKey = null
+  authStore.masterKey = null
+  authStore.user = null
+  localStorage.removeItem('auth')
+})
 </script>
 
 <style scoped>
