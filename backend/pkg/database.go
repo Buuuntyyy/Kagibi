@@ -368,7 +368,7 @@ func GetFolderContentRecursive(db *bun.DB, userID string, rootPath string) ([]Fi
 		return nil, nil, err
 	}
 
-	// Folders 
+	// Folders
 	qFolders := db.NewSelect().Model(&folders).Where("user_id = ?", userID)
 	if rootPath == "/" {
 		qFolders.Where("path LIKE ?", "/%")
