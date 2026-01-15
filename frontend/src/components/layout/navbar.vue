@@ -14,7 +14,7 @@
       <router-link v-if="!authStore.isAuthenticated" to="/login">Connexion / Inscription</router-link>
       <template v-else>
         <router-link to="/account">Mon Compte</router-link>
-        <a @click="logout" href="#">Se déconnecter</a>
+        <a @click.prevent="logout" href="#">Se déconnecter</a>
       </template>
     </div>
   </nav>
@@ -30,8 +30,8 @@ const authStore = useAuthStore()
 const themeStore = useThemeStore()
 const router = useRouter()
 
-const logout = () => {
-  authStore.logout()
+const logout = async () => {
+  await authStore.logout()
   router.push({ name: 'Login' })
 }
 </script>
