@@ -29,7 +29,7 @@ func CreateDirectShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager)
 		return
 	}
 
-	fmt.Printf("DEBUG: CreateDirectShare Payload - Type: %s, ID: %d, Friend: %s, KeyLen: %d, FileKeys: %d, FolderKeys: %d\n", 
+	fmt.Printf("DEBUG: CreateDirectShare Payload - Type: %s, ID: %d, Friend: %s, KeyLen: %d, FileKeys: %d, FolderKeys: %d\n",
 		req.ResourceType, req.ResourceID, req.FriendID, len(req.EncryptedKey), len(req.FolderFileKeys), len(req.FolderFolderKeys))
 
 	// currentUserID := c.GetString("user_id")
