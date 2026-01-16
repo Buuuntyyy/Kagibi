@@ -1,7 +1,7 @@
 <template>
   <div class="table-responsive">
     <table class="files-table">
-      <thead>
+      <thead class="sticky-header">
         <tr>
           <th v-for="col in columns" :key="col.key" :class="[col.headerClass, { sortable: isSortable(col.key) }]" @click="handleSort(col.key)">
             <div class="th-content">
@@ -308,8 +308,21 @@ const onShareIconHover = (isHovering, event) => {
 
 <style scoped>
 .table-responsive {
-  overflow-x: auto;
+  overflow: auto; /* Scrollable container */
+  width: 100%;
+  flex: 1;        /* Fill remaining vertical space */
+  min-height: 0;  /* Critical for flex scrolling */
   background-color: var(--card-color);
+  position: relative;
+}
+
+/* Sticky Header Implementation */
+.files-table th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--card-color);
+  box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.1); /* Optional shadow for separation */
 }
 
 .files-table {
@@ -342,6 +355,10 @@ const onShareIconHover = (isHovering, event) => {
 }
 
 .files-table th {
+  position: sticky; /* Make header sticky */
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 1px 0 var(--border-color); /* Separator line that moves with header */
   background-color: var(--card-color);
   color: var(--main-text-color);
   font-weight: 600;
