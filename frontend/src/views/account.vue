@@ -240,7 +240,8 @@ const handleUpdatePassword = async () => {
 .account-page {
   padding: 2rem;
   background-color: var(--background-color);
-  min-height: 100%;
+  height: 100%;
+  overflow-y: auto;
   box-sizing: border-box;
 }
 
