@@ -76,7 +76,7 @@ func StartWorker(redisClient *redis.Client) {
 				time.Sleep(time.Second * 5)
 				continue
 			}
-			
+
 			// Verify result structure
 			if len(result) < 2 {
 				log.Printf("S3 Worker ERROR: BLPop returned unexpected result: %v", result)
@@ -116,7 +116,7 @@ func processTask(task S3Task) {
 		defer file.Close()
 
 		uploader := manager.NewUploader(s3storage.Client)
-		result, err := uploader.Upload(ctx, &s3.PutObjectInput{
+		_, err = uploader.Upload(ctx, &s3.PutObjectInput{
 			Bucket:      aws.String(s3storage.BucketName),
 			Key:         aws.String(task.DestKey),
 			Body:        file,
