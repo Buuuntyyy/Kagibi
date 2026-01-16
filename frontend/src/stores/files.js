@@ -6,6 +6,50 @@ import { encryptChunkWorker, decryptChunkedFileWorker, CHUNK_SIZE } from '../uti
 import { generatePreview } from '../utils/previewGenerator'
 import sodium from 'libsodium-wrappers-sumo'
 
+// Compress image for preview display (reduces memory, not bandwidth)
+const PREVIEW_MAX_WIDTH = 1920;
+const PREVIEW_QUALITY = 0.85;
+
+function compressImageForPreview(blob) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(blob);
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+            
+            // Skip compression if image is small enough
+            if (img.width <= PREVIEW_MAX_WIDTH && blob.size < 2 * 1024 * 1024) {
+                resolve(null); // Return null to signal no compression needed
+                return;
+            }
+            
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            
+            if (width > PREVIEW_MAX_WIDTH) {
+                height = Math.round(height * (PREVIEW_MAX_WIDTH / width));
+                width = PREVIEW_MAX_WIDTH;
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            canvas.toBlob((compressedBlob) => {
+                if (compressedBlob) resolve(compressedBlob);
+                else resolve(null);
+            }, 'image/jpeg', PREVIEW_QUALITY);
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve(null); // Don't fail, just use original
+        };
+        img.src = url;
+    });
+}
+
 export const useFileStore = defineStore('files', {
   state: () => ({
     files: [],
@@ -348,17 +392,19 @@ export const useFileStore = defineStore('files', {
       // Find the file in the store to get encrypted_key
       const file = this.files.find(f => f.ID === fileId);
       
+      // Determine target file (Original or Preview)
       let targetFileId = fileId;
       let targetEncryptedKey = file ? file.EncryptedKey : null;
       let finalMimeType = mimeType;
 
-      // Use Preview file if available and requested
+      // Prefer server-side preview if available and requested
       if (preview && file && file.preview) {
-          console.log("Using optimized preview:", file.preview.ID);
-          targetFileId = file.preview.ID;
-          targetEncryptedKey = file.preview.EncryptedKey;
-          // Previews are usually JPEGs
-          finalMimeType = file.preview.MimeType || 'image/jpeg';
+           console.log("Using server-side preview:", file.preview.ID);
+           targetFileId = file.preview.ID; 
+           targetEncryptedKey = file.preview.EncryptedKey;
+           if (file.preview.MimeType) {
+               finalMimeType = file.preview.MimeType;
+           }
       }
 
       let fileKey = authStore.masterKey; // Default to masterKey for old files
@@ -383,9 +429,23 @@ export const useFileStore = defineStore('files', {
         
         // 2. Déchiffrer via Worker
         if (preview) this.preview.status = 'Déchiffrement local...';
-        const decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, finalMimeType);
+        let decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, finalMimeType);
 
-        // 3. Sauvegarder ou Prévisualiser
+        // 3. Pour la preview d'images, compresser côté client pour réduire la mémoire
+        if (preview && finalMimeType.startsWith('image/') && !finalMimeType.includes('svg')) {
+            this.preview.status = 'Optimisation pour affichage...';
+            try {
+                const compressedBlob = await compressImageForPreview(decryptedBlob);
+                if (compressedBlob) {
+                    decryptedBlob = compressedBlob;
+                    finalMimeType = 'image/jpeg';
+                }
+            } catch (e) {
+                console.warn("Image compression failed, using original", e);
+            }
+        }
+
+        // 4. Sauvegarder ou Prévisualiser
         const url = window.URL.createObjectURL(decryptedBlob);
         
         if (preview) {
@@ -419,21 +479,26 @@ export const useFileStore = defineStore('files', {
         return
       }
 
-      // 1. Generate Preview if main file and supported
+      // Generate Preview if main file and supported (images/PDFs)
       if (!isPreview && !previewID) {
           const previewBlob = await generatePreview(file);
           if (previewBlob) {
-             console.log("Uploading preview...");
+             console.log("Preview generated, size:", previewBlob.size, "bytes");
              const safeName = (file.name || "file").replace(/[^a-zA-Z0-9.-]/g, '_');
              const previewName = "preview_" + safeName + ".jpg";
              const previewFile = new File([previewBlob], previewName, { type: "image/jpeg" });
              try {
+                console.log("Uploading preview file:", previewName);
                 const previewResult = await this.uploadFile(previewFile, true);
+                console.log("Preview upload result:", previewResult);
                 if (previewResult && previewResult.ID) {
                     previewID = previewResult.ID;
+                    console.log("Preview ID set to:", previewID);
+                } else {
+                    console.warn("Preview uploaded but no ID returned");
                 }
              } catch (e) {
-                 console.warn("Failed to upload preview", e);
+                 console.error("Failed to upload preview:", e);
              }
           }
       }
