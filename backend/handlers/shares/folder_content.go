@@ -136,6 +136,7 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 		Where("user_id = ?", ownerID).
 		Where("path LIKE ?", currentPath+"/%").
 		Where("path NOT LIKE ?", currentPath+"/%/%").
+		Where("is_preview = ?", false).
 		Scan(c.Request.Context())
 
 	if err != nil {
