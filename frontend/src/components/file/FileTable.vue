@@ -5,10 +5,15 @@
         <tr>
           <th v-for="col in columns" :key="col.key" :class="[col.headerClass, { sortable: isSortable(col.key) }]" @click="handleSort(col.key)">
             <div class="th-content">
-              {{ col.label }}
-              <span v-if="sortKey === col.key" class="sort-icon">
-                {{ sortDirection === 'asc' ? '↑' : '↓' }}
-              </span>
+              <template v-if="col.key === 'selection'">
+                <input type="checkbox" :checked="areAllSelected" @change="$emit('toggle-select-all', $event.target.checked)" @click.stop style="cursor: pointer;">
+              </template>
+              <template v-else>
+                {{ col.label }}
+                <span v-if="sortKey === col.key" class="sort-icon">
+                  {{ sortDirection === 'asc' ? '↑' : '↓' }}
+                </span>
+              </template>
             </div>
           </th>
         </tr>
@@ -28,8 +33,15 @@
              @dragleave="$emit('folder-drag-leave', $event)">
           
           <td v-for="col in columns" :key="col.key" :class="col.cellClass">
+            <!-- Selection -->
+            <template v-if="col.key === 'selection'">
+                <div class="selection-cell" @click.stop>
+                    <input type="checkbox" :checked="isSelected(folder, 'folder')" @click.stop="$emit('toggle-select', folder, 'folder', $event)" style="cursor: pointer;">
+                </div>
+            </template>
+
             <!-- Icon -->
-            <template v-if="col.key === 'icon'">
+            <template v-else-if="col.key === 'icon'">
               <span class="icon">
                 <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="#5f6368"/>
@@ -99,8 +111,15 @@
             @dragstart="$emit('drag-start', file, 'file', $event)"
         >
           <td v-for="col in columns" :key="col.key" :class="col.cellClass">
+             <!-- Selection -->
+            <template v-if="col.key === 'selection'">
+                <div class="selection-cell" @click.stop>
+                    <input type="checkbox" :checked="isSelected(file, 'file')" @click.stop="$emit('toggle-select', file, 'file', $event)" style="cursor: pointer;">
+                </div>
+            </template>
+
              <!-- Icon -->
-            <template v-if="col.key === 'icon'">
+            <template v-else-if="col.key === 'icon'">
               <span class="icon">
                 <!-- PDF -->
                 <svg v-if="getFileType(file.Name) === 'pdf'" class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -193,6 +212,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useTagStore } from '../../stores/tags'
 import { formatDate, formatSize } from '../../utils/format'
 
@@ -241,7 +261,9 @@ const emit = defineEmits([
   'folder-drag-leave',
   'manage-share',
   'remove-tag',
-  'sort-change'
+  'sort-change',
+  'toggle-select-all',
+  'toggle-select'
 ])
 
 const tagStore = useTagStore()
@@ -272,7 +294,18 @@ const getFileType = (filename) => {
 const isSelected = (item, type) => {
   return props.selectedItems.some(i => i.ID === item.ID && i.type === type)
 }
+const areAllSelected = computed(() => {
+  const hasItems = props.folders.length > 0 || props.files.length > 0
+  if (!hasItems) return false
 
+  // Check if all displayed folders are selected
+  const allFoldersSelected = props.folders.every(f => isSelected(f, 'folder'))
+  if (!allFoldersSelected) return false
+
+  // Check if all displayed files are selected
+  const allFilesSelected = props.files.every(f => isSelected(f, 'file'))
+  return allFilesSelected
+})
 const getTagStyle = (tagName) => {
     const tag = tagStore.tags.find(t => t.name === tagName)
     if (tag) {
@@ -412,6 +445,19 @@ const onShareIconHover = (isHovering, event) => {
 .icon-col {
   width: 32px; /* Reduced from 40px */
   text-align: center;
+}
+
+.selection-col {
+  width: 32px;
+  text-align: center;
+  padding-left: 10px;
+}
+
+.selection-cell {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
 }
 
 .list-item .icon {

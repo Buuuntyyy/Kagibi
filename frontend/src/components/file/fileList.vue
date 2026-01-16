@@ -71,6 +71,8 @@
       :sortDirection="currentSortDirection"
       @sort-change="handleSortChange"
       @select-item="selectItem"
+      @toggle-select="toggleItemSelection"
+      @toggle-select-all="handleSelectAll"
       @open-folder="openFolder"
       @open-file="downloadFile"
       @context-menu="openContextMenu"
@@ -240,10 +242,16 @@ const sortItems = (items) => {
 };
 
 const columns = computed(() => {
-  const cols = [
+  const cols = [];
+  
+  if (selectedItems.value.length > 0) {
+    cols.push({ key: 'selection', label: '', headerClass: 'selection-col', cellClass: 'selection-col' });
+  }
+
+  cols.push(
     { key: 'icon', label: '', headerClass: 'icon-col', cellClass: 'icon-col' },
     { key: 'name', label: 'Nom', cellClass: 'name-cell' },
-  ];
+  );
 
   if (fileStore.searchQuery && fileStore.searchQuery.trim() !== '') {
     cols.push({ key: 'path', label: 'Chemin' });
@@ -680,6 +688,47 @@ const selectItem = (item, type, event) => {
       selectedItems.value = [itemWithType];
       lastClickedIndex.value = currentIndex;
     }
+  }
+}
+
+const toggleItemSelection = (item, type, event) => {
+  const currentIndex = allItems.value.findIndex(i => i.ID === item.ID && i.type === type);
+  const itemWithType = { ...item, type };
+
+  if (event && event.shiftKey && lastClickedIndex.value !== -1) {
+    const start = Math.min(lastClickedIndex.value, currentIndex);
+    const end = Math.max(lastClickedIndex.value, currentIndex);
+    const rangeToSelect = allItems.value.slice(start, end + 1);
+
+    // Merge range into current selection (additive behavior for checkboxes)
+    const newSelection = [...selectedItems.value];
+    rangeToSelect.forEach(rangeItem => {
+      if (!newSelection.some(i => i.ID === rangeItem.ID && i.type === rangeItem.type)) {
+        newSelection.push(rangeItem);
+      }
+    });
+    selectedItems.value = newSelection;
+    
+  } else {
+    // Standard toggle behavior
+    const isItemSelected = isSelected(item, type);
+    
+    if (isItemSelected) {
+      selectedItems.value = selectedItems.value.filter(i => !(i.ID === item.ID && i.type === type));
+    } else {
+      selectedItems.value.push(itemWithType);
+    }
+    
+    // Update last clicked index ONLY on direct click (not range select) for anchor
+    lastClickedIndex.value = currentIndex;
+  }
+}
+
+const handleSelectAll = (checked) => {
+  if (checked) {
+    selectedItems.value = [...allItems.value];
+  } else {
+    selectedItems.value = [];
   }
 }
 
