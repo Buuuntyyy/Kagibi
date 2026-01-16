@@ -8,6 +8,23 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Prevent global scroll */
+}
+
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 [data-theme="light"] {
   --primary-color: #3498db;
   --secondary-color: #2ecc71;
@@ -103,12 +120,4 @@ button:focus-visible {
   border: 1px solid var(--border-color);
 }
 
-#app {
-  width: 100vw;
-  height: 100vh;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
 
