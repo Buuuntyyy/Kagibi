@@ -90,6 +90,8 @@ export const useAuthStore = defineStore('auth', {
         this.isAuthenticated = true;
 
         await this.fetchUser();
+        // Persist user data to localStorage (non-sensitive fields only)
+        this.persistUserToStorage();
         router.push({ name: 'Home' });
         return true
       } catch (error) {
@@ -157,6 +159,7 @@ export const useAuthStore = defineStore('auth', {
         this.user = null;
         this.masterKey = null;
         sessionStorage.removeItem("safercloud_mk");
+        localStorage.removeItem("safercloud_user");
         router.push({ name: 'Login' });
       }
     },
@@ -164,6 +167,10 @@ export const useAuthStore = defineStore('auth', {
       try {
         await sodium.ready; // Ensure sodium is ready for key restoration
 
+        // First, try to restore user from localStorage (faster, offline support)
+        const restoredFromStorage = this.restoreUserFromStorage();
+
+        // Then, fetch fresh user data from backend
         const response = await api.get('/users/me'); 
         // Load user data first
         this.user = response.data;
@@ -195,6 +202,9 @@ export const useAuthStore = defineStore('auth', {
         // Set authenticated only after keys are potentially restored
         this.isAuthenticated = true;
 
+        // Persist user data to localStorage
+        this.persistUserToStorage();
+
         return true
 
       } catch (error) {
@@ -208,6 +218,8 @@ export const useAuthStore = defineStore('auth', {
       try {
         const response = await api.get('/users/me');
         this.user = response.data;
+        // Persist user data to localStorage after fetch
+        this.persistUserToStorage();
       } catch (error) {
         console.error("Failed to fetch user:", error)
         this.logout();
@@ -280,6 +292,28 @@ export const useAuthStore = defineStore('auth', {
         });
         
         return true;
+    },
+    // --- Storage Persistence Helpers ---
+    persistUserToStorage() {
+      if (this.user) {
+        try {
+          localStorage.setItem("safercloud_user", JSON.stringify(this.user));
+        } catch (e) {
+          console.error("Failed to persist user data to localStorage", e);
+        }
+      }
+    },
+    restoreUserFromStorage() {
+      try {
+        const storedUser = localStorage.getItem("safercloud_user");
+        if (storedUser) {
+          this.user = JSON.parse(storedUser);
+          return true;
+        }
+      } catch (e) {
+        console.error("Failed to restore user data from localStorage", e);
+      }
+      return false;
     }
   },
 })
