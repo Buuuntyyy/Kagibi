@@ -536,6 +536,8 @@ export const useFileStore = defineStore('files', {
 
         if (!isPreview) {
             this.fetchItems(this.currentPath)
+            // Mise à jour du quota utilisateur
+            await authStore.fetchUser()
         }
         
         // Reset progress after a short delay
@@ -568,8 +570,10 @@ export const useFileStore = defineStore('files', {
     },
     async deleteFiles(fileIDs) {
     try {
+      const authStore = useAuthStore()
       await api.post('/files/bulk-delete', { file_ids: fileIDs })
       this.fetchItems(this.currentPath)
+      await authStore.fetchUser()
     } catch (error) {
       console.error('Error deleting items:', error)
     }

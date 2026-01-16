@@ -11,9 +11,16 @@ export const useWebSocketStore = defineStore('websocket', {
     maxReconnectInterval: 30000,
   }),
   actions: {
-    connect() {
+    async connect() {
       if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
         return;
+      }
+
+      // Get Supabase Token
+      const { data: { session } } = await import('../supabase').then(m => m.supabase.auth.getSession());
+      if (!session?.access_token) {
+          console.warn("WS: No auth token available, skipping connection");
+          return;
       }
 
       let url;
@@ -26,6 +33,9 @@ export const useWebSocketStore = defineStore('websocket', {
           const host = 'localhost:8080'; 
           url = `${protocol}//${host}/ws`;
       }
+      
+      // Append Token
+      url += `?token=${session.access_token}`;
 
       console.log(`Connecting to WebSocket at ${url}...`);
       

@@ -1,12 +1,16 @@
 package middleware
 
 import (
+	"log"
+	"strings"
+
+	"github.com/MicahParks/keyfunc/v3"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"strings"
 )
 
-func AuthMiddleware(secret string) gin.HandlerFunc {
+// AuthMiddleware vérifie les tokens via JWKS (ES256) ou Secret (HS256)
+func AuthMiddleware(jwks keyfunc.Keyfunc, secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if !strings.HasPrefix(authHeader, "Bearer ") {
@@ -17,19 +21,28 @@ func AuthMiddleware(secret string) gin.HandlerFunc {
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			// Supabase utilise HS256 avec votre JWT SECRET
-			return []byte(secret), nil
+			// Si le token est signé avec HMAC (HS256), on utilise le secret
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
+				return []byte(secret), nil
+			}
+
+			// Si le token est signé avec ECDSA (ES256) et qu'on a le JWKS, on utilise le JWKS
+			if _, ok := token.Method.(*jwt.SigningMethodECDSA); ok && jwks != nil {
+				return jwks.Keyfunc(token)
+			}
+
+			// Sinon, méthode Inconnue
+			return nil, jwt.ErrTokenUnverifiable
 		})
 
 		if err != nil || !token.Valid {
+			log.Printf("Auth Error: %v", err) // Log pour débugger
 			c.AbortWithStatusJSON(401, gin.H{"error": "Token invalide"})
 			return
 		}
 
-		// L'ID utilisateur (sub) est dans les claims
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
-			// UUID de l'utilisateur
-			c.Set("userID", claims["sub"])
+			c.Set("user_id", claims["sub"])
 		} else {
 			c.AbortWithStatusJSON(401, gin.H{"error": "Claims invalides"})
 		}

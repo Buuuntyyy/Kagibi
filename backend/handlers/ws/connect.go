@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"safercloud/backend/pkg"
 	wsPkg "safercloud/backend/pkg/ws"
 	"time"
 
+	"github.com/MicahParks/keyfunc/v3"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/uptrace/bun"
 )
@@ -25,27 +28,63 @@ var upgrader = websocket.Upgrader{
 }
 
 // ConnectHandler gère l'upgrade HTTP -> WebSocket
-func ConnectHandler(c *gin.Context, manager *wsPkg.Manager, redisClient *redis.Client, db *bun.DB) {
-	// 1. Récupérer le cookie de session manuellement
-	userID, exists := c.Get("userID")
-	if !exists {
-		sessionID, err := c.Cookie("session_id")
-		if err != nil {
-			log.Println("WS: No session cookie")
+func ConnectHandler(c *gin.Context, manager *wsPkg.Manager, redisClient *redis.Client, db *bun.DB, jwks keyfunc.Keyfunc) {
+	// 1. Authentification via JWT Supabase
+	// Le token est passé soit via le middleware (c.Get) si la route est protégée,
+	// soit via Query Param `?token=...` car les websockets ne supportent pas les headers custom facilement lors du handshake initial.
+
+	userID := ""
+
+	// Essayer de récupérer depuis le contexte (cas où un middleware Auth serait passé avant)
+	if val, exists := c.Get("user_id"); exists {
+		userID = val.(string)
+	} else {
+		// Fallback: Récupérer le token depuis l'URL query string
+		tokenString := c.Query("token")
+		if tokenString == "" {
+			log.Println("WS: No token provided")
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
 
-		id, err := redisClient.Get(context.Background(), sessionID).Result()
-		if err != nil {
-			log.Println("WS: Invalid session")
+		secret := os.Getenv("SUPABASE_JWT_SECRET")
+		if secret == "" {
+			log.Println("WS: Server misconfiguration (missing jwt secret)")
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			// Si le token est signé avec HMAC (HS256), on utilise le secret
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
+				return []byte(secret), nil
+			}
+
+			// Si le token est signé avec ECDSA (ES256) et qu'on a le JWKS, on utilise le JWKS
+			if _, ok := token.Method.(*jwt.SigningMethodECDSA); ok && jwks != nil {
+				return jwks.Keyfunc(token)
+			}
+
+			// Sinon, méthode Inconnue
+			return nil, jwt.ErrTokenUnverifiable
+		})
+
+		if err != nil || !token.Valid {
+			log.Printf("WS: Invalid token: %v", err)
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
-		userID = id
+
+		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			userID = claims["sub"].(string)
+		} else {
+			log.Println("WS: Invalid claims")
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
 	}
 
-	uidStr := userID.(string)
+	uidStr := userID
 
 	// 2. Upgrade connection
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
