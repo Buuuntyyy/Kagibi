@@ -2,7 +2,8 @@
   <div class="file-list-container"
        @dragover.prevent="onDragOver"
        @dragleave.prevent="onDragLeave"
-       @drop.prevent="onDrop">
+       @drop.prevent="onDrop"
+       @contextmenu.prevent="openBackgroundContextMenu">
        
     <div v-if="isDragging" class="drag-overlay">
       <div class="drag-content">
@@ -84,6 +85,7 @@
 
   <div
     class="context-menu"
+    ref="contextMenuRef"
     v-if="contextMenu.visible"
     :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }">
       <template v-if="contextMenu.item">
@@ -405,6 +407,8 @@ const handleTagConfirm = (tags) => {
 
 
 
+const contextMenuRef = ref(null)
+
 const contextMenu = ref({
   visible: false,
   x: 0,
@@ -488,55 +492,105 @@ onUnmounted(() => {
   document.removeEventListener('click', closeContextMenu)
 })
 
-const openBackgroundContextMenu = (event) => {
+const openBackgroundContextMenu = async (event) => {
   if (!preferenceStore.enableContextMenu) return;
   
   // Deselect items when clicking on background
   selectedItems.value = []
 
-  const menuWidth = 150;
-  const menuHeight = 100;
+  // Get mouse position
   let x = event.clientX;
   let y = event.clientY;
 
-  if (x + menuWidth > window.innerWidth) {
-    x -= menuWidth;
-  }
-  if (y + menuHeight > window.innerHeight) {
-    y -= menuHeight;
-  }
-
+  // Render first to measure
   contextMenu.value = {
     visible: true,
-    x: x,
-    y: y,
+    x: -9999,
+    y: -9999,
     item: null
   }
+  
+  await nextTick()
+
+  // Measure dynamic size
+  let menuWidth = 200; 
+  let menuHeight = 220;
+  if (contextMenuRef.value) {
+    menuWidth = contextMenuRef.value.offsetWidth
+    menuHeight = contextMenuRef.value.offsetHeight
+  }
+
+  // Screen constraints
+  const winWidth = window.innerWidth;
+  const winHeight = window.innerHeight;
+
+  // Adjust X to prevent overflow right
+  if (x + menuWidth > winWidth) {
+    x = winWidth - menuWidth - 5; // 5px margin
+  }
+
+  // Adjust Y to prevent overflow bottom
+  if (y + menuHeight > winHeight) {
+    y = winHeight - menuHeight - 5; // 5px margin
+  }
+
+  // Ensure not creating negative coordinates
+  if (x < 0) x = 5;
+  if (y < 0) y = 5;
+
+  contextMenu.value.x = x
+  contextMenu.value.y = y
 }
 
-const openContextMenu = (event, item, type) => {
+const openContextMenu = async (event, item, type) => {
   if (!preferenceStore.enableContextMenu) return;
+  
+  // If item is not already selected, select it (exclusive selection)
   if(!isSelected(item, type)) {
     selectedItems.value = [{...item, type}]
   }
-  const menuWidth = 150; // Approximate width of context menu
-  const menuHeight = 100; // Approximate height of context menu
+  
+  // Get mouse position
   let x = event.clientX;
   let y = event.clientY;
 
-  if (x + menuWidth > window.innerWidth) {
-    x -= menuWidth;
-  }
-  if (y + menuHeight > window.innerHeight) {
-    y -= menuHeight;
-  }
-
   contextMenu.value = {
     visible: true,
-    x: x,
-    y: y,
+    x: -9999,
+    y: -9999,
     item: { ...item, type }
   }
+
+  await nextTick()
+
+  // Measure dynamic size
+  let menuWidth = 200; 
+  let menuHeight = 250;
+  if (contextMenuRef.value) {
+    menuWidth = contextMenuRef.value.offsetWidth
+    menuHeight = contextMenuRef.value.offsetHeight
+  }
+
+  // Screen constraints
+  const winWidth = window.innerWidth;
+  const winHeight = window.innerHeight;
+
+  // Adjust X to prevent overflow right
+  if (x + menuWidth > winWidth) {
+    x = winWidth - menuWidth - 5;
+  }
+
+  // Adjust Y to prevent overflow bottom
+  if (y + menuHeight > winHeight) {
+    y = winHeight - menuHeight - 5;
+  }
+
+  // Ensure not creating negative coordinates
+  if (x < 0) x = 5;
+  if (y < 0) y = 5;
+
+  contextMenu.value.x = x
+  contextMenu.value.y = y
 }
 
 const handleContextAction = (action) => {
