@@ -3,10 +3,16 @@
     <div class="modal-content">
       <div class="modal-header">
         <span class="file-name">{{ fileName }}</span>
-        <div class="tools" v-if="isPdf">
-            <button class="tool-btn" @click="prevPage" :disabled="page <= 1">Prev</button>
-            <span class="page-info">{{ page }} / {{ pageCount }}</span>
-            <button class="tool-btn" @click="nextPage" :disabled="page >= pageCount">Next</button>
+        <div class="tools" v-if="isPdf || isImage">
+            <template v-if="isPdf">
+                <button class="tool-btn" @click="prevPage" :disabled="page <= 1">Prev</button>
+                <span class="page-info">{{ page }} / {{ pageCount }}</span>
+                <button class="tool-btn" @click="nextPage" :disabled="page >= pageCount">Next</button>
+                <div class="separator"></div>
+            </template>
+            <button class="tool-btn" @click="zoomOut">-</button>
+            <span class="page-info">{{ Math.round(scale * 100) }}%</span>
+            <button class="tool-btn" @click="zoomIn">+</button>
         </div>
         <button class="close-btn" @click="close">&times;</button>
       </div>
@@ -15,15 +21,18 @@
             <div class="spinner"></div>
             <p>{{ status }}</p>
          </div>
-         <div v-else-if="isPdf" class="pdf-container">
+         <div v-else-if="isPdf" class="pdf-container" :style="{ width: scale * 100 + '%' }">
              <VuePdfEmbed 
+                :key="scale"
                 ref="pdfRef"
                 :source="fileUrl" 
                 :page="page" 
                 @loaded="handleLoaded"
              />
          </div>
-         <img v-else-if="isImage" :src="fileUrl" alt="Preview" />
+         <div v-else-if="isImage" style="display: flex; justify-content: center; min-height: 100%;">
+            <img :src="fileUrl" alt="Preview" :style="{ width: scale * 100 + '%', maxWidth: 'none', maxHeight: 'none' }" />
+         </div>
          <div v-else class="unsupported-msg">
             Preview non disponible pour ce type de fichier : {{ mimeType }} ({{ fileName }}) <br>
             <a :href="fileUrl" :download="fileName">Télécharger</a>
@@ -56,6 +65,7 @@ const emit = defineEmits(['close']);
 const page = ref(1);
 const pageCount = ref(1);
 const pdfRef = ref(null);
+const scale = ref(1.0);
 
 const handleLoaded = (pdfDoc) => {
     if (pdfDoc && pdfDoc.numPages) {
@@ -68,6 +78,14 @@ const nextPage = () => {
 };
 const prevPage = () => {
     if (page.value > 1) page.value--;
+};
+
+const zoomIn = () => {
+    scale.value = Math.min(scale.value + 0.1, 5.0); // Max 500%
+};
+
+const zoomOut = () => {
+    scale.value = Math.max(scale.value - 0.1, 0.1); // Min 10%
 };
 
 const close = () => {
@@ -97,6 +115,7 @@ const isImage = computed(() => {
 watch(() => props.fileUrl, () => {
     page.value = 1;
     pageCount.value = 1;
+    scale.value = 1.0;
 });
 </script>
 
@@ -167,6 +186,13 @@ watch(() => props.fileUrl, () => {
     cursor: not-allowed;
 }
 
+.separator {
+    width: 1px;
+    height: 20px;
+    background-color: #ccc;
+    margin: 0 10px;
+}
+
 .close-btn {
   background: none;
   border: none;
@@ -183,23 +209,25 @@ watch(() => props.fileUrl, () => {
 .modal-body {
   flex: 1;
   background-color: #525659;
-  display: flex;
-  justify-content: center;
-  align-items: center;
   overflow: auto; /* Allow scrolling content */
   position: relative;
   padding: 10px;
+  display: flex; /* Use flex for easy centering with margin: auto */
+}
+
+.pdf-container, img, .loading-container, .unsupported-msg {
+    margin: auto; /* Magic centering: centers when small, allows scroll when big */
 }
 
 .pdf-container {
     box-shadow: 0 0 10px rgba(0,0,0,0.5);
-    max-width: 100%;
+    /* max-width: 100%; Removed to allow zoom > 100% */
 }
 
 img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  display: block; /* Important for margin: auto to work if not flex child */
+  max-width: none; /* Allow zoom */
+  max-height: none; /* Allow zoom */
 }
 
 .unsupported-msg {

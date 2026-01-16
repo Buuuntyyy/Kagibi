@@ -38,5 +38,7 @@ watch(() => authStore.isAuthenticated, (isAuthenticated) => {
   flex-grow: 1;
   display: flex;
   flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 </style>
