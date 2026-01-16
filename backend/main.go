@@ -115,12 +115,18 @@ func main() {
 
 	friendHandler := friends.NewFriendHandler(db, wsManager)
 
+	// JWT Secret from Supabase
+	jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
+	if jwtSecret == "" {
+		log.Println("Warning: SUPABASE_JWT_SECRET not set. Auth will fail.")
+	}
+
 	api := router.Group("/api/v1")
 	// ROUTES PUBLIQUES (Non protégées par l'authentification)
 	publicRoutes := api.Group("/auth")
 	{
-		publicRoutes.POST("/register", func(c *gin.Context) { auth.RegisterHandler(c, db) })
-		publicRoutes.POST("/login", func(c *gin.Context) { auth.LoginHandler(c, db, redisClient) })
+		// Register is now authenticated (via Supabase JWT) so it moved to protected routes
+		// Login is handled by Supabase
 		publicRoutes.POST("/recovery/init", func(c *gin.Context) { auth.RecoveryInitHandler(c, db) })
 		publicRoutes.POST("/recovery/finish", func(c *gin.Context) { auth.RecoveryFinishHandler(c, db) })
 	}
@@ -136,8 +142,11 @@ func main() {
 
 	// ROUTES PROTÉGÉES (Protégées par l'authentification JWT)
 	protectedRoutes := api.Group("")
-	protectedRoutes.Use(middleware.AuthMiddleware(redisClient))
+	protectedRoutes.Use(middleware.AuthMiddleware(jwtSecret))
 	{
+		// Auth Routes that require JWT
+		protectedRoutes.POST("/auth/register", func(c *gin.Context) { auth.RegisterHandler(c, db) })
+		protectedRoutes.GET("/auth/keys", func(c *gin.Context) { auth.GetUserKeys(c, db) })
 		protectedRoutes.POST("/auth/logout", func(c *gin.Context) { auth.LogoutHandler(c, redisClient) })
 
 		userRoutes := protectedRoutes.Group("/users")
