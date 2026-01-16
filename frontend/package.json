@@ -10,6 +10,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.90.1",
     "axios": "^1.13.2",
     "libsodium-wrappers-sumo": "^0.7.15",
     "lodash": "^4.17.21",

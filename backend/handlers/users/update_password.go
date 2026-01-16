@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type UpdatePasswordRequest struct {
@@ -34,28 +33,19 @@ func UpdatePasswordHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	// Verify current password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Mot de passe actuel incorrect"})
-		return
-	}
-
-	// Hash new password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
-		return
-	}
+	// With Supabase, we trust the JWT token. The client handles the password verification/update with Supabase.
+	// This endpoint now only serves to rotate the MasterKey.
 
 	// Update user
-	user.PasswordHash = string(hashedPassword)
+	// Password is managed by Supabase, we don't store the hash anymore.
 	user.Salt = req.NewSalt
 	user.EncryptedMasterKey = req.NewEncryptedMasterKey
 
-	_, err = db.NewUpdate().Model(user).Column("password_hash", "salt", "encrypted_master_key").Where("id = ?", userID).Exec(c.Request.Context())
+	_, err = db.NewUpdate().Model(user).Column("salt", "encrypted_master_key").Where("id = ?", userID).Exec(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Mot de passe mis à jour avec succès"})
+	c.JSON(http.StatusOK, gin.H{"message": "Clés de chiffrement mises à jour avec succès"})
 }
