@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type RecoveryInitRequest struct {
@@ -66,23 +65,16 @@ func RecoveryFinishHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// Hash new password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
-		return
-	}
-
 	// Update user
-	user.PasswordHash = string(hashedPassword)
+    // We only update the encryption keys. Password hash is no longer stored here.
 	user.Salt = req.NewSalt
 	user.EncryptedMasterKey = req.NewEncryptedMasterKey
 
-	_, err = db.NewUpdate().Model(user).Column("password_hash", "salt", "encrypted_master_key").Where("id = ?", user.ID).Exec(c.Request.Context())
+	_, err = db.NewUpdate().Model(user).Column("salt", "encrypted_master_key").Where("id = ?", user.ID).Exec(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Password reset successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Keys reset successfully"})
 }

@@ -1,13 +1,14 @@
 package auth
 
 import (
+	"safercloud/backend/pkg"
+
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
-	"safercloud/backend/pkg"
 )
 
 func GetUserKeys(c *gin.Context, db *bun.DB) {
-	userID := c.GetString("userID") // Récupéré du JWT
+	userID := c.GetString("user_id") // Récupéré du JWT
 
 	user, err := pkg.FindUserByID(db, userID)
 	if err != nil {

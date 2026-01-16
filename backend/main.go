@@ -22,6 +22,7 @@ import (
 
 	"time"
 
+	"github.com/MicahParks/keyfunc/v3"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -117,8 +118,19 @@ func main() {
 
 	// JWT Secret from Supabase
 	jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
-	if jwtSecret == "" {
-		log.Println("Warning: SUPABASE_JWT_SECRET not set. Auth will fail.")
+
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	var jwks keyfunc.Keyfunc
+	if supabaseURL != "" {
+		jwksURL := supabaseURL + "/auth/v1/.well-known/jwks.json"
+		var err error
+		// Crée un JWKS qui se rafraîchit automatiquement
+		jwks, err = keyfunc.NewDefault([]string{jwksURL})
+		if err != nil {
+			log.Printf("Attention: Impossible d'initialiser JWKS: %v. Les tokens ES256 échoueront.", err)
+		} else {
+			log.Println("JWKS initialisé avec succès pour validation ES256")
+		}
 	}
 
 	api := router.Group("/api/v1")
@@ -142,7 +154,7 @@ func main() {
 
 	// ROUTES PROTÉGÉES (Protégées par l'authentification JWT)
 	protectedRoutes := api.Group("")
-	protectedRoutes.Use(middleware.AuthMiddleware(jwtSecret))
+	protectedRoutes.Use(middleware.AuthMiddleware(jwks, jwtSecret))
 	{
 		// Auth Routes that require JWT
 		protectedRoutes.POST("/auth/register", func(c *gin.Context) { auth.RegisterHandler(c, db) })
@@ -228,7 +240,7 @@ func main() {
 	}
 
 	// Route WebSocket (Racine)
-	router.GET("/ws", func(c *gin.Context) { ws.ConnectHandler(c, wsManager, redisClient, db) })
+	router.GET("/ws", func(c *gin.Context) { ws.ConnectHandler(c, wsManager, redisClient, db, jwks) })
 
 	// Route de configuration ICE (WebRTC)
 	protectedRoutes.GET("/ice-config", ws.GetICEConfigHandler)
