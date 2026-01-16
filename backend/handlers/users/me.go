@@ -3,16 +3,28 @@ package users
 import (
 	"net/http"
 	"safercloud/backend/pkg"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
 
-// Structure pour la réponse JSON, pour ne pas exposer le mot de passe hashé
+// Structure pour la réponse JSON, filtrée pour la sécurité et la confidentialité
+// Ne renvoie que les informations nécessaires pour :
+// - Upload/Download (id, storage_used, storage_limit, plan)
+// - Partage (public_key, encrypted_private_key, friend_code, id)
+// - Affichage UI (name, email, created_at)
 type UserResponse struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	ID                   string    `json:"id"`
+	Name                 string    `json:"name"`
+	Email                string    `json:"email"`
+	StorageUsed          int64     `json:"storage_used"`
+	StorageLimit         int64     `json:"storage_limit"`
+	Plan                 string    `json:"plan"`
+	FriendCode           string    `json:"friend_code"`
+	PublicKey            string    `json:"public_key"`
+	EncryptedPrivateKey  string    `json:"encrypted_private_key"`
+	CreatedAt            time.Time `json:"created_at"`
 }
 
 func MeHandler(c *gin.Context, db *bun.DB) {
@@ -37,11 +49,20 @@ func MeHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// 4. Renvoyer une réponse formatée et sécurisée
-	// Note: On renvoie l'objet user complet (sauf password qui n'est pas exporté en JSON si on utilisait le struct User directement, mais ici on mappe manuellement)
-	// Pour l'instant on garde la structure UserResponse mais on pourrait renvoyer user directement si on veut tous les champs (storage, plan, etc)
-	// Le frontend semble attendre l'objet complet pour le storage.
-	// On va renvoyer l'objet user complet car le frontend l'utilise pour le storage.
+	// 4. Construire une réponse filtrée avec UNIQUEMENT les champs nécessaires
+	// EXCLUT : password_hash, salt, encrypted_master_key, encrypted_master_key_recovery, recovery_hash, recovery_salt
+	response := UserResponse{
+		ID:                  user.ID,
+		Name:                user.Name,
+		Email:               user.Email,
+		StorageUsed:         user.StorageUsed,
+		StorageLimit:        user.StorageLimit,
+		Plan:                user.Plan,
+		FriendCode:          user.FriendCode,
+		PublicKey:           user.PublicKey,
+		EncryptedPrivateKey: user.EncryptedPrivateKey,
+		CreatedAt:           user.CreatedAt,
+	}
 
-	c.JSON(http.StatusOK, user)
+	c.JSON(http.StatusOK, response)
 }
