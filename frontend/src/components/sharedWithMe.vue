@@ -197,7 +197,8 @@ const fetchFolderContent = async (folderID) => {
         const response = await api.get(`/shares/direct/folder/${folderID}/content`);
         const data = response.data;
         
-        const files = (data.files || []).map(f => ({
+        const files = (data.files || [])
+          .map(f => ({
             ...f,
             type: 'file',
             resource_id: f.ID, // Standardize ID
