@@ -66,7 +66,7 @@ func RecoveryFinishHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	// Update user
-    // We only update the encryption keys. Password hash is no longer stored here.
+	// We only update the encryption keys. Password hash is no longer stored here.
 	user.Salt = req.NewSalt
 	user.EncryptedMasterKey = req.NewEncryptedMasterKey
 
