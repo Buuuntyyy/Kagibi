@@ -5,6 +5,18 @@
       <p class="subtitle">Gérez vos informations personnelles et vos préférences.</p>
     </div>
 
+    <!-- Plan Banner -->
+    <div class="plan-banner" v-if="!loading && authStore.user">
+      <div class="plan-content">
+        <span class="plan-icon">🌟</span>
+        <div class="plan-details">
+          <span class="plan-title">Votre plan actuel</span>
+          <span class="plan-value">{{ formatPlanName(authStore.user?.plan) }}</span>
+        </div>
+      </div>
+      <button class="btn-upgrade">Mettre à niveau</button>
+    </div>
+
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
       <p>Chargement du profil...</p>
@@ -170,6 +182,16 @@ const formatDate = (dateString) => {
   })
 }
 
+const formatPlanName = (plan) => {
+  const plans = {
+    'free': 'Gratuit',
+    'basic': 'Basique',
+    'pro': 'Professionnel',
+    'enterprise': 'Entreprise'
+  }
+  return plans[plan] || plan || 'Gratuit'
+}
+
 const handleUpdateUsername = async () => {
   alert("La fonctionnalité de changement de nom d'utilisateur sera disponible prochainement.")
 }
@@ -235,6 +257,83 @@ const handleUpdatePassword = async () => {
 .subtitle {
   color: var(--secondary-text-color);
   margin-top: 0.5rem;
+}
+
+.plan-banner {
+  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  border-radius: 12px;
+  padding: 1.5rem;
+  color: white;
+  margin-bottom: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.plan-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.plan-icon {
+  font-size: 2rem;
+  background: rgba(255,255,255,0.2);
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.plan-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.plan-title {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.plan-value {
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-transform: capitalize;
+}
+
+.btn-upgrade {
+  background: white;
+  color: var(--primary-color);
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.btn-upgrade:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+@media (max-width: 600px) {
+  .plan-banner {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+  
+  .plan-content {
+    flex-direction: column;
+  }
+
+  .btn-upgrade {
+    width: 100%;
+  }
 }
 
 .loading-state {
