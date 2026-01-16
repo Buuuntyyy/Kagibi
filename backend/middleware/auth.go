@@ -1,39 +1,39 @@
 package middleware
 
 import (
-	"context"
-	"log"
-	"net/http"
-	"time"
-
 	"github.com/gin-gonic/gin"
-	"github.com/go-redis/redis/v8"
+	"github.com/golang-jwt/jwt/v5"
+	"strings"
 )
 
-func AuthMiddleware(redisClient *redis.Client) gin.HandlerFunc {
+func AuthMiddleware(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		start := time.Now()
-		sessionID, err := c.Cookie("session_id")
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Non authorisé"})
-			return
-		}
-		userdID, err := redisClient.Get(context.Background(), sessionID).Result()
-		if err == redis.Nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Session invalide"})
-			return
-		} else if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Erreur serveur"})
+		authHeader := c.GetHeader("Authorization")
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			c.AbortWithStatusJSON(401, gin.H{"error": "Token manquant"})
 			return
 		}
 
-		// Log Redis latency if it's slow (> 100ms)
-		elapsed := time.Since(start)
-		if elapsed > 100*time.Millisecond {
-			log.Printf("SLOW REDIS AUTH: %v", elapsed)
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			// Supabase utilise HS256 avec votre JWT SECRET
+			return []byte(secret), nil
+		})
+
+		if err != nil || !token.Valid {
+			c.AbortWithStatusJSON(401, gin.H{"error": "Token invalide"})
+			return
 		}
 
-		c.Set("user_id", userdID)
+		// L'ID utilisateur (sub) est dans les claims
+		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			// UUID de l'utilisateur
+			c.Set("userID", claims["sub"])
+		} else {
+			c.AbortWithStatusJSON(401, gin.H{"error": "Claims invalides"})
+		}
+
 		c.Next()
 	}
 }
