@@ -950,7 +950,7 @@ const onDropOnParent = async (event) => {
 
 <style scoped>
 .file-list-container {
-  margin-top: 0.8rem;
+  padding-top: 0.8rem; /* Use padding instead of margin to include in height */
   position: relative;
   background-color: var(--card-color);
   height: 100%;
@@ -958,6 +958,7 @@ const onDropOnParent = async (event) => {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  overflow: hidden; /* Prevent container from expanding beyond 100% */
 }
 
 .path-banner {
