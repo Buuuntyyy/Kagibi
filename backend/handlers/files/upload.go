@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -155,6 +156,13 @@ func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client, wsMana
 		// fullPathDB starts with /, so we trim it or just concat
 		s3Key := fmt.Sprintf("users/%s%s", userID, fullPathDB)
 
+		// Verify temp file exists before enqueueing
+		if _, err := os.Stat(tempFilePath); err != nil {
+			log.Printf("Upload Handler ERROR: Temp file does not exist: %s, error: %v", tempFilePath, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Temp file missing"})
+			return
+		}
+
 		// Enqueue Upload Task to Redis
 		task := workers.S3Task{
 			Type:        workers.TaskUpload,
@@ -165,6 +173,7 @@ func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client, wsMana
 		}
 
 		if err := workers.EnqueueTask(redisClient, task); err != nil {
+			log.Printf("Upload Handler ERROR: Failed to enqueue task: %v", err)
 			os.Remove(tempFilePath) // Clean up if enqueue fails
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to enqueue upload task"})
 			return
@@ -199,7 +208,7 @@ func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client, wsMana
 			Exists(c)
 
 		if existsInDB {
-			// Get old file size to adjust storage
+			// Get old file to get ID and adjust storage
 			var oldFile pkg.File
 			err = tx.NewSelect().Model(&oldFile).Where("user_id = ? AND path = ?", userID, fullPathDB).Scan(c)
 			if err == nil {
@@ -208,6 +217,8 @@ func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client, wsMana
 					Set("storage_used = storage_used - ? + ?", oldFile.Size, fileSize).
 					Where("id = ?", userID).
 					Exec(c)
+				// Copy the ID to fileRecord so it's returned to client
+				fileRecord.ID = oldFile.ID
 			}
 
 			// Mettre à jour l'enregistrement existant

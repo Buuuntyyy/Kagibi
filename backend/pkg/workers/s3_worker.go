@@ -34,36 +34,64 @@ type S3Task struct {
 	ContentType string     `json:"content_type"` // For upload
 }
 
+// Helper for Go < 1.21
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 const QueueName = "s3_tasks"
 
 func EnqueueTask(redisClient *redis.Client, task S3Task) error {
 	data, err := json.Marshal(task)
 	if err != nil {
+		log.Printf("EnqueueTask ERROR: Failed to marshal task: %v", err)
 		return err
 	}
-	return redisClient.RPush(context.Background(), QueueName, data).Err()
+	err = redisClient.RPush(context.Background(), QueueName, data).Err()
+	if err != nil {
+		log.Printf("EnqueueTask ERROR: Failed to push to Redis: %v", err)
+	}
+	return err
 }
 
 func StartWorker(redisClient *redis.Client) {
 	go func() {
-		log.Println("S3 Worker started")
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("S3 Worker PANIC recovered: %v", r)
+				// Restart worker on panic
+				StartWorker(redisClient)
+			}
+		}()
+
+		log.Println("S3 Worker started and waiting for tasks...")
 		for {
 			// Blocking pop from Redis queue
 			result, err := redisClient.BLPop(context.Background(), 0, QueueName).Result()
 			if err != nil {
-				log.Printf("Worker Redis error: %v", err)
+				log.Printf("S3 Worker Redis error: %v", err)
 				time.Sleep(time.Second * 5)
 				continue
 			}
-
-			// result[0] is the key, result[1] is the value
-			var task S3Task
-			if err := json.Unmarshal([]byte(result[1]), &task); err != nil {
-				log.Printf("Worker unmarshal error: %v", err)
+			
+			// Verify result structure
+			if len(result) < 2 {
+				log.Printf("S3 Worker ERROR: BLPop returned unexpected result: %v", result)
 				continue
 			}
 
-			log.Printf("Processing task: %s %s -> %s", task.Type, task.SrcKey, task.DestKey)
+			payload := result[1]
+
+			// result[0] is the key, result[1] is the value
+			var task S3Task
+			if err := json.Unmarshal([]byte(payload), &task); err != nil {
+				log.Printf("S3 Worker unmarshal error: %v. Payload: %s", err, payload)
+				continue
+			}
+
 			processTask(task)
 		}
 	}()
@@ -73,16 +101,22 @@ func processTask(task S3Task) {
 	ctx := context.Background()
 
 	if task.Type == TaskUpload {
+		// Check if file exists before trying to open
+		if _, err := os.Stat(task.SrcKey); err != nil {
+			log.Printf("S3 Worker ERROR: File does not exist! Path: %s, Error: %v", task.SrcKey, err)
+			return
+		}
+
 		// Upload from local temp file to S3
 		file, err := os.Open(task.SrcKey)
 		if err != nil {
-			log.Printf("Error opening temp file for upload %s: %v", task.SrcKey, err)
+			log.Printf("S3 Worker ERROR: Cannot open temp file %s: %v", task.SrcKey, err)
 			return
 		}
 		defer file.Close()
 
 		uploader := manager.NewUploader(s3storage.Client)
-		_, err = uploader.Upload(ctx, &s3.PutObjectInput{
+		result, err := uploader.Upload(ctx, &s3.PutObjectInput{
 			Bucket:      aws.String(s3storage.BucketName),
 			Key:         aws.String(task.DestKey),
 			Body:        file,
@@ -90,7 +124,7 @@ func processTask(task S3Task) {
 		})
 
 		if err != nil {
-			log.Printf("Error uploading file to S3 %s: %v", task.DestKey, err)
+			log.Printf("S3 Worker ERROR: Upload failed for %s: %v", task.DestKey, err)
 			// Retry logic could be added here
 			return
 		}
@@ -98,7 +132,7 @@ func processTask(task S3Task) {
 		// Delete temp file on success
 		file.Close()
 		if err := os.Remove(task.SrcKey); err != nil {
-			log.Printf("Warning: Failed to delete temp file %s: %v", task.SrcKey, err)
+			log.Printf("S3 Worker WARNING: Failed to delete temp file %s: %v", task.SrcKey, err)
 		}
 		return
 	}
