@@ -424,7 +424,8 @@ export const useFileStore = defineStore('files', {
           const previewBlob = await generatePreview(file);
           if (previewBlob) {
              console.log("Uploading preview...");
-             const previewName = "(preview) " + (file.name || "file") + ".jpg";
+             const safeName = (file.name || "file").replace(/[^a-zA-Z0-9.-]/g, '_');
+             const previewName = "preview_" + safeName + ".jpg";
              const previewFile = new File([previewBlob], previewName, { type: "image/jpeg" });
              try {
                 const previewResult = await this.uploadFile(previewFile, true);
