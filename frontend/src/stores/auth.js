@@ -289,7 +289,7 @@ export const useAuthStore = defineStore('auth', {
               const mkJson = sessionStorage.getItem("safercloud_mk");
               if (mkJson) {
                   const jwk = JSON.parse(mkJson);
-                  this.masterKey = await window.crypto.subtle.importKey("jwk", jwk, "AES-GCM", true, ["encrypt", "decrypt", "wrapKey", "unwrapKey"]);
+                  this.masterKey = await window.crypto.subtle.importKey("jwk", jwk, "AES-GCM", true, ["encrypt", "decrypt"]);
               }
           } catch (e) {
               console.warn("Could not restore master key from session storage");

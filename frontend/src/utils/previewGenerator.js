@@ -56,7 +56,12 @@ function generateImagePreview(file) {
 
 async function generatePdfPreview(file) {
     const arrayBuffer = await file.arrayBuffer();
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    // Use standard font map to avoid warnings/missing text
+    const loadingTask = pdfjsLib.getDocument({ 
+        data: arrayBuffer,
+        cMapUrl: 'https://unpkg.com/pdfjs-dist@4.10.0/cmaps/',
+        cMapPacked: true,
+    });
     const pdf = await loadingTask.promise;
     const page = await pdf.getPage(1);
     
