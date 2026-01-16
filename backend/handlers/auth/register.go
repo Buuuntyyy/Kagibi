@@ -10,17 +10,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"github.com/google/uuid"
 	"github.com/uptrace/bun"
-	"golang.org/x/crypto/bcrypt"
 )
 
 var validate = validator.New()
 
 type RegisterRequest struct {
-	Name                       string `json:"name" validate:"required"`
-	Email                      string `json:"email" validate:"required,email"`
-	Password                   string `json:"password" validate:"required,min=8"`
+	Name  string `json:"name" validate:"required"`
+	Email string `json:"email" validate:"required,email"`
+	// Password removed (handled by Supabase)
 	Salt                       string `json:"salt" validate:"required"`
 	EncryptedMasterKey         string `json:"encrypted_master_key" validate:"required"`
 	EncryptedMasterKeyRecovery string `json:"encrypted_master_key_recovery" validate:"required"`
@@ -40,10 +38,18 @@ func generateFriendCode() string {
 	return "#" + string(code)
 }
 
+// Rename this to CreateProfileHandler to reflect its new purpose
 func RegisterHandler(c *gin.Context, db *bun.DB) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Données invalides"})
+		return
+	}
+
+	// Get UserID from JWT (set by auth middleware)
+	userID := c.GetString("userID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: JWT required to create profile"})
 		return
 	}
 
@@ -53,18 +59,11 @@ func RegisterHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// Hache le mot de passe
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur interne"})
-		return
-	}
-
 	user := &pkg.User{
-		ID:                         uuid.New().String(),
-		Name:                       req.Name,
-		Email:                      req.Email,
-		PasswordHash:               string(hashedPassword),
+		ID:    userID, // Use Supabase ID
+		Name:  req.Name,
+		Email: req.Email,
+		// PasswordHash: removed
 		Salt:                       req.Salt,
 		EncryptedMasterKey:         req.EncryptedMasterKey,
 		EncryptedMasterKeyRecovery: req.EncryptedMasterKeyRecovery,
@@ -77,14 +76,14 @@ func RegisterHandler(c *gin.Context, db *bun.DB) {
 
 	// Crée l'utilisateur
 	if err := pkg.CreateUser(db, user); err != nil {
-		log.Printf("Error creating user: %v", err)
+		log.Printf("Error creating user profile: %v", err)
 		if strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "duplicate key") {
-			c.JSON(http.StatusConflict, gin.H{"error": "Cet email est déjà utilisé"})
+			c.JSON(http.StatusConflict, gin.H{"error": "Profil déjà existant"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la création du compte"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la création du profil"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Utilisateur créé avec succès"})
+	c.JSON(http.StatusCreated, gin.H{"message": "Profil créé avec succès"})
 }
