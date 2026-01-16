@@ -17,40 +17,60 @@
         <button class="close-btn" @click="close">&times;</button>
       </div>
       <div class="modal-body">
+         <!-- Phase 1: Downloading/Preparing (Server/Decrypt) -->
          <div v-if="loading" class="loading-container">
             <div class="spinner"></div>
-            <p>{{ status }}</p>
+            <p>{{ status || 'Chargement...' }}</p>
          </div>
-         <div v-else-if="isPdf" class="pdf-container" :style="{ width: scale * 100 + '%' }">
-             <VuePdfEmbed 
-                :key="scale"
-                ref="pdfRef"
-                :source="fileUrl" 
-                :page="page" 
-                @loaded="handleLoaded"
-             />
-         </div>
-         <div v-else-if="isImage" style="display: flex; justify-content: center; min-height: 100%;">
-            <img :src="fileUrl" alt="Preview" :style="{ width: scale * 100 + '%', maxWidth: 'none', maxHeight: 'none' }" />
-         </div>
-         <div v-else class="unsupported-msg">
-            Preview non disponible pour ce type de fichier : {{ mimeType }} ({{ fileName }}) <br>
-            <a :href="fileUrl" :download="fileName">Télécharger</a>
-         </div>
+
+         <!-- Phase 2: Display -->
+         <template v-else>
+            <!-- PDF Viewer -->
+            <div v-if="isPdf" class="pdf-wrapper" :style="{ width: '100%' }">
+                 <div v-if="isRendering" class="loading-container" style="position: absolute; inset: 0; background: #525659; z-index: 10;">
+                    <div class="spinner"></div>
+                    <p>Rendu du PDF...</p>
+                 </div>
+                 <div class="pdf-container" :style="{ width: scale * 100 + '%' }">
+                     <VuePdfEmbed 
+                        :key="scale"
+                        ref="pdfRef"
+                        :source="pdfSource" 
+                        :page="page" 
+                        @loaded="handleLoaded"
+                        @loading-failed="handleError"
+                     />
+                 </div>
+            </div>
+
+            <!-- Image Viewer -->
+            <div v-else-if="isImage" style="display: flex; justify-content: center; min-height: 100%;">
+                <img :src="fileUrl" alt="Preview" :style="{ width: scale * 100 + '%', maxWidth: 'none', maxHeight: 'none' }" />
+            </div>
+
+            <!-- Unsupported -->
+            <div v-else class="unsupported-msg">
+                Preview non disponible pour ce type de fichier : {{ mimeType }} ({{ fileName }}) <br>
+                <a :href="fileUrl" :download="fileName">Télécharger</a>
+            </div>
+         </template>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted } from 'vue';
 import VuePdfEmbed from 'vue-pdf-embed'
 
 // Essential for PDF.js in Vite
 import * as pdfjsLib from 'pdfjs-dist';
+// V5/V4 worker import
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+if (typeof window !== 'undefined' && 'Worker' in window) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+}
 
 const props = defineProps({
   visible: Boolean,
@@ -62,20 +82,113 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close']);
+
+const isPdf = computed(() => {
+    // 1. Explicit PDF MimeType
+    if (props.mimeType && props.mimeType.toLowerCase().includes('pdf')) return true;
+    
+    // 2. Explicit Image MimeType -> Not PDF (even if filename ends in .pdf, it might be a server-side preview)
+    if (props.mimeType && props.mimeType.toLowerCase().startsWith('image/')) return false;
+
+    // 3. Fallback to extension
+    if (props.fileName && props.fileName.toLowerCase().endsWith('.pdf')) return true;
+    return false;
+});
+
+const isImage = computed(() => {
+    if (props.mimeType && props.mimeType.startsWith('image/')) return true;
+    if (props.fileName) {
+        const lowerName = props.fileName.toLowerCase();
+        return lowerName.endsWith('.jpg') || 
+               lowerName.endsWith('.jpeg') || 
+               lowerName.endsWith('.png') || 
+               lowerName.endsWith('.gif') || 
+               lowerName.endsWith('.webp') || 
+               lowerName.endsWith('.bmp') ||
+               lowerName.endsWith('.svg');
+    }
+    return false;
+});
+
+// Removed internal 'loading' state mutation, use local
+// Actually props.loading is passed from store. We should not mutate it directly but the store handles it?
+// The store sets loading=false when download completes.
+// But the content rendering (PDF) is async too.
+const isRendering = ref(true);
+
+watch(() => props.loading, (newVal) => {
+    isRendering.value = newVal; // Sync with prop
+    // But PDF rendering starts AFTER prop loading is false (when URL is ready)
+    if (!newVal && props.fileUrl && isPdf.value) {
+        isRendering.value = true; // Start PDF rendering wait
+    } else if (!newVal) {
+        isRendering.value = false;
+    }
+});
 const page = ref(1);
 const pageCount = ref(1);
 const pdfRef = ref(null);
 const scale = ref(1.0);
+const pdfSource = ref(null); // Document Proxy or URL
 
 const handleLoaded = (pdfDoc) => {
+    console.log("PDF Loaded successfully", pdfDoc);
+    isRendering.value = false;
     if (pdfDoc && pdfDoc.numPages) {
         pageCount.value = pdfDoc.numPages;
     }
 };
 
+const handleError = (error) => {
+    console.error("PDF Preview Error (VuePdfEmbed):", error);
+    isRendering.value = false;
+}
+
+// Manually load PDF to debug and ensure control
+const loadPdf = async (url) => {
+    if (!url) {
+        pdfSource.value = null;
+        return;
+    }
+    console.log("Loading PDF from URL:", url);
+    isRendering.value = true;
+    
+    try {
+        // Option A: Pass URL directly (let VuePdfEmbed handle it)
+        // pdfSource.value = url;
+        
+        // Option B: Load manually
+        const loadingTask = pdfjsLib.getDocument({
+             url: url,
+             cMapUrl: 'https://unpkg.com/pdfjs-dist@4.10.0/cmaps/', // Use CDN for cmaps to avoid local 404s
+             cMapPacked: true,
+        });
+        
+        const doc = await loadingTask.promise;
+        console.log("PDF Document loaded manually:", doc.numPages, "pages");
+        pdfSource.value = doc;
+        // isRendering will be set to false by handleLoaded when component renders it
+        
+    } catch (e) {
+        console.error("Manual PDF Load Failed:", e);
+        handleError(e);
+        pdfSource.value = null; // Reset
+    }
+};
+
+watch(() => props.fileUrl, (newUrl) => {
+    page.value = 1;
+    pageCount.value = 1;
+    scale.value = 1.0;
+    if (newUrl && isPdf.value) {
+        loadPdf(newUrl);
+    }
+}, { immediate: true });
+
 const nextPage = () => {
     if (page.value < pageCount.value) page.value++;
 };
+
 const prevPage = () => {
     if (page.value > 1) page.value--;
 };
@@ -92,25 +205,6 @@ const close = () => {
   emit('close');
 };
 
-const isPdf = computed(() => {
-    if (props.mimeType && props.mimeType.toLowerCase().includes('pdf')) return true;
-    if (props.fileName && props.fileName.toLowerCase().endsWith('.pdf')) return true;
-    return false;
-});
-const isImage = computed(() => {
-    if (props.mimeType && props.mimeType.startsWith('image/')) return true;
-    if (props.fileName) {
-        const lowerName = props.fileName.toLowerCase();
-        return lowerName.endsWith('.jpg') || 
-               lowerName.endsWith('.jpeg') || 
-               lowerName.endsWith('.png') || 
-               lowerName.endsWith('.gif') || 
-               lowerName.endsWith('.webp') || 
-               lowerName.endsWith('.bmp') ||
-               lowerName.endsWith('.svg');
-    }
-    return false;
-});
 
 watch(() => props.fileUrl, () => {
     page.value = 1;
@@ -219,9 +313,16 @@ watch(() => props.fileUrl, () => {
     margin: auto; /* Magic centering: centers when small, allows scroll when big */
 }
 
+.pdf-wrapper {
+    margin: auto;
+    position: relative; 
+    min-height: 200px;
+    display: flex;
+    justify-content: center;
+}
+
 .pdf-container {
     box-shadow: 0 0 10px rgba(0,0,0,0.5);
-    /* max-width: 100%; Removed to allow zoom > 100% */
 }
 
 img {
