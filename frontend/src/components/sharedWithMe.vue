@@ -142,6 +142,18 @@ const sharedFiles = computed(() => {
 const fetchSharedWithMe = async () => {
   loading.value = true;
   try {
+    // Ensure RSA keys are available before fetching shared files
+    // This is crucial for decrypting shared folder/file keys
+    if (authStore.masterKey && !authStore.privateKey) {
+      try {
+        await authStore.ensureRSAKeys(authStore.masterKey);
+      } catch (e) {
+        console.error("Failed to ensure RSA keys:", e);
+        error.value = "Impossible de charger les clés de déchiffrement.";
+        return;
+      }
+    }
+    
     const response = await api.get('/shares/with-me');
     // Map response to match FileTable expectation
     items.value = (response.data || []).map(share => ({
@@ -250,6 +262,15 @@ const handleOpenFolder = async (folder) => {
              if (!folder.encrypted_key) {
                  alert("Clé de dossier manquante");
                  return;
+             }
+             
+             // Ensure RSA keys are loaded before attempting decryption
+             if (!authStore.privateKey && authStore.masterKey) {
+                 await authStore.ensureRSAKeys(authStore.masterKey);
+             }
+             
+             if (!authStore.privateKey) {
+                 throw new Error("Clé privée RSA non disponible");
              }
              
              // Decrypt Root Folder Key
@@ -380,6 +401,11 @@ const downloadSharedFile = async (item) => {
             // Root Share (Direct)
             if (!item.encrypted_key) {
                 throw new Error("Clé de chiffrement manquante.");
+            }
+            
+            // Ensure RSA keys are loaded before attempting decryption
+            if (!authStore.privateKey && authStore.masterKey) {
+                await authStore.ensureRSAKeys(authStore.masterKey);
             }
             
             // Decrypt User Private Key first if not ready

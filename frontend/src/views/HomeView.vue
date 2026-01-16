@@ -20,8 +20,12 @@ import { useAuthStore } from '../stores/auth'
 const authStore = useAuthStore()
 
 onMounted(async () => {
-  // Refresh user info (storage usage, etc.)
+  // Refresh user info (storage usage, etc.) and ensure RSA keys are loaded
   await authStore.checkAuth();
+  // Ensure RSA keys are available for shared folder decryption
+  if (authStore.masterKey) {
+    await authStore.ensureRSAKeys(authStore.masterKey);
+  }
 })
 </script>
 
