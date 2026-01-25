@@ -207,7 +207,8 @@ export const useAuthStore = defineStore('auth', {
     },
     async logout() {
       try {
-        await api.post('/auth/logout');
+        await api.post('/auth/logout'); // Backend logout
+        await supabase.auth.signOut();  // Supabase logout (clears localStorage)
       } catch (error) {
         console.error("Logout failed:", error)
       } finally {
