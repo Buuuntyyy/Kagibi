@@ -430,7 +430,10 @@ const closeContextMenu = () => {
 
 const pathSegments = computed(() => {
   if (fileStore.viewMode === 'shared') {
-      const segments = [{ name: 'Partagés avec moi', path: 'SHARE_ROOT' }];
+      const segments = [
+          { name: 'Mon Drive', path: 'DRIVE_ROOT' },
+          { name: 'Partagés avec moi', path: 'SHARE_ROOT' }
+      ];
       fileStore.sharedBreadcrumbs.forEach((crumb, index) => {
           segments.push({
               name: crumb.name,
@@ -459,7 +462,7 @@ const pathSegments = computed(() => {
 
 const navigateToPath = (path) => {
   if (fileStore.viewMode === 'shared') {
-       if (path === 'SHARE_ROOT') {
+       if (path === 'DRIVE_ROOT' || path === 'SHARE_ROOT') {
            fileStore.viewMode = 'drive';
            fileStore.fetchItems('/');
            return;
@@ -1165,8 +1168,9 @@ button {
 .breadcrumbs {
   display: flex;
   align-items: center;
-  font-size: 1.5rem;
-  transform: translateY(-2px);
+  font-size: 1.8rem;
+  font-weight: 500;
+  color: var(--secondary-text-color);
 }
 
 .breadcrumb-segment {
@@ -1176,30 +1180,29 @@ button {
 
 .breadcrumb-link {
   cursor: pointer;
-  color: var(--primary-color, #42b983);
+  color: var(--secondary-text-color);
   text-decoration: none;
-  padding: 0.2rem 0.5rem;
-  padding-top: 0.2rem;
-  border-radius: 4px;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
   transition: all 0.2s ease;
 }
 
 .breadcrumb-link:hover {
-  text-decoration: underline;
-  background-color: rgba(66, 185, 131, 0.1);
-  transform: translateY(-1px);
+  color: var(--primary-color);
+  background-color: var(--hover-background-color);
 }
 
 .breadcrumb-link.current {
-  color: var(--text-color);
+  color: var(--main-text-color);
   cursor: default;
-  font-weight: bold;
-  text-decoration: none;
+  font-weight: 600;
+  background-color: transparent;
 }
 
 .separator {
-  margin: 0 0.5rem;
-  color: #999;
+  margin: 0 0.2rem;
+  color: var(--secondary-text-color);
+  opacity: 0.6;
 }
 
 .progress-container {
