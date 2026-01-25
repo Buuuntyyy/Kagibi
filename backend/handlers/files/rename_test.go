@@ -15,6 +15,7 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 )
 
+const ENDPOINT = "/rename"
 func TestRenameHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -27,7 +28,7 @@ func TestRenameHandler(t *testing.T) {
 	redisClient, _ := redismock.NewClientMock()
 
 	r := gin.New()
-	r.POST("/rename", func(c *gin.Context) {
+	r.POST(ENDPOINT, func(c *gin.Context) {
 		c.Set("user_id", "user-123")
 		RenameHandler(c, db, redisClient)
 	})
@@ -39,7 +40,7 @@ func TestRenameHandler(t *testing.T) {
 			NewName: "NewName.txt",
 		}
 		jsonValue, _ := json.Marshal(reqBody)
-		req, _ := http.NewRequest("POST", "/rename", bytes.NewBuffer(jsonValue))
+		req, _ := http.NewRequest("POST", ENDPOINT, bytes.NewBuffer(jsonValue))
 		req.Header.Set("Content-Type", "application/json")
 
 		// 1. Expect GetFile
@@ -75,7 +76,7 @@ func TestRenameHandler(t *testing.T) {
 			NewName: "Bad/Name",
 		}
 		jsonValue, _ := json.Marshal(reqBody)
-		req, _ := http.NewRequest("POST", "/rename", bytes.NewBuffer(jsonValue))
+		req, _ := http.NewRequest("POST", ENDPOINT, bytes.NewBuffer(jsonValue))
 		req.Header.Set("Content-Type", "application/json")
 
 		w := httptest.NewRecorder()
