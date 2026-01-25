@@ -9,7 +9,7 @@ const IV_LENGTH = 12;   // 12 octets pour AES-GCM
 const ARGON2_MEMLIMIT = 64 * 1024 * 1024; // 64 MB de RAM
 const ARGON2_OPSLIMIT = 4; // 4 passes, recommandation OSWASP
 
-export const CHUNK_SIZE = 1 * 1024 * 1024; // 1 MB par chunk pour le traitement en worker
+export const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB par chunk pour le traitement en worker
 export const ENCRYPTED_CHUNK_SIZE = CHUNK_SIZE + SALT_LENGTH + IV_LENGTH; // Taille estimée après chiffrement
 
 /**

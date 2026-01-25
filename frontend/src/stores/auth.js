@@ -145,6 +145,11 @@ export const useAuthStore = defineStore('auth', {
 
         if (error) throw error
         
+        // Check for missing session (Email Confirmation enabled case)
+        if (!data.session && data.user) {
+            throw new Error("L'inscription nécessite que la confirmation d'email soit DÉSACTIVÉE dans Supabase. Les clés de chiffrement générées ne peuvent pas être sauvegardées sans session active.")
+        }
+
         // 3. Création du profil chiffré sur votre Backend
         // La session est active après le signUp (si confirmation email désactivée)
         // L'intercepteur injectera le token, mais on force pour être sûr (race condition)
@@ -152,6 +157,9 @@ export const useAuthStore = defineStore('auth', {
         const config = {};
         if (accessToken) {
             config.headers = { Authorization: `Bearer ${accessToken}` };
+        } else {
+             // Should be caught by the check above, but as a safety:
+             throw new Error("Erreur: Token d'accès manquant après l'inscription.")
         }
 
         const payload = {
