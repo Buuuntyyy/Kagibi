@@ -290,7 +290,6 @@ export const useAuthStore = defineStore('auth', {
       
       if (session?.access_token) {
           // Session Supabase active !
-          this.isAuthenticated = true;
           
           // Essayer de restaurer la MasterKey depuis sessionStorage (pour F5)
           try {
@@ -302,6 +301,16 @@ export const useAuthStore = defineStore('auth', {
           } catch (e) {
               console.warn("Could not restore master key from session storage");
           }
+
+          // SECURITY CHECK: If session exists but NO master key (e.g. New Tab), force logout to re-derive key
+          if (!this.masterKey) {
+             console.warn("Session found but MasterKey missing (New Tab?). Forcing logout to unlock vault.");
+             await this.logout();
+             return false;
+          }
+
+          this.isAuthenticated = true; // Only set true if we have KEY + SESSION
+
           // Optimization: Don't re-fetch if we already have the user and it matches the session
           if (!this.user || this.user.id !== session.user.id) {
              await this.fetchUser();

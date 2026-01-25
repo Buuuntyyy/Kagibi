@@ -122,7 +122,7 @@ export const useFileStore = defineStore('files', {
             type: item.type === 'folder' ? 'folder' : 'file'
         }).catch(err => console.error("Failed to save history", err))
     },
-    },
+
     notifyShareUpdate() {
         this.shareUpdateTrigger++;
     },
@@ -855,4 +855,4 @@ export const useFileStore = defineStore('files', {
         this.searchFiles(query);
     }
   },
-)
+})
