@@ -5,6 +5,22 @@
         <div v-if="mode === 'login'" key="login">
           <h1>Se connecter</h1>
           <LoginComponent />
+          
+          <div class="security-msg">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <p>
+              Pour votre sécurité, nous recommandons l'utilisation d'un gestionnaire de mots de passe comme <strong>Bitwarden</strong> ou <strong>KeePass</strong>.
+            </p>
+          </div>
+
+          <div class="oauth-unavailable">
+            <small>⚠️ La connexion via des fournisseurs tiers (Google/GitHub) est désactivée car elle est incompatible avec notre chiffrement de bout en bout (Zéro-Knowledge).</small>
+          </div>
+
           <div class="auth-links">
             <p>
               Pas encore de compte ? <a href="#" @click.prevent="mode = 'register'">S'inscrire</a>
@@ -17,6 +33,17 @@
         <div v-else-if="mode === 'register'" key="register">
           <h1>Créer un compte</h1>
           <RegisterComponent />
+
+          <div class="security-msg warning">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <p>
+              <strong>Attention :</strong> Si vous perdez votre mot de passe, vos fichiers seront définitivement perdus. Nous ne pouvons PAS le réinitialiser.
+            </p>
+          </div>
           <div class="auth-links">
             <p>
               Déjà un compte ? <a href="#" @click.prevent="mode = 'login'">Se connecter</a>
@@ -124,5 +151,43 @@ a {
 a:hover {
   color: var(--accent-color);
   text-decoration: underline;
+}
+
+.security-msg {
+  background-color: rgba(52, 152, 219, 0.1);
+  border: 1px solid rgba(52, 152, 219, 0.3);
+  color: var(--main-text-color);
+  padding: 0.75rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-top: 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  text-align: left;
+}
+
+.security-msg.warning {
+  background-color: rgba(231, 76, 60, 0.1);
+  border-color: rgba(231, 76, 60, 0.3);
+  color: var(--danger-color, #e74c3c);
+}
+
+.info-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.security-msg p {
+  margin: 0;
+}
+
+.oauth-unavailable {
+  margin-top: 1rem;
+  font-size: 1rem;
+  color: var(--secondary-text-color);
+  opacity: 0.8;
+  font-style: italic;
+  padding: 0 1rem;
 }
 </style>

@@ -163,6 +163,17 @@ export const useFileStore = defineStore('files', {
         this.files = response.data.files || []
         this.folders = response.data.folders || []
         this.currentPath = safePath
+
+        // Record History
+        const fid = response.data.current_folder_id;
+        if (fid && fid !== 0) {
+            this.addToHistory({ 
+                type: 'folder', 
+                id: fid, 
+                name: safePath.split('/').pop(), 
+                path: safePath 
+            });
+        }
       } catch (error) {
         console.error('Error fetching items:', error)
       }
@@ -532,6 +543,9 @@ export const useFileStore = defineStore('files', {
              setTimeout(() => { link.remove(); window.URL.revokeObjectURL(url); }, 100);
         }
 
+        // Add to history
+        this.addToHistory({ id: fileId, type: 'file', displayName: fileName });
+
       } catch (error) {
         console.error("Erreur download:", error);
         alert("Erreur lors du téléchargement.");
@@ -669,6 +683,15 @@ export const useFileStore = defineStore('files', {
             this.fetchItems(this.currentPath)
             // Mise à jour du quota utilisateur
             await authStore.fetchUser()
+
+            // Add to history
+             if (lastResponse?.data?.file) {
+                 this.addToHistory({ 
+                     ...lastResponse.data.file, 
+                     type: 'file', 
+                     displayName: lastResponse.data.file.Name 
+                 });
+            }
         }
         
         // Reset progress after a short delay
