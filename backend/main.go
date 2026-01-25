@@ -166,6 +166,8 @@ func main() {
 		userRoutes.GET("/", func(c *gin.Context) { users.ListUsersHandler(c, db) })
 		userRoutes.GET("/me", func(c *gin.Context) { users.MeHandler(c, db) })
 		userRoutes.POST("/change-password", func(c *gin.Context) { users.UpdatePasswordHandler(c, db) })
+		userRoutes.POST("/recent", func(c *gin.Context) { users.AddRecentActivityHandler(c, db) })
+		userRoutes.GET("/recent", func(c *gin.Context) { users.GetRecentActivityHandler(c, db) })
 		userRoutes.POST("/keys", func(c *gin.Context) {
 			// Lazy load to avoid cycle, or just call handler directly
 			// assuming 'keys' pkg doesn't import main
