@@ -443,7 +443,6 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  background-color: var(--background-color);
   cursor: pointer;
   transition: background-color 0.2s;
   user-select: none;

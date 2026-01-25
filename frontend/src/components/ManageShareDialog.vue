@@ -81,7 +81,9 @@
             <!-- Shared State -->
             <div v-else class="shared-state">
                 <div class="link-section">
-                    <label>Lien de partage</label>
+                    <label>
+                      <input type="text" readonly value="Lien de partage" />
+                    </label>
                     <div class="link-container">
                         <input type="text" :value="shareUrl" readonly ref="shareLinkInput" @click="selectAll" />
                         <button @click="copyLink" class="btn-copy" :class="{ copied: linkCopied }">

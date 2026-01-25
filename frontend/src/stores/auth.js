@@ -269,21 +269,6 @@ export const useAuthStore = defineStore('auth', {
         new_encrypted_master_key: newEncryptedMasterKey
       });
     },
-    async logout() {
-      try {
-        await supabase.auth.signOut(); // Logout Supabase
-        await api.post('/auth/logout'); // Logout Backend (invalidate redis session if any legacy left)
-      } catch (e) {
-        console.warn("Logout error", e);
-      }
-      this.isAuthenticated = false;
-      this.user = null;
-      this.masterKey = null;
-      this.privateKey = null;
-      this.publicKey = null;
-      sessionStorage.removeItem("safercloud_mk");
-      //this.clearUserFromStorage(); // Methode n'existe plus/renommée
-    },
     async checkAuth() { 
       // Cette fonction devrait être appelée au chargement de l'app (App.vue)
       const { data: { session } } = await supabase.auth.getSession();

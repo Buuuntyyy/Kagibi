@@ -126,8 +126,9 @@ export const useFileStore = defineStore('files', {
     notifyShareUpdate() {
         this.shareUpdateTrigger++;
     },
-    setSearchQuery(query) {
-      this.searchQuery = query
+        setSearchQuery(query) {
+        this.searchQuery = query;
+        this.searchFiles(query);
     },
     async fetchItems(path) {
         // If a pending navigation is set, consume it and use that path
@@ -564,7 +565,7 @@ export const useFileStore = defineStore('files', {
           const previewBlob = await generatePreview(file);
           if (previewBlob) {
              console.log("Preview generated, size:", previewBlob.size, "bytes");
-             const safeName = (file.name || "file").replace(/[^a-zA-Z0-9.-]/g, '_');
+             const safeName = (file.name || "file").replaceAll(/[^a-zA-Z0-9.-]/g, '_');
              const previewName = "preview_" + safeName + ".jpg";
              const previewFile = new File([previewBlob], previewName, { type: "image/jpeg" });
              try {
@@ -782,8 +783,8 @@ export const useFileStore = defineStore('files', {
       
       // 1. Generate Token
       const tokenBytes = window.crypto.getRandomValues(new Uint8Array(32));
-      const token = btoa(String.fromCharCode(...tokenBytes))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      const token = btoa(String.fromCodePoint(...tokenBytes))
+        .replaceAll(/\+/g, '-').replaceAll(/\//g, '_').replaceAll(/=+$/, '');
 
       let encryptedKeyForShare = "";
       let fileKeys = {};
@@ -872,10 +873,5 @@ export const useFileStore = defineStore('files', {
             console.error("Search error:", error);
         }
     },
-    
-    setSearchQuery(query) {
-        this.searchQuery = query;
-        this.searchFiles(query);
-    }
   },
 })
