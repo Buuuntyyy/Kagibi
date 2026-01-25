@@ -411,12 +411,13 @@ const storagePercentage = computed(() => {
 }
 
 .menu-item.active {
-  background-color: #c2e7ff;
-  color: #001d35;
+  background-color: var(--hover-background-color);
+  color: var(--primary-color);
+  font-weight: bold;
 }
 
 .menu-item.active:hover {
-  background-color: #c2e7ff;
+  background-color: var(--hover-background-color);
 }
 
 .icon-svg {
@@ -444,7 +445,7 @@ const storagePercentage = computed(() => {
 }
 .storage-fill {
   height: 100%;
-  background-color: var(--primary-color, #1a73e8); /* Default blue if var not set */
+  background-color: var(--primary-color);
   transition: width 0.3s ease;
 }
 

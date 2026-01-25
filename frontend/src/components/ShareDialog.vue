@@ -158,29 +158,30 @@ h3 {
 
 button {
   padding: 8px 16px;
-  border: 1px solid #ddd;
-  background-color: white;
+  border: 1px solid var(--border-color);
+  background-color: var(--card-color);
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.2s;
+  color: var(--main-text-color);
 }
 
 button:hover {
-  background-color: #f5f5f5;
+  background-color: var(--hover-background-color);
 }
 
 .btn-primary {
-  background-color: #4CAF50;
+  background-color: var(--primary-color);
   color: white;
   border: none;
 }
 
 .btn-primary:hover {
-  background-color: #45a049;
+  background-color: var(--accent-color);
 }
 
 .btn-primary:disabled {
-  background-color: #cccccc;
+  background-color: var(--border-color);
   cursor: not-allowed;
 }
 
@@ -193,9 +194,10 @@ button:hover {
 .link-display input {
   flex: 1;
   padding: 8px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
-  background-color: #f9f9f9;
+  background-color: var(--hover-background-color);
+  color: var(--main-text-color);
 }
 
 .btn-copy {
