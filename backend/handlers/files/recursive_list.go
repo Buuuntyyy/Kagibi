@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"safercloud/backend/pkg"
-
+	"strings"
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
@@ -14,6 +14,7 @@ func ListAllFilesRecursiveHandler(c *gin.Context, db *bun.DB) {
 	userID := userIDInterface.(string)
 
 	path := c.Query("path")
+	path = strings.ReplaceAll(strings.ReplaceAll(path, "\n", "_"), "\r", "_")
 	if path == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Path is required"})
 		return

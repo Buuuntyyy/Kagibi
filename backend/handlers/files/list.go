@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
+	"strings"
 )
 
 func ListFilesHandler(c *gin.Context, db *bun.DB) {
@@ -16,6 +17,7 @@ func ListFilesHandler(c *gin.Context, db *bun.DB) {
 	userID := userIDInterface.(string)
 
 	path := c.Param("path")
+	path = strings.ReplaceAll(strings.ReplaceAll(path, "\n", "_"), "\r", "_")
 	if path == "" {
 		path = "/"
 	}

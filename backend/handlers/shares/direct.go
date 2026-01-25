@@ -7,7 +7,7 @@ import (
 	"safercloud/backend/pkg/ws"
 	"strconv"
 	"time"
-
+	"strings"
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
@@ -168,6 +168,7 @@ func RemoveDirectShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager)
 	resourceType := c.Query("resource_type")
 	friendID := c.Query("friend_id")
 	shareIDStr := c.Query("id")
+	shareIDStr = strings.ReplaceAll(strings.ReplaceAll(shareIDStr, "\n", "_"), "\r", "_")
 
 	fmt.Printf("DEBUG: RemoveDirectShareHandler called. ResID=%s Type=%s FriendID=%s ShareID=%s\n", resourceIDStr, resourceType, friendID, shareIDStr)
 
