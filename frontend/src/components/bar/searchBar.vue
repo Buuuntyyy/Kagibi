@@ -200,7 +200,7 @@ onUnmounted(() => {
 .search-wrapper {
   display: flex;
   align-items: center;
-  background-color: #f1f3f4;
+  background-color: var(--hover-background-color);
   border-radius: 24px;
   padding: 0 8px;
   width: 100%;
@@ -211,7 +211,7 @@ onUnmounted(() => {
 
 .search-wrapper.focused,
 .search-wrapper:focus-within {
-  background-color: white;
+  background-color: var(--card-color);
   box-shadow: 0 1px 1px 0 rgba(65,69,73,0.3), 0 1px 3px 1px rgba(65,69,73,0.15);
 }
 
@@ -225,7 +225,7 @@ onUnmounted(() => {
 }
 
 .icon-wrapper:hover {
-  background-color: rgba(60,64,67,0.08);
+  background-color: var(--hover-background-color);
 }
 
 .search-icon {
@@ -242,13 +242,13 @@ onUnmounted(() => {
   background: transparent;
   padding: 0 8px;
   font-size: 16px;
-  color: #3c4043;
+  color: var(--main-text-color);
   outline: none;
   height: 100%;
 }
 
 .search-bar input::placeholder {
-  color: #5f6368;
+  color: var(--secondary-text-color);
 }
 
 /* Dropdown Styles */
@@ -257,7 +257,7 @@ onUnmounted(() => {
   top: 100%;
   left: 0;
   right: 0;
-  background: white;
+  background: var(--card-color);
   border-radius: 0 0 8px 8px;
   margin-top: 2px;
   box-shadow: 0 4px 6px rgba(32,33,36,0.28);
@@ -265,7 +265,7 @@ onUnmounted(() => {
   max-height: 400px;
   overflow-y: auto;
   padding: 8px 0;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-color);
 }
 
 .result-group {
@@ -276,7 +276,7 @@ onUnmounted(() => {
   padding: 8px 16px 4px;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #5f6368;
+  color: var(--secondary-text-color);
   text-transform: uppercase;
 }
 
@@ -289,7 +289,7 @@ onUnmounted(() => {
 }
 
 .result-item:hover, .result-item.active {
-  background-color: #f1f3f4;
+  background-color: var(--hover-background-color);
 }
 
 .item-icon {
@@ -306,7 +306,7 @@ onUnmounted(() => {
 
 .item-name {
   font-size: 0.9rem;
-  color: #202124;
+  color: var(--main-text-color);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -314,7 +314,7 @@ onUnmounted(() => {
 
 .item-path {
   font-size: 0.75rem;
-  color: #5f6368;
+  color: var(--secondary-text-color);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

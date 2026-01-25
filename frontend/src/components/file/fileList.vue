@@ -1,5 +1,6 @@
 <template>
   <div class="file-list-container"
+       @click="deselectAll"
        @dragover.prevent="onDragOver"
        @dragleave.prevent="onDragLeave"
        @drop.prevent="onDrop"
@@ -197,6 +198,11 @@ const selectedItems = ref([])
 const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
 const fileInput = ref(null)
 const isDragging = ref(false)
+
+const deselectAll = () => {
+    selectedItems.value = [];
+    lastClickedIndex.value = -1;
+};
 
 const currentSortKey = ref('name');
 const currentSortDirection = ref('asc');
@@ -1044,10 +1050,10 @@ const onDropOnParent = async (event) => {
 }
 
 .back-arrow.disabled {
-  color: #ccc;
+  color: var(--secondary-text-color);
   cursor: not-allowed;
-  background-color: #f9f9f9;
-  border-color: #eee;
+  background-color: var(--background-color);
+  border-color: var(--border-color);
 }
 
 .toolbar {
@@ -1083,9 +1089,9 @@ const onDropOnParent = async (event) => {
 }
 
 .btn-header {
-  background-color: white;
-  border: 1px solid #ccc;
-  color: #333;
+  background-color: var(--card-color);
+  border: 1px solid var(--border-color);
+  color: var(--main-text-color);
   padding: 0.5rem 1rem;
   border-radius: 4px;
   cursor: pointer;
@@ -1094,16 +1100,16 @@ const onDropOnParent = async (event) => {
 }
 
 .btn-header:hover {
-  background-color: #f0f0f0;
+  background-color: var(--hover-background-color);
 }
 
 .btn-logout {
-  color: #dc3545;
-  border-color: #dc3545;
+  color: var(--error-color);
+  border-color: var(--error-color);
 }
 
 .btn-logout:hover {
-  background-color: #dc3545;
+  background-color: var(--error-color);
   color: white;
 }
 
@@ -1116,13 +1122,14 @@ const onDropOnParent = async (event) => {
 
 
 .size {
-  color: #5c5c5c;
+  color: var(--secondary-text-color);
   font-size: 0.9em;
   text-align: right;
 }
 
 .list-item.selected {
-  background-color: rgba(66, 185, 131, 0.2); /* Light green selection */
+  background-color: var(--hover-background-color); /* Updated to use theme hover */
+  border: 1px solid var(--primary-color); /* Added border to distinguish selection */
 }
 
 button {
@@ -1139,14 +1146,14 @@ button {
 }
 
 .btn-rename {
-  background-color: #ffc107;
-  color: #333;
+  background-color: var(--warning-color);
+  color: var(--main-text-color);
   margin-right: 0.5rem;
 }
 
 .btn-rename:disabled {
-  background-color: #e0e0e0;
-  color: #999;
+  background-color: var(--border-color);
+  color: var(--secondary-text-color);
   cursor: not-allowed;
 }
 
@@ -1157,7 +1164,7 @@ button {
 
 .path-banner button {
     background-color: var(--background-color);
-    border: 1px solid #ccc;
+    border: 1px solid var(--border-color);
 }
 
 .path-banner button:disabled {
@@ -1210,28 +1217,28 @@ button {
   display: flex;
   align-items: center;
   gap: 1rem;
-  background-color: #f9f9f9;
-  border-bottom: 1px solid #eee;
+  background-color: var(--background-color);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .progress-bar {
   flex-grow: 1;
   height: 10px;
-  background-color: #e0e0e0;
+  background-color: var(--border-color);
   border-radius: 5px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background-color: var(--primary-color, #42b983);
+  background-color: var(--primary-color);
   transition: width 0.3s ease;
 }
 
 .progress-text {
   font-size: 0.9rem;
   font-weight: bold;
-  color: #555;
+  color: var(--secondary-text-color);
   min-width: 3rem;
   text-align: right;
 }
@@ -1241,11 +1248,11 @@ button {
   top: 20px;
   right: 20px;
   width: 320px;
-  background-color: white;
+  background-color: var(--card-color);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   z-index: 1000;
-  border: 1px solid #eee;
+  border: 1px solid var(--border-color);
   overflow: hidden;
   animation: slideIn 0.3s ease;
 }
@@ -1260,14 +1267,14 @@ button {
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem 1rem;
-  background-color: #f5f5f5;
-  border-bottom: 1px solid #eee;
+  background-color: var(--background-color);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .popup-title {
   font-weight: bold;
   font-size: 0.9rem;
-  color: #333;
+  color: var(--main-text-color);
 }
 
 .btn-close {
@@ -1277,13 +1284,13 @@ button {
   cursor: pointer;
   padding: 0;
   line-height: 0.8;
-  color: #999;
+  color: var(--secondary-text-color);
   width: auto;
   height: auto;
 }
 
 .btn-close:hover {
-  color: #333;
+  color: var(--main-text-color);
   background: none;
 }
 
@@ -1298,7 +1305,7 @@ button {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #333;
+  color: var(--main-text-color);
   text-align: left;
 }
 
@@ -1345,8 +1352,8 @@ button {
 
 .context-menu {
   position: fixed;
-  background: white;
-  border: 1px solid #ccc;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.2);
   z-index: 1000;
@@ -1361,18 +1368,18 @@ button {
   align-items: center;
   gap: 8px;
   font-size: 0.9rem;
-  color: #333;
+  color: var(--main-text-color);
   transition: background-color 0.2s;
   text-align: left;
 }
 
 .menu-item:hover {
-  background-color: #f0f0f0;
+  background-color: var(--hover-background-color);
 }
 
 .menu-item.delete {
-  color: #dc3545;
-  border-top: 1px solid #eee;
+  color: var(--error-color);
+  border-top: 1px solid var(--border-color);
 }
 
 .menu-icon {
@@ -1384,7 +1391,7 @@ button {
 }
 
 .menu-item.delete .menu-icon svg {
-  fill: #dc3545;
+  fill: var(--error-color);
 }
 
 .date-column {
