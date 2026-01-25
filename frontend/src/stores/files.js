@@ -855,4 +855,4 @@ export const useFileStore = defineStore('files', {
         this.searchFiles(query);
     }
   },
-})
+)
