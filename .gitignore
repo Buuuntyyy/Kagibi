@@ -2,7 +2,9 @@ db_data/*
 redis-data/*
 
 backend/uploads/*
+
 backend/.env
+frontend/.env
 
 docker/dump.sql
 docker/.env
