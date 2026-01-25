@@ -2,15 +2,24 @@
   <div v-if="!recoveryCode">
     <form @submit.prevent="submit" class="auth-form">
       <div class="form-group">
-        <label>Nom d'utilisateur</label>
+        <label>
+          <input type="text" />
+          Nom d'utilisateur
+        </label>
         <input v-model="username" type="text" required class="form-control" placeholder="Votre nom" />
       </div>
       <div class="form-group">
-        <label>Email</label>
+        <label>
+          <input type="text" />
+          Email
+        </label>
         <input v-model="email" type="email" required class="form-control" placeholder="votre@email.com" />
       </div>
       <div class="form-group">
-        <label>Mot de passe</label>
+        <label>
+          <input type="password" />
+          Mot de passe
+        </label>
         <input v-model="password" type="password" required class="form-control" placeholder="••••••••" />
       </div>
       <button type="submit" class="btn-submit" :disabled="loading">

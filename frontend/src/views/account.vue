@@ -49,12 +49,14 @@
           <div class="section-body">
             <div class="form-row">
               <div class="input-group">
-                <label>Nom d'utilisateur</label>
-                <input 
-                  type="text" 
-                  v-model="usernameForm.newName" 
-                  :placeholder="authStore.user?.name" 
-                />
+                <label>
+                  Nom d'utilisateur
+                  <input 
+                    type="text" 
+                    v-model="usernameForm.newName" 
+                    :placeholder="authStore.user?.name" 
+                  />
+                </label>
               </div>
               <button class="btn-secondary" @click="handleUpdateUsername">Modifier</button>
             </div>
@@ -68,17 +70,23 @@
           <div class="section-body">
             <form @submit.prevent="handleUpdatePassword" class="password-form">
               <div class="input-group">
-                <label>Mot de passe actuel</label>
-                <input type="password" v-model="passwordForm.current" required placeholder="••••••••" />
+                <label>
+                  Mot de passe actuel
+                  <input type="password" v-model="passwordForm.current" required placeholder="••••••••" />
+                </label>
               </div>
               <div class="password-row">
                  <div class="input-group">
-                  <label>Nouveau mot de passe</label>
-                  <input type="password" v-model="passwordForm.new" required placeholder="••••••••" />
+                  <label>
+                    Nouveau mot de passe
+                    <input type="password" v-model="passwordForm.new" required placeholder="••••••••" />
+                  </label>
                 </div>
                 <div class="input-group">
-                  <label>Confirmer</label>
-                  <input type="password" v-model="passwordForm.confirm" required placeholder="••••••••" />
+                  <label>
+                    Confirmer
+                    <input type="password" v-model="passwordForm.confirm" required placeholder="••••••••" />
+                  </label>
                 </div>
               </div>
               <div class="form-actions">

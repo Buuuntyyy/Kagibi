@@ -7,22 +7,34 @@
     
     <form @submit.prevent="handleRecovery" class="auth-form">
       <div class="form-group">
-        <label>Email</label>
+        <label>
+          <input type="text" />
+          Email
+        </label>
         <input type="email" v-model="email" required class="form-control" placeholder="votre@email.com" />
       </div>
       
       <div class="form-group">
-        <label>Code de récupération</label>
+        <label>
+          <input type="text" />
+          Code de récupération
+        </label>
         <textarea v-model="recoveryCode" required class="form-control" placeholder="Collez votre code ici..." rows="3"></textarea>
       </div>
       
       <div class="form-group">
-        <label>Nouveau mot de passe</label>
+        <label>
+          <input type="password" />
+          Nouveau mot de passe
+        </label>
         <input type="password" v-model="newPassword" required minlength="8" class="form-control" placeholder="••••••••" />
       </div>
       
       <div class="form-group">
-        <label>Confirmer le mot de passe</label>
+        <label>
+          <input type="password" />
+          Confirmer le mot de passe
+        </label>
         <input type="password" v-model="confirmPassword" required minlength="8" class="form-control" placeholder="••••••••" />
       </div>
       

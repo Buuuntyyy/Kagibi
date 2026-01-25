@@ -5,7 +5,10 @@
       
       <div v-if="!generatedLink" class="share-form">
         <div class="form-group">
-          <label>Expiration (optionnel)</label>
+          <label>
+            <input type="text" />
+            Expiration (optionnel)
+          </label>
           <input type="datetime-local" v-model="expiresAt" class="date-input" />
         </div>
         
