@@ -851,7 +851,7 @@ button {
 }
 
 .btn-danger:hover {
-  background-color: #d32f2f;
+  filter: brightness(0.9);
 }
 
 .spinner {
@@ -977,13 +977,13 @@ button {
 }
 
 .warning-box {
-  background-color: #fff3cd;
-  color: #856404;
+  background-color: var(--card-color);
+  color: var(--warning-color);
   padding: 10px;
   border-radius: 4px;
   margin-bottom: 15px;
   font-size: 0.9rem;
-  border: 1px solid #ffeeba;
+  border: 1px solid var(--warning-color);
 }
 
 .empty-friends {
