@@ -6,67 +6,11 @@
         <button @click="close" class="btn-close">×</button>
       </div>
 
-      <div class="modal-tabs">
-        <button 
-          :class="['tab-btn', { active: activeTab === 'link' }]"
-          @click="activeTab = 'link'"
-        >
-          Lien Public
-        </button>
-        <button 
-          :class="['tab-btn', { active: activeTab === 'friends' }]"
-          @click="activeTab = 'friends'"
-        >
-          Amis (Sécurisé)
-        </button>
-      </div>
-      
       <div class="modal-body">
-        
-        <!-- === LINK SHARE TAB === -->
-        <div v-if="activeTab === 'link'">
-            <!-- Loading State -->
-            <div v-if="loading" class="loading-state">
-                <div class="spinner"></div> Traitement en cours...
-            </div>
 
-            <!-- Not Shared State -->
-            <div v-else-if="!isShared" class="not-shared-state">
-                <div class="illustration">
-                    🔗
-                </div>
-                <p>Ce {{ item?.type === 'folder' ? 'dossier' : 'fichier' }} n'est pas encore partagé par lien.</p>
-                <p class="sub-text">Créez un lien pour le partager avec d'autres personnes.</p>
-                
-                <div class="form-group">
-                    <label for="expiresAt">Expiration (optionnel)</label>
-                    <input type="datetime-local" id="expiresAt" v-model="expiresAt" class="form-control" />
-                </div>
-
-                <button @click="createShare" class="btn-primary">Créer un lien de partage</button>
-            </div>
-
-            <!-- Shared State -->
-            <div v-else class="shared-state">
-                <div class="link-section">
-                    <label>Lien de partage</label>
-                    <div class="link-container">
-                        <input type="text" :value="shareUrl" readonly ref="shareLinkInput" @click="selectAll" />
-                        <button @click="copyLink" class="btn-copy" :class="{ copied: linkCopied }">
-                            {{ linkCopied ? 'Copié !' : 'Copier' }}
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="share-info">
-                    <p v-if="localExpiresAt">⏳ Ce lien expirera le : <b>{{ formattedExpiration }}</b></p>
-                    <p>⚠️ Toute personne disposant de ce lien pourra accéder au contenu <b>déchiffré</b>.</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- === FRIENDS SHARE TAB === -->
-        <div v-else-if="activeTab === 'friends'" class="friends-tab">
+        <!-- === FRIENDS SECTION === -->
+        <div class="friends-section">
+            <h4 class="section-title">Partage avec des amis (Sécurisé)</h4>
             
             <div v-if="friends.length === 0" class="empty-friends">
                 Vous n'avez pas encore d'amis. 
@@ -107,6 +51,52 @@
             </div>
         </div>
 
+        <div class="section-divider"></div>
+
+        <!-- === LINK SECTION === -->
+        <div class="link-section-wrapper">
+            <h4 class="section-title">Partage via lien public</h4>
+
+            <!-- Loading State -->
+            <div v-if="loading" class="loading-state">
+                <div class="spinner"></div> Traitement en cours...
+            </div>
+
+            <!-- Not Shared State -->
+            <div v-else-if="!isShared" class="not-shared-state">
+                <div class="illustration">
+                    🔗
+                </div>
+                <p>Ce {{ item?.type === 'folder' ? 'dossier' : 'fichier' }} n'est pas encore partagé par lien.</p>
+                <p class="sub-text">Créez un lien pour le partager avec d'autres personnes.</p>
+                
+                <div class="form-group">
+                    <label for="expiresAt">Expiration (optionnel)</label>
+                    <input type="datetime-local" id="expiresAt" v-model="expiresAt" class="form-control" />
+                </div>
+
+                <button @click="createShare" class="btn-primary">Créer un lien de partage</button>
+            </div>
+
+            <!-- Shared State -->
+            <div v-else class="shared-state">
+                <div class="link-section">
+                    <label>Lien de partage</label>
+                    <div class="link-container">
+                        <input type="text" :value="shareUrl" readonly ref="shareLinkInput" @click="selectAll" />
+                        <button @click="copyLink" class="btn-copy" :class="{ copied: linkCopied }">
+                            {{ linkCopied ? 'Copié !' : 'Copier' }}
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="share-info">
+                    <p v-if="localExpiresAt">⏳ Ce lien expirera le : <b>{{ formattedExpiration }}</b></p>
+                    <p>⚠️ Toute personne disposant de ce lien pourra accéder au contenu <b>déchiffré</b>.</p>
+                </div>
+            </div>
+        </div>
+
       </div>
 
       <div class="modal-footer">
@@ -143,7 +133,6 @@ const authStore = useAuthStore();
 const uiStore = useUIStore();
 
 // UI State
-const activeTab = ref(props.initialTab || 'link'); // 'link' or 'friends'
 const loading = ref(false);
 
 // Link Share State
@@ -161,27 +150,8 @@ const localShareToken = ref(null);
 const localShareId = ref(null);
 const localExpiresAt = ref(null);
 
-// Reset local state when item changes
-watch(() => props.item, (newItem) => {
-    if (newItem) {
-        localShareToken.value = newItem.share_token || newItem.ShareToken;
-        localShareId.value = newItem.share_id || newItem.ShareID;
-        localExpiresAt.value = newItem.expires_at || newItem.ExpiresAt; // Populate expiration
-        
-        // Reset tab
-        activeTab.value = props.initialTab || 'link';
-        sharedStatus.value = {};
-    }
-}, { immediate: true });
-
-// Fetch direct shares when Friends tab is active
-watch(activeTab, (newTab) => {
-    if (newTab === 'friends' && props.item) {
-        fetchDirectShares();
-    }
-});
-
 const fetchDirectShares = async () => {
+    if (!props.item) return;
     try {
         const resourceType = (props.item.type === 'folder' || props.item.is_dir) ? 'folder' : 'file';
         const resourceId = props.item.ID || props.item.id;
@@ -204,6 +174,18 @@ const fetchDirectShares = async () => {
         console.error("Error fetching direct shares:", e);
     }
 }
+
+// Reset local state when item changes
+watch(() => props.item, (newItem) => {
+    if (newItem) {
+        localShareToken.value = newItem.share_token || newItem.ShareToken;
+        localShareId.value = newItem.share_id || newItem.ShareID;
+        localExpiresAt.value = newItem.expires_at || newItem.ExpiresAt; // Populate expiration
+        
+        sharedStatus.value = {};
+        fetchDirectShares();
+    }
+}, { immediate: true });
 
 onMounted(() => {
     if (friends.value.length === 0) {
@@ -873,34 +855,21 @@ button {
   to { opacity: 1; }
 }
 
-/* Tabs */
-.modal-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--border-color);
-  background-color: var(--background-color);
-}
-
-.tab-btn {
-  flex: 1;
-  padding: 12px;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--secondary-text-color);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.tab-btn:hover {
-  background-color: var(--hover-background-color);
+.section-title {
+  margin: 0 0 15px 0;
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--main-text-color);
 }
 
-.tab-btn.active {
-  color: var(--primary-color);
-  border-bottom-color: var(--primary-color);
-  font-weight: 600;
-  background-color: var(--card-color);
+.section-divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 20px 0;
+}
+
+.link-section-wrapper {
+  margin-top: 10px;
 }
 
 .friends-list {
