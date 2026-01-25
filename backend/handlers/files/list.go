@@ -27,5 +27,20 @@ func ListFilesHandler(c *gin.Context, db *bun.DB) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"files": files, "folders": folders})
+
+	// Fetch current folder meta (for ID)
+	var currentFolderID int64 = 0
+	if path != "/" && path != "" {
+		currentFolder := new(pkg.Folder)
+		err := db.NewSelect().Model(currentFolder).
+			Column("id").
+			Where("user_id = ? AND path = ?", userID, path).
+			Limit(1).
+			Scan(c.Request.Context())
+		if err == nil {
+			currentFolderID = currentFolder.ID
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"files": files, "folders": folders, "current_folder_id": currentFolderID})
 }
