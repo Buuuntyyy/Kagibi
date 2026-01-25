@@ -2,14 +2,12 @@
   <form @submit.prevent="login" class="auth-form">
     <div class="form-group">
       <label>
-        <input type="text" />
         Email
       </label>
       <input v-model="email" type="email" required class="form-control" placeholder="votre@email.com" />
     </div>
     <div class="form-group">
       <label>
-        <input type="password" />
         Mot de passe
       </label>
       <input v-model="password" type="password" required class="form-control" placeholder="••••••••" />
