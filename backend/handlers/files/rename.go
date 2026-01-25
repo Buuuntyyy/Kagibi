@@ -1,6 +1,7 @@
 package files
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -26,13 +27,11 @@ type RenameRequest struct {
 
 func RenameHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 	var req RenameRequest
-	// 1. Bind and validate input
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
 		return
 	}
 
-	// Validate new name
 	if !validNameRegex.MatchString(req.NewName) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid name"})
 		return
@@ -41,121 +40,147 @@ func RenameHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 	userIDInterface, _ := c.Get("user_id")
 	userID, _ := userIDInterface.(string)
 
-	var oldPath string
-	var parentPath string
-
-	// 1. Get the item to rename
-	if req.Type == "file" {
-		file, err := pkg.GetFile(db, req.ID, userID)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
-			return
-		}
-		oldPath = file.Path
-		parentPath = filepath.ToSlash(filepath.Dir(oldPath))
-		if parentPath == "." {
-			parentPath = ""
-		}
-	} else {
-		var folder pkg.Folder
-		err := db.NewSelect().Model(&folder).Where("id = ? AND user_id = ?", req.ID, userID).Scan(c.Request.Context())
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Folder not found"})
-			return
-		}
-		oldPath = folder.Path
-		parentPath = filepath.ToSlash(filepath.Dir(oldPath))
-		if parentPath == "." {
-			parentPath = ""
-		}
+	oldPath, parentPath, err := getRenameItemInfo(c.Request.Context(), db, req.ID, req.Type, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
 	}
 
-	var newPath string
+	newPath, finalName := calculateNewPath(req, oldPath, parentPath)
+
+	if newPath == oldPath {
+		c.JSON(http.StatusOK, gin.H{"message": "No changes made", "newName": finalName, "newPath": newPath})
+		return
+	}
+
+	if err := checkRenameConflict(c.Request.Context(), db, req.Type, newPath, userID); err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := executeRenameTransaction(c.Request.Context(), db, req.ID, req.Type, userID, oldPath, newPath, finalName); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	enqueueS3RenameTask(redisClient, userID, oldPath, newPath, req.Type == "folder")
+
+	c.JSON(http.StatusOK, gin.H{"message": "Item renamed successfully", "newName": finalName, "newPath": newPath})
+}
+
+func getRenameItemInfo(ctx context.Context, db *bun.DB, id int64, itemType, userID string) (string, string, error) {
+	var oldPath string
+	if itemType == "file" {
+		file, err := pkg.GetFile(db, id, userID)
+		if err != nil {
+			return "", "", fmt.Errorf("File not found")
+		}
+		oldPath = file.Path
+	} else {
+		var folder pkg.Folder
+		err := db.NewSelect().Model(&folder).Where("id = ? AND user_id = ?", id, userID).Scan(ctx)
+		if err != nil {
+			return "", "", fmt.Errorf("Folder not found")
+		}
+		oldPath = folder.Path
+	}
+
+	parentPath := filepath.ToSlash(filepath.Dir(oldPath))
+	if parentPath == "." {
+		parentPath = ""
+	}
+	return oldPath, parentPath, nil
+}
+
+func calculateNewPath(req RenameRequest, oldPath, parentPath string) (string, string) {
+	finalName := req.NewName
 	if req.Type == "file" {
 		// Conserver l'extension originale
 		ext := filepath.Ext(oldPath)
 		// Si le nouveau nom n'a pas l'extension, on l'ajoute
-		if filepath.Ext(req.NewName) != ext {
-			req.NewName = req.NewName + ext
+		if filepath.Ext(finalName) != ext {
+			finalName = finalName + ext
 		}
 	}
 
+	var newPath string
 	if parentPath == "/" || parentPath == "" {
-		newPath = "/" + req.NewName
+		newPath = "/" + finalName
 	} else {
-		newPath = parentPath + "/" + req.NewName
+		newPath = parentPath + "/" + finalName
 	}
+	return newPath, finalName
+}
 
-	if newPath == oldPath {
-		c.JSON(http.StatusOK, gin.H{"message": "No changes made", "newName": req.NewName, "newPath": newPath})
-		return
-	}
-
-	// Check for name conflicts
-	if req.Type == "file" {
-		exists, _ := db.NewSelect().Model((*pkg.File)(nil)).Where("path = ? AND user_id = ?", newPath, userID).Exists(c.Request.Context())
+func checkRenameConflict(ctx context.Context, db *bun.DB, itemType, newPath, userID string) error {
+	var exists bool
+	if itemType == "file" {
+		exists, _ = db.NewSelect().Model((*pkg.File)(nil)).Where("path = ? AND user_id = ?", newPath, userID).Exists(ctx)
 		if exists {
-			c.JSON(http.StatusConflict, gin.H{"error": "A file with this name already exists"})
-			return
+			return fmt.Errorf("A file with this name already exists")
 		}
 	} else {
-		exists, _ := db.NewSelect().Model((*pkg.Folder)(nil)).Where("path = ? AND user_id = ?", newPath, userID).Exists(c.Request.Context())
+		exists, _ = db.NewSelect().Model((*pkg.Folder)(nil)).Where("path = ? AND user_id = ?", newPath, userID).Exists(ctx)
 		if exists {
-			c.JSON(http.StatusConflict, gin.H{"error": "A folder with this name already exists"})
-			return
+			return fmt.Errorf("A folder with this name already exists")
 		}
 	}
+	return nil
+}
 
-	// 4. Update database records
-	ctx := c.Request.Context()
+func executeRenameTransaction(ctx context.Context, db *bun.DB, id int64, itemType, userID, oldPath, newPath, newName string) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database transaction error"})
-		return
+		return fmt.Errorf("Database transaction error")
 	}
 
-	if req.Type == "file" {
-		_, err = tx.NewUpdate().Model((*pkg.File)(nil)).Set("name = ?", req.NewName).Set("path = ?", newPath).Where("id = ?", req.ID).Exec(ctx)
+	if itemType == "file" {
+		_, err = tx.NewUpdate().Model((*pkg.File)(nil)).Set("name = ?", newName).Set("path = ?", newPath).Where("id = ?", id).Exec(ctx)
 		if err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update file"})
-			return
+			return fmt.Errorf("Failed to update file")
 		}
 	} else {
-		_, err = tx.NewUpdate().Model((*pkg.Folder)(nil)).Set("name = ?", req.NewName).Set("path = ?", newPath).Where("id = ?", req.ID).Exec(ctx)
+		// Update folder itself
+		_, err = tx.NewUpdate().Model((*pkg.Folder)(nil)).Set("name = ?", newName).Set("path = ?", newPath).Where("id = ?", id).Exec(ctx)
 		if err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update folder"})
-			return
+			return fmt.Errorf("Failed to update folder")
 		}
 
-		startIdx := len(oldPath) + 1
-
-		_, err = tx.NewRaw("UPDATE files SET path = ? || SUBSTRING(path, ?) WHERE path LIKE ? AND user_id = ?",
-			newPath, startIdx, oldPath+"/%", userID).Exec(ctx)
-
-		if err != nil {
+		// Update children
+		if err := updateChildrenPaths(ctx, tx, userID, oldPath, newPath); err != nil {
 			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update children files"})
-			return
-		}
-
-		_, err = tx.NewRaw("UPDATE folders SET path = ? || SUBSTRING(path, ?) WHERE path LIKE ? AND user_id = ?",
-			newPath, startIdx, oldPath+"/%", userID).Exec(ctx)
-
-		if err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update children folders"})
-			return
+			return err
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
-		return
+		return fmt.Errorf("Failed to commit transaction")
+	}
+	return nil
+}
+
+func updateChildrenPaths(ctx context.Context, tx bun.Tx, userID, oldPath, newPath string) error {
+	startIdx := len(oldPath) + 1
+
+	_, err := tx.NewRaw("UPDATE files SET path = ? || SUBSTRING(path, ?) WHERE path LIKE ? AND user_id = ?",
+		newPath, startIdx, oldPath+"/%", userID).Exec(ctx)
+
+	if err != nil {
+		return fmt.Errorf("Failed to update children files")
 	}
 
-	// 5. Enqueue S3 Task
+	_, err = tx.NewRaw("UPDATE folders SET path = ? || SUBSTRING(path, ?) WHERE path LIKE ? AND user_id = ?",
+		newPath, startIdx, oldPath+"/%", userID).Exec(ctx)
+
+	if err != nil {
+		return fmt.Errorf("Failed to update children folders")
+	}
+	return nil
+}
+
+func enqueueS3RenameTask(redisClient *redis.Client, userID, oldPath, newPath string, isFolder bool) {
 	srcKey := fmt.Sprintf("users/%s%s", userID, oldPath)
 	destKey := fmt.Sprintf("users/%s%s", userID, newPath)
 
@@ -164,12 +189,10 @@ func RenameHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 		UserID:   userID,
 		SrcKey:   srcKey,
 		DestKey:  destKey,
-		IsFolder: req.Type == "folder",
+		IsFolder: isFolder,
 	}
 
 	if err := workers.EnqueueTask(redisClient, task); err != nil {
 		log.Printf("Failed to enqueue S3 task: %v", err)
 	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Item renamed successfully", "newName": req.NewName, "newPath": newPath})
 }
