@@ -43,11 +43,15 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useFileStore } from '../../stores/files'
 
 const fileStore = useFileStore()
 const isOpen = ref(true)
+
+onMounted(() => {
+  fileStore.fetchRecents()
+})
 
 const toggleAccordion = () => {
   isOpen.value = !isOpen.value

@@ -154,3 +154,13 @@ type ImportedShare struct {
 	ShareLink   *ShareLink `bun:"rel:belongs-to,join:share_link_id=id"`
 	CreatedAt   time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 }
+
+type RecentActivity struct {
+	ID         int64     `bun:"id,pk,autoincrement"`
+	UserID     string    `bun:"user_id,notnull"`
+	FileID     *int64    `bun:"file_id"`   // Nullable, set if it's a file
+	FolderID   *int64    `bun:"folder_id"` // Nullable, set if it's a folder
+	File       *File     `bun:"rel:belongs-to,join:file_id=id"`
+	Folder     *Folder   `bun:"rel:belongs-to,join:folder_id=id"`
+	AccessedAt time.Time `bun:"accessed_at,nullzero,notnull,default:current_timestamp"`
+}
