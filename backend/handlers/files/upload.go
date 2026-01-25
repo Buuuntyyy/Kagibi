@@ -2,10 +2,12 @@
 package files
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,288 +22,281 @@ import (
 	"github.com/uptrace/bun"
 )
 
+type UploadRequest struct {
+	UserID       string
+	Path         string
+	EncryptedKey string
+	ShareKeys    string
+	ChunkIndex   int
+	TotalChunks  int
+	IsChunked    bool
+	TotalSize    int64
+	PreviewID    *int64
+	IsPreview    bool
+}
+
 func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client, wsManager *ws.Manager) {
-	userIDInterface, _ := c.Get("user_id")
-	userID := userIDInterface.(string)
+	userID := c.GetString("user_id")
 
-	path := c.PostForm("path") // Chemin virtuel où le fichier doit être stocké
-	if path == "" {
-		path = "/"
-	}
+	req := parseUploadRequest(c, userID)
 
-	encryptedKey := c.PostForm("encrypted_key")
-	shareKeysJSON := c.PostForm("share_keys") // JSON string: {"shareID": "encryptedKey", ...}
-
-	// Paramètre de chunking
-	chunkIndexStr := c.PostForm("chunk_index")
-	totalChunksStr := c.PostForm("total_chunks")
-
-	isChunked := chunkIndexStr != "" && totalChunksStr != ""
-	chunkIndex := 0
-	totalChunks := 1
-	if isChunked {
-		chunkIndex, _ = strconv.Atoi(chunkIndexStr)
-		totalChunks, _ = strconv.Atoi(totalChunksStr)
-	}
-
-	// Early Storage Quota Check (on first chunk)
-	if chunkIndex == 0 {
-		totalSizeStr := c.PostForm("total_file_size")
-		if totalSizeStr != "" {
-			totalSize, _ := strconv.ParseInt(totalSizeStr, 10, 64)
-			if totalSize > 0 {
-				var user pkg.User
-				if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c); err == nil {
-					if user.StorageUsed+totalSize > user.StorageLimit {
-						c.JSON(http.StatusForbidden, gin.H{"error": "Storage limit exceeded"})
-						return
-					}
-				}
-			}
+	// Early Storage Quota Check
+	if req.ChunkIndex == 0 && req.TotalSize > 0 {
+		if err := checkStorageQuota(c.Request.Context(), db, userID, req.TotalSize); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
 		}
 	}
 
-	// Récupération du fichier (morceau actuel)
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File is required"})
 		return
 	}
 
-	// Préparation des chemins
-	fullPathDB := filepath.ToSlash(filepath.Join(path, fileHeader.Filename))
+	tempFilePath, err := handleChunkAssembly(fileHeader, userID, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
-	// Use a temporary directory for assembling chunks
+	isLastChunk := !req.IsChunked || (req.ChunkIndex == req.TotalChunks-1)
+	if !isLastChunk {
+		c.JSON(http.StatusOK, gin.H{"message": "Chunk uploaded successfully", "chunk_index": req.ChunkIndex})
+		return
+	}
+
+	// Finalize Upload
+	fileRecord, err := finalizeUpload(c.Request.Context(), db, redisClient, wsManager, req, fileHeader, tempFilePath)
+	if err != nil {
+		// Attempt cleanup
+		os.Remove(tempFilePath)
+		// Return appropriate error code based on error type? For now 500 or 403
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "Upload en cours de traitement", "file": fileRecord})
+}
+
+func parseUploadRequest(c *gin.Context, userID string) UploadRequest {
+	path := c.PostForm("path")
+	if path == "" {
+		path = "/"
+	}
+
+	chunkIndexStr := c.PostForm("chunk_index")
+	totalChunksStr := c.PostForm("total_chunks")
+	chunkIndex := 0
+	totalChunks := 1
+	isChunked := chunkIndexStr != "" && totalChunksStr != ""
+
+	if isChunked {
+		chunkIndex, _ = strconv.Atoi(chunkIndexStr)
+		totalChunks, _ = strconv.Atoi(totalChunksStr)
+	}
+
+	var totalSize int64
+	if totalSizeStr := c.PostForm("total_file_size"); totalSizeStr != "" {
+		totalSize, _ = strconv.ParseInt(totalSizeStr, 10, 64)
+	}
+
+	previewIDStr := c.PostForm("preview_id")
+	var previewID *int64
+	if previewIDStr != "" {
+		pid, _ := strconv.ParseInt(previewIDStr, 10, 64)
+		previewID = &pid
+	}
+
+	return UploadRequest{
+		UserID:       userID,
+		Path:         path,
+		EncryptedKey: c.PostForm("encrypted_key"),
+		ShareKeys:    c.PostForm("share_keys"),
+		ChunkIndex:   chunkIndex,
+		TotalChunks:  totalChunks,
+		IsChunked:    isChunked,
+		TotalSize:    totalSize,
+		PreviewID:    previewID,
+		IsPreview:    c.PostForm("is_preview") == "true",
+	}
+}
+
+func checkStorageQuota(ctx context.Context, db *bun.DB, userID string, size int64) error {
+	var user pkg.User
+	if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(ctx); err != nil {
+		return nil // Skip check if user load fails (handled later)
+	}
+	if user.StorageUsed+size > user.StorageLimit {
+		return fmt.Errorf("Storage limit exceeded")
+	}
+	return nil
+}
+
+func handleChunkAssembly(fileHeader *multipart.FileHeader, userID string, req UploadRequest) (string, error) {
 	tempDir := filepath.Join(os.TempDir(), "safercloud_uploads", userID)
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create temp directory"})
-		return
+		return "", fmt.Errorf("Failed to create temp directory")
 	}
 
-	// Temporary file path for assembly
 	tempFilePath := filepath.Join(tempDir, fileHeader.Filename+"_partial")
 
-	// LOGIQUE D'ASSEMBLAGE DES MORCEAUX
-	var flags int
-	if isChunked && chunkIndex > 0 {
-		// Si ce n'est pas le premier morceau, on l'ajoute à la fin du fichier existant
+	flags := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+	if req.IsChunked && req.ChunkIndex > 0 {
 		flags = os.O_WRONLY | os.O_APPEND
-	} else {
-		// Premier morceau ou fichier non morcelé : créer/tronquer le fichier
-		flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 	}
 
-	// Ouverture du fichier sur le disque
 	dst, err := os.OpenFile(tempFilePath, flags, 0644)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open temp file"})
-		return
+		return "", fmt.Errorf("Failed to open temp file")
 	}
 	defer dst.Close()
 
-	// Lecture du morceau téléchargé
 	src, err := fileHeader.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open uploaded file"})
-		return
+		return "", fmt.Errorf("Failed to open uploaded file")
 	}
 	defer src.Close()
 
-	// Copie du morceau dans le fichier sur le disque
 	if _, err := io.Copy(dst, src); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to write chunk to temp file"})
-		return
+		return "", fmt.Errorf("Failed to write chunk to temp file")
 	}
 
-	// Enregistrement en base de données
-	isLastChunk := !isChunked || (chunkIndex == totalChunks-1)
+	return tempFilePath, nil
+}
 
-	if isLastChunk {
-		// Ensure data is written to disk
-		dst.Sync()
-		// Close the file before reading it for upload
-		dst.Close()
+func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, wsManager *ws.Manager, req UploadRequest, fileHeader *multipart.FileHeader, tempFilePath string) (*pkg.File, error) {
+	// 1. Verify file size
+	fi, err := os.Stat(tempFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to stat final file")
+	}
+	fileSize := fi.Size()
 
-		fi, err := os.Stat(tempFilePath)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to stat final file"})
-			return
+	// 2. Transaction for DB updates
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("Database error")
+	}
+	defer tx.Rollback()
+
+	// 3. Quota Check
+	if err := checkStorageQuota(ctx, db, req.UserID, fileSize); err != nil {
+		return nil, err
+	}
+
+	// 4. Enqueue S3 Task
+	fullPathDB := filepath.ToSlash(filepath.Join(req.Path, fileHeader.Filename))
+	s3Key := fmt.Sprintf("users/%s%s", req.UserID, fullPathDB)
+
+	task := workers.S3Task{
+		Type:        workers.TaskUpload,
+		UserID:      req.UserID,
+		SrcKey:      tempFilePath,
+		DestKey:     s3Key,
+		ContentType: fileHeader.Header.Get("Content-Type"),
+	}
+
+	if err := workers.EnqueueTask(redisClient, task); err != nil {
+		log.Printf("Upload Handler ERROR: Failed to enqueue task: %v", err)
+		return nil, fmt.Errorf("Failed to enqueue upload task")
+	}
+
+	// 5. Update DB
+	fileRecord := &pkg.File{
+		Name:         fileHeader.Filename,
+		Path:         fullPathDB,
+		Size:         fileSize,
+		MimeType:     fileHeader.Header.Get("Content-Type"),
+		UserID:       req.UserID,
+		EncryptedKey: req.EncryptedKey,
+		PreviewID:    req.PreviewID,
+		IsPreview:    req.IsPreview,
+	}
+
+	if err := upsertFileInDB(ctx, tx, fileRecord, fileSize); err != nil {
+		return nil, err
+	}
+
+	// 6. Handle Share Keys
+	if err := processShareKeys(ctx, tx, req.ShareKeys, fileRecord); err != nil {
+		fmt.Printf("Error inserting share keys: %v\n", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("Transaction commit failed")
+	}
+
+	// 7. Notify Storage Update
+	notifyStorageUpdate(db, wsManager, req.UserID)
+
+	return fileRecord, nil
+}
+
+func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) error {
+	exists, _ := tx.NewSelect().Model((*pkg.File)(nil)).
+		Where("user_id = ? AND path = ?", file.UserID, file.Path).
+		Exists(ctx)
+
+	if exists {
+		var oldFile pkg.File
+		if err := tx.NewSelect().Model(&oldFile).Where("user_id = ? AND path = ?", file.UserID, file.Path).Scan(ctx); err == nil {
+			// Update user storage: remove old, add new
+			_, _ = tx.NewUpdate().Model((*pkg.User)(nil)).
+				Set("storage_used = storage_used - ? + ?", oldFile.Size, size).
+				Where("id = ?", file.UserID).Exec(ctx)
+			file.ID = oldFile.ID
 		}
+		_, err := tx.NewUpdate().Model(file).Where("user_id = ? AND path = ?", file.UserID, file.Path).Exec(ctx)
+		return err
+	}
 
-		fileSize := fi.Size()
+	_, err := tx.NewInsert().Model(file).Exec(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = tx.NewUpdate().Model((*pkg.User)(nil)).
+		Set("storage_used = storage_used + ?", size).
+		Where("id = ?", file.UserID).Exec(ctx)
+	return err
+}
 
-		// Start transaction
-		tx, err := db.Begin()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-			return
-		}
-		defer tx.Rollback()
+func processShareKeys(ctx context.Context, tx bun.Tx, shareKeysJSON string, file *pkg.File) error {
+	if shareKeysJSON == "" {
+		return nil
+	}
+	var shareKeysMap map[string]string
+	if err := json.Unmarshal([]byte(shareKeysJSON), &shareKeysMap); err != nil {
+		return err
+	}
 
-		// Check storage limit
-		var user pkg.User
-		err = tx.NewSelect().Model(&user).Where("id = ?", userID).Scan(c)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "User not found"})
-			return
-		}
-
-		if user.StorageUsed+fileSize > user.StorageLimit {
-			os.Remove(tempFilePath) // Clean up
-			c.JSON(http.StatusForbidden, gin.H{"error": "Storage limit exceeded"})
-			return
-		}
-
-		// S3 Key: users/{userID}/{path}/{filename}
-		// fullPathDB starts with /, so we trim it or just concat
-		s3Key := fmt.Sprintf("users/%s%s", userID, fullPathDB)
-
-		// Verify temp file exists before enqueueing
-		if _, err := os.Stat(tempFilePath); err != nil {
-			log.Printf("Upload Handler ERROR: Temp file does not exist: %s, error: %v", tempFilePath, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Temp file missing"})
-			return
-		}
-
-		// Enqueue Upload Task to Redis
-		task := workers.S3Task{
-			Type:        workers.TaskUpload,
-			UserID:      userID,
-			SrcKey:      tempFilePath, // Local path to temp file
-			DestKey:     s3Key,        // S3 Key
-			ContentType: fileHeader.Header.Get("Content-Type"),
-		}
-
-		if err := workers.EnqueueTask(redisClient, task); err != nil {
-			log.Printf("Upload Handler ERROR: Failed to enqueue task: %v", err)
-			os.Remove(tempFilePath) // Clean up if enqueue fails
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to enqueue upload task"})
-			return
-		}
-
-		// Note: We do NOT remove tempFilePath here. The worker will remove it after successful upload.
-
-		previewIDStr := c.PostForm("preview_id")
-		var previewID *int64
-		if previewIDStr != "" {
-			pid, _ := strconv.ParseInt(previewIDStr, 10, 64)
-			previewID = &pid
-		}
-
-		isPreviewStr := c.PostForm("is_preview")
-		isPreview := isPreviewStr == "true"
-
-		fileRecord := &pkg.File{
-			Name:         fileHeader.Filename,
-			Path:         fullPathDB,
-			Size:         fileSize,
-			MimeType:     fileHeader.Header.Get("Content-Type"),
-			UserID:       userID,
-			EncryptedKey: encryptedKey,
-			PreviewID:    previewID,
-			IsPreview:    isPreview,
-		}
-
-		// Vérifier si le fichier existe deja
-		existsInDB, _ := tx.NewSelect().Model((*pkg.File)(nil)).
-			Where("user_id = ? AND path = ?", userID, fullPathDB).
-			Exists(c)
-
-		if existsInDB {
-			// Get old file to get ID and adjust storage
-			var oldFile pkg.File
-			err = tx.NewSelect().Model(&oldFile).Where("user_id = ? AND path = ?", userID, fullPathDB).Scan(c)
-			if err == nil {
-				// Update storage: remove old size, add new size
-				_, err = tx.NewUpdate().Model(&user).
-					Set("storage_used = storage_used - ? + ?", oldFile.Size, fileSize).
-					Where("id = ?", userID).
-					Exec(c)
-				// Copy the ID to fileRecord so it's returned to client
-				fileRecord.ID = oldFile.ID
-			}
-
-			// Mettre à jour l'enregistrement existant
-			_, err = tx.NewUpdate().Model(fileRecord).Where("user_id = ? AND path = ?", userID, fullPathDB).Exec(c)
-		} else {
-			// Créer un nouvel enregistrement
-			_, err = tx.NewInsert().Model(fileRecord).Exec(c)
-
-			// Update storage: add new size
-			_, err = tx.NewUpdate().Model(&user).
-				Set("storage_used = storage_used + ?", fileSize).
-				Where("id = ?", userID).
-				Exec(c)
-		}
-
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur base de données"})
-			return
-		}
-
-		// Handle Share Keys if provided
-		if shareKeysJSON != "" {
-			var shareKeysMap map[string]string
-			if err := json.Unmarshal([]byte(shareKeysJSON), &shareKeysMap); err == nil {
-				var shareFileKeys []pkg.ShareFileKey
-
-				// Need to get the File ID. If it was an update, we need to fetch it.
-				// If it was an insert, fileRecord.ID should be populated by Bun if we passed a pointer?
-				// Bun populates ID on Insert. But on Update, we might need to fetch it if we didn't have it.
-
-				var finalFileID int64
-				if existsInDB {
-					// Fetch ID
-					var f pkg.File
-					_ = tx.NewSelect().Model(&f).Where("user_id = ? AND path = ?", userID, fullPathDB).Scan(c)
-					finalFileID = f.ID
-				} else {
-					finalFileID = fileRecord.ID
-				}
-
-				for sIDStr, key := range shareKeysMap {
-					sID, _ := strconv.ParseInt(sIDStr, 10, 64)
-					if sID > 0 {
-						shareFileKeys = append(shareFileKeys, pkg.ShareFileKey{
-							ShareID:      sID,
-							FileID:       finalFileID,
-							EncryptedKey: key,
-						})
-					}
-				}
-
-				if len(shareFileKeys) > 0 {
-					// Use OnConflict to update if exists
-					_, err = tx.NewInsert().Model(&shareFileKeys).
-						On("CONFLICT (share_id, file_id) DO UPDATE").
-						Set("encrypted_key = EXCLUDED.encrypted_key").
-						Exec(c)
-					if err != nil {
-						// Log error but don't fail upload? Or fail?
-						// Better to fail so client knows sharing is broken
-						// But maybe not critical. Let's log.
-						fmt.Printf("Error inserting share keys: %v\n", err)
-					}
-				}
-			}
-		}
-
-		if err := tx.Commit(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
-			return
-		}
-
-		// Notify WebSocket about storage update
-		// We need to fetch the new total storage used
-		var updatedUser pkg.User
-		if err := db.NewSelect().Model(&updatedUser).Where("id = ?", userID).Scan(c); err == nil {
-			wsManager.SendToUser(userID, ws.MsgStorageUpdate, map[string]interface{}{
-				"storage_used": updatedUser.StorageUsed,
+	var shareFileKeys []pkg.ShareFileKey
+	for sIDStr, key := range shareKeysMap {
+		sID, _ := strconv.ParseInt(sIDStr, 10, 64)
+		if sID > 0 {
+			shareFileKeys = append(shareFileKeys, pkg.ShareFileKey{
+				ShareID:      sID,
+				FileID:       file.ID,
+				EncryptedKey: key,
 			})
 		}
+	}
 
-		c.JSON(http.StatusCreated, gin.H{"message": "Upload en cours de traitement", "file": fileRecord})
-	} else {
-		c.JSON(http.StatusOK, gin.H{"message": "Chunk uploaded successfully", "chunk_index": chunkIndex})
+	if len(shareFileKeys) > 0 {
+		_, err := tx.NewInsert().Model(&shareFileKeys).
+			On("CONFLICT (share_id, file_id) DO UPDATE").
+			Set("encrypted_key = EXCLUDED.encrypted_key").
+			Exec(ctx)
+		return err
+	}
+	return nil
+}
+
+func notifyStorageUpdate(db *bun.DB, wsManager *ws.Manager, userID string) {
+	var updatedUser pkg.User
+	if err := db.NewSelect().Model(&updatedUser).Where("id = ?", userID).Scan(context.Background()); err == nil {
+		wsManager.SendToUser(userID, ws.MsgStorageUpdate, map[string]interface{}{
+			"storage_used": updatedUser.StorageUsed,
+		})
 	}
 }

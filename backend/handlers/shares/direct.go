@@ -1,13 +1,16 @@
 package shares
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/ws"
 	"strconv"
-	"time"
 	"strings"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
@@ -29,238 +32,211 @@ func CreateDirectShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager)
 		return
 	}
 
-	fmt.Printf("DEBUG: CreateDirectShare Payload - Type: %s, ID: %d, Friend: %s, KeyLen: %d, FileKeys: %d, FolderKeys: %d\n",
-		req.ResourceType, req.ResourceID, req.FriendID, len(req.EncryptedKey), len(req.FolderFileKeys), len(req.FolderFolderKeys))
-
-	// currentUserID := c.GetString("user_id")
-
-	// Verify friendship exists?
-	// Check if the friend user exists to prevent FK violation
-	var friendExists bool
-	exists, err := db.NewSelect().Model((*pkg.User)(nil)).Where("id = ?", req.FriendID).Exists(c.Request.Context())
-	if err != nil {
-		fmt.Printf("Error checking user existence: %v\n", err)
-	} else {
-		friendExists = exists
-	}
-
-	if !friendExists {
-		fmt.Printf("User %s does not exist in users table!\n", req.FriendID)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Friend user not found in database"})
+	exists, err := checkUserExists(c.Request.Context(), db, req.FriendID)
+	if err != nil || !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Friend user not found"})
 		return
 	}
 
-	if req.ResourceType == "file" {
-		share := &pkg.FileShare{
-			FileID:           req.ResourceID,
-			SharedWithUserID: req.FriendID,
-			EncryptedKey:     req.EncryptedKey,
-			Permission:       req.Permission,
-			CreatedAt:        time.Now(),
-		}
-
-		fmt.Printf("Inserting FileShare: %+v\n", share)
-
-		_, err := db.NewInsert().Model(share).Exec(c.Request.Context())
-		if err != nil {
-			// Check for unique constraint (already shared) -> Update key?
-			// For now, let's just return error
-			fmt.Printf("FileShare Insert Error: %v\n", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to share file: " + err.Error()})
-			return
-		}
-	} else if req.ResourceType == "folder" {
-		share := &pkg.FolderShare{
-			FolderID:         req.ResourceID,
-			SharedWithUserID: req.FriendID,
-			EncryptedKey:     req.EncryptedKey,
-			Permission:       req.Permission,
-			CreatedAt:        time.Now(),
-		}
-
-		fmt.Printf("Inserting FolderShare: %+v, KeyLen: %d\n", share, len(share.EncryptedKey))
-
-		_, err := db.NewInsert().Model(share).Exec(c.Request.Context())
-		if err != nil {
-			fmt.Printf("FolderShare Insert Error: %v\n", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to share folder: " + err.Error()})
-			return
-		}
-
-		// Insert/Upsert FolderFileKeys
-		if len(req.FolderFileKeys) > 0 {
-			var keys []pkg.FolderFileKey
-			for fileID, key := range req.FolderFileKeys {
-				keys = append(keys, pkg.FolderFileKey{
-					FolderID:     req.ResourceID,
-					FileID:       fileID,
-					EncryptedKey: key,
-					CreatedAt:    time.Now(),
-				})
-			}
-
-			// We use OnConflict to ignore duplicates (if keys already exist for this folder)
-			// Assuming the FolderKey doesn't change frequently.
-			// Or we can simple overwrite.
-			_, err := db.NewInsert().Model(&keys).
-				On("CONFLICT (folder_id, file_id) DO UPDATE").
-				Set("encrypted_key = EXCLUDED.encrypted_key").
-				Exec(c.Request.Context())
-
-			if err != nil {
-				fmt.Printf("FolderFileKeys Insert Error: %v\n", err)
-				// Log but don't fail the whole request? The share is created.
-				// But without keys, it's useless.
-				// Retrying might be needed.
-			}
-		}
-
-		// Insert/Upsert FolderFolderKeys (Recursively shared subfolder keys)
-		if len(req.FolderFolderKeys) > 0 {
-			var folderKeys []pkg.FolderFolderKey
-			for subFolderID, key := range req.FolderFolderKeys {
-				folderKeys = append(folderKeys, pkg.FolderFolderKey{
-					ParentFolderID: req.ResourceID,
-					SubFolderID:    subFolderID,
-					EncryptedKey:   key,
-					CreatedAt:      time.Now(),
-				})
-			}
-
-			_, err := db.NewInsert().Model(&folderKeys).
-				On("CONFLICT (parent_folder_id, sub_folder_id) DO UPDATE").
-				Set("encrypted_key = EXCLUDED.encrypted_key").
-				Exec(c.Request.Context())
-
-			if err != nil {
-				fmt.Printf("Error inserting FolderFolderKeys: %v\n", err)
-			}
-		}
-
-	} else {
+	switch req.ResourceType {
+	case "file":
+		err = handleFileShare(c.Request.Context(), db, req)
+	case "folder":
+		err = handleFolderShare(c.Request.Context(), db, req)
+	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource type"})
 		return
 	}
 
-	// Notify friend via WebSocket
-	wsManager.SendToUser(req.FriendID, ws.MsgStorageUpdate, map[string]interface{}{
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to share resource: " + err.Error()})
+		return
+	}
+
+	sendShareNotifications(c, wsManager, req.FriendID)
+	c.JSON(http.StatusCreated, gin.H{"message": "Resource shared successfully"})
+}
+
+func checkUserExists(ctx context.Context, db *bun.DB, userID string) (bool, error) {
+	return db.NewSelect().Model((*pkg.User)(nil)).Where("id = ?", userID).Exists(ctx)
+}
+
+func handleFileShare(ctx context.Context, db *bun.DB, req CreateDirectShareRequest) error {
+	share := &pkg.FileShare{
+		FileID:           req.ResourceID,
+		SharedWithUserID: req.FriendID,
+		EncryptedKey:     req.EncryptedKey,
+		Permission:       req.Permission,
+		CreatedAt:        time.Now(),
+	}
+	_, err := db.NewInsert().Model(share).Exec(ctx)
+	return err
+}
+
+func handleFolderShare(ctx context.Context, db *bun.DB, req CreateDirectShareRequest) error {
+	share := &pkg.FolderShare{
+		FolderID:         req.ResourceID,
+		SharedWithUserID: req.FriendID,
+		EncryptedKey:     req.EncryptedKey,
+		Permission:       req.Permission,
+		CreatedAt:        time.Now(),
+	}
+
+	if _, err := db.NewInsert().Model(share).Exec(ctx); err != nil {
+		return err
+	}
+
+	if err := upsertFolderFileKeys(ctx, db, req.ResourceID, req.FolderFileKeys); err != nil {
+		// Just log error? Returning error might be safer to indicate partial failure
+		fmt.Printf("FolderFileKeys Insert Error: %v\n", err)
+	}
+
+	if err := upsertFolderSubFolderKeys(ctx, db, req.ResourceID, req.FolderFolderKeys); err != nil {
+		fmt.Printf("FolderFolderKeys Insert Error: %v\n", err)
+	}
+	return nil
+}
+
+func upsertFolderFileKeys(ctx context.Context, db *bun.DB, folderID int64, keysMap map[int64]string) error {
+	if len(keysMap) == 0 {
+		return nil
+	}
+	var keys []pkg.FolderFileKey
+	for fileID, key := range keysMap {
+		keys = append(keys, pkg.FolderFileKey{
+			FolderID:     folderID,
+			FileID:       fileID,
+			EncryptedKey: key,
+			CreatedAt:    time.Now(),
+		})
+	}
+	_, err := db.NewInsert().Model(&keys).
+		On("CONFLICT (folder_id, file_id) DO UPDATE").
+		Set("encrypted_key = EXCLUDED.encrypted_key").
+		Exec(ctx)
+	return err
+}
+
+func upsertFolderSubFolderKeys(ctx context.Context, db *bun.DB, parentID int64, keysMap map[int64]string) error {
+	if len(keysMap) == 0 {
+		return nil
+	}
+	var folderKeys []pkg.FolderFolderKey
+	for subFolderID, key := range keysMap {
+		folderKeys = append(folderKeys, pkg.FolderFolderKey{
+			ParentFolderID: parentID,
+			SubFolderID:    subFolderID,
+			EncryptedKey:   key,
+			CreatedAt:      time.Now(),
+		})
+	}
+	_, err := db.NewInsert().Model(&folderKeys).
+		On("CONFLICT (parent_folder_id, sub_folder_id) DO UPDATE").
+		Set("encrypted_key = EXCLUDED.encrypted_key").
+		Exec(ctx)
+	return err
+}
+
+func sendShareNotifications(c *gin.Context, wsManager *ws.Manager, friendID string) {
+	wsManager.SendToUser(friendID, ws.MsgStorageUpdate, map[string]interface{}{
 		"action": "share_received",
 	})
-
-	// Notify self (sender) via WebSocket to refresh file list (show share icon)
-	userIDInterface, _ := c.Get("user_id")
-	currentUserID := userIDInterface.(string)
-	wsManager.SendToUser(currentUserID, ws.MsgStorageUpdate, map[string]interface{}{
+	userID := c.GetString("user_id")
+	wsManager.SendToUser(userID, ws.MsgStorageUpdate, map[string]interface{}{
 		"action": "share_created",
 	})
-
-	c.JSON(http.StatusCreated, gin.H{"message": "Resource shared successfully"})
 }
 
 // RemoveDirectShareHandler revokes a direct share with a friend
 func RemoveDirectShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
-	userIDInterface, _ := c.Get("user_id")
-	currentUserID := userIDInterface.(string)
-
-	// Query params: resource_id, resource_type, friend_id
-	// OR: id (share_id) + resource_type
-	resourceIDStr := c.Query("resource_id")
+	currentUserID := c.GetString("user_id")
+	shareIDStr := sanitizeInput(c.Query("id"))
 	resourceType := c.Query("resource_type")
-	friendID := c.Query("friend_id")
-	shareIDStr := c.Query("id")
-	shareIDStr = strings.ReplaceAll(strings.ReplaceAll(shareIDStr, "\n", "_"), "\r", "_")
+	friendID := sanitizeInput(c.Query("friend_id"))
+	resourceIDStr := c.Query("resource_id")
 
 	fmt.Printf("DEBUG: RemoveDirectShareHandler called. ResID=%s Type=%s FriendID=%s ShareID=%s\n", resourceIDStr, resourceType, friendID, shareIDStr)
 
-	// Mode 1: Delete by Share ID (PK)
 	if shareIDStr != "" {
-		shareID, _ := strconv.ParseInt(shareIDStr, 10, 64)
-		if resourceType == "file" {
-			res, err := db.NewDelete().Model((*pkg.FileShare)(nil)).
-				Where("id = ?", shareID).
-				Exec(c.Request.Context())
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete file share by ID"})
-				return
-			}
-			rows, _ := res.RowsAffected()
-			if rows == 0 {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Share not found"})
-				return
-			}
-		} else if resourceType == "folder" {
-			res, err := db.NewDelete().Model((*pkg.FolderShare)(nil)).
-				Where("id = ?", shareID).
-				Exec(c.Request.Context())
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete folder share by ID"})
-				return
-			}
-			rows, _ := res.RowsAffected()
-			if rows == 0 {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Share not found"})
-				return
-			}
-		} else {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource type for ID deletion"})
+		if err := deleteShareByID(c.Request.Context(), db, shareIDStr, resourceType); err != nil {
+			handleRemoveError(c, err)
 			return
 		}
-
-		// Notify self to update UI
-		wsManager.SendToUser(currentUserID, ws.MsgStorageUpdate, map[string]interface{}{
-			"action": "share_revoked",
-		})
-
-		c.JSON(http.StatusOK, gin.H{"message": "Share revoked by ID"})
-		return
-	}
-
-	// Mode 2: Delete by Resource + Friend (Legacy / ContextMenu)
-	if resourceIDStr == "" || friendID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing parameters"})
-		return
-	}
-
-	resID, _ := strconv.ParseInt(resourceIDStr, 10, 64)
-
-	if resourceType == "file" {
-		res, err := db.NewDelete().Model((*pkg.FileShare)(nil)).
-			Where("file_id = ? AND shared_with_user_id = ?", resID, friendID).
-			Exec(c.Request.Context())
-		if err != nil {
-			fmt.Printf("Error deleting file share: %v\n", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke file share"})
-			return
-		}
-		rows, _ := res.RowsAffected()
-		fmt.Printf("Deleted %d file share rows\n", rows)
-	} else if resourceType == "folder" {
-		res, err := db.NewDelete().Model((*pkg.FolderShare)(nil)).
-			Where("folder_id = ? AND shared_with_user_id = ?", resID, friendID).
-			Exec(c.Request.Context())
-		if err != nil {
-			fmt.Printf("Error deleting folder share: %v\n", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke folder share"})
-			return
-		}
-		rows, _ := res.RowsAffected()
-		fmt.Printf("Deleted %d folder share rows\n", rows)
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource type"})
-		return
+		if resourceIDStr == "" || friendID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing parameters"})
+			return
+		}
+		if err := deleteShareByResource(c.Request.Context(), db, resourceIDStr, resourceType, friendID); err != nil {
+			handleRemoveError(c, err)
+			return
+		}
+		wsManager.SendToUser(friendID, ws.MsgStorageUpdate, map[string]interface{}{
+			"action": "share_revoked_by_owner",
+		})
 	}
 
-	// Notify self to update UI (Mode 2)
 	wsManager.SendToUser(currentUserID, ws.MsgStorageUpdate, map[string]interface{}{
 		"action": "share_revoked",
 	})
 
-	// Also notify friend that access is lost? (Optional but good UX)
-	wsManager.SendToUser(friendID, ws.MsgStorageUpdate, map[string]interface{}{
-		"action": "share_revoked_by_owner",
-	})
-
 	c.JSON(http.StatusOK, gin.H{"message": "Share revoked"})
+}
+
+func sanitizeInput(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, "\n", "_"), "\r", "_")
+}
+
+func deleteShareByID(ctx context.Context, db *bun.DB, shareIDStr, resourceType string) error {
+	shareID, _ := strconv.ParseInt(shareIDStr, 10, 64)
+	var res sql.Result
+	var err error
+
+	switch resourceType {
+	case "file":
+		res, err = db.NewDelete().Model((*pkg.FileShare)(nil)).Where("id = ?", shareID).Exec(ctx)
+	case "folder":
+		res, err = db.NewDelete().Model((*pkg.FolderShare)(nil)).Where("id = ?", shareID).Exec(ctx)
+	default:
+		return fmt.Errorf("Invalid resource type for ID deletion")
+	}
+
+	if err != nil {
+		return err
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return fmt.Errorf("Share not found")
+	}
+	return nil
+}
+
+func deleteShareByResource(ctx context.Context, db *bun.DB, resourceIDStr, resourceType, friendID string) error {
+	resID, _ := strconv.ParseInt(resourceIDStr, 10, 64)
+	var err error
+
+	switch resourceType {
+	case "file":
+		_, err = db.NewDelete().Model((*pkg.FileShare)(nil)).
+			Where("file_id = ? AND shared_with_user_id = ?", resID, friendID).
+			Exec(ctx)
+	case "folder":
+		_, err = db.NewDelete().Model((*pkg.FolderShare)(nil)).
+			Where("folder_id = ? AND shared_with_user_id = ?", resID, friendID).
+			Exec(ctx)
+	default:
+		return fmt.Errorf("Invalid resource type")
+	}
+	return err
+}
+
+func handleRemoveError(c *gin.Context, err error) {
+	if err.Error() == "Share not found" {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	} else if strings.Contains(err.Error(), "Invalid resource type") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	} else {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke share: " + err.Error()})
+	}
 }
 
 // ListDirectSharesForResourceHandler returns a list of friend IDs with whom the resource is shared

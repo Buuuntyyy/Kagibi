@@ -1,85 +1,72 @@
 package shares
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/ws"
-	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
 
+type SharedWithMeResponse struct {
+	ID           int64     `json:"id"`
+	ShareLinkID  int64     `json:"share_link_id,omitempty"`
+	Token        string    `json:"token,omitempty"`
+	ResourceType string    `json:"type"`
+	Name         string    `json:"name"`
+	OwnerName    string    `json:"owner_name"`
+	SharedAt     time.Time `json:"shared_at"`
+	Size         int64     `json:"size"`
+	Link         string    `json:"link,omitempty"`
+	FileID       int64     `json:"file_id,omitempty"`
+	FolderID     int64     `json:"folder_id,omitempty"`
+	EncryptedKey string    `json:"encrypted_key"`
+}
+
 // ListImportedSharesHandler lists shares that have been shared with the user (imported)
 func ListImportedSharesHandler(c *gin.Context, db *bun.DB) {
-	userIDInterface, _ := c.Get("user_id")
-	userID := userIDInterface.(string)
+	userID := c.GetString("user_id")
 
+	linkShares := fetchLinkShares(c.Request.Context(), db, userID)
+	fileShares := fetchDirectFileShares(c.Request.Context(), db, userID)
+	folderShares := fetchDirectFolderShares(c.Request.Context(), db, userID)
+
+	response := append(linkShares, fileShares...)
+	response = append(response, folderShares...)
+
+	c.JSON(http.StatusOK, response)
+}
+
+func fetchLinkShares(ctx context.Context, db *bun.DB, userID string) []SharedWithMeResponse {
 	var importedShares []pkg.ImportedShare
 	err := db.NewSelect().Model(&importedShares).
 		Relation("ShareLink").
 		Where("ish.user_id = ?", userID).
 		Order("ish.created_at DESC").
-		Scan(c.Request.Context())
+		Scan(ctx)
 
 	if err != nil {
 		log.Printf("Error fetching imported shares: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch shared with me items"})
-		return
+		return []SharedWithMeResponse{}
 	}
 
-	type SharedWithMeResponse struct {
-		ID           int64     `json:"id"` // ImportedShare ID or Share ID
-		ShareLinkID  int64     `json:"share_link_id,omitempty"`
-		Token        string    `json:"token,omitempty"`
-		ResourceType string    `json:"type"`
-		Name         string    `json:"name"`
-		OwnerName    string    `json:"owner_name"`
-		SharedAt     time.Time `json:"shared_at"`
-		Size         int64     `json:"size"`
-		Link         string    `json:"link,omitempty"`
-		FileID       int64     `json:"file_id,omitempty"`   // IMPORTANT: For Direct File Share
-		FolderID     int64     `json:"folder_id,omitempty"` // IMPORTANT: For Direct Folder Share
-		EncryptedKey string    `json:"encrypted_key"`       // IMPORTANT: For Direct File Share (Removed omitempty to debug)
-	}
-
-	var response []SharedWithMeResponse
-
-	// 1. Fetch Imported Shares (Link based)
+	var results []SharedWithMeResponse
 	for _, is := range importedShares {
 		if is.ShareLink == nil {
 			continue
 		}
-
 		sl := is.ShareLink
-		name := "Unknown"
-		size := int64(0)
-		ownerName := "Unknown"
+		name, size := getResourceDetails(ctx, db, sl.ResourceType, sl.ResourceID)
+		ownerName := getOwnerName(ctx, db, sl.OwnerID)
 
-		// Fetch Owner Name
-		var owner pkg.User
-		if err := db.NewSelect().Model(&owner).Where("id = ?", sl.OwnerID).Scan(c.Request.Context()); err == nil {
-			ownerName = owner.Name
-		}
-
-		// Fetch Resource Details
-		if sl.ResourceType == "file" {
-			var f pkg.File
-			if err := db.NewSelect().Model(&f).Where("id = ?", sl.ResourceID).Scan(c.Request.Context()); err == nil {
-				name = f.Name
-				size = f.Size
-			}
-		} else if sl.ResourceType == "folder" {
-			var f pkg.Folder
-			if err := db.NewSelect().Model(&f).Where("id = ?", sl.ResourceID).Scan(c.Request.Context()); err == nil {
-				name = f.Name
-			}
-		}
-
-		response = append(response, SharedWithMeResponse{
+		results = append(results, SharedWithMeResponse{
 			ID:           is.ID,
 			ShareLinkID:  sl.ID,
 			Token:        sl.Token,
@@ -91,81 +78,85 @@ func ListImportedSharesHandler(c *gin.Context, db *bun.DB) {
 			Link:         "/s/" + sl.Token,
 		})
 	}
+	return results
+}
 
-	// 2. Fetch Direct File Shares
+func fetchDirectFileShares(ctx context.Context, db *bun.DB, userID string) []SharedWithMeResponse {
 	var fileShares []pkg.FileShare
-	err = db.NewSelect().Model(&fileShares).
-		Where("shared_with_user_id = ?", userID).
-		Scan(c.Request.Context())
-
-	if err == nil {
-		for _, fs := range fileShares {
-			var file pkg.File
-			// Need to fetch file to get owner and details
-			if err := db.NewSelect().Model(&file).Where("id = ?", fs.FileID).Scan(c.Request.Context()); err == nil {
-				var owner pkg.User
-				ownerName := "Unknown"
-				if err := db.NewSelect().Model(&owner).Where("id = ?", file.UserID).Scan(c.Request.Context()); err == nil {
-					ownerName = owner.Name
-				}
-
-				// Debug Log
-				// fmt.Printf("Direct Share Found: ID=%d, File=%s, KeyLen=%d\n", fs.ID, file.Name, len(fs.EncryptedKey))
-
-				response = append(response, SharedWithMeResponse{
-					ID:           fs.ID, // Use Share ID
-					ResourceType: "file",
-					Name:         file.Name,
-					OwnerName:    ownerName,
-					SharedAt:     fs.CreatedAt,
-					Size:         file.Size,
-					FileID:       file.ID,         // Needed for frontend detection
-					EncryptedKey: fs.EncryptedKey, // Needed for decryption
-					Link:         "",
-				})
-			}
-		}
+	if err := db.NewSelect().Model(&fileShares).Where("shared_with_user_id = ?", userID).Scan(ctx); err != nil {
+		return []SharedWithMeResponse{}
 	}
 
-	// 3. Fetch Direct Folder Shares
+	var results []SharedWithMeResponse
+	for _, fs := range fileShares {
+		var file pkg.File
+		if err := db.NewSelect().Model(&file).Where("id = ?", fs.FileID).Scan(ctx); err == nil {
+			results = append(results, SharedWithMeResponse{
+				ID:           fs.ID,
+				ResourceType: "file",
+				Name:         file.Name,
+				OwnerName:    getOwnerName(ctx, db, file.UserID),
+				SharedAt:     fs.CreatedAt,
+				Size:         file.Size,
+				FileID:       file.ID,
+				EncryptedKey: fs.EncryptedKey,
+			})
+		}
+	}
+	return results
+}
+
+func fetchDirectFolderShares(ctx context.Context, db *bun.DB, userID string) []SharedWithMeResponse {
 	var folderShares []pkg.FolderShare
-	err = db.NewSelect().Model(&folderShares).
-		Where("shared_with_user_id = ?", userID).
-		Scan(c.Request.Context())
-
-	if err == nil {
-		for _, fs := range folderShares {
-			fmt.Printf("DEBUG READ: ShareID: %d, FolderID: %d, KeyLen: %d\n", fs.ID, fs.FolderID, len(fs.EncryptedKey))
-			var folder pkg.Folder
-			if err := db.NewSelect().Model(&folder).Where("id = ?", fs.FolderID).Scan(c.Request.Context()); err == nil {
-				var owner pkg.User
-				ownerName := "Unknown"
-				if err := db.NewSelect().Model(&owner).Where("id = ?", folder.UserID).Scan(c.Request.Context()); err == nil {
-					ownerName = owner.Name
-				}
-
-				response = append(response, SharedWithMeResponse{
-					ID:           fs.ID, // Use Share ID
-					ResourceType: "folder",
-					Name:         folder.Name,
-					OwnerName:    ownerName,
-					SharedAt:     fs.CreatedAt,
-					Size:         0,               // Folders don't track size directly here
-					FolderID:     folder.ID,       // Needed for frontend
-					EncryptedKey: fs.EncryptedKey, // Needed for decryption
-					Link:         "",
-				})
-			}
-		}
+	if err := db.NewSelect().Model(&folderShares).Where("shared_with_user_id = ?", userID).Scan(ctx); err != nil {
+		return []SharedWithMeResponse{}
 	}
 
-	c.JSON(http.StatusOK, response)
+	var results []SharedWithMeResponse
+	for _, fs := range folderShares {
+		var folder pkg.Folder
+		if err := db.NewSelect().Model(&folder).Where("id = ?", fs.FolderID).Scan(ctx); err == nil {
+			results = append(results, SharedWithMeResponse{
+				ID:           fs.ID,
+				ResourceType: "folder",
+				Name:         folder.Name,
+				OwnerName:    getOwnerName(ctx, db, folder.UserID),
+				SharedAt:     fs.CreatedAt,
+				Size:         0,
+				FolderID:     folder.ID,
+				EncryptedKey: fs.EncryptedKey,
+			})
+		}
+	}
+	return results
+}
+
+func getResourceDetails(ctx context.Context, db *bun.DB, resType string, resID int64) (string, int64) {
+	if resType == "file" {
+		var f pkg.File
+		if err := db.NewSelect().Model(&f).Where("id = ?", resID).Scan(ctx); err == nil {
+			return f.Name, f.Size
+		}
+	} else if resType == "folder" {
+		var f pkg.Folder
+		if err := db.NewSelect().Model(&f).Where("id = ?", resID).Scan(ctx); err == nil {
+			return f.Name, 0
+		}
+	}
+	return "Unknown", 0
+}
+
+func getOwnerName(ctx context.Context, db *bun.DB, userID string) string {
+	var owner pkg.User
+	if err := db.NewSelect().Model(&owner).Where("id = ?", userID).Scan(ctx); err == nil {
+		return owner.Name
+	}
+	return "Unknown"
 }
 
 // ImportShareHandler adds a share link to the user's "Shared With Me" list
 func ImportShareHandler(c *gin.Context, db *bun.DB) {
-	userIDInterface, _ := c.Get("user_id")
-	userID := userIDInterface.(string)
+	userID := c.GetString("user_id")
 
 	var req struct {
 		Token string `json:"token"`
@@ -216,104 +207,96 @@ func ImportShareHandler(c *gin.Context, db *bun.DB) {
 
 // RemoveImportedShareHandler removes a share from the "Shared With Me" list
 func RemoveImportedShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
-	userIDInterface, _ := c.Get("user_id")
-	userID := userIDInterface.(string)
-	id := c.Param("id")
-	shareType := c.Query("type") // "imported" (default) or "direct_file" or "direct_folder"
-	shareType = strings.ReplaceAll(strings.ReplaceAll(shareType, "\n", "_"), "\r", "_")
+	userID := c.GetString("user_id")
+	id := sanitizeID(c.Param("id"))
+	shareType := sanitizeID(c.Query("type"))
 
-	log.Printf("DEBUG: RemoveImportedShareHandler - UserID: %s, ID: %s, Type: %s", userID, id, shareType)
-
+	var err error
 	var ownerIDToNotify string
 
-	if shareType == "direct_file" {
-		// Fetch share to get FileID first
-		var fs pkg.FileShare
-		err := db.NewSelect().Model(&fs).Where("id = ? AND shared_with_user_id = ?", id, userID).Scan(c.Request.Context())
-		if err == nil {
-			// Get Owner of file
-			var file pkg.File
-			if err := db.NewSelect().Model(&file).Where("id = ?", fs.FileID).Scan(c.Request.Context()); err == nil {
-				ownerIDToNotify = file.UserID
-			}
-		}
-
-		// Delete from FileShare
-		res, err := db.NewDelete().Model((*pkg.FileShare)(nil)).
-			Where("id = ? AND shared_with_user_id = ?", id, userID).
-			Exec(c.Request.Context())
-
-		if err != nil {
-			log.Printf("Error deleting file share: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove direct share"})
-			return
-		}
-		rows, _ := res.RowsAffected()
-		log.Printf("Rows deleted (file share): %d", rows)
-
-		if rows == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Share not found or mismatch"})
-			return
-		}
-	} else if shareType == "direct_folder" {
-		// Fetch share
-		var fs pkg.FolderShare
-		err := db.NewSelect().Model(&fs).Where("id = ? AND shared_with_user_id = ?", id, userID).Scan(c.Request.Context())
-		if err == nil {
-			var folder pkg.Folder
-			if err := db.NewSelect().Model(&folder).Where("id = ?", fs.FolderID).Scan(c.Request.Context()); err == nil {
-				ownerIDToNotify = folder.UserID
-			}
-		}
-
-		// Delete from FolderShare
-		res, err := db.NewDelete().Model((*pkg.FolderShare)(nil)).
-			Where("id = ? AND shared_with_user_id = ?", id, userID).
-			Exec(c.Request.Context())
-
-		if err != nil {
-			log.Printf("Error deleting folder share: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove direct folder share"})
-			return
-		}
-		rows, _ := res.RowsAffected()
-		log.Printf("Rows deleted (folder share): %d", rows)
-
-		if rows == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Share not found or mismatch"})
-			return
-		}
-	} else {
-		// Default to imported_shares
-		// Not really needed for owner notification as it's just a local reference removal,
-		// but maybe owner wants to know their link was removed from someone's list?
-		// Usually public links don't notify owner on import/removal from list.
-
-		// Delete
-		res, err := db.NewDelete().Model((*pkg.ImportedShare)(nil)).
-			Where("id = ? AND user_id = ?", id, userID).
-			Exec(c.Request.Context())
-
-		if err != nil {
-			log.Printf("Error deleting imported share: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove imported share"})
-			return
-		}
-		rows, _ := res.RowsAffected()
-		log.Printf("Rows deleted (imported share): %d", rows)
-
-		if rows == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Share not found or mismatch"})
-			return
-		}
+	switch shareType {
+	case "direct_file":
+		ownerIDToNotify, err = removeDirectFileShare(c.Request.Context(), db, id, userID)
+	case "direct_folder":
+		ownerIDToNotify, err = removeDirectFolderShare(c.Request.Context(), db, id, userID)
+	default:
+		err = removeImportedShareLink(c.Request.Context(), db, id, userID)
 	}
 
-	// Send Notification
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	if ownerIDToNotify != "" {
 		wsManager.SendToUser(ownerIDToNotify, ws.MsgStorageUpdate, map[string]interface{}{
 			"action": "share_revoked_by_recipient",
 		})
 	}
 
+	// Also notify self
+	wsManager.SendToUser(userID, ws.MsgStorageUpdate, map[string]interface{}{
+		"action": "share_removed_from_imported",
+	})
+
 	c.JSON(http.StatusOK, gin.H{"message": "Removed from shared with me"})
+}
+
+func sanitizeID(id string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(id, "\n", "_"), "\r", "_")
+}
+
+func removeDirectFileShare(ctx context.Context, db *bun.DB, id, userID string) (string, error) {
+	var fs pkg.FileShare
+	if err := db.NewSelect().Model(&fs).Where("id = ? AND shared_with_user_id = ?", id, userID).Scan(ctx); err != nil {
+		return "", fmt.Errorf("Share not found")
+	}
+
+	res, err := db.NewDelete().Model((*pkg.FileShare)(nil)).Where("id = ? AND shared_with_user_id = ?", id, userID).Exec(ctx)
+	if err != nil {
+		return "", err
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return "", fmt.Errorf("Share not found")
+	}
+
+	var file pkg.File
+	if err := db.NewSelect().Model(&file).Where("id = ?", fs.FileID).Scan(ctx); err == nil {
+		return file.UserID, nil
+	}
+	return "", nil
+}
+
+func removeDirectFolderShare(ctx context.Context, db *bun.DB, id, userID string) (string, error) {
+	var fs pkg.FolderShare
+	if err := db.NewSelect().Model(&fs).Where("id = ? AND shared_with_user_id = ?", id, userID).Scan(ctx); err != nil {
+		return "", fmt.Errorf("Share not found")
+	}
+
+	res, err := db.NewDelete().Model((*pkg.FolderShare)(nil)).Where("id = ? AND shared_with_user_id = ?", id, userID).Exec(ctx)
+	if err != nil {
+		return "", err
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return "", fmt.Errorf("Share not found")
+	}
+
+	var folder pkg.Folder
+	if err := db.NewSelect().Model(&folder).Where("id = ?", fs.FolderID).Scan(ctx); err == nil {
+		return folder.UserID, nil
+	}
+	return "", nil
+}
+
+func removeImportedShareLink(ctx context.Context, db *bun.DB, id, userID string) error {
+	res, err := db.NewDelete().Model((*pkg.ImportedShare)(nil)).
+		Where("id = ? AND user_id = ?", id, userID).
+		Exec(ctx)
+	if err != nil {
+		return err
+	}
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		return fmt.Errorf("Share not found")
+	}
+	return nil
 }
