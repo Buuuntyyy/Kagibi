@@ -3,6 +3,7 @@ redis-data/*
 
 backend/uploads/*
 
+backend/
 backend/.env
 frontend/.env
 
