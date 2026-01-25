@@ -8,7 +8,7 @@ import (
 
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/ws"
-
+	"strings"
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
@@ -220,6 +220,7 @@ func RemoveImportedShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manage
 	userID := userIDInterface.(string)
 	id := c.Param("id")
 	shareType := c.Query("type") // "imported" (default) or "direct_file" or "direct_folder"
+	shareType = strings.ReplaceAll(strings.ReplaceAll(shareType, "\n", "_"), "\r", "_")
 
 	log.Printf("DEBUG: RemoveImportedShareHandler - UserID: %s, ID: %s, Type: %s", userID, id, shareType)
 

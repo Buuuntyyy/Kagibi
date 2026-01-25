@@ -4,7 +4,7 @@ import (
 	"log"
 	"net/http"
 	"safercloud/backend/pkg"
-
+	"strings"
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
@@ -17,6 +17,7 @@ func UpdateFolderKeyHandler(c *gin.Context, db *bun.DB) {
 	userIDInterface, _ := c.Get("user_id")
 	userID := userIDInterface.(string)
 	folderID := c.Param("id")
+	folderID = strings.ReplaceAll(strings.ReplaceAll(folderID, "\n", "_"), "\r", "_")
 
 	var req UpdateFolderKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
