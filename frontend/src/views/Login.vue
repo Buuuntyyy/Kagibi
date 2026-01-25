@@ -1,30 +1,32 @@
 <template>
   <div class="auth-page">
     <div class="auth-container card">
-      <div v-if="mode === 'login'">
-        <h1>Se connecter</h1>
-        <LoginComponent />
-        <div class="auth-links">
-          <p>
-            Pas encore de compte ? <a href="#" @click.prevent="mode = 'register'">S'inscrire</a>
-          </p>
-          <p>
-            Mot de passe oublié ? <a href="#" @click.prevent="mode = 'recovery'">Récupérer mon compte</a>
-          </p>
+      <Transition name="auth-flip" mode="out-in">
+        <div v-if="mode === 'login'" key="login">
+          <h1>Se connecter</h1>
+          <LoginComponent />
+          <div class="auth-links">
+            <p>
+              Pas encore de compte ? <a href="#" @click.prevent="mode = 'register'">S'inscrire</a>
+            </p>
+            <p>
+              Mot de passe oublié ? <a href="#" @click.prevent="mode = 'recovery'">Récupérer mon compte</a>
+            </p>
+          </div>
         </div>
-      </div>
-      <div v-else-if="mode === 'register'">
-        <h1>Créer un compte</h1>
-        <RegisterComponent />
-        <div class="auth-links">
-          <p>
-            Déjà un compte ? <a href="#" @click.prevent="mode = 'login'">Se connecter</a>
-          </p>
+        <div v-else-if="mode === 'register'" key="register">
+          <h1>Créer un compte</h1>
+          <RegisterComponent />
+          <div class="auth-links">
+            <p>
+              Déjà un compte ? <a href="#" @click.prevent="mode = 'login'">Se connecter</a>
+            </p>
+          </div>
         </div>
-      </div>
-      <div v-else-if="mode === 'recovery'">
-        <RecoveryComponent @cancel="mode = 'login'" @success="mode = 'login'" />
-      </div>
+        <div v-else-if="mode === 'recovery'" key="recovery">
+          <RecoveryComponent @cancel="mode = 'login'" @success="mode = 'login'" />
+        </div>
+      </Transition>
     </div>
   </div>
 </template>
@@ -78,6 +80,22 @@ onMounted(() => {
   border-radius: 12px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   text-align: center;
+  perspective: 1000px;
+}
+
+.auth-flip-enter-active,
+.auth-flip-leave-active {
+  transition: all 0.4s ease-in-out;
+}
+
+.auth-flip-enter-from {
+  opacity: 0;
+  transform: rotateY(-90deg);
+}
+
+.auth-flip-leave-to {
+  opacity: 0;
+  transform: rotateY(90deg);
 }
 
 h1 {

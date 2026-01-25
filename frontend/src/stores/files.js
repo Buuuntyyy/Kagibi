@@ -76,28 +76,52 @@ export const useFileStore = defineStore('files', {
 
     searchQuery: '',
     shareUpdateTrigger: 0,
-    recentFolders: JSON.parse(localStorage.getItem('recentFolders')) || [],
-    recentFiles: JSON.parse(localStorage.getItem('recentFiles')) || [],
+    recentFolders: [],
+    recentFiles: [],
     // Used to coordinate navigation from Suggestions
     pendingNavigatePath: null,
   }),
   actions: {
-    addToHistory(item) {
-        if (item.type === 'folder') {
-            // Remove existing if present
-            this.recentFolders = this.recentFolders.filter(f => f.path !== item.path)
-            // Add to top
-            this.recentFolders.unshift(item)
-            // Limit to 5
-            if (this.recentFolders.length > 5) this.recentFolders.pop()
-            localStorage.setItem('recentFolders', JSON.stringify(this.recentFolders))
-        } else {
-            // Remove existing if present (check ID)
-            this.recentFiles = this.recentFiles.filter(f => f.ID !== item.ID)
-            this.recentFiles.unshift(item)
-            if (this.recentFiles.length > 5) this.recentFiles.pop()
-            localStorage.setItem('recentFiles', JSON.stringify(this.recentFiles))
+    async fetchRecents() {
+        try {
+            const res = await api.get('/users/recent')
+            // Backend returns list of { type: 'file'|'folder', file: {...}, folder: {...}, ... }
+            const items = res.data
+            
+            this.recentFiles = items
+                .filter(i => i.type === 'file')
+                .map(i => ({ ...i.file, type: 'file', displayName: i.file.Name }))
+                
+            this.recentFolders = items
+                .filter(i => i.type === 'folder')
+                .map(i => ({ ...i.folder, type: 'folder', displayName: i.folder.Name, path: i.folder.Path }))
+                
+        } catch (err) {
+            console.error("Failed to fetch recent history", err)
         }
+    },
+
+    addToHistory(item) {
+        // Optimistic UI Update first
+        if (item.type === 'folder') {
+            const path = item.path || item.Path
+            this.recentFolders = this.recentFolders.filter(f => (f.path || f.Path) !== path)
+            this.recentFolders.unshift(item)
+            if (this.recentFolders.length > 10) this.recentFolders.pop()
+        } else {
+            const id = item.ID || item.id
+            this.recentFiles = this.recentFiles.filter(f => (f.ID || f.id) !== id)
+            this.recentFiles.unshift(item)
+            if (this.recentFiles.length > 10) this.recentFiles.pop()
+        }
+        
+        // Persist to Backend
+        // Don't await strictly to not block UI
+        api.post('/users/recent', {
+            id: item.ID || item.id,
+            type: item.type === 'folder' ? 'folder' : 'file'
+        }).catch(err => console.error("Failed to save history", err))
+    },
     },
     notifyShareUpdate() {
         this.shareUpdateTrigger++;
