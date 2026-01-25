@@ -25,6 +25,7 @@ func Migrate(db *bun.DB) error {
 		(*FolderShare)(nil),
 		(*FolderFileKey)(nil),
 		(*FolderFolderKey)(nil),
+		(*RecentActivity)(nil),
 	}
 
 	for _, model := range models {
