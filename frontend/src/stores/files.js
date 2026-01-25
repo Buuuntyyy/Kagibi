@@ -784,7 +784,7 @@ export const useFileStore = defineStore('files', {
       // 1. Generate Token
       const tokenBytes = window.crypto.getRandomValues(new Uint8Array(32));
       const token = btoa(String.fromCodePoint(...tokenBytes))
-        .replaceAll(/\+/g, '-').replaceAll(/\//g, '_').replaceAll(/=+$/, '');
+        .replaceAll('+', '-').replaceAll('/', '_').replaceAll(/=+$/, '');
 
       let encryptedKeyForShare = "";
       let fileKeys = {};

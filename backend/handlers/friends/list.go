@@ -2,6 +2,7 @@
 package friends
 
 import (
+	"context"
 	"net/http"
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/ws"
@@ -33,64 +34,71 @@ func NewFriendHandler(db *bun.DB, ws *ws.Manager) *FriendHandler {
 func (h *FriendHandler) ListFriends(c *gin.Context) {
 	currentUserID := c.GetString("user_id")
 
-	var friendships []pkg.Friendship
-	// Fetch all friendships involving me
-	err := h.DB.NewSelect().
-		Model(&friendships).
-		Where("user_id_1 = ?", currentUserID).
-		WhereOr("user_id_2 = ?", currentUserID).
-		Scan(c.Request.Context())
-
+	friendships, err := h.getUserFriendships(c.Request.Context(), currentUserID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la récupération des amis"})
 		return
 	}
 
-	var results []FriendResponse
-
-	for _, f := range friendships {
-		var otherUserID string
-		var status string
-		var requestID int64 = f.ID
-
-		if f.Status == "accepted" {
-			status = "accepted"
-			if f.UserID1 == currentUserID {
-				otherUserID = f.UserID2
-			} else {
-				otherUserID = f.UserID1
-			}
-		} else {
-			// Pending logic
-			if f.UserID1 == currentUserID {
-				status = "pending_sent"
-				otherUserID = f.UserID2
-			} else {
-				status = "pending_received"
-				otherUserID = f.UserID1
-			}
-		}
-
-		// Fetch other user details (optimize this with a Join later if needed)
-		var otherUser pkg.User
-		err := h.DB.NewSelect().Model(&otherUser).Where("id = ?", otherUserID).Scan(c.Request.Context())
-		if err == nil {
-			isOnline := false
-			if h.WS != nil {
-				isOnline = h.WS.IsUserOnline(otherUser.ID)
-			}
-
-			results = append(results, FriendResponse{
-				ID:        otherUser.ID,
-				Name:      otherUser.Name,
-				Email:     otherUser.Email,
-				Status:    status,
-				RequestID: requestID,
-				PublicKey: otherUser.PublicKey,
-				Online:    isOnline,
-			})
-		}
-	}
+	results := h.buildFriendResponses(c.Request.Context(), currentUserID, friendships)
 
 	c.JSON(http.StatusOK, results)
+}
+
+func (h *FriendHandler) getUserFriendships(ctx context.Context, userID string) ([]pkg.Friendship, error) {
+	var friendships []pkg.Friendship
+	err := h.DB.NewSelect().
+		Model(&friendships).
+		Where("user_id_1 = ?", userID).
+		WhereOr("user_id_2 = ?", userID).
+		Scan(ctx)
+	return friendships, err
+}
+
+func (h *FriendHandler) buildFriendResponses(ctx context.Context, currentUserID string, friendships []pkg.Friendship) []FriendResponse {
+	var results []FriendResponse
+	for _, f := range friendships {
+		if resp := h.processSingleFriendship(ctx, currentUserID, f); resp != nil {
+			results = append(results, *resp)
+		}
+	}
+	return results
+}
+
+func (h *FriendHandler) processSingleFriendship(ctx context.Context, currentUserID string, f pkg.Friendship) *FriendResponse {
+	otherUserID, status := determineFriendStatus(currentUserID, f)
+
+	var otherUser pkg.User
+	if err := h.DB.NewSelect().Model(&otherUser).Where("id = ?", otherUserID).Scan(ctx); err != nil {
+		return nil
+	}
+
+	isOnline := false
+	if h.WS != nil {
+		isOnline = h.WS.IsUserOnline(otherUser.ID)
+	}
+
+	return &FriendResponse{
+		ID:        otherUser.ID,
+		Name:      otherUser.Name,
+		Email:     otherUser.Email,
+		Status:    status,
+		RequestID: f.ID,
+		PublicKey: otherUser.PublicKey,
+		Online:    isOnline,
+	}
+}
+
+func determineFriendStatus(currentUserID string, f pkg.Friendship) (string, string) {
+	if f.Status == "accepted" {
+		if f.UserID1 == currentUserID {
+			return f.UserID2, "accepted"
+		}
+		return f.UserID1, "accepted"
+	}
+
+	if f.UserID1 == currentUserID {
+		return f.UserID2, "pending_sent"
+	}
+	return f.UserID1, "pending_received"
 }

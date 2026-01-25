@@ -1,6 +1,7 @@
 package shares
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
@@ -19,6 +20,16 @@ import (
 	"github.com/uptrace/bun"
 )
 
+type createShareLinkRequest struct {
+	ResourceID   int64            `json:"resource_id"`
+	ResourceType string           `json:"resource_type"` // "file" or "folder"
+	ExpiresAt    *time.Time       `json:"expires_at"`
+	Password     string           `json:"password"` // Optional
+	EncryptedKey string           `json:"encrypted_key"`
+	Token        string           `json:"token"`
+	FileKeys     map[int64]string `json:"file_keys"`
+}
+
 func generateToken() (string, error) {
 	b := make([]byte, 32)
 	_, err := rand.Read(b)
@@ -30,19 +41,9 @@ func generateToken() (string, error) {
 
 // CreateShareLinkHandler creates a public link for a file or folder
 func CreateShareLinkHandler(c *gin.Context, db *bun.DB) {
-	userIDInterface, _ := c.Get("user_id")
-	userID := userIDInterface.(string)
+	userID := c.GetString("user_id")
 
-	var req struct {
-		ResourceID   int64            `json:"resource_id"`
-		ResourceType string           `json:"resource_type"` // "file" or "folder"
-		ExpiresAt    *time.Time       `json:"expires_at"`
-		Password     string           `json:"password"` // Optional, not implemented yet in this iteration
-		EncryptedKey string           `json:"encrypted_key"`
-		Token        string           `json:"token"`
-		FileKeys     map[int64]string `json:"file_keys"`
-	}
-
+	var req createShareLinkRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
@@ -53,43 +54,14 @@ func CreateShareLinkHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	log.Printf("CreateShareLink: ResourceID=%d Type=%s FileKeys=%d", req.ResourceID, req.ResourceType, len(req.FileKeys))
-
-	// Verify ownership and get path
-	var resourcePath string
-	if req.ResourceType == "file" {
-		var file pkg.File
-		err := db.NewSelect().Model(&file).
-			Where("id = ? AND user_id = ?", req.ResourceID, userID).
-			Scan(c.Request.Context())
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "File not found or permission denied"})
-			return
-		}
-		resourcePath = file.Path
-	} else if req.ResourceType == "folder" {
-		var folder pkg.Folder
-		err := db.NewSelect().Model(&folder).
-			Where("id = ? AND user_id = ?", req.ResourceID, userID).
-			Scan(c.Request.Context())
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Folder not found or permission denied"})
-			return
-		}
-		resourcePath = folder.Path
-	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource type"})
+	resourcePath, err := verifyOwnerAndGetPath(c.Request.Context(), db, userID, req.ResourceID, req.ResourceType)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Check if a share link already exists for this resource
-	var existingShare pkg.ShareLink
-	err := db.NewSelect().Model(&existingShare).
-		Where("resource_id = ? AND resource_type = ? AND owner_id = ?", req.ResourceID, req.ResourceType, userID).
-		Scan(c.Request.Context())
-
+	existingShare, err := checkExistingShareLink(c.Request.Context(), db, userID, req.ResourceID, req.ResourceType)
 	if err == nil {
-		// A share link already exists, return it instead of creating a new one.
 		c.JSON(http.StatusConflict, gin.H{
 			"error": "A share link for this resource already exists",
 			"token": existingShare.Token,
@@ -99,58 +71,25 @@ func CreateShareLinkHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	token := req.Token
-	if token == "" {
-		var err error
-		token, err = generateToken()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
-			return
-		}
-	}
-
-	shareLink := &pkg.ShareLink{
-		ResourceID:   req.ResourceID,
-		ResourceType: req.ResourceType,
-		Path:         resourcePath,
-		OwnerID:      userID,
-		Token:        token,
-		ExpiresAt:    req.ExpiresAt,
-		EncryptedKey: req.EncryptedKey,
-		// PasswordHash: ... (TODO if password provided)
-	}
-
-	_, err = db.NewInsert().Model(shareLink).Exec(c.Request.Context())
+	shareLink, err := createNewShareLink(c.Request.Context(), db, userID, resourcePath, req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create share link"})
 		return
 	}
 
-	// Insert file keys if any
 	if len(req.FileKeys) > 0 {
-		var shareFileKeys []pkg.ShareFileKey
-		for fileID, key := range req.FileKeys {
-			shareFileKeys = append(shareFileKeys, pkg.ShareFileKey{
-				ShareID:      shareLink.ID,
-				FileID:       fileID,
-				EncryptedKey: key,
-			})
-		}
-		if len(shareFileKeys) > 0 {
-			if _, err := db.NewInsert().Model(&shareFileKeys).Exec(c.Request.Context()); err != nil {
-				log.Printf("Error saving share keys: %v", err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file keys"})
-				return
-			}
-			log.Printf("Saved %d share keys", len(shareFileKeys))
+		if err := saveShareFileKeys(c.Request.Context(), db, shareLink.ID, req.FileKeys); err != nil {
+			log.Printf("Error saving share keys: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file keys"})
+			return
 		}
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Link created",
-		"token":   token,
+		"token":   shareLink.Token,
 		"id":      shareLink.ID,
-		"link":    fmt.Sprintf("/s/%s", token), // Frontend URL format
+		"link":    fmt.Sprintf("/s/%s", shareLink.Token),
 	})
 }
 
@@ -158,87 +97,39 @@ func CreateShareLinkHandler(c *gin.Context, db *bun.DB) {
 func GetShareLinkHandler(c *gin.Context, db *bun.DB) {
 	token := c.Param("token")
 
-	var shareLink pkg.ShareLink
-	err := db.NewSelect().Model(&shareLink).
-		Where("token = ?", token).
-		Scan(c.Request.Context())
-
+	shareLink, err := getValidShareLink(c.Request.Context(), db, token)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Link not found"})
+		status := http.StatusNotFound
+		if err.Error() == "Link expired" {
+			status = http.StatusGone
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Check expiration
-	if shareLink.ExpiresAt != nil && shareLink.ExpiresAt.Before(time.Now()) {
-		c.JSON(http.StatusGone, gin.H{"error": "Link expired"})
+	go incrementShareViews(context.Background(), db, shareLink.ID)
+
+	ownerEmail := getShareOwnerEmail(c.Request.Context(), db, shareLink.OwnerID)
+	response, err := buildShareLinkResponse(c.Request.Context(), db, shareLink, ownerEmail)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Increment views
-	_, _ = db.NewUpdate().Model(&shareLink).
-		Set("views = views + 1").
-		Where("id = ?", shareLink.ID).
-		Exec(c.Request.Context())
-
-	// Fetch owner info
-	var owner pkg.User
-	err = db.NewSelect().Model(&owner).
-		Where("id = ?", shareLink.OwnerID).
-		Scan(c.Request.Context())
-
-	ownerEmail := "Unknown"
-	if err == nil {
-		ownerEmail = owner.Email
-	}
-
-	if shareLink.ResourceType == "file" {
-		var file pkg.File
-		err := db.NewSelect().Model(&file).
-			Where("id = ?", shareLink.ResourceID).
-			Scan(c.Request.Context())
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"resource_type": "file",
-			"resource_name": file.Name,
-			"file_size":     file.Size,
-			"mime_type":     file.MimeType,
-			"owner_email":   ownerEmail,
-			"expires_at":    shareLink.ExpiresAt,
-			"encrypted_key": shareLink.EncryptedKey,
-		})
-	} else {
-		// Folder logic
-		var folder pkg.Folder
-		err := db.NewSelect().Model(&folder).
-			Where("id = ?", shareLink.ResourceID).
-			Scan(c.Request.Context())
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Folder not found"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"resource_type": "folder",
-			"resource_name": folder.Name,
-			"owner_email":   ownerEmail,
-			"expires_at":    shareLink.ExpiresAt,
-		})
-	}
+	c.JSON(http.StatusOK, response)
 }
 
 // DownloadSharedFileHandler downloads a file via a share link
 func DownloadSharedFileHandler(c *gin.Context, db *bun.DB) {
 	token := c.Param("token")
 
-	var shareLink pkg.ShareLink
-	err := db.NewSelect().Model(&shareLink).
-		Where("token = ?", token).
-		Scan(c.Request.Context())
-
+	shareLink, err := getValidShareLink(c.Request.Context(), db, token)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Link not found"})
+		status := http.StatusNotFound
+		if err.Error() == "Link expired" {
+			status = http.StatusGone
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -247,75 +138,28 @@ func DownloadSharedFileHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	if shareLink.ExpiresAt != nil && shareLink.ExpiresAt.Before(time.Now()) {
-		c.JSON(http.StatusGone, gin.H{"error": "Link expired"})
-		return
-	}
-
-	var file pkg.File
-	err = db.NewSelect().Model(&file).
-		Where("id = ?", shareLink.ResourceID).
-		Scan(c.Request.Context())
+	file, err := getSharedFile(c.Request.Context(), db, shareLink.ResourceID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
 		return
 	}
 
-	// S3 Key construction
-	s3Key := fmt.Sprintf("users/%s%s", shareLink.OwnerID, file.Path)
-
-	// Get object from S3
-	output, err := s3storage.Client.GetObject(c.Request.Context(), &s3.GetObjectInput{
-		Bucket: aws.String(s3storage.BucketName),
-		Key:    aws.String(s3Key),
-	})
-	if err != nil {
-		log.Printf("Error getting shared file from S3. Key: %s, Error: %v", s3Key, err)
+	if err := streamFileFromS3(c, shareLink.OwnerID, file); err != nil {
+		log.Printf("Error streaming file: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve file from storage"})
-		return
-	}
-	defer output.Body.Close()
-
-	// Headers
-	c.Header("Content-Description", "File Transfer")
-	c.Header("Content-Transfer-Encoding", "binary")
-
-	disposition := "attachment"
-	if c.Query("inline") == "true" {
-		disposition = "inline"
-	}
-	c.Header("Content-Disposition", disposition+"; filename=\""+file.Name+"\"")
-
-	c.Header("Content-Type", "application/octet-stream")
-	if file.MimeType != "" {
-		c.Header("Content-Type", file.MimeType)
-	}
-	c.Header("Content-Length", strconv.FormatInt(file.Size, 10))
-
-	// Stream
-	if _, err := io.Copy(c.Writer, output.Body); err != nil {
-		log.Printf("Error streaming shared file to client: %v", err)
 	}
 }
 
 // GetShareForResourceHandler allows the owner to retrieve share link(s) for a given file
 func GetShareForResourceHandler(c *gin.Context, db *bun.DB) {
-	userIDInterface, _ := c.Get("user_id")
-	userID := userIDInterface.(string)
-
-	fileIDParam := c.Param("fileID")
-	fileID, err := strconv.ParseInt(fileIDParam, 10, 64)
+	userID := c.GetString("user_id")
+	fileID, err := strconv.ParseInt(c.Param("fileID"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file ID"})
 		return
 	}
 
-	var links []pkg.ShareLink
-	err = db.NewSelect().Model(&links).
-		Where("resource_type = ?", "file").
-		Where("resource_id = ?", fileID).
-		Where("owner_id = ?", userID).
-		Scan(c.Request.Context())
+	links, err := getUserFileShareLinks(c.Request.Context(), db, userID, fileID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -335,6 +179,183 @@ func GetShareForResourceHandler(c *gin.Context, db *bun.DB) {
 			"expires_at": l.ExpiresAt,
 		})
 	}
-
 	c.JSON(http.StatusOK, gin.H{"links": resp})
+}
+
+// --- Helpers ---
+
+func verifyOwnerAndGetPath(ctx context.Context, db *bun.DB, userID string, resID int64, resType string) (string, error) {
+	if resType == "file" {
+		var file pkg.File
+		err := db.NewSelect().Model(&file).Where("id = ? AND user_id = ?", resID, userID).Scan(ctx)
+		if err != nil {
+			return "", fmt.Errorf("File not found or permission denied")
+		}
+		return file.Path, nil
+	} else if resType == "folder" {
+		var folder pkg.Folder
+		err := db.NewSelect().Model(&folder).Where("id = ? AND user_id = ?", resID, userID).Scan(ctx)
+		if err != nil {
+			return "", fmt.Errorf("Folder not found or permission denied")
+		}
+		return folder.Path, nil
+	}
+	return "", fmt.Errorf("Invalid resource type")
+}
+
+func checkExistingShareLink(ctx context.Context, db *bun.DB, userID string, resID int64, resType string) (*pkg.ShareLink, error) {
+	var existingShare pkg.ShareLink
+	err := db.NewSelect().Model(&existingShare).
+		Where("resource_id = ? AND resource_type = ? AND owner_id = ?", resID, resType, userID).
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &existingShare, nil
+}
+
+func createNewShareLink(ctx context.Context, db *bun.DB, userID, path string, req createShareLinkRequest) (*pkg.ShareLink, error) {
+	token := req.Token
+	if token == "" {
+		var err error
+		token, err = generateToken()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	shareLink := &pkg.ShareLink{
+		ResourceID:   req.ResourceID,
+		ResourceType: req.ResourceType,
+		Path:         path,
+		OwnerID:      userID,
+		Token:        token,
+		ExpiresAt:    req.ExpiresAt,
+		EncryptedKey: req.EncryptedKey,
+	}
+
+	_, err := db.NewInsert().Model(shareLink).Exec(ctx)
+	return shareLink, err
+}
+
+func saveShareFileKeys(ctx context.Context, db *bun.DB, shareID int64, keys map[int64]string) error {
+	var shareFileKeys []pkg.ShareFileKey
+	for fileID, key := range keys {
+		shareFileKeys = append(shareFileKeys, pkg.ShareFileKey{
+			ShareID:      shareID,
+			FileID:       fileID,
+			EncryptedKey: key,
+		})
+	}
+	if len(shareFileKeys) > 0 {
+		_, err := db.NewInsert().Model(&shareFileKeys).Exec(ctx)
+		return err
+	}
+	return nil
+}
+
+func getValidShareLink(ctx context.Context, db *bun.DB, token string) (*pkg.ShareLink, error) {
+	var shareLink pkg.ShareLink
+	err := db.NewSelect().Model(&shareLink).Where("token = ?", token).Scan(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("Link not found")
+	}
+	if shareLink.ExpiresAt != nil && shareLink.ExpiresAt.Before(time.Now()) {
+		return nil, fmt.Errorf("Link expired")
+	}
+	return &shareLink, nil
+}
+
+func incrementShareViews(ctx context.Context, db *bun.DB, id int64) {
+	_, _ = db.NewUpdate().Model(&pkg.ShareLink{}).
+		Set("views = views + 1").
+		Where("id = ?", id).
+		Exec(ctx)
+}
+
+func getShareOwnerEmail(ctx context.Context, db *bun.DB, ownerID string) string {
+	var owner pkg.User
+	if err := db.NewSelect().Model(&owner).Where("id = ?", ownerID).Scan(ctx); err == nil {
+		return owner.Email
+	}
+	return "Unknown"
+}
+
+func buildShareLinkResponse(ctx context.Context, db *bun.DB, sl *pkg.ShareLink, ownerEmail string) (gin.H, error) {
+	if sl.ResourceType == "file" {
+		var file pkg.File
+		if err := db.NewSelect().Model(&file).Where("id = ?", sl.ResourceID).Scan(ctx); err != nil {
+			return nil, fmt.Errorf("File not found")
+		}
+		return gin.H{
+			"resource_type": "file",
+			"resource_name": file.Name,
+			"file_size":     file.Size,
+			"mime_type":     file.MimeType,
+			"owner_email":   ownerEmail,
+			"expires_at":    sl.ExpiresAt,
+			"encrypted_key": sl.EncryptedKey,
+		}, nil
+	}
+
+	// Folder
+	var folder pkg.Folder
+	if err := db.NewSelect().Model(&folder).Where("id = ?", sl.ResourceID).Scan(ctx); err != nil {
+		return nil, fmt.Errorf("Folder not found")
+	}
+	return gin.H{
+		"resource_type": "folder",
+		"resource_name": folder.Name,
+		"owner_email":   ownerEmail,
+		"expires_at":    sl.ExpiresAt,
+	}, nil
+}
+
+func getSharedFile(ctx context.Context, db *bun.DB, resourceID int64) (*pkg.File, error) {
+	var file pkg.File
+	err := db.NewSelect().Model(&file).Where("id = ?", resourceID).Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &file, nil
+}
+
+func streamFileFromS3(c *gin.Context, ownerID string, file *pkg.File) error {
+	s3Key := fmt.Sprintf("users/%s%s", ownerID, file.Path)
+	output, err := s3storage.Client.GetObject(c.Request.Context(), &s3.GetObjectInput{
+		Bucket: aws.String(s3storage.BucketName),
+		Key:    aws.String(s3Key),
+	})
+	if err != nil {
+		return err
+	}
+	defer output.Body.Close()
+
+	c.Header("Content-Description", "File Transfer")
+	c.Header("Content-Transfer-Encoding", "binary")
+
+	disposition := "attachment"
+	if c.Query("inline") == "true" {
+		disposition = "inline"
+	}
+
+	c.Header("Content-Disposition", fmt.Sprintf("%s; filename=\"%s\"", disposition, file.Name))
+	c.Header("Content-Type", "application/octet-stream")
+	if file.MimeType != "" {
+		c.Header("Content-Type", file.MimeType)
+	}
+	c.Header("Content-Length", strconv.FormatInt(file.Size, 10))
+
+	_, err = io.Copy(c.Writer, output.Body)
+	return err
+}
+
+func getUserFileShareLinks(ctx context.Context, db *bun.DB, userID string, fileID int64) ([]pkg.ShareLink, error) {
+	var links []pkg.ShareLink
+	err := db.NewSelect().Model(&links).
+		Where("resource_type = ?", "file").
+		Where("resource_id = ?", fileID).
+		Where("owner_id = ?", userID).
+		Scan(ctx)
+	return links, err
 }

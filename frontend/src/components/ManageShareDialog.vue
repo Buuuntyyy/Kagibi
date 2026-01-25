@@ -82,7 +82,8 @@
             <div v-else class="shared-state">
                 <div class="link-section">
                     <label>
-                      <input type="text" readonly value="Lien de partage" />
+                      Lien de partage
+                      <input type="text"/>
                     </label>
                     <div class="link-container">
                         <input type="text" :value="shareUrl" readonly ref="shareLinkInput" @click="selectAll" />
