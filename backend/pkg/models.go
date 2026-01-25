@@ -120,6 +120,7 @@ type Folder struct {
 	EncryptedKey string    `bun:"encrypted_key"` // FolderKey encrypted with MasterKey
 	Tags         []string  `bun:"tags,array"`    // Tags
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	UpdatedAt    time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 }
 
 type Tag struct {
