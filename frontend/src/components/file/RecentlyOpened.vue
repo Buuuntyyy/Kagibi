@@ -62,8 +62,16 @@ const hasRecents = computed(() => {
 })
 
 const combinedRecents = computed(() => {
-  const folders = fileStore.recentFolders.map(f => ({ ...f, type: 'folder', displayName: f.name }));
-  const files = fileStore.recentFiles.map(f => ({ ...f, type: 'file', displayName: f.Name }));
+  const folders = fileStore.recentFolders.map(f => ({ 
+      ...f, 
+      type: 'folder', 
+      displayName: f.displayName || f.Name || f.name 
+  }));
+  const files = fileStore.recentFiles.map(f => ({ 
+      ...f, 
+      type: 'file', 
+      displayName: f.displayName || f.Name || f.name 
+  }));
   
   // Combine and maybe slice to a reasonable number if needed, keeping separate lists structure 
   // but displaying them together. We could interleave them or just concat.
@@ -147,7 +155,7 @@ const openItem = async (item) => {
   height: 6px;
 }
 .cards-row::-webkit-scrollbar-thumb {
-  background-color: #ccc;
+  background-color: var(--border-color);
   border-radius: 3px;
 }
 
@@ -170,6 +178,7 @@ const openItem = async (item) => {
 .recent-card:hover {
   box-shadow: 0 1px 3px rgba(0,0,0,0.12);
   border-color: transparent;
+  background-color: var(--hover-background-color);
 }
 
 .icon-wrapper {
@@ -183,10 +192,10 @@ const openItem = async (item) => {
 }
 /* Optional: Folder icon specific color */
 .recent-card.folder .icon-wrapper svg {
-    fill: #5f6368;
+    fill: var(--secondary-text-color);
 }
 .recent-card.file .icon-wrapper svg {
-    fill: #3498db; /* Blue for files */
+    fill: var(--primary-color); /* Blue for files */
 }
 
 .card-details {

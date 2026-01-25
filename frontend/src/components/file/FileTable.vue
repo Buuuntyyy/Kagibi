@@ -23,7 +23,7 @@
         <tr v-for="folder in folders" :key="folder.ID" 
              class="list-item folder-item" 
              :class="{ selected: isSelected(folder, 'folder') }"
-             @click="$emit('select-item', folder, 'folder', $event)"
+             @click.stop="$emit('select-item', folder, 'folder', $event)"
              @dblclick="$emit('open-folder', folder)"
              @contextmenu.prevent.stop="$emit('context-menu', $event, folder, 'folder')"
              draggable="true"
@@ -104,7 +104,7 @@
         <tr v-for="file in files" :key="file.ID" 
             class="list-item"
             :class="{ selected: isSelected(file, 'file') }"
-            @click="$emit('select-item', file, 'file', $event)"
+            @click.stop="$emit('select-item', file, 'file', $event)"
             @dblclick="$emit('open-file', file)"
             @contextmenu.prevent.stop="$emit('context-menu', $event, file, 'file')"
             draggable="true"
@@ -439,7 +439,9 @@ const onShareIconHover = (isHovering, event) => {
 }
 
 .list-item.selected {
-  background-color: rgba(66, 185, 131, 0.2); /* Light green selection */
+  background-color: var(--hover-background-color);
+  font-weight: 500;
+  color: var(--primary-color);
 }
 
 .icon-col {
@@ -489,7 +491,7 @@ const onShareIconHover = (isHovering, event) => {
   cursor: pointer;
 }
 .shared-icon:hover {
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: var(--hover-background-color);
   border-radius: 25%;
 }
 
@@ -498,12 +500,12 @@ const onShareIconHover = (isHovering, event) => {
 }
 
 .tag-badge {
-  background-color: #e0e0e0;
-  color: #333;
+  background-color: var(--hover-background-color);
+  color: var(--main-text-color);
   font-size: 0.75rem;
   padding: 2px 6px;
   border-radius: 10%;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border-color);
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -511,14 +513,14 @@ const onShareIconHover = (isHovering, event) => {
 
 .remove-tag {
   cursor: pointer;
-  color: #666;
+  color: var(--secondary-text-color);
   font-weight: bold;
   line-height: 1;
   display: inline-block;
 }
 
 .remove-tag:hover {
-  color: #dc3545;
+  color: var(--error-color);
 }
 
 .tags-column {
@@ -528,8 +530,8 @@ const onShareIconHover = (isHovering, event) => {
 }
 
 .drag-over-target {
-  background-color: rgba(66, 185, 131, 0.2) !important;
-  border: 2px dashed var(--primary-color, #42b983);
+  background-color: var(--hover-background-color) !important;
+  border: 2px dashed var(--primary-color);
 }
 
 .icon-svg {
