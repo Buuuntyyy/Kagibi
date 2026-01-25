@@ -27,49 +27,107 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
+	"github.com/uptrace/bun"
 )
 
 func main() {
-	log.Println("Starting SaferCloud Backend v2.1 (With Share Keys Fix)...")
+	log.Println("Starting SaferCloud Backend v2.2 (Refactored)...")
 
-	// Load .env file
+	loadEnv()
+	initS3()
+
+	db := pkg.NewDB()
+	migrateDB(db)
+
+	redisClient := initRedis()
+
+	// Start Workers
+	workers.StartWorker(redisClient)
+	workers.StartCleanupWorker(db)
+
+	// Initialize Managers
+	wsManager := wsPkg.NewManager()
+	friendHandler := friends.NewFriendHandler(db, wsManager)
+	jwks, jwtSecret := initAuth()
+
+	// Setup Server
+	router := setupRouter()
+
+	registerRoutes(router, db, redisClient, wsManager, jwks, jwtSecret, friendHandler)
+
+	startServer(router)
+}
+
+func loadEnv() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found")
 	}
+}
 
-	// Initialize S3
+func initS3() {
 	if err := s3storage.InitS3(); err != nil {
 		log.Printf("Warning: S3 not configured: %v", err)
 	} else {
 		log.Println("S3 Storage initialized successfully")
 	}
+}
 
-	// Initialise la connexion à la base de données
-	db := pkg.NewDB()
-
-	// Exécute les migrations
+func migrateDB(db *bun.DB) {
 	err := pkg.Migrate(db)
 	if err != nil {
-		log.Printf("Failed to migrate: %v", err) // Printf instead of Fatalf strictly for safety in this context
+		log.Printf("Failed to migrate: %v", err)
 	}
 	log.Println("Migrations executed successfully!")
+}
 
-	// Crée une instance de Gin (equivalent à Express.js en Node.js)
+func initRedis() *redis.Client {
+	redisURL := os.Getenv("REDIS_URL")
+	var redisOptions *redis.Options
+
+	if redisURL != "" {
+		var err error
+		redisOptions, err = redis.ParseURL(redisURL)
+		if err != nil {
+			log.Fatalf("Invalid REDIS_URL: %v", err)
+		}
+	} else {
+		redisOptions = &redis.Options{Addr: "localhost:6379"}
+	}
+
+	client := redis.NewClient(redisOptions)
+	if _, err := client.Ping(context.Background()).Result(); err != nil {
+		log.Fatalf("Impossible de se connecter à Redis: %v", err)
+	}
+	return client
+}
+
+func initAuth() (keyfunc.Keyfunc, string) {
+	jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	var jwks keyfunc.Keyfunc
+
+	if supabaseURL != "" {
+		jwksURL := supabaseURL + "/auth/v1/.well-known/jwks.json"
+		var err error
+		jwks, err = keyfunc.NewDefault([]string{jwksURL})
+		if err != nil {
+			log.Printf("Attention: Impossible d'initialiser JWKS: %v. Les tokens ES256 échoueront.", err)
+		} else {
+			log.Println("JWKS initialisé avec succès pour validation ES256")
+		}
+	}
+	return jwks, jwtSecret
+}
+
+func setupRouter() *gin.Engine {
 	router := gin.Default()
-
-	// Configure et utilise le middleware CORS
 	config := cors.DefaultConfig()
 
-	// Définit les origines autorisées via variable d'environnement (pour la prod)
-	// ou par défaut (pour le dev)
 	allowedOriginsEnv := os.Getenv("ALLOWED_ORIGINS")
 	if allowedOriginsEnv != "" {
 		config.AllowOrigins = strings.Split(allowedOriginsEnv, ",")
 	} else {
-		config.AllowOrigins = []string{
-			"http://localhost:5173",
-			"http://localhost:3000",
-		}
+		config.AllowOrigins = []string{"http://localhost:5173", "http://localhost:3000"}
 	}
 
 	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
@@ -82,177 +140,109 @@ func main() {
 	router.Use(middleware.SecureHeaders())
 	router.Use(middleware.RateLimitMiddleware())
 
-	redisURL := os.Getenv("REDIS_URL")
-	var redisOptions *redis.Options
+	return router
+}
 
-	if redisURL != "" {
-		// Si une URL complète est fournie (ex: rediss://user:pass@host:port)
-		var err error
-		redisOptions, err = redis.ParseURL(redisURL)
-		if err != nil {
-			log.Fatalf("Invalid REDIS_URL: %v", err)
-		}
-	} else {
-		// Fallback local
-		redisOptions = &redis.Options{
-			Addr: "localhost:6379",
-		}
-	}
-
-	redisClient := redis.NewClient(redisOptions)
-
-	if _, err := redisClient.Ping(context.Background()).Result(); err != nil {
-		log.Fatalf("Impossible de se connecter à Redis: %v", err)
-	}
-
-	// Start S3 Worker
-	workers.StartWorker(redisClient)
-
-	// Start Cleanup Worker (Expired shares, etc.)
-	workers.StartCleanupWorker(db)
-
-	// Initialize WebSocket Manager
-	wsManager := wsPkg.NewManager()
-
-	friendHandler := friends.NewFriendHandler(db, wsManager)
-
-	// JWT Secret from Supabase
-	jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
-
-	supabaseURL := os.Getenv("SUPABASE_URL")
-	var jwks keyfunc.Keyfunc
-	if supabaseURL != "" {
-		jwksURL := supabaseURL + "/auth/v1/.well-known/jwks.json"
-		var err error
-		// Crée un JWKS qui se rafraîchit automatiquement
-		jwks, err = keyfunc.NewDefault([]string{jwksURL})
-		if err != nil {
-			log.Printf("Attention: Impossible d'initialiser JWKS: %v. Les tokens ES256 échoueront.", err)
-		} else {
-			log.Println("JWKS initialisé avec succès pour validation ES256")
-		}
-	}
-
+func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, wsManager *wsPkg.Manager, jwks keyfunc.Keyfunc, jwtSecret string, friendHandler *friends.FriendHandler) {
 	api := router.Group("/api/v1")
-	// ROUTES PUBLIQUES (Non protégées par l'authentification)
-	publicRoutes := api.Group("/auth")
-	{
-		// Register is now authenticated (via Supabase JWT) so it moved to protected routes
-		// Login is handled by Supabase
-		publicRoutes.POST("/recovery/init", func(c *gin.Context) { auth.RecoveryInitHandler(c, db) })
-		publicRoutes.POST("/recovery/finish", func(c *gin.Context) { auth.RecoveryFinishHandler(c, db) })
-	}
 
-	// ROUTES PUBLIQUES DE PARTAGE
+	// Authentication Routes (Public + Protected)
+	authGroup := api.Group("/auth")
+	authGroup.POST("/recovery/init", func(c *gin.Context) { auth.RecoveryInitHandler(c, db) })
+	authGroup.POST("/recovery/finish", func(c *gin.Context) { auth.RecoveryFinishHandler(c, db) })
+
+	// Public Share Routes
 	publicShareRoutes := api.Group("/public/share")
-	{
-		publicShareRoutes.GET("/:token", func(c *gin.Context) { shares.GetShareLinkHandler(c, db) })
-		publicShareRoutes.GET("/:token/download", func(c *gin.Context) { shares.DownloadSharedFileHandler(c, db) })
-		publicShareRoutes.GET("/:token/download/file/:file_id", func(c *gin.Context) { shares.DownloadFileFromSharedFolderHandler(c, db) })
-		publicShareRoutes.GET("/:token/browse/*subpath", func(c *gin.Context) { shares.BrowseSharedFolderHandler(c, db) })
-	}
+	publicShareRoutes.GET("/:token", func(c *gin.Context) { shares.GetShareLinkHandler(c, db) })
+	publicShareRoutes.GET("/:token/download", func(c *gin.Context) { shares.DownloadSharedFileHandler(c, db) })
+	publicShareRoutes.GET("/:token/download/file/:file_id", func(c *gin.Context) { shares.DownloadFileFromSharedFolderHandler(c, db) })
+	publicShareRoutes.GET("/:token/browse/*subpath", func(c *gin.Context) { shares.BrowseSharedFolderHandler(c, db) })
 
-	// ROUTES PROTÉGÉES (Protégées par l'authentification JWT)
-	protectedRoutes := api.Group("")
-	protectedRoutes.Use(middleware.AuthMiddleware(jwks, jwtSecret))
-	{
-		// Auth Routes that require JWT
-		protectedRoutes.POST("/auth/register", func(c *gin.Context) { auth.RegisterHandler(c, db) })
-		protectedRoutes.GET("/auth/keys", func(c *gin.Context) { auth.GetUserKeys(c, db) })
-		protectedRoutes.POST("/auth/logout", func(c *gin.Context) { auth.LogoutHandler(c, redisClient) })
+	// Protected Routes
+	protected := api.Group("")
+	protected.Use(middleware.AuthMiddleware(jwks, jwtSecret))
 
-		userRoutes := protectedRoutes.Group("/users")
-		// ROUTES UTILISATEURS
-		userRoutes.GET("/", func(c *gin.Context) { users.ListUsersHandler(c, db) })
-		userRoutes.GET("/me", func(c *gin.Context) { users.MeHandler(c, db) })
-		userRoutes.POST("/change-password", func(c *gin.Context) { users.UpdatePasswordHandler(c, db) })
-		userRoutes.POST("/recent", func(c *gin.Context) { users.AddRecentActivityHandler(c, db) })
-		userRoutes.GET("/recent", func(c *gin.Context) { users.GetRecentActivityHandler(c, db) })
-		userRoutes.POST("/keys", func(c *gin.Context) {
-			// Lazy load to avoid cycle, or just call handler directly
-			// assuming 'keys' pkg doesn't import main
-			// Actually need to import it. I will fix imports later if needed.
-			// For now let's assume 'keys' package is available.
-			// Ideally should be "safercloud/backend/handlers/keys"
-			keys.UpdateKeysHandler(c, db)
-		})
+	registerUserRoutes(protected, db, redisClient)
+	registerFileRoutes(protected, db, redisClient, wsManager)
+	registerFolderRoutes(protected, db)
+	registerTagRoutes(protected, db)
+	registerFriendRoutes(protected, friendHandler)
+	registerShareRoutes(protected, db, wsManager)
 
-		// ROUTES FICHIERS
-		fileRoutes := protectedRoutes.Group("/files")
-		{
-			fileRoutes.POST("/upload", func(c *gin.Context) { files.UploadHandler(c, db, redisClient, wsManager) })
-			fileRoutes.GET("/list-recursive", func(c *gin.Context) { files.ListAllFilesRecursiveHandler(c, db) })
-			fileRoutes.GET("/list/*path", func(c *gin.Context) { files.ListFilesHandler(c, db) })
-			fileRoutes.POST("/bulk-delete", func(c *gin.Context) { files.BulkDeleteHandler(c, db, wsManager) })
-			fileRoutes.DELETE("/file/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db, wsManager) })
-			fileRoutes.DELETE("/folder/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db, wsManager) })
-			fileRoutes.POST("/move", func(c *gin.Context) { files.MoveHandler(c, db, redisClient) })
-			fileRoutes.POST("/rename", func(c *gin.Context) { files.RenameHandler(c, db, redisClient) })
-			fileRoutes.POST("/tags", func(c *gin.Context) { files.UpdateTagsHandler(c, db) })
-			fileRoutes.GET("/download/:fileID", func(c *gin.Context) { files.DownloadFileHandler(c, db) })
-			fileRoutes.GET("/search", func(c *gin.Context) { files.SearchFilesHandler(c, db) })
-		}
-
-		// ROUTES DOSSIERS
-		folderRoutes := protectedRoutes.Group("/folders")
-		{
-			folderRoutes.POST("/create", func(c *gin.Context) { folders.CreateHandler(c, db) })
-			folderRoutes.PUT("/:id/key", func(c *gin.Context) { folders.UpdateFolderKeyHandler(c, db) })
-		}
-
-		// ROUTES TAGS
-		tagRoutes := protectedRoutes.Group("/tags")
-		{
-			tagRoutes.GET("/", tags.ListTagsHandler(db))
-			tagRoutes.POST("/", tags.CreateTagHandler(db))
-			tagRoutes.DELETE("/:id", tags.DeleteTagHandler(db))
-		}
-
-		// ROUTES AMIS
-		friendRoutes := protectedRoutes.Group("/friends")
-		{
-			friendRoutes.GET("", friendHandler.ListFriends)
-			friendRoutes.POST("", friendHandler.AddFriend)
-			friendRoutes.DELETE("/:id", friendHandler.RemoveFriend)
-			friendRoutes.PUT("/:id/accept", friendHandler.AcceptFriend)
-			friendRoutes.DELETE("/:id/reject", friendHandler.RejectFriend)
-		}
-
-		// ROUTES PARTAGE
-		shareRoutes := protectedRoutes.Group("/shares")
-		{
-			shareRoutes.GET("/list", func(c *gin.Context) { shares.ListSharesHandler(c, db) })
-			shareRoutes.POST("/link", func(c *gin.Context) {
-				log.Println("DEBUG: Hit /shares/link route")
-				shares.CreateShareLinkHandler(c, db)
-			})
-			shareRoutes.POST("/direct", func(c *gin.Context) { shares.CreateDirectShareHandler(c, db, wsManager) })
-			shareRoutes.GET("/direct", func(c *gin.Context) { shares.ListDirectSharesForResourceHandler(c, db) })
-			shareRoutes.DELETE("/direct", func(c *gin.Context) { shares.RemoveDirectShareHandler(c, db, wsManager) })
-			shareRoutes.GET("/check-path", func(c *gin.Context) { shares.GetActiveSharesForPathHandler(c, db) })
-			shareRoutes.GET("/file/:fileID", func(c *gin.Context) { shares.GetShareForResourceHandler(c, db) })
-			shareRoutes.GET("/direct/folder/:folderID/content", func(c *gin.Context) { shares.GetSharedFolderContentHandler(c, db) })
-			shareRoutes.DELETE("/link/:shareID", func(c *gin.Context) { shares.DeleteShareLinkHandler(c, db) })
-
-			// Shared With Me Routes
-			shareRoutes.GET("/with-me", func(c *gin.Context) { shares.ListImportedSharesHandler(c, db) })
-			shareRoutes.POST("/with-me", func(c *gin.Context) { shares.ImportShareHandler(c, db) })
-			shareRoutes.DELETE("/with-me/:id", func(c *gin.Context) { shares.RemoveImportedShareHandler(c, db, wsManager) })
-		}
-	}
-
-	// Route WebSocket (Racine)
+	// WebSocket & System
 	router.GET("/ws", func(c *gin.Context) { ws.ConnectHandler(c, wsManager, redisClient, db, jwks) })
+	protected.GET("/ice-config", ws.GetICEConfigHandler)
+	router.GET("/api/v1/ping", func(c *gin.Context) { c.JSON(200, gin.H{"message": "pong", "version": "2.2"}) })
+}
 
-	// Route de configuration ICE (WebRTC)
-	protectedRoutes.GET("/ice-config", ws.GetICEConfigHandler)
+func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Client) {
+	g.POST("/auth/register", func(c *gin.Context) { auth.RegisterHandler(c, db) })
+	g.GET("/auth/keys", func(c *gin.Context) { auth.GetUserKeys(c, db) })
+	g.POST("/auth/logout", func(c *gin.Context) { auth.LogoutHandler(c, redisClient) })
 
-	// Route de debug
-	router.GET("/api/v1/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "pong", "version": "2.2"})
-	})
+	usersG := g.Group("/users")
+	usersG.GET("/", func(c *gin.Context) { users.ListUsersHandler(c, db) })
+	usersG.GET("/me", func(c *gin.Context) { users.MeHandler(c, db) })
+	usersG.POST("/change-password", func(c *gin.Context) { users.UpdatePasswordHandler(c, db) })
+	usersG.POST("/recent", func(c *gin.Context) { users.AddRecentActivityHandler(c, db) })
+	usersG.GET("/recent", func(c *gin.Context) { users.GetRecentActivityHandler(c, db) })
+	usersG.POST("/keys", func(c *gin.Context) { keys.UpdateKeysHandler(c, db) })
+}
 
-	// Démarre le serveur sur le port 8080
+func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Client, wsManager *wsPkg.Manager) {
+	filesG := g.Group("/files")
+	filesG.POST("/upload", func(c *gin.Context) { files.UploadHandler(c, db, redisClient, wsManager) })
+	filesG.GET("/list-recursive", func(c *gin.Context) { files.ListAllFilesRecursiveHandler(c, db) })
+	filesG.GET("/list/*path", func(c *gin.Context) { files.ListFilesHandler(c, db) })
+	filesG.POST("/bulk-delete", func(c *gin.Context) { files.BulkDeleteHandler(c, db, wsManager) })
+	filesG.DELETE("/file/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db, wsManager) })
+	filesG.DELETE("/folder/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db, wsManager) })
+	filesG.POST("/move", func(c *gin.Context) { files.MoveHandler(c, db, redisClient) })
+	filesG.POST("/rename", func(c *gin.Context) { files.RenameHandler(c, db, redisClient) })
+	filesG.POST("/tags", func(c *gin.Context) { files.UpdateTagsHandler(c, db) })
+	filesG.GET("/download/:fileID", func(c *gin.Context) { files.DownloadFileHandler(c, db) })
+	filesG.GET("/search", func(c *gin.Context) { files.SearchFilesHandler(c, db) })
+}
+
+func registerFolderRoutes(g *gin.RouterGroup, db *bun.DB) {
+	foldersG := g.Group("/folders")
+	foldersG.POST("/create", func(c *gin.Context) { folders.CreateHandler(c, db) })
+	foldersG.PUT("/:id/key", func(c *gin.Context) { folders.UpdateFolderKeyHandler(c, db) })
+}
+
+func registerTagRoutes(g *gin.RouterGroup, db *bun.DB) {
+	tagsG := g.Group("/tags")
+	tagsG.GET("/", tags.ListTagsHandler(db))
+	tagsG.POST("/", tags.CreateTagHandler(db))
+	tagsG.DELETE("/:id", tags.DeleteTagHandler(db))
+}
+
+func registerFriendRoutes(g *gin.RouterGroup, h *friends.FriendHandler) {
+	friendsG := g.Group("/friends")
+	friendsG.GET("", h.ListFriends)
+	friendsG.POST("", h.AddFriend)
+	friendsG.DELETE("/:id", h.RemoveFriend)
+	friendsG.PUT("/:id/accept", h.AcceptFriend)
+	friendsG.DELETE("/:id/reject", h.RejectFriend)
+}
+
+func registerShareRoutes(g *gin.RouterGroup, db *bun.DB, wsManager *wsPkg.Manager) {
+	sharesG := g.Group("/shares")
+	sharesG.GET("/list", func(c *gin.Context) { shares.ListSharesHandler(c, db) })
+	sharesG.POST("/link", func(c *gin.Context) { shares.CreateShareLinkHandler(c, db) })
+	sharesG.POST("/direct", func(c *gin.Context) { shares.CreateDirectShareHandler(c, db, wsManager) })
+	sharesG.GET("/direct", func(c *gin.Context) { shares.ListDirectSharesForResourceHandler(c, db) })
+	sharesG.DELETE("/direct", func(c *gin.Context) { shares.RemoveDirectShareHandler(c, db, wsManager) })
+	sharesG.GET("/check-path", func(c *gin.Context) { shares.GetActiveSharesForPathHandler(c, db) })
+	sharesG.GET("/file/:fileID", func(c *gin.Context) { shares.GetShareForResourceHandler(c, db) })
+	sharesG.GET("/direct/folder/:folderID/content", func(c *gin.Context) { shares.GetSharedFolderContentHandler(c, db) })
+	sharesG.DELETE("/link/:shareID", func(c *gin.Context) { shares.DeleteShareLinkHandler(c, db) })
+	sharesG.GET("/with-me", func(c *gin.Context) { shares.ListImportedSharesHandler(c, db) })
+	sharesG.POST("/with-me", func(c *gin.Context) { shares.ImportShareHandler(c, db) })
+	sharesG.DELETE("/with-me/:id", func(c *gin.Context) { shares.RemoveImportedShareHandler(c, db, wsManager) })
+}
+
+func startServer(router *gin.Engine) {
 	if err := router.Run(":8080"); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
 	}

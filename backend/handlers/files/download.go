@@ -2,6 +2,7 @@
 package files
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -28,93 +29,109 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	file, err := pkg.GetFile(db, fileID, userID)
+	file, err := getFileWithPermission(c.Request.Context(), db, fileID, userID)
 	if err != nil {
-		// If not found as owner, check if shared with user (Direct File Share)
-		var fileShare pkg.FileShare
-		errShare := db.NewSelect().Model(&fileShare).
-			Where("file_id = ? AND shared_with_user_id = ?", fileID, userID).
-			Scan(c.Request.Context())
-
-		if errShare == nil {
-			// It is shared!
-			// Re-allocate file because GetFile returned nil
-			file = new(pkg.File)
-			err = db.NewSelect().Model(file).Where("id = ?", fileID).Scan(c.Request.Context())
-		} else {
-			// Check if file is inside a Shared Folder
-			// Retrieve file info first to get the path
-			var tempFile pkg.File
-			if errFetch := db.NewSelect().Model(&tempFile).Where("id = ?", fileID).Scan(c.Request.Context()); errFetch == nil {
-				// Search for any FolderShare that covers this file's path
-				type FolderShareWithFolder struct {
-					bun.BaseModel `bun:"table:folder_shares"`
-					pkg.FolderShare
-					Folder *pkg.Folder `bun:"rel:belongs-to,join:folder_id=id"`
-				}
-
-				var sharesWithFolders []FolderShareWithFolder
-				errFolderShare := db.NewSelect().
-					Model(&sharesWithFolders).
-					Relation("Folder").
-					Where("shared_with_user_id = ?", userID).
-					Scan(c.Request.Context())
-
-				if errFolderShare == nil {
-					for _, s := range sharesWithFolders {
-						if s.Folder == nil {
-							continue
-						}
-
-						folderPath := s.Folder.Path
-						// Ensure folder path ends with / for prefix check (unless root)
-						if folderPath != "/" && len(folderPath) > 0 && folderPath[len(folderPath)-1] != '/' {
-							folderPath += "/"
-						}
-						if folderPath == "" {
-							folderPath = "/"
-						}
-
-						// Check if tempFile.Path starts with folderPath
-						// Case 1: Subfolder match
-						match := false
-						if len(tempFile.Path) >= len(folderPath) && tempFile.Path[0:len(folderPath)] == folderPath {
-							match = true
-						}
-						// Case 2: Exact match (file is arguably not IN a folder logicwise if paths are identical, but file paths include filename)
-						// Files always have unique paths including filename.
-
-						if match {
-							// Found a parent shared folder
-							err = nil        // Clear error
-							file = &tempFile // Assign valid pointer
-							log.Printf("Debug: Download allowed via recursive share. File: %s, SharedFolder: %s", tempFile.Path, s.Folder.Path)
-							break
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if err != nil {
-		// Log l'erreur pour le débogage côté serveur
 		log.Printf("Error getting file from DB. FileID: %d, UserID: %s, Error: %v", fileID, userID, err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "File not found or permission denied"})
 		return
 	}
 
-	// Double check: if it was a share, ensure we actually found the file
+	// Double check
 	if file.ID == 0 {
-		log.Printf("File with ID %d not found (even after share check)", fileID)
 		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
 		return
 	}
 
+	streamFileFromS3(c, file)
+}
+
+func getFileWithPermission(ctx context.Context, db *bun.DB, fileID int64, userID string) (*pkg.File, error) {
+	// 1. Check Owner Access
+	if file, err := pkg.GetFile(db, fileID, userID); err == nil {
+		return file, nil
+	}
+
+	// 2. Check Direct Share Access
+	if file, err := checkDirectShareAccess(ctx, db, fileID, userID); err == nil {
+		return file, nil
+	}
+
+	// 3. Check Recursive Folder Share Access
+	if file, err := checkFolderShareAccess(ctx, db, fileID, userID); err == nil {
+		return file, nil
+	}
+
+	return nil, fmt.Errorf("permission denied")
+}
+
+func checkDirectShareAccess(ctx context.Context, db *bun.DB, fileID int64, userID string) (*pkg.File, error) {
+	var fileShare pkg.FileShare
+	err := db.NewSelect().Model(&fileShare).
+		Where("file_id = ? AND shared_with_user_id = ?", fileID, userID).
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	file := new(pkg.File)
+	if err := db.NewSelect().Model(file).Where("id = ?", fileID).Scan(ctx); err != nil {
+		return nil, err
+	}
+	return file, nil
+}
+
+func checkFolderShareAccess(ctx context.Context, db *bun.DB, fileID int64, userID string) (*pkg.File, error) {
+	// Retrieve file info first to get the path
+	var tempFile pkg.File
+	if err := db.NewSelect().Model(&tempFile).Where("id = ?", fileID).Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	type FolderShareWithFolder struct {
+		bun.BaseModel `bun:"table:folder_shares"`
+		pkg.FolderShare
+		Folder *pkg.Folder `bun:"rel:belongs-to,join:folder_id=id"`
+	}
+
+	var sharesWithFolders []FolderShareWithFolder
+	err := db.NewSelect().
+		Model(&sharesWithFolders).
+		Relation("Folder").
+		Where("shared_with_user_id = ?", userID).
+		Scan(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, s := range sharesWithFolders {
+		if s.Folder == nil {
+			continue
+		}
+		if isFileInSharedFolder(tempFile.Path, s.Folder.Path) {
+			log.Printf("Debug: Download allowed via recursive share. File: %s, SharedFolder: %s", tempFile.Path, s.Folder.Path)
+			return &tempFile, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no access through folder shares")
+}
+
+func isFileInSharedFolder(filePath, folderPath string) bool {
+	if folderPath != "/" && len(folderPath) > 0 && folderPath[len(folderPath)-1] != '/' {
+		folderPath += "/"
+	}
+	if folderPath == "" {
+		folderPath = "/"
+	}
+	// Case: Subfolder match or exact match
+	return len(filePath) >= len(folderPath) && filePath[0:len(folderPath)] == folderPath
+}
+
+func streamFileFromS3(c *gin.Context, file *pkg.File) {
 	// S3 Key construction: Use file.UserID (Owner) instead of userID (Requester)
 	s3Key := fmt.Sprintf("users/%s%s", file.UserID, file.Path)
 
-	// Get object from S3
 	output, err := s3storage.Client.GetObject(c.Request.Context(), &s3.GetObjectInput{
 		Bucket: aws.String(s3storage.BucketName),
 		Key:    aws.String(s3Key),
@@ -126,7 +143,6 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 	}
 	defer output.Body.Close()
 
-	// Définit les en-têtes pour forcer le téléchargement
 	c.Header("Content-Description", "File Transfer")
 	c.Header("Content-Transfer-Encoding", "binary")
 
@@ -142,7 +158,6 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 	}
 	c.Header("Content-Length", strconv.FormatInt(file.Size, 10))
 
-	// Stream the body to the client
 	if _, err := io.Copy(c.Writer, output.Body); err != nil {
 		log.Printf("Error streaming file to client: %v", err)
 	}
