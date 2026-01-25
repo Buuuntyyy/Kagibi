@@ -100,7 +100,7 @@ function processChunkInWorker(type, chunk, key, chunkIndex) {
         };
 
         worker.onerror = (err) => {
-            reject(err);
+            reject(new Error(err.message));
             worker.terminate();
         }
 
@@ -315,7 +315,7 @@ export async function generateRSAKeyPair() {
  */
 export async function exportKeyToPEM(key, type = 'spki') {
     const exported = await window.crypto.subtle.exportKey(type, key);
-    const exportedAsString = String.fromCharCode(...new Uint8Array(exported));
+    const exportedAsString = String.fromCodePoint(...new Uint8Array(exported));
     const exportedAsBase64 = btoa(exportedAsString);
     const pemHeader = type === 'spki' ? '-----BEGIN PUBLIC KEY-----' : '-----BEGIN PRIVATE KEY-----';
     const pemFooter = type === 'spki' ? '-----END PUBLIC KEY-----' : '-----END PRIVATE KEY-----';
@@ -332,14 +332,14 @@ export async function importKeyFromPEM(pemData, type = 'spki') {
     const pemFooter = type === 'spki' ? '-----END PUBLIC KEY-----' : '-----END PRIVATE KEY-----';
     
     // Simple basic cleanup, robust enough for our generated keys
-    const pemContents = pemData.replace(/-----BEGIN [A-Z ]+-----/g, "")
-                               .replace(/-----END [A-Z ]+-----/g, "")
-                               .replace(/\s/g, "");
+    const pemContents = pemData.replaceAll(/-----BEGIN [A-Z ]+-----/g, "")
+                               .replaceAll(/-----END [A-Z ]+-----/g, "")
+                               .replaceAll(/\s/g, "");
                                
     const binaryDerString = atob(pemContents);
     const binaryDer = new Uint8Array(binaryDerString.length);
     for (let i = 0; i < binaryDerString.length; i++) {
-        binaryDer[i] = binaryDerString.charCodeAt(i);
+        binaryDer[i] = binaryDerString.codePointAt(i);
     }
 
     return window.crypto.subtle.importKey(

@@ -48,7 +48,7 @@ function generateImagePreview(file) {
         };
         img.onerror = (e) => {
             URL.revokeObjectURL(url);
-            reject(e);
+            reject(new Error(e.message));
         };
         img.src = url;
     });
