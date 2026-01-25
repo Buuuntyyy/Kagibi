@@ -4,7 +4,7 @@ package shares
 import (
 	"fmt"
 	"net/http"
-
+	"strings"
 	"safercloud/backend/pkg"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +17,7 @@ func DeleteShareLinkHandler(c *gin.Context, db *bun.DB) {
 	userID := userIDInterface.(string)
 
 	shareIDStr := c.Param("shareID")
+	shareIDStr = strings.ReplaceAll(strings.ReplaceAll(shareIDStr, "\n", "_"), "\r", "_")
 
 	// Convertir shareID en int64 pour être sûr
 	// (Postgres gère généralement bien les chaînes pour les entiers, mais soyons explicites)

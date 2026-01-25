@@ -14,6 +14,7 @@ import (
 func BrowseSharedFolderHandler(c *gin.Context, db *bun.DB) {
 	token := c.Param("token")
 	subpath := c.Param("subpath")
+	subpath = strings.ReplaceAll(strings.ReplaceAll(subpath, "\n", "_"), "\r", "_")
 
 	var shareLink pkg.ShareLink
 	err := db.NewSelect().Model(&shareLink).Where("token = ?", token).Scan(c.Request.Context())
@@ -29,6 +30,7 @@ func BrowseSharedFolderHandler(c *gin.Context, db *bun.DB) {
 
 	// Clean and validate the subpath to prevent directory traversal
 	requestedPath := path.Join(shareLink.Path, subpath)
+	requestedPath = strings.ReplaceAll(strings.ReplaceAll(requestedPath, "\n", "_"), "\r", "_")
 	if !strings.HasPrefix(requestedPath, shareLink.Path) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access to this path is forbidden"})
 		return
