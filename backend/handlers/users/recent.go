@@ -87,7 +87,7 @@ func GetRecentActivityHandler(c *gin.Context, db *bun.DB) {
 
 	var activities []pkg.RecentActivity
 	err := db.NewSelect().Model(&activities).
-		Where("user_id = ?", userID).
+		Where("?TableAlias.user_id = ?", userID). // Specify table name to avoid ambiguous column error
 		Relation("File").
 		Relation("Folder").
 		Order("accessed_at DESC").
@@ -101,7 +101,7 @@ func GetRecentActivityHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	// Format response to match what frontend expects or generic structure
-	var result []gin.H
+	var result []gin.H = []gin.H{} // Initialize as empty array to avoid null in JSON
 	for _, act := range activities {
 		if act.File != nil {
 			result = append(result, gin.H{
