@@ -288,10 +288,10 @@ export const useAuthStore = defineStore('auth', {
               console.warn("Could not restore master key from session storage");
           }
 
-          // SECURITY CHECK: If session exists but NO master key (e.g. New Tab), force logout to re-derive key
+          // SECURITY CHECK: If session exists but NO master key (e.g. New Tab), force re-auth to derive key
           if (!this.masterKey) {
-             console.warn("Session found but MasterKey missing (New Tab?). Forcing logout to unlock vault.");
-             await this.logout();
+             console.warn("Session found but MasterKey missing (New Tab?). Redirecting to login to unlock vault.");
+             // Do not call logout(), simply return false to trigger router redirect to /login
              return false;
           }
 
