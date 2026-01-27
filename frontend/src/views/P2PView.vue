@@ -1,12 +1,5 @@
 <template>
   <div class="p2p-page">
-    <div class="p2p-header-bar">
-      <button class="back-btn" @click="$router.push('/dashboard')">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
-        Retour au Dashboard
-      </button>
-    </div>
-
     <div class="p2p-container">
       <div class="main-card">
         <div class="card-header">
@@ -170,44 +163,13 @@ const startTransfer = async () => {
     flex-direction: column;
 }
 
-.p2p-header-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem 2rem;
-    background: transparent;
-    border-bottom: none;
-}
-
-.back-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--main-text-color);
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
-    transition: all 0.2s;
-}
-.back-btn:hover {
-    border-color: var(--primary-color);
-    color: var(--primary-color);
-}
-
-.logo {
-    font-weight: 700;
-    color: var(--primary-color);
-    font-size: 1.2rem;
-}
-
 .p2p-container {
     flex: 1;
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    padding-top: 4rem;
-    padding-bottom: 4rem;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
     overflow-y: auto;
 }
 
