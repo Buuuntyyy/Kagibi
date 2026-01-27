@@ -50,7 +50,7 @@
         </svg>
         <span>Fichiers partagés</span>
       </div>
-      <div class="menu-item" :class="{ active: isActive('/dashboard/p2p') }" @click="navigateTo('/dashboard/p2p')">
+      <div class="menu-item" :class="{ active: isActive('/p2p') }" @click="navigateTo('/p2p')">
         <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
              <line x1="22" y1="2" x2="11" y2="13"></line>
              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
@@ -285,7 +285,7 @@ const triggerCreateFolder = async () => {
 
 const triggerP2P = () => {
     showNewMenu.value = false;
-    router.push('/dashboard/p2p')
+    router.push('/p2p')
 }
 
 const formatSize = (bytes) => {

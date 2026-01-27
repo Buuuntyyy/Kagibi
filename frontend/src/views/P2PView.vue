@@ -1,1001 +1,379 @@
 <template>
-  <div class="p2p-container" ref="containerRef">
-    <div class="p2p-header-minimal">
-        <h2>Transfert P2P</h2>
+  <div class="p2p-page">
+    <div class="p2p-header-bar">
+      <button class="back-btn" @click="$router.push('/dashboard')">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+        Retour au Dashboard
+      </button>
     </div>
 
-    <!-- Canvas for Particles -->
-    <canvas ref="canvasRef" class="particle-canvas"></canvas>
-
-    <div class="p2p-layout">
-        <!-- LEFT: Current User -->
-        <div class="user-zone" ref="userZoneRef">
-            <div class="large-avatar pulse-effect">
-                {{ getInitials(authStore.user?.name) }}
-            </div>
-            <p class="user-name">{{ authStore.user?.name || 'Moi' }}</p>
+    <div class="p2p-container">
+      <div class="main-card">
+        <div class="card-header">
+           <h2>Transfert P2P Sécurisé</h2>
+           <p>Envoyez des fichiers directement à vos amis connectés, sans passer par le serveur.</p>
         </div>
 
-        <!-- CENTER: Action Button -->
-        <div class="center-zone" ref="centerZoneRef">
-            <input type="file" id="p2p-file-input" @change="handleFileSelect" style="display: none" />
-            
-            <div style="position: relative">
-                <div 
-                    class="action-circle" 
-                    :class="{ 'has-file': !!selectedFile, 'ready-to-send': canSend }"
-                    @click="handleActionClick"
-                    @dragover.prevent="dragOver = true" 
-                    @dragleave.prevent="dragOver = false" 
-                    @drop.prevent="handleDrop"
-                >
-                    <div v-if="!selectedFile" class="plus-icon">
-                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
+        <div class="transfer-flow">
+            <!-- STEP 1: DESTINATAIRE -->
+            <div class="flow-step" :class="{ active: !selectedFriend, completed: selectedFriend }">
+                <div class="step-icon">1</div>
+                <div class="step-content">
+                    <h3>Destinataire</h3>
+                    <div v-if="!selectedFriend">
+                        <p class="secondary-text">Sélectionnez un ami en ligne</p>
+                        <div class="friend-selector">
+                           <div v-if="onlineFriends.length === 0" class="no-friends">
+                               Aucun ami en ligne
+                           </div>
+                           <div v-else class="friends-grid">
+                               <div 
+                                  v-for="friend in onlineFriends" 
+                                  :key="friend.id" 
+                                  class="friend-chip"
+                                  @click="selectedFriend = friend"
+                               >
+                                  <div class="avatar-mini">{{ getInitials(friend.name) }}</div>
+                                  <span>{{ friend.name }}</span>
+                               </div>
+                           </div>
+                        </div>
                     </div>
+                    <div v-else class="selected-friend-display" style="width: fit-content">
+                        <div class="friend-chip selected">
+                            <div class="avatar-mini">{{ getInitials(selectedFriend.name) }}</div>
+                            <span>{{ selectedFriend.name }}</span>
+                            <button class="close-btn" @click="selectedFriend = null">×</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 2: FICHIER -->
+            <div class="flow-step" :class="{ active: selectedFriend && !selectedFile, completed: selectedFile, disabled: !selectedFriend }">
+                <div class="step-icon">2</div>
+                <div class="step-content">
+                    <h3>Fichier</h3>
+                    <input type="file" id="p2p-file-input" @change="handleFileSelect" style="display: none" />
                     
-                    <div v-else-if="!canSend" class="file-state">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" class="file-icon">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2"/>
-                            <polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        <span class="filename">{{ truncate(selectedFile.name) }}</span>
+                    <div v-if="!selectedFile" 
+                         class="drop-area" 
+                         :class="{ 'pulse': selectedFriend && !selectedFile }"
+                         @click="selectedFriend && triggerFileSelect()"
+                         @dragover.prevent
+                         @drop.prevent="handleDrop"
+                    >
+                        <span v-if="!selectedFriend">Sélectionnez un destinataire d'abord</span>
+                        <span v-else>Cliquez ou glissez un fichier ici</span>
                     </div>
 
-                    <div v-else class="send-state">
-                        <span class="send-text">ENVOYER</span>
-                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="22" y1="2" x2="11" y2="13"></line>
-                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                        </svg>
+                    <div v-else class="file-display">
+                        <div class="file-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                        </div>
+                        <div class="file-meta">
+                            <span class="fname" :title="selectedFile.name">{{ selectedFile.name }}</span>
+                            <span class="fsize">{{ formatSize(selectedFile.size) }}</span>
+                        </div>
+                        <button class="change-file-btn" @click="selectedFile = null">Changer</button>
                     </div>
                 </div>
-
-                <transition name="fade">
-                    <button v-if="selectedFile" class="close-file" @click.stop="removeFile" title="Changer de fichier">
-                         <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                    </button>
-                </transition>
             </div>
 
-            <p class="action-label" v-if="!selectedFile">Sélectionner un fichier</p>
-            <p class="action-label" v-else>
-                 {{ canSend ? `Prêt à envoyer à ${selectedFriend.name}` : 'En attente d\'un destinataire...' }}
-            </p>
+            <!-- STEP 3: ACTION -->
+            <div class="flow-step action-step">
+                <button class="send-big-btn" :disabled="!canSend" @click="startTransfer">
+                    <span v-if="!canSend">En attente...</span>
+                    <span v-else>
+                        Envoyer le fichier
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:8px;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </span>
+                </button>
+            </div>
         </div>
-
-        <!-- RIGHT: Friends List or Selected Friend -->
-        <div class="friends-zone" ref="friendsZoneRef">
-            
-            <!-- Case: Friend Selected -->
-            <div v-if="selectedFriend" class="selected-friend-view">
-                <div style="position: relative;">
-                    <div class="large-avatar friend-avatar pulse-effect">
-                        {{ getInitials(selectedFriend.name) }}
-                    </div>
-                    <button class="close-friend" @click="deselectFriend" title="Fermer">
-                         <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                    </button>
-                </div>
-                <p class="user-name">{{ selectedFriend.name }}</p>
-            </div>
-
-            <!-- Case: Friends List (Orbit) -->
-            <div v-else-if="viewMode === 'orbit'" class="friends-orbit-container">
-                <div class="orbit-center-text clickable-text" @click="viewMode = 'list'" title="Passer en vue liste">
-                    Avec qui<br>partager ?
-                </div>
-
-                <div v-if="onlineFriends.length === 0" class="empty-orbit-msg">
-                    Personne...
-                </div>
-                
-                <div 
-                    v-for="(friend, index) in onlineFriends" 
-                    :key="friend.id" 
-                    class="orbit-item"
-                    :style="getOrbitPosition(index, onlineFriends.length)"
-                    @click="selectFriend(friend)"
-                >
-                    <div class="orbit-avatar" :style="getFloatStyle()">
-                        {{ getInitials(friend.name) }}
-                        <div class="orbit-status"></div>
-                    </div>
-                    <span class="orbit-name">{{ friend.name }}</span>
-                </div>
-            </div>
-
-            <!-- Case: Friends List (Vertical) -->
-            <div v-else class="friends-list-box">
-                <div class="list-header">
-                    <div class="zone-label clickable-text" @click="viewMode = 'orbit'" title="Retour à l'orbite">
-                        AMIS EN LIGNE ({{ onlineFriends.length }}) ↺
-                    </div>
-                </div>
-                
-                <div v-if="onlineFriends.length === 0" class="empty-list">
-                    <p>Personne en vue...</p>
-                </div>
-                
-                <div class="scrollable-list" v-else>
-                     <div 
-                        v-for="friend in onlineFriends" 
-                        :key="friend.id" 
-                        class="friend-row"
-                        @click="selectFriend(friend)"
-                     >
-                        <div class="mini-avatar">{{ getInitials(friend.name) }}</div>
-                        <span class="mini-name">{{ friend.name }}</span>
-                        <div class="mini-status"></div>
-                     </div>
-                </div>
-            </div>
-
-        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useFriendStore } from '../stores/friends'
 import { useAuthStore } from '../stores/auth'
 import { useP2PStore } from '../stores/p2p'
 
 const friendStore = useFriendStore()
-const p2pStore = useP2PStore()
 const authStore = useAuthStore()
-
-const containerRef = ref(null)
-const canvasRef = ref(null)
-const userZoneRef = ref(null)
-const centerZoneRef = ref(null)
-const friendsZoneRef = ref(null)
+const p2pStore = useP2PStore()
 
 const selectedFriend = ref(null)
 const selectedFile = ref(null)
-const dragOver = ref(false)
-const viewMode = ref('orbit') // 'orbit' | 'list'
-
-const canSend = computed(() => !!selectedFile.value && !!selectedFriend.value)
-
-// --- Lifecycle ---
-onMounted(() => {
-  friendStore.fetchFriends()
-  startAnimation()
-  window.addEventListener('resize', handleResize)
-})
-
-onUnmounted(() => {
-  cancelAnimationFrame(animFrameId)
-  window.removeEventListener('resize', handleResize)
-})
 
 const onlineFriends = computed(() => {
   return friendStore.acceptedFriends.filter(f => f.online)
 })
 
+const canSend = computed(() => !!selectedFriend.value && !!selectedFile.value)
+
+onMounted(() => {
+    friendStore.fetchFriends()
+})
+
 const getInitials = (name) => {
-  if (!name) return '?'
-  return name.substring(0, 2).toUpperCase()
+    if (!name) return '?'
+    return name.substring(0, 2).toUpperCase()
 }
 
-const truncate = (str) => {
-    if (str.length > 15) return str.substring(0, 12) + '...'
-    return str
+const formatSize = (bytes) => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-// --- Orbit Logic ---
-const getOrbitPosition = (index, total) => {
-    if (total === 0) return {}
-    const radius = 120 // Distance from center
-    const centerX = 150 // Container width/2 (adjust based on CSS)
-    const centerY = 150 // Container height/2
-    const angle = (index / total) * 2 * Math.PI - (Math.PI / 2) // Start top
-    
-    const x = centerX + radius * Math.cos(angle) - 35 // -35 = half avatar size (70px)
-    const y = centerY + radius * Math.sin(angle) - 35
-    
-    return {
-        left: `${x}px`,
-        top: `${y}px`
+const triggerFileSelect = () => {
+    document.getElementById('p2p-file-input').click()
+}
+
+const handleFileSelect = (e) => {
+    if (e.target.files.length > 0) {
+        selectedFile.value = e.target.files[0]
     }
 }
 
-const getFloatStyle = () => {
-    const duration = 3 + Math.random() * 2 // 3-5s
-    const delay = Math.random() * -5
-    return {
-        animationDuration: `${duration}s`,
-        animationDelay: `${delay}s`
+const handleDrop = (e) => {
+    if (!selectedFriend.value) return
+    if (e.dataTransfer.files.length > 0) {
+        selectedFile.value = e.dataTransfer.files[0]
     }
-}
-
-// --- Interaction Logic ---
-const selectFriend = (friend) => {
-  selectedFriend.value = friend
-}
-
-const deselectFriend = () => {
-    selectedFriend.value = null
-}
-
-const removeFile = () => {
-    selectedFile.value = null
-    const input = document.getElementById('p2p-file-input')
-    if(input) input.value = ''
-}
-
-const handleActionClick = () => {
-    if (canSend.value) {
-        startTransfer()
-    } else {
-        document.getElementById('p2p-file-input').click()
-    }
-}
-
-const handleFileSelect = (event) => {
-  if (event.target.files.length > 0) {
-    selectedFile.value = event.target.files[0]
-  }
-}
-
-const handleDrop = (event) => {
-  dragOver.value = false
-  if (event.dataTransfer.files.length > 0) {
-    selectedFile.value = event.dataTransfer.files[0]
-  }
 }
 
 const startTransfer = async () => {
-  if (!canSend.value) return
-  
-  try {
-     await p2pStore.startTransfer(selectedFriend.value, selectedFile.value)
-     // Keep file selected for repeated transfers
-     // alert("Transfert démarré !")
-  } catch (e) {
-     console.error("Transfer failed", e)
-     alert("Erreur lors du démarrage du transfert")
-  }
-}
-
-// --- Particle Engine ---
-let particles = []
-let animFrameId
-let lastTime = 0
-
-// Configuration Colors
-const COLOR_RED_DARK = 'hsla(0, 40%, 65%, 0.6)'
-const COLOR_GREEN_DARK = 'hsla(140, 40%, 55%, 0.8)'
-
-class Particle {
-    constructor(x, y, targetX, targetY, color, type) {
-        this.x = x
-        this.y = y
-        this.startX = x
-        this.startY = y
-        this.targetX = targetX
-        this.targetY = targetY
-        this.color = color
-        
-        this.progress = 0
-        this.speed = 0.005 + Math.random() * 0.01 // Speed of travel (0 to 1)
-        
-        // Curve Control Point (offset from midpoint)
-        // Perpendicular offset
-        const midX = (x + targetX) / 2
-        const midY = (y + targetY) / 2
-        const dx = targetX - x
-        const dy = targetY - y
-        const dist = Math.sqrt(dx*dx + dy*dy)
-        
-        // Random curve direction (up or down relative to line)
-        const offset = (Math.random() - 0.5) * (dist * 0.5) 
-        
-        // Normal vector (-dy, dx)
-        this.cpX = midX - dy * (offset / dist)
-        this.cpY = midY + dx * (offset / dist)
-        
-        this.radius = 2 + Math.random() * 4
-        this.wobblePhase = Math.random() * Math.PI * 2
-    }
-    
-    update() {
-        this.progress += this.speed
-        if (this.progress > 1) {
-             return false // Dead
-        }
-        
-        // Quadratic Bezier Formula
-        // (1-t)^2 * P0 + 2(1-t)t * P1 + t^2 * P2
-        const t = this.progress
-        const invT = 1 - t
-        
-        this.x = (invT * invT * this.startX) + (2 * invT * t * this.cpX) + (t * t * this.targetX)
-        this.y = (invT * invT * this.startY) + (2 * invT * t * this.cpY) + (t * t * this.targetY)
-        
-        return true
-    }
-    
-    draw(ctx) {
-        ctx.fillStyle = this.color
-        ctx.beginPath()
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2)
-        ctx.fill()
+    if (!canSend.value) return
+    try {
+        await p2pStore.startTransfer(selectedFriend.value, selectedFile.value)
+        // Reset after send? Or keep?
+        // Let's keep for now so user sees feedback or can send again
+    } catch (e) {
+        console.error("Transfer failed", e)
+        alert("Erreur: " + e.message)
     }
 }
-
-const getRandomPastelDark = () => {
-    const hue = Math.floor(Math.random() * 360)
-    return `hsla(${hue}, 40%, 60%, 0.6)`
-}
-
-const spawnParticle = (sourceRect, targetRect, color, type) => {
-    // Random point on source border or center? Let's say center area
-    const sx = sourceRect.left + sourceRect.width/2 + (Math.random() - 0.5) * 20
-    const sy = sourceRect.top + sourceRect.height/2 + (Math.random() - 0.5) * 20
-    
-    // Target is center of destination
-    const tx = targetRect.left + targetRect.width/2 + (Math.random() - 0.5) * 10
-    const ty = targetRect.top + targetRect.height/2 + (Math.random() - 0.5) * 10
-    
-    return new Particle(sx, sy, tx, ty, color, type)
-}
-
-const updateParticles = () => {
-    if (!canvasRef.value || !userZoneRef.value || !centerZoneRef.value || !friendsZoneRef.value) return
-    
-    const ctx = canvasRef.value.getContext('2d')
-    const width = canvasRef.value.width
-    const height = canvasRef.value.height
-    
-    ctx.clearRect(0, 0, width, height)
-    
-    // Rects
-    const containerRect = containerRef.value.getBoundingClientRect()
-    
-    // Helper to get relative coords inside canvas
-    const getRelRect = (el) => {
-        const rect = el.getBoundingClientRect()
-        return {
-            left: rect.left - containerRect.left,
-            top: rect.top - containerRect.top,
-            width: rect.width,
-            height: rect.height
-        }
-    }
-    
-    const userRect = getRelRect(userZoneRef.value.querySelector('.large-avatar') || userZoneRef.value)
-    const centerRect = getRelRect(centerZoneRef.value.querySelector('.action-circle'))
-    
-    // -- SPAWNING LOGIC --
-    
-    // 1. LEFT STREAM (User -> Center)
-    if (Math.random() < 0.15) { // Spawn rate
-        const color = selectedFile.value ? COLOR_GREEN_DARK : COLOR_RED_DARK
-        particles.push(spawnParticle(userRect, centerRect, color, 'left'))
-    }
-    
-    // 2. RIGHT STREAM (Friends -> Center)
-    if (Math.random() < 0.15) {
-        if (selectedFriend.value) {
-            // Spawn from Selected Friend Avatar
-            const friendAvatarEl = friendsZoneRef.value.querySelector('.friend-avatar')
-            if (friendAvatarEl) {
-                 const friendRect = getRelRect(friendAvatarEl)
-                 particles.push(spawnParticle(friendRect, centerRect, COLOR_GREEN_DARK, 'right'))
-            }
-        } else {
-            // Spawn from List or Orbit
-            const orbitEl = friendsZoneRef.value.querySelector('.friends-orbit-container')
-            const listEl = friendsZoneRef.value.querySelector('.friends-list-box')
-
-            if (orbitEl) {
-                const boxRect = getRelRect(orbitEl)
-                // Spawn source: Random position inside the orbit container
-                const angle = Math.random() * Math.PI * 2
-                const r = 100 // Approximation
-                const sx = boxRect.left + boxRect.width/2 + r * Math.cos(angle)
-                const sy = boxRect.top + boxRect.height/2 + r * Math.sin(angle)
-                
-                // Target: Center
-                const tx = centerRect.left + centerRect.width/2
-                const ty = centerRect.top + centerRect.height/2
-                
-                particles.push(new Particle(sx, sy, tx, ty, getRandomPastelDark(), 'right-list'))
-
-            } else if (listEl) {
-                const boxRect = getRelRect(listEl)
-                // Spawn source: Left edge of the box
-                const sy = boxRect.top + Math.random() * boxRect.height
-                const sx = boxRect.left + 20 
-                
-                // Target: Center
-                const tx = centerRect.left + centerRect.width/2
-                const ty = centerRect.top + centerRect.height/2
-                
-                particles.push(new Particle(sx, sy, tx, ty, getRandomPastelDark(), 'right-list')) 
-            }
-        }
-    }
-    
-    // -- UPDATE & DRAW --
-    for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i]
-        const alive = p.update()
-        if (alive) {
-            p.draw(ctx)
-        } else {
-            particles.splice(i, 1)
-        }
-    }
-    
-    animFrameId = requestAnimationFrame(updateParticles)
-}
-
-const startAnimation = () => {
-     handleResize() // Init size
-     animFrameId = requestAnimationFrame(updateParticles)
-}
-
-const handleResize = () => {
-    if (canvasRef.value && containerRef.value) {
-        // Match canvas size to container
-        canvasRef.value.width = containerRef.value.offsetWidth
-        canvasRef.value.height = containerRef.value.offsetHeight
-    }
-}
-
-// Watchers
-watch(onlineFriends, () => {
-    // Reactive update if friends list changes size/pos
-    setTimeout(handleResize, 100)
-})
-
 </script>
 
 <style scoped>
-.p2p-container {
-    padding: 1rem;
-    height: 100%;
-    position: relative;
-    overflow: hidden; /* For particles */
+.p2p-page {
+    background-color: var(--background-color);
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
 }
 
-.particle-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    pointer-events: none; /* Let clicks pass through */
-    z-index: 1;
+.p2p-header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 2rem;
+    background: transparent;
+    border-bottom: none;
 }
 
-.p2p-header-minimal {
-    text-align: center;
-    margin-bottom: 2rem;
-    z-index: 2;
-}
-
-.orbit-center-text {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 180px;
-    height: 180px;
-    transform: translate(-50%, -50%);
+.back-btn {
     display: flex;
     align-items: center;
-    justify-content: center;
-    text-align: center;
-    font-weight: 700;
-    color: var(--secondary-text-color);
-    z-index: 100;
-    border-radius: 50%;
-    font-size: 1.1rem;
-    pointer-events: auto;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    transition: all 0.2s ease;
-    margin: 0;
-    padding: 0;
-    background: none;
-}
-.orbit-center-text:hover {
-    color: var(--primary-color);
-    transform: translate(-50%, -50%) scale(1.1);
-    text-shadow: 0 0 15px rgba(255,255,255,0.8);
-}
-.p2p-layout {
-    display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-    justify-content: space-around;
-    gap: 2rem;
-    height: calc(100% - 80px); /* Adjust for header */
-    position: relative;
-    z-index: 2;
-}
-
-/* --- ZONES --- */
-.user-zone, .center-zone, .friends-zone {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    min-width: 200px;
-}
-
-.user-zone {
-    margin-top: 120px;
-}
-
-.center-zone {
-    margin-top: 90px;
-}
-
-.friends-zone {
-    margin-top: 30px;
-}
-
-/* User Zone */
-.large-avatar {
-    width: 120px;
-    height: 120px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 3rem;
-    font-weight: bold;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    margin-bottom: 1rem;
-    position: relative;
-}
-
-.pulse-effect::after {
-    content: '';
-    position: absolute;
-    top: -5px; left: -5px; right: -5px; bottom: -5px;
-    border-radius: 50%;
-    border: 2px solid rgba(118, 75, 162, 0.4);
-    animation: pulse 2s infinite;
-}
-
-.friend-avatar.pulse-effect::after {
-    border-color: rgba(253, 160, 133, 0.6);
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); opacity: 1; }
-    100% { transform: scale(1.2); opacity: 0; }
-}
-
-.user-name {
-    font-weight: 600;
+    gap: 0.5rem;
+    background: transparent;
+    border: 1px solid var(--border-color);
     color: var(--main-text-color);
-}
-
-/* Center Zone */
-.action-circle {
-    width: 180px;
-    height: 180px;
-    border-radius: 50%;
-    background: var(--card-color);
-    border: 4px dashed var(--border-color);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-}
-
-.action-circle:hover {
-    border-color: var(--primary-color);
-    transform: scale(1.05);
-}
-
-.plus-icon {
-    color: var(--secondary-text-color);
-}
-
-.action-circle.has-file {
-    border-style: solid;
-    border-color: #42b983;
-}
-
-.action-circle.ready-to-send {
-    background: #42b983;
-    border-color: #42b983;
-    color: white;
-}
-
-.file-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding: 10px;
-    text-align: center;
-}
-
-.send-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-}
-
-/* Common label style restored */
-.zone-label {
-    font-weight: 600;
-    color: var(--secondary-text-color);
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 12px;
-    width: 100%;
-    text-align: center;
-}
-
-.clickable-text {
-    cursor: pointer;
-    transition: color 0.2s;
-}
-.clickable-text:hover {
-    color: var(--primary-color);
-}
-
-/* LIST MODE STYLES RE-ADDED */
-.friends-list-box {
-    width: 280px;
-    display: flex;
-    flex-direction: column;
-    margin-top: 140px;
-}
-
-.list-header {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.scrollable-list {
-    max-height: 400px;
-    overflow-y: auto;
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.friend-row {
-    display: flex;
-    align-items: center;
-    padding: 6px;
-    padding-right: 20px;
-    background: var(--card-color);
-    border-radius: 99px; /* Pill shape */
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    border: 1px solid transparent;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-    margin-bottom: 2px;
-}
-
-.friend-row:hover {
-    transform: scale(1.03) translateX(5px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-    background: white; 
-    z-index: 10;
-}
-
-.mini-avatar {
-    width: 63px;
-    height: 63px;
-    border-radius: 50%;
-    background: #f1f3f4;
-    color: #444;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.35rem;
-    font-weight: 600;
-    margin-right: 12px;
-    flex-shrink: 0;
-    border: 2px solid white; /* Border to separate from row bg */
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-}
-
-.mini-name {
-    flex: 1;
-    font-size: 0.95rem;
-    color: var(--main-text-color);
-    font-weight: 500;
-}
-
-.mini-status {
-    width: 8px;
-    height: 8px;
-    background: #4caf50;
-    border-radius: 50%;
-    box-shadow: 0 0 0 2px var(--card-color);
-}
-
-.orbit-center-text {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    font-weight: 700;
-    color: var(--secondary-text-color);
-    width: 120px;
-    z-index: 21; /* Above particles/items if needed, but allow clicks */
-    font-size: 0.9rem;
-    pointer-events: auto; /* Enable click */
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-.orbit-center-text:hover {
-    color: var(--primary-color);
-    font-size: 0.8rem;
-    word-break: break-all;
-    max-width: 100px;
-}
-
-/* Friends Zone */
-.friends-orbit-container {
-    width: 300px;
-    height: 300px;
-    position: relative;
-    /* border: 1px dashed var(--border-color); /* Debug */
-    border-radius: 50%; /* Optional circular boundary */
-}
-
-.orbit-center-text {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    /* Correction: translateY(-50%) only, to keep vertical center regardless of text height */
-    transform: translate(-50%, -50%);
-    text-align: center;
-    font-weight: 700;
-    color: var(--secondary-text-color);
-    width: 180px; /* Match .action-circle width */
-    height: auto;
-    min-height: 64px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    border-radius: 50%;
-    font-size: 0.9rem;
-    pointer-events: auto;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    transition: all 0.2s ease;
-    /* Ensure the text stays at the same vertical center as the action-circle */
-    /* Remove any margin or padding that could offset it */
-    margin: 0;
-    padding: 0;
-}
-
-.orbit-center-text:hover {
-    color: var(--primary-color);
-    /* background removed to avoid oval shape */
-    transform: translate(-50%, -50%) scale(1.1);
-    text-shadow: 0 0 15px rgba(255,255,255,0.8);
-}
-
-.empty-orbit-msg {
-    position: absolute;
-    bottom: 20px;
-    left: 0; right: 0;
-    text-align: center;
-    color: #999;
-}
-
-.orbit-item {
-    position: absolute;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    cursor: pointer;
-    z-index: 10;
-    width: 70px; /* Helper for centering logic */
-    /* Transition for layout changes */
-    transition: top 0.5s ease, left 0.5s ease;
-}
-
-.orbit-avatar {
-    width: 70px;
-    height: 70px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    font-weight: bold;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-    border: 3px solid white;
-    position: relative;
-    
-    /* Animation definition */
-    animation-name: orbitFloat;
-    animation-iteration-count: infinite;
-    animation-timing-function: ease-in-out;
-}
-
-.orbit-avatar:hover {
-    transform: scale(1.15);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
-    z-index: 20;
-    border-color: var(--primary-color);
-}
-
-.orbit-name {
-    margin-top: 5px;
-    background: rgba(255,255,255,0.9);
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--main-text-color);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    white-space: nowrap;
-    opacity: 0.8;
-    transition: opacity 0.2s;
-}
-
-.orbit-item:hover .orbit-name {
-    opacity: 1;
-    background: white;
-}
-
-.orbit-status {
-    position: absolute;
-    bottom: 2px;
-    right: 2px;
-    width: 14px;
-    height: 14px;
-    background: #4caf50;
-    border: 2px solid white;
-    border-radius: 50%;
-}
-
-@keyframes orbitFloat {
-    0% { transform: translate(0, 0); }
-    50% { transform: translate(0, -6px); }
-    100% { transform: translate(0, 0); }
-}
-.selected-friend-view {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    position: relative;
-    animation: fadeIn 0.3s;
-    margin-top: 90px;
-    /* Removed card styling to match User zone exactly */
-}
-
-.close-friend {
-    position: absolute;
-    top: 0;
-    right: 0;
-    transform: translate(0, 0); /* Positioned relative to avatar wrapper */
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: #ff5252;
-    color: white;
-    border: 2px solid var(--background-color, #fff);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    transition: transform 0.2s;
-    z-index: 5;
-}
-
-.close-friend:hover {
-    transform: scale(1.1); /* Simple scale on hover */
-    background: #ff1744;
-}
-
-.friend-avatar {
-    background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
-    /* Inherits size 80px from .large-avatar */
-}
-
-.status-indicator {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 20px;
-    height: 20px;
-    background: #4caf50;
-    border: 3px solid var(--background-color);
-    border-radius: 50%;
-}
-
-.close-file {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
-    background: #e0e0e0;
-    color: #555;
-    border: 2px solid var(--background-color, #fff);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
     transition: all 0.2s;
-    z-index: 10;
+}
+.back-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
 }
 
-.close-file:hover {
-    background: #d6d6d6;
-    transform: scale(1.1);
+.logo {
+    font-weight: 700;
+    color: var(--primary-color);
+    font-size: 1.2rem;
 }
 
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
+.p2p-container {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+    overflow-y: auto;
 }
 
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
+.main-card {
+    background: var(--card-color);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    width: 600px;
+    padding: 2.5rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+    margin-bottom: 2rem;
 }
 
-/* Responsive */
-@media (max-width: 900px) {
-    .p2p-layout {
-        flex-direction: column;
-        gap: 2rem;
-    }
-    .user-zone { order: 1; margin-top: 30px; }
-    .center-zone { order: 2; margin: 2rem 0; }
-    .friends-zone { order: 3; margin-top: 30px; }
-    .friends-list-box { margin-top: 0; }
-    .selected-friend-view { margin-top: 0; }
-    
-    .friends-list-box {
-        height: 200px;
-        width: 100%;
-        min-width: 280px;
-    }
+.card-header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+.card-header h2 { margin: 0 0 0.5rem 0; color: var(--main-text-color); }
+.card-header p { margin: 0; color: var(--secondary-text-color); }
+
+.transfer-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: scale(0.9); }
-    to { opacity: 1; transform: scale(1); }
+.flow-step {
+    display: flex;
+    gap: 1.5rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px dashed var(--border-color);
+}
+.flow-step:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+.flow-step.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.step-icon {
+    width: 40px; height: 40px;
+    background: var(--border-color);
+    color: var(--secondary-text-color);
+    font-weight: 700;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.flow-step.active .step-icon {
+    background: var(--primary-color);
+    color: white;
+    box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.2);
+}
+
+.flow-step.completed .step-icon {
+    background: var(--success-color);
+    color: white;
+}
+
+.step-content {
+    flex: 1;
+    min-width: 0;
+}
+.step-content h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.secondary-text {
+    font-size: 0.9rem;
+    color: var(--secondary-text-color);
+    margin-bottom: 0.5rem;
+}
+
+.friends-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.friend-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.8rem;
+    background: var(--hover-background-color);
+    border-radius: 20px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+}
+.friend-chip:hover {
+    border-color: var(--primary-color);
+}
+.friend-chip.selected {
+    background: var(--primary-color);
+    color: white;
+}
+
+.avatar-mini {
+    width: 24px; height: 24px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+}
+
+.drop-area {
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    color: var(--secondary-text-color);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.drop-area:hover, .drop-area.pulse {
+    border-color: var(--primary-color);
+    background: var(--hover-background-color);
+    color: var(--primary-color);
+}
+
+.file-display {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--hover-background-color);
+    padding: 1rem;
+    border-radius: 8px;
+    border-left: 4px solid var(--primary-color);
+}
+.file-icon { font-size: 1.5rem; }
+.file-meta { flex: 1; display:flex; flex-direction:column; overflow: hidden; min-width: 0; }
+.fname { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fsize { font-size: 0.85rem; color: var(--secondary-text-color); }
+.change-file-btn { font-size: 0.8rem; padding: 0.2rem 0.6rem; }
+.close-btn { background:transparent; border:none; color:white; font-size:1.2rem; margin-left:0.5rem; cursor:pointer;}
+
+.send-big-btn {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1.1rem;
+    background: var(--success-color);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(39, 174, 96, 0.3);
+    transition: transform 0.1s;
+}
+.send-big-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+}
+.send-big-btn:disabled {
+    background: var(--border-color);
+    box-shadow: none;
+    cursor: not-allowed;
+    color: var(--secondary-text-color);
 }
 </style>
