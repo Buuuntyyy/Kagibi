@@ -1,6 +1,6 @@
 <template>
   <div class="left-bar-container">
-  <div class="left-bar">
+  <div class="left-bar" :class="{ 'collapsed': isCollapsed }">
     <div class="action-section">
       <button class="btn-new" @click.stop="toggleNewMenu">
         <svg class="plus-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -102,13 +102,33 @@
     </div>
 
     <div class="storage-section">
-      <div class="storage-info">
+      <div class="storage-info" v-if="!isCollapsed">
         <span class="storage-label">Stockage</span>
         <span class="storage-value">{{ formattedStorageUsed }} / {{ formattedStorageLimit }}</span>
       </div>
-      <div class="storage-bar">
+      <div class="storage-info-collapsed" v-else :title="storagePercentageInt + '% utilisé sur ' + storageLimitGB">
+             <svg class="progress-ring" viewBox="0 0 36 36">
+                <path class="ring-bg"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+                <path class="ring-fill"
+                    :stroke-dasharray="storagePercentage + ', 100'"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+                <text x="18" y="14" class="ring-text-pct">{{ storagePercentageInt }}%</text>
+                <text x="18" y="24" class="ring-text-limit">{{ storageLimitGB }}</text>
+             </svg>
+      </div>
+      <div class="storage-bar" v-if="!isCollapsed">
         <div class="storage-fill" :style="{ width: storagePercentage + '%' }"></div>
       </div>
+    </div>
+
+    <div class="collapse-toggle" @click="toggleCollapse" :title="isCollapsed ? 'Agrandir' : 'Réduire'">
+        <svg class="toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline v-if="!isCollapsed" points="15 18 9 12 15 6"></polyline>
+            <polyline v-else points="9 18 15 12 9 6"></polyline>
+        </svg>
     </div>
   </div>
 
@@ -151,6 +171,7 @@ const fileInput = ref(null)
 const showAddFriendMenu = ref(false)
 const newFriendId = ref('')
 const showLeftInfo = ref(false)
+const isCollapsed = ref(false)
 
 const closeAddFriendMenu = () => {
     if (showAddFriendMenu.value) {
@@ -210,7 +231,19 @@ const toggleNewMenu = () => {
 }
 
 const toggleFriendsAccordion = () => {
-    friendsOpen.value = !friendsOpen.value
+    if (isCollapsed.value) {
+        isCollapsed.value = false
+        friendsOpen.value = true
+    } else {
+        friendsOpen.value = !friendsOpen.value
+    }
+}
+
+const toggleCollapse = () => {
+  isCollapsed.value = !isCollapsed.value
+  if (isCollapsed.value) {
+    friendsOpen.value = false
+  }
 }
 
 const navigateTo = (path) => {
@@ -308,6 +341,13 @@ const storagePercentage = computed(() => {
   const used = authStore.user?.storage_used || 0
   const limit = authStore.user?.storage_limit || 10737418240
   return Math.min((used / limit) * 100, 100)
+})
+
+const storagePercentageInt = computed(() => Math.round(storagePercentage.value))
+
+const storageLimitGB = computed(() => {
+    const limit = authStore.user?.storage_limit || 10737418240
+    return Math.round(limit / (1024 * 1024 * 1024)) + ' Go'
 })
 </script>
 
@@ -656,5 +696,109 @@ const storagePercentage = computed(() => {
 
 .dialogs {
     position: absolute;
+}
+
+/* Collapsed State Styles */
+.left-bar {
+  transition: width 0.3s ease;
+}
+
+.left-bar.collapsed {
+  width: 72px;
+  padding: 8px;
+}
+
+.left-bar.collapsed .btn-new {
+  padding: 0;
+  justify-content: center;
+}
+.left-bar.collapsed .btn-new span { display: none; }
+.left-bar.collapsed .plus-icon { margin: 0; }
+
+.left-bar.collapsed .menu-item span,
+.left-bar.collapsed .arrow-icon {
+  display: none;
+}
+
+.left-bar.collapsed .menu-item {
+  justify-content: center;
+  padding: 0;
+}
+.left-bar.collapsed .icon-svg { margin: 0; }
+
+.left-bar.collapsed .accordion-content {
+  display: none;
+}
+
+.left-bar.collapsed .new-menu-dropdown {
+  left: 10px;
+}
+
+.collapse-toggle {
+    margin-top: 1rem;
+    padding: 10px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    color: var(--secondary-text-color);
+    border-top: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+.collapse-toggle:hover {
+    color: var(--primary-color);
+    background: var(--hover-background-color);
+    border-radius: 8px;
+}
+.toggle-icon {
+    width: 20px; 
+    height: 20px;
+}
+
+.left-bar.collapsed .storage-section {
+    padding: 6px;
+}
+
+.storage-info-collapsed {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+}
+
+.progress-ring {
+    width: 42px;
+    height: 42px;
+}
+
+.ring-bg {
+    fill: none;
+    stroke: var(--border-color);
+    stroke-width: 3;
+}
+
+.ring-fill {
+    fill: none;
+    stroke: var(--primary-color);
+    stroke-width: 3;
+    stroke-linecap: round;
+    transition: stroke-dasharray 0.3s ease;
+}
+
+.ring-text-pct {
+    font-size: 8px;
+    font-weight: bold;
+    fill: var(--main-text-color);
+    text-anchor: middle;
+}
+
+.ring-text-limit {
+    font-size: 6px;
+    fill: var(--secondary-text-color);
+    text-anchor: middle;
+}
+
+/* Hide line bar in collapsed mode, already handled by v-if in template but cleaning css */
+.left-bar.collapsed .storage-bar {
+    display: none;
 }
 </style>
