@@ -57,13 +57,14 @@ const routes = [
         path: 'friends',
         name: 'Friends',
         component: FriendsView
-      },
-      {
-        path: 'p2p',
-        name: 'P2P',
-        component: P2PView
       }
     ]
+  },
+  {
+    path: '/p2p',
+    name: 'P2P',
+    component: P2PView,
+    meta: { requiresAuth: true }
   },
   {
     path: '/account',
