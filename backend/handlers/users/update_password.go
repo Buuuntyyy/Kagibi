@@ -1,6 +1,10 @@
 package users
 
 import (
+	"encoding/base64"
+	"encoding/hex"
+	"fmt"
+	"log"
 	"net/http"
 	"safercloud/backend/pkg"
 
@@ -11,6 +15,43 @@ import (
 type UpdatePasswordRequest struct {
 	NewSalt               string `json:"new_salt" binding:"required"`
 	NewEncryptedMasterKey string `json:"new_encrypted_master_key" binding:"required"`
+}
+
+// validateCryptoKeys validates the format and length of cryptographic keys
+func validateCryptoKeys(salt, encryptedKey string) error {
+	// 1. Validate hex format of salt
+	saltBytes, err := hex.DecodeString(salt)
+	if err != nil {
+		return fmt.Errorf("invalid salt format: must be hex-encoded")
+	}
+
+	// 2. Check salt length (16 bytes minimum)
+	if len(saltBytes) < 16 {
+		return fmt.Errorf("salt too short: minimum 16 bytes required")
+	}
+
+	if len(saltBytes) > 64 {
+		return fmt.Errorf("salt too long: maximum 64 bytes")
+	}
+
+	// 3. Validate base64 format of encrypted key
+	keyBytes, err := base64.StdEncoding.DecodeString(encryptedKey)
+	if err != nil {
+		return fmt.Errorf("invalid encrypted key format: must be base64-encoded")
+	}
+
+	// 4. Check structure (IV + Encrypted Data + Auth Tag)
+	// For AES-GCM: IV (12 bytes) + Data (variable) + Tag (16 bytes)
+	if len(keyBytes) < 28 { // 12 + 0 + 16
+		return fmt.Errorf("encrypted key too short")
+	}
+
+	// 5. Reasonable maximum limit
+	if len(keyBytes) > 1024 {
+		return fmt.Errorf("encrypted key too large")
+	}
+
+	return nil
 }
 
 func UpdatePasswordHandler(c *gin.Context, db *bun.DB) {
@@ -28,16 +69,17 @@ func UpdatePasswordHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	// CRITICAL: Validate cryptographic keys
+	if err := validateCryptoKeys(req.NewSalt, req.NewEncryptedMasterKey); err != nil {
+		log.Printf("SECURITY: Invalid crypto keys - UserID: %s, Error: %v", userID, err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid cryptographic keys: " + err.Error()})
+		return
+	}
+
 	// Fetch user
 	user, err := pkg.FindUserByID(db, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-		return
-	}
-
-	// Verify new salt and encrypted master key are not empty
-	if req.NewSalt == "" || req.NewEncryptedMasterKey == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Salt and encrypted master key cannot be empty"})
 		return
 	}
 
@@ -53,5 +95,6 @@ func UpdatePasswordHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	log.Printf("INFO: Encryption keys updated - UserID: %s", userID)
 	c.JSON(http.StatusOK, gin.H{"message": "Encryption keys updated successfully after password change"})
 }
