@@ -16,7 +16,7 @@ export const useAuthStore = defineStore('auth', {
     masterKey: null,
     privateKey: null, // RSA Private Key (Unwrapped)
     publicKey: null,  // RSA Public Key (CryptoKey)
-    sessionTimeout: null, // Timeout handler for security
+    sessionTimeoutId: null, // Timeout handler for security (30 minutes)
   }),
   actions: {
     // --- Key Management Helpers ---
@@ -81,11 +81,18 @@ export const useAuthStore = defineStore('auth', {
         if (salt && encrypted_master_key) {
           try {
             await sodium.ready;
+            console.log('[Auth] Salt received from backend (hex):', salt.substring(0, 16) + '...');
+            console.log('[Auth] Encrypted master key (base64):', encrypted_master_key.substring(0, 32) + '...');
+            
             const saltBytes = sodium.from_hex(salt);
+            console.log('[Auth] Salt converted to bytes, length:', saltBytes.length);
             
             // Le mot de passe sert toujours à déchiffrer la clé maître
             const kek = await deriveKeyFromPassword(credentials.password, saltBytes);
+            console.log('[Auth] KEK derived from password');
+            
             this.masterKey = await unwrapMasterKey(encrypted_master_key, kek);
+            console.log('[Auth] Master key successfully unwrapped');
             
             // SECURITY: MasterKey stays in RAM only, NOT persisted to storage
             // Set up automatic session timeout for security (30 minutes)
@@ -125,10 +132,13 @@ export const useAuthStore = defineStore('auth', {
       // 1. Préparation de la cryptographie locale
       const salt = generateSalt();
       const saltHex = sodium.to_hex(salt);
+      console.log('[Auth] Register - Salt generated (hex):', saltHex.substring(0, 16) + '...');
+      console.log('[Auth] Register - Salt length:', salt.length);
 
       const masterKey = await generateMasterKey();
       const kek = await deriveKeyFromPassword(password, salt);
       const wrappedMasterKey = await wrapMasterKey(masterKey, kek);
+      console.log('[Auth] Register - Master key wrapped (base64):', wrappedMasterKey.substring(0, 32) + '...');
 
       // Generate Recovery Code
       const recoveryCode = generateRecoveryCode();
@@ -431,6 +441,21 @@ export const useAuthStore = defineStore('auth', {
         console.error("Failed to restore user data from localStorage", e);
       }
       return false;
+    },
+    setupSessionTimeout() {
+      // Clear any existing timeout
+      if (this.sessionTimeoutId) {
+        clearTimeout(this.sessionTimeoutId);
+      }
+      
+      // Set 30-minute timeout for security
+      const THIRTY_MINUTES = 30 * 60 * 1000;
+      this.sessionTimeoutId = setTimeout(() => {
+        console.warn('[Security] Session timeout - logging out');
+        this.logout();
+      }, THIRTY_MINUTES);
+      
+      console.log('[Security] Session timeout set to 30 minutes');
     }
   },
 })

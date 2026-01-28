@@ -24,7 +24,7 @@ window.addEventListener('load', () => {
     console.error('[App] XSS attempts detected at startup');
     getSecurityMonitor().logSecurityEvent(
       'XSS_DETECTED_AT_STARTUP',
-      'critical',
+      'high',
       { timestamp: new Date().toISOString() }
     );
   }
@@ -33,17 +33,7 @@ window.addEventListener('load', () => {
   setupXSSMonitoring();
 });
 
-// Initialiser le Service Worker crypto au démarrage
-authStore.initCrypto().then(() => {
-  console.log('[App] Secure crypto initialized');
-}).catch(err => {
-  console.error('[App] Failed to init secure crypto:', err);
-  getSecurityMonitor().logSecurityEvent(
-    'CRYPTO_INIT_FAILED',
-    'high',
-    { error: err.message }
-  );
-});
+console.log('[App] Security enhancements loaded');
 
 app.use(router)
 app.mount('#app')
