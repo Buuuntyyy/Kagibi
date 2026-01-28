@@ -162,7 +162,7 @@ func parseUploadRequest(c *gin.Context, userID string) (UploadRequest, error) {
 		TotalSize:    totalSize,
 		PreviewID:    previewID,
 		IsPreview:    c.PostForm("is_preview") == "true",
-	}
+	}, nil
 }
 
 func checkStorageQuota(ctx context.Context, db *bun.DB, userID string, size int64) error {
