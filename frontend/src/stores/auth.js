@@ -67,31 +67,44 @@ export const useAuthStore = defineStore('auth', {
 
         // 2. Récupérer les clés de chiffrement depuis votre Backend
         // Le token Supabase est injecté automatiquement par l'intercepteur api.js
-        const keysResponse = await api.get('/auth/keys');
+        let keysResponse;
+        try {
+          keysResponse = await api.get('/auth/keys');
+        } catch (err) {
+          console.error("Failed to fetch keys from backend:", err);
+          throw new Error("Impossible de récupérer les clés de chiffrement du serveur.");
+        }
+        
         const { salt, encrypted_master_key } = keysResponse.data;
 
         if (salt && encrypted_master_key) {
-          await sodium.ready;
-          const saltBytes = sodium.from_hex(salt);
-          // Le mot de passe sert toujours à déchiffrer la clé maître
-          const kek = await deriveKeyFromPassword(credentials.password, saltBytes);
-          this.masterKey = await unwrapMasterKey(encrypted_master_key, kek);
-          
-          // Persist key for page reload (SessionStorage)
           try {
-            const exportedKey = await window.crypto.subtle.exportKey("jwk", this.masterKey);
-            sessionStorage.setItem("safercloud_mk", JSON.stringify(exportedKey));
-          } catch (e) {
-            console.error("Failed to persist master key", e);
-          }
+            await sodium.ready;
+            const saltBytes = sodium.from_hex(salt);
+            
+            // Le mot de passe sert toujours à déchiffrer la clé maître
+            const kek = await deriveKeyFromPassword(credentials.password, saltBytes);
+            this.masterKey = await unwrapMasterKey(encrypted_master_key, kek);
+            
+            // Persist key for page reload (SessionStorage)
+            try {
+              const exportedKey = await window.crypto.subtle.exportKey("jwk", this.masterKey);
+              sessionStorage.setItem("safercloud_mk", JSON.stringify(exportedKey));
+            } catch (e) {
+              console.error("Failed to persist master key", e);
+            }
 
-          // Generate/Load RSA Keys (New functionality)
-          await this.fetchUser(); // Get latest user data including keys
-          await this.ensureRSAKeys(this.masterKey);
+            // Generate/Load RSA Keys (New functionality)
+            await this.fetchUser(); // Get latest user data including keys
+            await this.ensureRSAKeys(this.masterKey);
+          } catch (decryptError) {
+            console.error("Decryption failed during login:", decryptError);
+            throw new Error("Impossible de déchiffrer vos clés. Votre mot de passe est-il correct ?");
+          }
           
         } else {
           this.masterKey = null;
-          console.warn("No salt received from server during login.");
+          throw new Error("Pas de clés de chiffrement trouvées sur le serveur. Veuillez contacter le support.");
         }
 
         this.isAuthenticated = true;
@@ -103,10 +116,10 @@ export const useAuthStore = defineStore('auth', {
         router.push({ name: 'Home' });
         return true
       } catch (error) {
-        console.error("Login failed:", error)
+        console.error("Login failed:", error);
         this.isAuthenticated = false;
         this.user = null;
-        return false
+        throw error; // Re-throw for the UI to handle
       }
     },
     async register(username, email, password) {
@@ -247,28 +260,79 @@ export const useAuthStore = defineStore('auth', {
 
       await sodium.ready;
       
-      // 1. Mise à jour via Supabase (auth.users)
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) throw new Error("Erreur Supabase: " + error.message);
+      try {
+        // 1. Mise à jour via Supabase (auth.users)
+        console.log("Updating password in Supabase...");
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) {
+          console.error("Supabase password update error:", error);
+          throw new Error("Erreur Supabase: " + error.message);
+        }
 
-      // 2. Mise à jour des clés chiffrées sur votre Backend (profiles)
-      // Car le "KEK" qui protège la MasterKey dépend du mot de passe !
-      
-      const newSalt = generateSalt(); // Nouveau sel pour la nouvelle clé crypto
-      const newSaltHex = sodium.to_hex(newSalt);
-      const newKek = await deriveKeyFromPassword(newPassword, newSalt);
-      const newEncryptedMasterKey = await wrapMasterKey(this.masterKey, newKek);
+        // 2. Mise à jour des clés chiffrées sur votre Backend (profiles)
+        // Car le "KEK" qui protège la MasterKey dépend du mot de passe !
+        
+        const newSalt = generateSalt(); // Nouveau sel pour la nouvelle clé crypto
+        const newSaltHex = sodium.to_hex(newSalt);
+        const newKek = await deriveKeyFromPassword(newPassword, newSalt);
+        const newEncryptedMasterKey = await wrapMasterKey(this.masterKey, newKek);
 
-      // On appelle votre API pour mettre à jour Salt + EncryptedMasterKey
-      // Note: l'API ne vérifie plus 'current_password' car c'est Supabase qui gère l'auth.
-      // Cependant, pour sécuriser cet appel critique, votre backend pourrait demander de re-confirmer
-      // l'ancien mot de passe, mais avec Supabase c'est complexe.
-      // Pour l'instant on fait confiance à la session active.
-      
-      await api.post('/users/change-password', {
-        new_salt: newSaltHex,
-        new_encrypted_master_key: newEncryptedMasterKey
-      });
+        console.log("Updating salt and encrypted master key on backend...");
+        // On appelle votre API pour mettre à jour Salt + EncryptedMasterKey
+        // Note: l'API ne vérifie plus 'current_password' car c'est Supabase qui gère l'auth.
+        // Cependant, pour sécuriser cet appel critique, votre backend pourrait demander de re-confirmer
+        // l'ancien mot de passe, mais avec Supabase c'est complexe.
+        // Pour l'instant on fait confiance à la session active.
+        
+        await api.post('/users/change-password', {
+          new_salt: newSaltHex,
+          new_encrypted_master_key: newEncryptedMasterKey
+        });
+
+        // 3. Mise à jour de la sessionStorage avec la MÊME masterKey 
+        // (elle n'a pas changé, seule sa réencapsulation a changé)
+        try {
+          const exportedKey = await window.crypto.subtle.exportKey("jwk", this.masterKey);
+          sessionStorage.setItem("safercloud_mk", JSON.stringify(exportedKey));
+          console.log("Master key persisted to sessionStorage after password change");
+        } catch (e) {
+          console.error("Failed to update persisted master key:", e);
+        }
+
+        console.log("Password update completed successfully");
+      } catch (error) {
+        console.error("Password update failed:", error);
+        throw error;
+      }
+    },
+    async updateUsername(newName) {
+      if (!newName || newName.trim().length === 0) {
+        throw new Error("Le nom d'utilisateur ne peut pas être vide.");
+      }
+
+      try {
+        // 1. Mettre à jour Supabase Auth (user metadata)
+        const { error: supabaseError } = await supabase.auth.updateUser({
+          data: { name: newName.trim() }
+        });
+
+        if (supabaseError) {
+          console.error("Supabase username update error:", supabaseError);
+          throw new Error("Erreur lors de la mise à jour Supabase: " + supabaseError.message);
+        }
+
+        // 2. Mettre à jour notre backend (profiles table)
+        const response = await api.put('/users/profile', {
+          name: newName.trim()
+        });
+
+        this.user = response.data;
+        this.persistUserToStorage();
+        return response.data;
+      } catch (error) {
+        console.error("Username update failed:", error);
+        throw error;
+      }
     },
     async checkAuth() { 
       // Cette fonction devrait être appelée au chargement de l'app (App.vue)

@@ -43,7 +43,13 @@ const login = async () => {
       error.value = 'Identifiants invalides'
     }
   } catch (e) {
-    error.value = 'Une erreur est survenue'
+    console.error("Login error details:", e)
+    // Afficher le message d'erreur détaillé du store
+    if (e.message) {
+      error.value = e.message
+    } else {
+      error.value = 'Une erreur est survenue. Veuillez réessayer.'
+    }
   } finally {
     loading.value = false
   }
