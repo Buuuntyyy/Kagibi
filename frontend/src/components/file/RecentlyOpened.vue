@@ -76,7 +76,7 @@ const combinedRecents = computed(() => {
   // Combine and maybe slice to a reasonable number if needed, keeping separate lists structure 
   // but displaying them together. We could interleave them or just concat.
   // Given user wants "one line", concat is easiest.
-  return [...folders, ...files];
+  return [...folders, ...files].slice(0, 10);
 })
 
 import { useRouter } from 'vue-router'
@@ -144,28 +144,21 @@ const openItem = async (item) => {
 
 .cards-row {
   display: flex;
+  flex-wrap: wrap; /* Allow wrapping to next line */
   gap: 12px;
-  overflow-x: auto;
-  padding: 0.5rem 2px 1rem 2px; /* Bottom padding for shadow visibility */
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-color) transparent;
-}
-
-.cards-row::-webkit-scrollbar {
-  height: 6px;
-}
-.cards-row::-webkit-scrollbar-thumb {
-  background-color: var(--border-color);
-  border-radius: 3px;
+  overflow-x: hidden; /* No scrolling needed if we limit */
+  padding: 0.5rem 2px 1rem 2px;
 }
 
 .recent-card {
   background-color: var(--card-color);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  min-width: 180px;
-  max-width: 180px;
-  height: 48px; /* Compact height like a chip/card row */
+  /* Calc width for 5 items per row with 12px gap: (100% - 4*12px) / 5 */
+  width: calc(20% - 10px); 
+  min-width: 140px; /* Ensure not too small on resize */
+  max-width: none;
+  height: 48px;
   padding: 0 12px;
   display: flex;
   align-items: center;
@@ -173,6 +166,7 @@ const openItem = async (item) => {
   cursor: pointer;
   transition: box-shadow 0.2s, border-color 0.2s;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .recent-card:hover {
