@@ -9,6 +9,7 @@ import (
 	"safercloud/backend/handlers/folders"
 	"safercloud/backend/handlers/friends"
 	"safercloud/backend/handlers/keys"
+	"safercloud/backend/handlers/security"
 	"safercloud/backend/handlers/shares"
 	"safercloud/backend/handlers/tags"
 	"safercloud/backend/handlers/users"
@@ -168,6 +169,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, w
 	registerTagRoutes(protected, db)
 	registerFriendRoutes(protected, friendHandler)
 	registerShareRoutes(protected, db, wsManager)
+	registerSecurityRoutes(protected)
 
 	// WebSocket & System
 	router.GET("/ws", func(c *gin.Context) { ws.ConnectHandler(c, wsManager, redisClient, db, jwks) })
@@ -241,6 +243,12 @@ func registerShareRoutes(g *gin.RouterGroup, db *bun.DB, wsManager *wsPkg.Manage
 	sharesG.GET("/with-me", func(c *gin.Context) { shares.ListImportedSharesHandler(c, db) })
 	sharesG.POST("/with-me", func(c *gin.Context) { shares.ImportShareHandler(c, db) })
 	sharesG.DELETE("/with-me/:id", func(c *gin.Context) { shares.RemoveImportedShareHandler(c, db, wsManager) })
+}
+
+func registerSecurityRoutes(g *gin.RouterGroup) {
+	securityG := g.Group("/security")
+	securityG.POST("/report", func(c *gin.Context) { security.ReportSecurityEvent(c) })
+	securityG.GET("/events", func(c *gin.Context) { security.GetSecurityEvents(c) })
 }
 
 func startServer(router *gin.Engine) {
