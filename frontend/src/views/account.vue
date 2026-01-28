@@ -58,7 +58,9 @@
                   />
                 </label>
               </div>
-              <button class="btn-secondary" @click="handleUpdateUsername">Modifier</button>
+              <button class="btn-secondary" @click="handleUpdateUsername" :disabled="updatingUsername">
+                {{ updatingUsername ? 'Mise à jour...' : 'Modifier' }}
+              </button>
             </div>
           </div>
         </section>
@@ -69,28 +71,96 @@
           </div>
           <div class="section-body">
             <form @submit.prevent="handleUpdatePassword" class="password-form">
-              <div class="input-group">
+              <div class="input-group password-with-toggle">
                 <label>
                   Mot de passe actuel
-                  <input type="password" v-model="passwordForm.current" required placeholder="••••••••" />
+                  <div class="password-input-wrapper">
+                    <input 
+                      :type="showCurrentPassword ? 'text' : 'password'" 
+                      v-model="passwordForm.current" 
+                      required 
+                      placeholder="••••••••" 
+                    />
+                    <button 
+                      type="button" 
+                      class="toggle-password-btn" 
+                      @click="showCurrentPassword = !showCurrentPassword"
+                      title="Afficher/Masquer"
+                    >
+                      <svg v-if="!showCurrentPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                      </svg>
+                      <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                      </svg>
+                    </button>
+                  </div>
                 </label>
               </div>
               <div class="password-row">
-                 <div class="input-group">
+                 <div class="input-group password-with-toggle">
                   <label>
                     Nouveau mot de passe
-                    <input type="password" v-model="passwordForm.new" required placeholder="••••••••" />
+                    <div class="password-input-wrapper">
+                      <input 
+                        :type="showNewPassword ? 'text' : 'password'" 
+                        v-model="passwordForm.new" 
+                        required 
+                        placeholder="••••••••" 
+                      />
+                      <button 
+                        type="button" 
+                        class="toggle-password-btn" 
+                        @click="showNewPassword = !showNewPassword"
+                        title="Afficher/Masquer"
+                      >
+                        <svg v-if="!showNewPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                          <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                          <line x1="1" y1="1" x2="23" y2="23"/>
+                        </svg>
+                      </button>
+                    </div>
                   </label>
                 </div>
-                <div class="input-group">
+                <div class="input-group password-with-toggle">
                   <label>
                     Confirmer
-                    <input type="password" v-model="passwordForm.confirm" required placeholder="••••••••" />
+                    <div class="password-input-wrapper">
+                      <input 
+                        :type="showConfirmPassword ? 'text' : 'password'" 
+                        v-model="passwordForm.confirm" 
+                        required 
+                        placeholder="••••••••" 
+                      />
+                      <button 
+                        type="button" 
+                        class="toggle-password-btn" 
+                        @click="showConfirmPassword = !showConfirmPassword"
+                        title="Afficher/Masquer"
+                      >
+                        <svg v-if="!showConfirmPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                          <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                          <line x1="1" y1="1" x2="23" y2="23"/>
+                        </svg>
+                      </button>
+                    </div>
                   </label>
                 </div>
               </div>
               <div class="form-actions">
-                <button type="submit" class="btn-primary">Mettre à jour le mot de passe</button>
+                <button type="submit" class="btn-primary" :disabled="updatingPassword">
+                  {{ updatingPassword ? 'Mise à jour...' : 'Mettre à jour le mot de passe' }}
+                </button>
               </div>
             </form>
           </div>
@@ -139,6 +209,46 @@
         </section>
       </div>
     </div>
+
+    <!-- Error Modal -->
+    <div v-if="errorModal.show" class="error-modal-overlay" @click="closeErrorModal">
+      <div class="error-modal" @click.stop>
+        <div class="error-modal-header">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" class="error-icon">
+            <circle cx="12" cy="12" r="10"/>
+            <text x="12" y="16" text-anchor="middle" fill="white" font-size="12" font-weight="bold">!</text>
+          </svg>
+          <h3>{{ errorModal.title }}</h3>
+          <button class="btn-close-modal" @click="closeErrorModal">×</button>
+        </div>
+        <div class="error-modal-body">
+          <p>{{ errorModal.message }}</p>
+        </div>
+        <div class="error-modal-footer">
+          <button class="btn-primary" @click="closeErrorModal">Fermer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div v-if="successModal.show" class="success-modal-overlay" @click="closeSuccessModal">
+      <div class="success-modal" @click.stop>
+        <div class="success-modal-header">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" class="success-icon">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M10 14.5l3 3 5-5.5" stroke="white" stroke-width="2" fill="none"/>
+          </svg>
+          <h3>{{ successModal.title }}</h3>
+          <button class="btn-close-modal" @click="closeSuccessModal">×</button>
+        </div>
+        <div class="success-modal-body">
+          <p>{{ successModal.message }}</p>
+        </div>
+        <div class="success-modal-footer">
+          <button class="btn-primary" @click="closeSuccessModal">Fermer</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -162,6 +272,41 @@ const passwordForm = ref({
   new: '',
   confirm: ''
 })
+
+const showCurrentPassword = ref(false)
+const showNewPassword = ref(false)
+const showConfirmPassword = ref(false)
+
+const updatingUsername = ref(false)
+const updatingPassword = ref(false)
+
+const errorModal = ref({
+  show: false,
+  title: '',
+  message: ''
+})
+
+const successModal = ref({
+  show: false,
+  title: '',
+  message: ''
+})
+
+const closeErrorModal = () => {
+  errorModal.value.show = false
+}
+
+const closeSuccessModal = () => {
+  successModal.value.show = false
+}
+
+const showError = (title, message) => {
+  errorModal.value = { show: true, title, message }
+}
+
+const showSuccess = (title, message) => {
+  successModal.value = { show: true, title, message }
+}
 
 onMounted(async () => {
   try {
@@ -201,37 +346,62 @@ const formatPlanName = (plan) => {
 }
 
 const handleUpdateUsername = async () => {
-  alert("La fonctionnalité de changement de nom d'utilisateur sera disponible prochainement.")
+  if (!usernameForm.value.newName.trim()) {
+    showError('Erreur', 'Le nom d\'utilisateur ne peut pas être vide.')
+    return
+  }
+
+  if (usernameForm.value.newName === authStore.user?.name) {
+    showError('Erreur', 'Veuillez entrer un nouveau nom différent du nom actuel.')
+    return
+  }
+
+  updatingUsername.value = true
+  try {
+    await authStore.updateUsername(usernameForm.value.newName)
+    showSuccess('Succès', 'Votre nom d\'utilisateur a été mis à jour avec succès.')
+    // Update local user
+    authStore.user.name = usernameForm.value.newName
+  } catch (error) {
+    console.error("Failed to update username:", error)
+    const errorMessage = error.response?.data?.error || error.message || 'Erreur lors de la mise à jour du nom d\'utilisateur.'
+    showError('Erreur', errorMessage)
+  } finally {
+    updatingUsername.value = false
+  }
 }
 
 const handleUpdatePassword = async () => {
   if (passwordForm.value.new !== passwordForm.value.confirm) {
-    alert("Les nouveaux mots de passe ne correspondent pas.")
+    showError('Erreur', 'Les nouveaux mots de passe ne correspondent pas.')
     return
   }
   
   if (passwordForm.value.new.length < 20) {
-    alert("Le nouveau mot de passe doit contenir au moins 20 caractères.")
+    showError('Erreur', 'Le nouveau mot de passe doit contenir au moins 20 caractères.')
     return
   }
   
+  updatingPassword.value = true
   try {
     await authStore.updatePassword(passwordForm.value.current, passwordForm.value.new)
-    alert("Mot de passe mis à jour avec succès !")
+    showSuccess('Succès', 'Votre mot de passe a été mis à jour avec succès !')
     
     // Reset the form
     passwordForm.value.current = ''
     passwordForm.value.new = ''
     passwordForm.value.confirm = ''
+    showCurrentPassword.value = false
+    showNewPassword.value = false
+    showConfirmPassword.value = false
   } catch (error) {
     console.error("Failed to update password:", error)
     
-    // Handle different error types
-    let errorMessage = "Erreur lors de la mise à jour du mot de passe."
+    let errorMessage = 'Erreur lors de la mise à jour du mot de passe.'
     
     if (error.response) {
       if (error.response.status === 401) {
-        errorMessage = "Mot de passe actuel incorrect."
+        errorMessage = 'Mot de passe actuel incorrect.'
       } else if (error.response.data && error.response.data.error) {
         errorMessage = error.response.data.error
       }
@@ -239,7 +409,9 @@ const handleUpdatePassword = async () => {
       errorMessage = error.message
     }
     
-    alert("Erreur: " + errorMessage)
+    showError('Erreur', errorMessage)
+  } finally {
+    updatingPassword.value = false
   }
 }
 </script>
@@ -478,6 +650,12 @@ const handleUpdatePassword = async () => {
   color: var(--secondary-text-color);
 }
 
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 input {
   padding: 0.8rem 1rem;
   border: 1px solid var(--border-color);
@@ -491,6 +669,38 @@ input {
 input:focus {
   outline: none;
   border-color: var(--primary-color);
+}
+
+.password-input-wrapper input {
+  flex: 1;
+  padding-right: 40px;
+}
+
+.toggle-password-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--secondary-text-color);
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.toggle-password-btn:hover {
+  color: var(--primary-color);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.toggle-password-btn svg {
+  width: 18px;
+  height: 18px;
 }
 
 .btn-primary {
@@ -631,5 +841,102 @@ input:checked + .slider:before {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* Error & Success Modals */
+.error-modal-overlay, .success-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+.error-modal, .success-modal {
+  background: var(--card-color);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  max-width: 400px;
+  width: 90%;
+  animation: slideUp 0.3s ease;
+  border: 1px solid var(--border-color);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.error-modal-header, .success-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.error-modal-header h3, .success-modal-header h3 {
+  margin: 0;
+  flex: 1;
+  font-size: 1.1rem;
+  color: var(--main-text-color);
+}
+
+.error-icon {
+  color: var(--error-color);
+  flex-shrink: 0;
+}
+
+.success-icon {
+  color: var(--success-color);
+  flex-shrink: 0;
+}
+
+.btn-close-modal {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--secondary-text-color);
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.btn-close-modal:hover {
+  color: var(--main-text-color);
+}
+
+.error-modal-body, .success-modal-body {
+  padding: 20px 24px;
+  color: var(--main-text-color);
+  line-height: 1.5;
+}
+
+.error-modal-body p, .success-modal-body p {
+  margin: 0;
+}
+
+.error-modal-footer, .success-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 </style>
