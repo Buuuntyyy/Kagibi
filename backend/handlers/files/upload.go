@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/workers"
@@ -35,10 +36,46 @@ type UploadRequest struct {
 	IsPreview    bool
 }
 
+// validatePath validates and sanitizes file paths to prevent path traversal
+func validatePath(path string) (string, error) {
+	// 1. Clean the path
+	cleanPath := filepath.Clean(path)
+
+	// 2. Check if it starts with ".."
+	if strings.HasPrefix(cleanPath, "..") {
+		return "", fmt.Errorf("path traversal detected")
+	}
+
+	// 3. Check if it contains ".."
+	if strings.Contains(cleanPath, "..") {
+		return "", fmt.Errorf("path traversal detected")
+	}
+
+	// 4. Ensure it starts with "/"
+	if !strings.HasPrefix(cleanPath, "/") {
+		cleanPath = "/" + cleanPath
+	}
+
+	// 5. Check for forbidden characters
+	invalidChars := []string{"\x00", "\n", "\r"}
+	for _, char := range invalidChars {
+		if strings.Contains(cleanPath, char) {
+			return "", fmt.Errorf("invalid characters in path")
+		}
+	}
+
+	return cleanPath, nil
+}
+
 func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client, wsManager *ws.Manager) {
 	userID := c.GetString("user_id")
 
-	req := parseUploadRequest(c, userID)
+	req, err := parseUploadRequest(c, userID)
+	if err != nil {
+		log.Printf("SECURITY: Invalid upload request - UserID: %s, Error: %v", userID, err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	// Early Storage Quota Check
 	if req.ChunkIndex == 0 && req.TotalSize > 0 {
@@ -79,10 +116,16 @@ func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client, wsMana
 	c.JSON(http.StatusCreated, gin.H{"message": "Upload en cours de traitement", "file": fileRecord})
 }
 
-func parseUploadRequest(c *gin.Context, userID string) UploadRequest {
+func parseUploadRequest(c *gin.Context, userID string) (UploadRequest, error) {
 	path := c.PostForm("path")
 	if path == "" {
 		path = "/"
+	}
+
+	// CRITICAL: Validate path to prevent traversal
+	validPath, err := validatePath(path)
+	if err != nil {
+		return UploadRequest{}, err
 	}
 
 	chunkIndexStr := c.PostForm("chunk_index")
@@ -110,7 +153,7 @@ func parseUploadRequest(c *gin.Context, userID string) UploadRequest {
 
 	return UploadRequest{
 		UserID:       userID,
-		Path:         path,
+		Path:         validPath, // PATH VALIDÉ
 		EncryptedKey: c.PostForm("encrypted_key"),
 		ShareKeys:    c.PostForm("share_keys"),
 		ChunkIndex:   chunkIndex,
