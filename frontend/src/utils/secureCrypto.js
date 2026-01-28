@@ -264,20 +264,21 @@ export function setupUserActivityTracking() {
 
 /**
  * Détecte les tentatives d'injection de scripts XSS
- * Vérifie que tous les scripts ont un nonce valide
+ * Vérifie que tous les scripts ont un nonce valide ou sont des scripts autorisés
  */
 export function detectXSSAttempts() {
   const scriptTags = document.querySelectorAll('script');
   const unAuthorizedScripts = [];
   
   scriptTags.forEach((script) => {
-    // Vérifier que chaque script a un nonce ou est un script de module autorisé
+    // Ignorer les scripts autorisés
     const hasNonce = script.hasAttribute('nonce');
     const isModule = script.type === 'module';
+    const isSRI = script.hasAttribute('nonce') && script.textContent.includes('verifyServiceWorkerIntegrity');
     const isInlineEvent = script.hasAttribute('onload') || script.hasAttribute('onerror');
     
-    // Scripts inline sans nonce sont suspectes
-    if (script.textContent && !hasNonce && !isModule) {
+    // Scripts inline sans nonce sont suspects (sauf les scripts SRI avec nonce)
+    if (script.textContent && !hasNonce && !isModule && !isSRI) {
       unAuthorizedScripts.push({
         script,
         reason: 'Inline script without nonce',

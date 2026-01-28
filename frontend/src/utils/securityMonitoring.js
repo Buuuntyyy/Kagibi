@@ -3,6 +3,8 @@
  * Détecte et log les événements de sécurité suspects
  */
 
+import { supabase } from '../supabase'
+
 class SecurityMonitor {
   constructor() {
     this.events = [];
@@ -70,22 +72,43 @@ class SecurityMonitor {
    */
   async reportToBackend(event) {
     try {
-      const response = await fetch('/api/security/report', {
+      // Essayer d'obtenir le token de Supabase
+      let token = null;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        token = session?.access_token;
+      } catch (error) {
+        // Silencieusement ignorer si Supabase n'est pas disponible
+      }
+      
+      // Fallback à localStorage
+      if (!token) {
+        token = localStorage.getItem('safercloud_token');
+      }
+      
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch('/api/v1/security/report', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('safercloud_token')}`
-        },
+        headers,
         body: JSON.stringify(event)
       });
 
       if (response.ok) {
         console.log('[SecurityMonitor] Event reported to backend');
+      } else if (response.status === 401) {
+        console.debug('[SecurityMonitor] Not authenticated yet, event cached locally');
       } else {
-        console.error('[SecurityMonitor] Failed to report event to backend');
+        console.warn(`[SecurityMonitor] Backend returned ${response.status}`);
       }
     } catch (error) {
-      console.error('[SecurityMonitor] Error reporting event:', error);
+      console.debug('[SecurityMonitor] Cannot reach backend (normal before auth):', error.message);
     }
   }
 
