@@ -79,12 +79,15 @@ const copyCode = () => {
 }
 
 const finishRegistration = async () => {
-    // Après une inscription réussie, connecter automatiquement l'utilisateur
-    const loginSuccess = await authStore.login({email: email.value, password: password.value})
-    if (loginSuccess) {
+    // After successful registration, user is already authenticated
+    // The register() function already set isAuthenticated = true and loaded the MasterKey
+    // Just ensure RSA keys are loaded
+    try {
+      await authStore.ensureRSAKeys(authStore.masterKey);
       router.push({ name: 'Home' })
-    } else {
-      error.value = 'Erreur lors de la connexion automatique après inscription.'
+    } catch (err) {
+      console.error('Error ensuring RSA keys after registration:', err);
+      error.value = 'Erreur lors de la finalisation de l\'inscription: ' + err.message;
     }
 }
 </script>
