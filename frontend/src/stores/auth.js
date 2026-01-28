@@ -16,6 +16,7 @@ export const useAuthStore = defineStore('auth', {
     masterKey: null,
     privateKey: null, // RSA Private Key (Unwrapped)
     publicKey: null,  // RSA Public Key (CryptoKey)
+    sessionTimeout: null, // Timeout handler for security
   }),
   actions: {
     // --- Key Management Helpers ---
@@ -86,13 +87,9 @@ export const useAuthStore = defineStore('auth', {
             const kek = await deriveKeyFromPassword(credentials.password, saltBytes);
             this.masterKey = await unwrapMasterKey(encrypted_master_key, kek);
             
-            // Persist key for page reload (SessionStorage)
-            try {
-              const exportedKey = await window.crypto.subtle.exportKey("jwk", this.masterKey);
-              sessionStorage.setItem("safercloud_mk", JSON.stringify(exportedKey));
-            } catch (e) {
-              console.error("Failed to persist master key", e);
-            }
+            // SECURITY: MasterKey stays in RAM only, NOT persisted to storage
+            // Set up automatic session timeout for security (30 minutes)
+            this.setupSessionTimeout();
 
             // Generate/Load RSA Keys (New functionality)
             await this.fetchUser(); // Get latest user data including keys
@@ -341,21 +338,11 @@ export const useAuthStore = defineStore('auth', {
       if (session?.access_token) {
           // Session Supabase active !
           
-          // Essayer de restaurer la MasterKey depuis sessionStorage (pour F5)
-          try {
-              const mkJson = sessionStorage.getItem("safercloud_mk");
-              if (mkJson) {
-                  const jwk = JSON.parse(mkJson);
-                  this.masterKey = await window.crypto.subtle.importKey("jwk", jwk, "AES-GCM", true, ["encrypt", "decrypt"]);
-              }
-          } catch (e) {
-              console.warn("Could not restore master key from session storage");
-          }
-
-          // SECURITY CHECK: If session exists but NO master key (e.g. New Tab), force re-auth to derive key
+          // SECURITY: MasterKey is NOT persisted. User must re-login after page reload.
+          // This prevents XSS attacks from stealing the key from storage.
           if (!this.masterKey) {
-             console.warn("Session found but MasterKey missing (New Tab?). Redirecting to login to unlock vault.");
-             // Do not call logout(), simply return false to trigger router redirect to /login
+             console.warn("Session found but MasterKey missing (page reload or new tab). Redirecting to login.");
+             // Force re-authentication to derive the key from password
              return false;
           }
 
@@ -417,6 +404,9 @@ export const useAuthStore = defineStore('auth', {
             new_salt: newSaltHex,
             new_encrypted_master_key: newEncryptedMasterKey
         });
+        
+        // Set up security timeout for recovered session
+        this.setupSessionTimeout();
         
         return true;
     },

@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
+	"time"
 
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/s3storage"
@@ -18,9 +20,41 @@ import (
 	"github.com/uptrace/bun"
 )
 
+// Rate limiter for downloads
+var downloadAttempts = make(map[string][]time.Time)
+var downloadMutex sync.Mutex
+
+func checkDownloadRateLimit(userID, ip string) bool {
+	downloadMutex.Lock()
+	defer downloadMutex.Unlock()
+
+	key := userID + "_" + ip
+	now := time.Now()
+
+	// Clean old attempts (> 1 minute)
+	if attempts, ok := downloadAttempts[key]; ok {
+		var recent []time.Time
+		for _, t := range attempts {
+			if now.Sub(t) < time.Minute {
+				recent = append(recent, t)
+			}
+		}
+		downloadAttempts[key] = recent
+	}
+
+	// Check limit (max 200 downloads per minute for blob streaming)
+	if len(downloadAttempts[key]) >= 200 {
+		return false
+	}
+
+	downloadAttempts[key] = append(downloadAttempts[key], now)
+	return true
+}
+
 func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 	userIDInterface, _ := c.Get("user_id")
 	userID := userIDInterface.(string)
+	clientIP := c.ClientIP()
 
 	fileIDStr := c.Param("fileID")
 	fileID, err := strconv.ParseInt(fileIDStr, 10, 64)
@@ -29,10 +63,29 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	// Rate limiting specific to downloads
+	if !checkDownloadRateLimit(userID, clientIP) {
+		log.Printf("SECURITY: Download rate limit exceeded for user %s from IP %s", userID, clientIP)
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many download attempts"})
+		return
+	}
+
+	// Timing attack mitigation: always take the same time
+	startTime := time.Now()
+	defer func() {
+		elapsed := time.Since(startTime)
+		if elapsed < 100*time.Millisecond {
+			time.Sleep(100*time.Millisecond - elapsed)
+		}
+	}()
+
 	file, err := getFileWithPermission(c.Request.Context(), db, fileID, userID)
 	if err != nil {
-		log.Printf("Error getting file from DB. FileID: %d, UserID: %s, Error: %v", fileID, userID, err)
-		c.JSON(http.StatusNotFound, gin.H{"error": "File not found or permission denied"})
+		// Security log
+		log.Printf("SECURITY: Unauthorized file access attempt - UserID: %s, FileID: %d, IP: %s", userID, fileID, clientIP)
+
+		// Generic response
+		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
 		return
 	}
 
@@ -41,6 +94,9 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
 		return
 	}
+
+	// Log legitimate access
+	log.Printf("INFO: File download - UserID: %s, FileID: %d, FileName: %s", userID, fileID, file.Name)
 
 	streamFileFromS3(c, file)
 }
