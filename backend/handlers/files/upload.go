@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -37,9 +38,15 @@ type UploadRequest struct {
 }
 
 // validatePath validates and sanitizes file paths to prevent path traversal
-func validatePath(path string) (string, error) {
-	// 1. Clean the path
-	cleanPath := filepath.Clean(path)
+func validatePath(inputPath string) (string, error) {
+	// Normalize separators and check traversal early
+	rawPath := strings.ReplaceAll(inputPath, "\\", "/")
+	if strings.Contains(rawPath, "..") {
+		return "", fmt.Errorf("path traversal detected")
+	}
+
+	// 1. Clean the path using POSIX rules (virtual paths)
+	cleanPath := path.Clean(rawPath)
 
 	// 2. Check if it starts with ".."
 	if strings.HasPrefix(cleanPath, "..") {
@@ -229,7 +236,12 @@ func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, 
 	}
 
 	// 4. Enqueue S3 Task
-	fullPathDB := filepath.ToSlash(filepath.Join(req.Path, fileHeader.Filename))
+	fullPathDB := path.Join(req.Path, fileHeader.Filename)
+	fullPathDB = path.Clean(fullPathDB)
+	if !strings.HasPrefix(fullPathDB, "/") {
+		fullPathDB = "/" + fullPathDB
+	}
+
 	s3Key := fmt.Sprintf("users/%s%s", req.UserID, fullPathDB)
 
 	task := workers.S3Task{
@@ -277,11 +289,14 @@ func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, 
 }
 
 func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) error {
+	log.Printf("[UpsertFile] Attempting to upsert file: path=%s, user_id=%s, size=%d", file.Path, file.UserID, size)
+
 	exists, _ := tx.NewSelect().Model((*pkg.File)(nil)).
 		Where("user_id = ? AND path = ?", file.UserID, file.Path).
 		Exists(ctx)
 
 	if exists {
+		log.Printf("[UpsertFile] File exists, updating: path=%s", file.Path)
 		var oldFile pkg.File
 		if err := tx.NewSelect().Model(&oldFile).Where("user_id = ? AND path = ?", file.UserID, file.Path).Scan(ctx); err == nil {
 			// Update user storage: remove old, add new
@@ -291,16 +306,28 @@ func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) 
 			file.ID = oldFile.ID
 		}
 		_, err := tx.NewUpdate().Model(file).Where("user_id = ? AND path = ?", file.UserID, file.Path).Exec(ctx)
+		if err != nil {
+			log.Printf("[UpsertFile] ERROR updating file: %v", err)
+		} else {
+			log.Printf("[UpsertFile] Successfully updated file with ID: %d", file.ID)
+		}
 		return err
 	}
 
+	log.Printf("[UpsertFile] File doesn't exist, inserting new: path=%s", file.Path)
 	_, err := tx.NewInsert().Model(file).Exec(ctx)
 	if err != nil {
+		log.Printf("[UpsertFile] ERROR inserting file: %v", err)
 		return err
 	}
+	log.Printf("[UpsertFile] Successfully inserted file with ID: %d", file.ID)
+
 	_, err = tx.NewUpdate().Model((*pkg.User)(nil)).
 		Set("storage_used = storage_used + ?", size).
 		Where("id = ?", file.UserID).Exec(ctx)
+	if err != nil {
+		log.Printf("[UpsertFile] ERROR updating storage_used: %v", err)
+	}
 	return err
 }
 

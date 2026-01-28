@@ -7,7 +7,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"path"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -186,14 +188,21 @@ func isFileInSharedFolder(filePath, folderPath string) bool {
 
 func streamFileFromS3(c *gin.Context, file *pkg.File) {
 	// S3 Key construction: Use file.UserID (Owner) instead of userID (Requester)
-	s3Key := fmt.Sprintf("users/%s%s", file.UserID, file.Path)
+	normalizedPath := path.Clean(strings.ReplaceAll(file.Path, "\\", "/"))
+	if normalizedPath == "." {
+		normalizedPath = "/"
+	}
+	if !strings.HasPrefix(normalizedPath, "/") {
+		normalizedPath = "/" + normalizedPath
+	}
 
+	primaryKey := fmt.Sprintf("users/%s%s", file.UserID, normalizedPath)
 	output, err := s3storage.Client.GetObject(c.Request.Context(), &s3.GetObjectInput{
 		Bucket: aws.String(s3storage.BucketName),
-		Key:    aws.String(s3Key),
+		Key:    aws.String(primaryKey),
 	})
 	if err != nil {
-		log.Printf("Error getting file from S3. Key: %s, Error: %v", s3Key, err)
+		log.Printf("Error getting file from S3. Key: %s, Error: %v", primaryKey, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve file from storage"})
 		return
 	}
