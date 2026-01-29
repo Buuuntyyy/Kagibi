@@ -14,7 +14,9 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/uptrace/bun"
 )
+
 const CLAUSE = "path = ? AND user_id = ?"
+
 type MoveRequest struct {
 	ID              int64  `json:"id" binding:"required"`
 	Type            string `json:"type" binding:"required,oneof=file folder"`
