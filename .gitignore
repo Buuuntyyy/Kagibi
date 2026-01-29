@@ -1,9 +1,8 @@
 db_data/*
 redis-data/*
-
+backend/.tmp/*
 backend/uploads/*
 
-backend/
 backend/.env
 frontend/.env
 
