@@ -107,6 +107,15 @@ func BulkDeleteHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
 		return
 	}
 
+	for _, file := range filesToDelete {
+		if file.IsPreview {
+			continue
+		}
+		if err := pkg.UpdateFolderSizesForFile(c.Request.Context(), db, userID, file.Path, -file.Size); err != nil {
+			log.Printf("Failed to update folder sizes on bulk delete: %v", err)
+		}
+	}
+
 	// Notify WebSocket about storage update
 	var user pkg.User
 	if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c); err == nil {

@@ -67,6 +67,7 @@
       :folders="filteredFolders"
       :files="filteredFiles"
       :selectedItems="selectedItems"
+      :showFolderSizes="preferenceStore.showFolderSizes"
       :columns="columns"
       :sortKey="currentSortKey"
       :sortDirection="currentSortDirection"
@@ -198,6 +199,13 @@ const selectedItems = ref([])
 const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
 const fileInput = ref(null)
 const isDragging = ref(false)
+
+watch(
+  () => preferenceStore.showFolderSizes,
+  () => {
+    fileStore.fetchItems(fileStore.currentPath)
+  }
+)
 
 const deselectAll = () => {
     selectedItems.value = [];
