@@ -119,8 +119,17 @@ type Folder struct {
 	UserID       string    `bun:"user_id,notnull"`
 	EncryptedKey string    `bun:"encrypted_key"` // FolderKey encrypted with MasterKey
 	Tags         []string  `bun:"tags,array"`    // Tags
+	SizeBytes    int64     `bun:"size_bytes,scanonly" json:"size_bytes,omitempty"`
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt    time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
+}
+
+type FolderSize struct {
+	bun.BaseModel `bun:"table:folder_sizes,alias:fs"`
+	FolderID      int64     `bun:"folder_id,pk"`
+	UserID        string    `bun:"user_id,notnull"`
+	SizeBytes     int64     `bun:"size_bytes,notnull,default:0"`
+	UpdatedAt     time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 }
 
 type Tag struct {

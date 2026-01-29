@@ -5,6 +5,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
   // Valeurs par défaut
   const enableContextMenu = ref(true)
   const showToolBar = ref(true)
+  const showFolderSizes = ref(false)
 
   // Initialisation depuis le LocalStorage
   const init = () => {
@@ -15,6 +16,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
         // On vérifie que les clés existent pour éviter d'écraser avec undefined
         if (parsed.enableContextMenu !== undefined) enableContextMenu.value = parsed.enableContextMenu
         if (parsed.showToolBar !== undefined) showToolBar.value = parsed.showToolBar
+        if (parsed.showFolderSizes !== undefined) showFolderSizes.value = parsed.showFolderSizes
       } catch (e) {
         console.error("Erreur lors du chargement des préférences", e)
       }
@@ -22,10 +24,11 @@ export const usePreferencesStore = defineStore('preferences', () => {
   }
 
   // Sauvegarde automatique à chaque changement
-  watch([enableContextMenu, showToolBar], () => {
+  watch([enableContextMenu, showToolBar, showFolderSizes], () => {
     localStorage.setItem('user_preferences', JSON.stringify({
       enableContextMenu: enableContextMenu.value,
-      showToolBar: showToolBar.value
+      showToolBar: showToolBar.value,
+      showFolderSizes: showFolderSizes.value
     }))
   })
 
@@ -34,6 +37,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
 
   return {
     enableContextMenu,
-    showToolBar
+    showToolBar,
+    showFolderSizes
   }
 })

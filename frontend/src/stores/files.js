@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import api from '../api'
 import { useAuthStore } from './auth'
+import { usePreferencesStore } from './preferences'
 import { encryptFile, decryptFile, generateMasterKey, wrapMasterKey, unwrapMasterKey, deriveKeyFromToken } from '../utils/crypto'
 import { encryptChunkWorker, decryptChunkedFileWorker, CHUNK_SIZE } from '../utils/crypto'
 import { generatePreview } from '../utils/previewGenerator'
@@ -117,9 +118,13 @@ export const useFileStore = defineStore('files', {
         
         // Persist to Backend
         // Don't await strictly to not block UI
+        const recentId = item.ID || item.id
+        if (!recentId) {
+          return
+        }
         api.post('/users/recent', {
-            id: item.ID || item.id,
-            type: item.type === 'folder' ? 'folder' : 'file'
+          id: recentId,
+          type: item.type === 'folder' ? 'folder' : 'file'
         }).catch(err => console.error("Failed to save history", err))
     },
 
@@ -131,6 +136,7 @@ export const useFileStore = defineStore('files', {
         this.searchFiles(query);
     },
     async fetchItems(path) {
+      const preferenceStore = usePreferencesStore()
         // If a pending navigation is set, consume it and use that path
         if (this.pendingNavigatePath) {
           path = this.pendingNavigatePath;
@@ -160,7 +166,8 @@ export const useFileStore = defineStore('files', {
       this.searchQuery = ''; // Clear search query when navigating
       try {
         const safePath = path.startsWith('/') ? path : `/${path}`
-        const response = await api.get(`/files/list${safePath}`)
+        const params = preferenceStore.showFolderSizes ? { include_folder_sizes: '1' } : undefined
+        const response = await api.get(`/files/list${safePath}`, { params })
         this.files = response.data.files || []
         this.folders = response.data.folders || []
         this.currentPath = safePath
@@ -559,7 +566,7 @@ export const useFileStore = defineStore('files', {
              const previewName = "preview_" + safeName + ".jpg";
              const previewFile = new File([previewBlob], previewName, { type: "image/jpeg" });
              try {
-                const previewResult = await this.uploadFile(previewFile, true, null, this.currentPath);
+               const previewResult = await this.uploadFile(previewFile, true, null, uploadPath);
                 if (previewResult && previewResult.ID) {
                     previewID = previewResult.ID;
                 } else {
