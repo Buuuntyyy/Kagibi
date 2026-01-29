@@ -184,27 +184,39 @@ func deleteFolderRecursive(c *gin.Context, db *bun.DB, userID, folderPath string
 		}
 	}
 
+	// Delete all subfolders + parent folder itself
+	var allFolderIDs []int64
 	if len(folders) > 0 {
-		folderIDs := make([]int64, 0, len(folders))
 		for _, f := range folders {
-			folderIDs = append(folderIDs, f.ID)
+			allFolderIDs = append(allFolderIDs, f.ID)
 		}
+	}
 
+	// Get parent folder ID to include it in deletion
+	var parentFolder pkg.Folder
+	if err := db.NewSelect().Model(&parentFolder).Where("path = ? AND user_id = ?", folderPath, userID).Scan(ctx); err == nil {
+		allFolderIDs = append(allFolderIDs, parentFolder.ID)
+	}
+
+	if len(allFolderIDs) > 0 {
 		_, _ = tx.NewDelete().Model((*pkg.ShareLink)(nil)).
-			Where("resource_type = ? AND resource_id IN (?)", "folder", bun.In(folderIDs)).
+			Where("resource_type = ? AND resource_id IN (?)", "folder", bun.In(allFolderIDs)).
 			Exec(ctx)
 		_, _ = tx.NewDelete().Model((*pkg.FolderShare)(nil)).
-			Where("folder_id IN (?)", bun.In(folderIDs)).
+			Where("folder_id IN (?)", bun.In(allFolderIDs)).
 			Exec(ctx)
 		_, _ = tx.NewDelete().Model((*pkg.FolderFileKey)(nil)).
-			Where("folder_id IN (?)", bun.In(folderIDs)).
+			Where("folder_id IN (?)", bun.In(allFolderIDs)).
 			Exec(ctx)
 		_, _ = tx.NewDelete().Model((*pkg.FolderFolderKey)(nil)).
-			Where("parent_folder_id IN (?) OR sub_folder_id IN (?)", bun.In(folderIDs), bun.In(folderIDs)).
+			Where("parent_folder_id IN (?) OR sub_folder_id IN (?)", bun.In(allFolderIDs), bun.In(allFolderIDs)).
+			Exec(ctx)
+		_, _ = tx.NewDelete().Model((*pkg.FolderSize)(nil)).
+			Where("folder_id IN (?)", bun.In(allFolderIDs)).
 			Exec(ctx)
 
 		_, err = tx.NewDelete().Model((*pkg.Folder)(nil)).
-			Where("id IN (?)", bun.In(folderIDs)).
+			Where("id IN (?)", bun.In(allFolderIDs)).
 			Where("user_id = ?", userID).
 			Exec(ctx)
 		if err != nil {
