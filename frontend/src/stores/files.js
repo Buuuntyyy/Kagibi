@@ -120,10 +120,19 @@ export const useFileStore = defineStore('files', {
         // Don't await strictly to not block UI
         const recentId = item.ID || item.id
         if (!recentId) {
+          console.warn("No ID found for history item:", item)
           return
         }
+        
+        // Validate that recentId is a number (convert if needed)
+        const numId = typeof recentId === 'string' ? parseInt(recentId, 10) : recentId
+        if (isNaN(numId)) {
+          console.warn("Invalid ID for history item:", recentId)
+          return
+        }
+        
         api.post('/users/recent', {
-          id: recentId,
+          id: numId,
           type: item.type === 'folder' ? 'folder' : 'file'
         }).catch(err => console.error("Failed to save history", err))
     },
