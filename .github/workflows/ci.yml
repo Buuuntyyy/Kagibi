@@ -65,7 +65,6 @@ jobs:
     - name: Run Tests with Coverage
       run: |
         go test -v -race -coverprofile=coverage.out -covermode=atomic ./utils/... ./middleware/... ./pkg/...
-        go tool cover -func=coverage.out
 
     - name: Upload Coverage
       uses: codecov/codecov-action@v3
