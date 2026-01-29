@@ -88,6 +88,20 @@ func CreateFile(db *bun.DB, file *File) error {
 func CreateFolderDB(db *bun.DB, folder *Folder) error {
 	ctx := context.Background()
 	_, err := db.NewInsert().Model(folder).Exec(ctx)
+	if err != nil {
+		return err
+	}
+
+	fs := &FolderSize{
+		FolderID:  folder.ID,
+		UserID:    folder.UserID,
+		SizeBytes: 0,
+		UpdatedAt: time.Now(),
+	}
+	_, err = db.NewInsert().Model(fs).
+		Column("folder_id", "user_id", "size_bytes", "updated_at").
+		On("CONFLICT (folder_id) DO NOTHING").
+		Exec(ctx)
 	return err
 }
 
