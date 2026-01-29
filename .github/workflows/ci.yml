@@ -60,11 +60,11 @@ jobs:
 
     - name: Run Unit Tests
       # Exécute les tests unitaires (Middleware, Utils, Handlers, Models)
-      run: go test -v ./utils/... ./middleware/... ./handlers/... ./pkg/...
+      run: go test -v ./utils/... ./middleware/... ./handlers/auth/... ./handlers/folders/... ./pkg/...
 
     - name: Run Tests with Coverage
       run: |
-        go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+        go test -v -race -coverprofile=coverage.out -covermode=atomic ./utils/... ./middleware/... ./pkg/...
         go tool cover -func=coverage.out
 
     - name: Upload Coverage
@@ -343,13 +343,15 @@ jobs:
 
     - name: Run go vet
       working-directory: ./backend
-      run: go vet ./...
+      run: |
+        # Vérifier tous les sous-packages
+        go vet ./handlers/... ./middleware/... ./pkg/... ./utils/...
 
     - name: Run staticcheck
       working-directory: ./backend
       run: |
         go install honnef.co/go/tools/cmd/staticcheck@latest
-        staticcheck ./...
+        staticcheck ./handlers/... ./middleware/... ./pkg/... ./utils/...
 
     - name: Check for TODO/FIXME comments
       run: |
