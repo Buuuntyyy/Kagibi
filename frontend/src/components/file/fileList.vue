@@ -766,6 +766,7 @@ const openFolder = (folder) => {
   // Add to history
   const fullPath = fileStore.currentPath === '/' ? '/' + folderName : fileStore.currentPath + '/' + folderName;
   fileStore.addToHistory({ 
+      ID: folder.ID,
       name: folderName, 
       path: fullPath, 
       type: 'folder' 
