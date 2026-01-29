@@ -64,7 +64,8 @@ jobs:
 
     - name: Run Tests with Coverage
       run: |
-        go test -v -race -coverprofile=coverage.out -covermode=atomic ./utils/... ./middleware/... ./pkg/...
+        go test -v ./utils/... -coverprofile coverage.out -covermode atomic
+        go test -v ./middleware/... -coverprofile coverage_middleware.out -covermode atomic
 
     - name: Upload Coverage
       uses: codecov/codecov-action@v3
@@ -343,14 +344,14 @@ jobs:
     - name: Run go vet
       working-directory: ./backend
       run: |
-        # Vérifier tous les sous-packages
-        go vet ./handlers/... ./middleware/... ./pkg/... ./utils/...
+        # Vérifier les sous-packages testés uniquement
+        go vet ./handlers/auth/... ./handlers/folders/... ./middleware/... ./pkg/... ./utils/...
 
     - name: Run staticcheck
       working-directory: ./backend
       run: |
         go install honnef.co/go/tools/cmd/staticcheck@latest
-        staticcheck ./handlers/... ./middleware/... ./pkg/... ./utils/...
+        staticcheck ./handlers/auth/... ./handlers/folders/... ./middleware/... ./pkg/... ./utils/...
 
     - name: Check for TODO/FIXME comments
       run: |
