@@ -143,10 +143,11 @@ const openItem = async (item) => {
 }
 
 .cards-row {
-  display: flex;
-  flex-wrap: wrap; /* Allow wrapping to next line */
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-rows: 48px;
   gap: 12px;
-  overflow-x: hidden; /* No scrolling needed if we limit */
+  overflow: hidden;
   padding: 0.5rem 2px 1rem 2px;
 }
 
@@ -154,10 +155,7 @@ const openItem = async (item) => {
   background-color: var(--card-color);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  /* Calc width for 5 items per row with 12px gap: (100% - 4*12px) / 5 */
-  width: calc(20% - 10px); 
-  min-width: 140px; /* Ensure not too small on resize */
-  max-width: none;
+  width: 100%;
   height: 48px;
   padding: 0 12px;
   display: flex;
@@ -165,7 +163,6 @@ const openItem = async (item) => {
   gap: 12px;
   cursor: pointer;
   transition: box-shadow 0.2s, border-color 0.2s;
-  flex-shrink: 0;
   box-sizing: border-box;
 }
 
