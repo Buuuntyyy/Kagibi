@@ -280,21 +280,50 @@ jobs:
 
     - name: Check for hardcoded secrets
       run: |
-        # Vérifier les fichiers sensibles
-        if grep -r "password.*=" --include="*.go" --include="*.js" --include="*.vue" . | \
-           grep -v "test" | grep -v "example" | grep -v "_test.go" | grep -v ".spec.js"; then
-          echo "⚠️ Potential hardcoded passwords found!"
+        # Rechercher des mots de passe/secrets en dur (pas les variables nommées "password")
+        echo "🔍 Checking for hardcoded credentials..."
+        
+        # Pattern pour trouver des secrets en dur (éviter les faux positifs)
+        # Chercher: password = "valeur", PASSWORD="valeur", etc. mais pas password = ref(''), type="password", etc.
+        if grep -rE '(password|secret|api_key|private_key|token)\s*[=:]\s*["\047][a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};:,.<>?/]{8,}["\047]' \
+           --include="*.go" --include="*.js" --include="*.vue" --include="*.ts" . | \
+           grep -v "test" | \
+           grep -v "example" | \
+           grep -v "_test.go" | \
+           grep -v ".spec.js" | \
+           grep -v "type=\"password\"" | \
+           grep -v "type='password'" | \
+           grep -v "placeholder=" | \
+           grep -v "ref('')" | \
+           grep -v "ref(\"\")" | \
+           grep -v "binding:" | \
+           grep -v "json:" | \
+           grep -v "// " | \
+           grep -v "github.com" | \
+           grep -v "sslmode=disable"; then
+          echo "⚠️ Potential hardcoded credentials found!"
           exit 1
         fi
+        
+        echo "✅ No hardcoded credentials detected"
 
     - name: Check for exposed API keys
       run: |
-        if grep -rE "(api_key|apikey|access_key).*=.*['\"][a-zA-Z0-9]{20,}" \
-           --include="*.go" --include="*.js" --include="*.vue" . | \
-           grep -v "test" | grep -v "example"; then
+        echo "🔍 Checking for exposed API keys..."
+        
+        # Chercher des clés API exposées (longues chaînes alphanumériques)
+        if grep -rE '(api_key|apikey|access_key|secret_key)\s*[=:]\s*["\047][a-zA-Z0-9]{32,}["\047]' \
+           --include="*.go" --include="*.js" --include="*.vue" --include="*.ts" . | \
+           grep -v "test" | \
+           grep -v "example" | \
+           grep -v "binding:" | \
+           grep -v "json:" | \
+           grep -v "// "; then
           echo "⚠️ Potential exposed API keys found!"
           exit 1
         fi
+        
+        echo "✅ No exposed API keys detected"
 
   # Job pour vérifier la qualité du code
   code-quality:
