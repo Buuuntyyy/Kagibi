@@ -144,8 +144,10 @@ const openItem = async (item) => {
 
 .cards-row {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-rows: 48px;
   gap: 12px;
+  overflow: hidden;
   padding: 0.5rem 2px 1rem 2px;
 }
 
@@ -153,15 +155,15 @@ const openItem = async (item) => {
   background-color: var(--card-color);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 10px 12px;
+  width: 100%;
+  height: 48px;
+  padding: 0 12px;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
+  align-items: center;
+  gap: 12px;
   cursor: pointer;
   transition: box-shadow 0.2s, border-color 0.2s;
   box-sizing: border-box;
-  min-height: 70px;
 }
 
 .recent-card:hover {
