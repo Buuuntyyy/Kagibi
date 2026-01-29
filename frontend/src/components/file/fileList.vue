@@ -685,7 +685,11 @@ const selectItem = (item, type, event) => {
   if (event.shiftKey && lastClickedIndex.value !== -1) {
     const start = Math.min(lastClickedIndex.value, currentIndex);
     const end = Math.max(lastClickedIndex.value, currentIndex);
-    const rangeToSelect = allItems.value.slice(start, end + 1);
+    const rangeToSelect = allItems.value.slice(start, end + 1).map((i, idx) => {
+      // Déterminer le type basé sur si c'est un fichier ou un dossier
+      const itemType = i.Path ? 'folder' : 'file';
+      return { ...i, type: itemType };
+    });
     
     selectedItems.value = rangeToSelect;
 
@@ -715,7 +719,11 @@ const toggleItemSelection = (item, type, event) => {
   if (event && event.shiftKey && lastClickedIndex.value !== -1) {
     const start = Math.min(lastClickedIndex.value, currentIndex);
     const end = Math.max(lastClickedIndex.value, currentIndex);
-    const rangeToSelect = allItems.value.slice(start, end + 1);
+    const rangeToSelect = allItems.value.slice(start, end + 1).map((i) => {
+      // Déterminer le type basé sur si c'est un fichier ou un dossier
+      const itemType = i.Path ? 'folder' : 'file';
+      return { ...i, type: itemType };
+    });
 
     // Merge range into current selection (additive behavior for checkboxes)
     const newSelection = [...selectedItems.value];
