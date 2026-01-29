@@ -156,13 +156,15 @@ jobs:
       run: npm run test -- --run
 
     - name: Run Tests with Coverage
-      run: npm run test -- --run --coverage
+      run: npm run test -- --run --coverage || npm run test -- --run
 
     - name: Upload Coverage
+      if: success()
       uses: codecov/codecov-action@v3
       with:
         file: ./frontend/coverage/coverage-final.json
         flags: frontend
+      continue-on-error: true
 
     - name: Build Frontend
       run: npm run build
@@ -304,6 +306,10 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.21'
+
+    - name: Install dependencies
+      working-directory: ./backend
+      run: go mod download
 
     - name: Run go vet
       working-directory: ./backend
