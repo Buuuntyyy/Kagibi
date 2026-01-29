@@ -16,6 +16,7 @@ import (
 )
 
 const ENDPOINT = "/rename"
+
 func TestRenameHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

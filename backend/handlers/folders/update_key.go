@@ -1,12 +1,12 @@
 package folders
 
 import (
+	"github.com/gin-gonic/gin"
+	"github.com/uptrace/bun"
 	"log"
 	"net/http"
 	"safercloud/backend/pkg"
 	"strings"
-	"github.com/gin-gonic/gin"
-	"github.com/uptrace/bun"
 )
 
 type UpdateFolderKeyRequest struct {

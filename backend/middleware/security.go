@@ -40,7 +40,7 @@ func SecureHeaders() gin.HandlerFunc {
 				"font-src 'self'; "+
 				"connect-src 'self' ws: wss:; "+
 				"media-src 'self' blob:; "+
-				"worker-src 'self'; "+  // Service Worker allowed
+				"worker-src 'self'; "+ // Service Worker allowed
 				"object-src 'none'; "+
 				"base-uri 'self'; "+
 				"form-action 'self'; "+
