@@ -77,6 +77,11 @@ func Migrate(db *bun.DB) error {
 		return fmt.Errorf("failed to create folder_sizes table: %w", err)
 	}
 
+	// Initialize folder sizes if table is empty
+	if err := EnsureFolderSizesInitialized(ctx, db); err != nil {
+		log.Printf("Warning: failed to initialize folder sizes: %v", err)
+	}
+
 	// Update existing rows to have a default path if it's empty
 	_, err = db.ExecContext(ctx, `UPDATE "share_links" SET "path" = '' WHERE "path" IS NULL;`)
 	if err != nil {
