@@ -269,7 +269,8 @@ func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, 
 		IsPreview:    req.IsPreview,
 	}
 
-	if err := upsertFileInDB(ctx, tx, fileRecord, fileSize); err != nil {
+	delta, err := upsertFileInDB(ctx, tx, fileRecord, fileSize)
+	if err != nil {
 		return nil, err
 	}
 
@@ -282,8 +283,8 @@ func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, 
 		return nil, fmt.Errorf("Transaction commit failed")
 	}
 
-	if !req.IsPreview {
-		if err := pkg.UpdateFolderSizesForFile(ctx, db, req.UserID, fileRecord.Path, fileRecord.Size); err != nil {
+	if !req.IsPreview && delta != 0 {
+		if err := pkg.UpdateFolderSizesForFile(ctx, db, req.UserID, fileRecord.Path, delta); err != nil {
 			log.Printf("Failed to update folder sizes: %v", err)
 		}
 	}
@@ -294,7 +295,7 @@ func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, 
 	return fileRecord, nil
 }
 
-func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) error {
+func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) (int64, error) {
 	log.Printf("[UpsertFile] Attempting to upsert file: path=%s, user_id=%s, size=%d", file.Path, file.UserID, size)
 
 	exists, _ := tx.NewSelect().Model((*pkg.File)(nil)).
@@ -310,6 +311,15 @@ func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) 
 				Set("storage_used = storage_used - ? + ?", oldFile.Size, size).
 				Where("id = ?", file.UserID).Exec(ctx)
 			file.ID = oldFile.ID
+			// Return delta for folder sizes
+			delta := size - oldFile.Size
+			_, err := tx.NewUpdate().Model(file).Where("user_id = ? AND path = ?", file.UserID, file.Path).Exec(ctx)
+			if err != nil {
+				log.Printf("[UpsertFile] ERROR updating file: %v", err)
+			} else {
+				log.Printf("[UpsertFile] Successfully updated file with ID: %d", file.ID)
+			}
+			return delta, err
 		}
 		_, err := tx.NewUpdate().Model(file).Where("user_id = ? AND path = ?", file.UserID, file.Path).Exec(ctx)
 		if err != nil {
@@ -317,14 +327,14 @@ func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) 
 		} else {
 			log.Printf("[UpsertFile] Successfully updated file with ID: %d", file.ID)
 		}
-		return err
+		return 0, err
 	}
 
 	log.Printf("[UpsertFile] File doesn't exist, inserting new: path=%s", file.Path)
 	_, err := tx.NewInsert().Model(file).Exec(ctx)
 	if err != nil {
 		log.Printf("[UpsertFile] ERROR inserting file: %v", err)
-		return err
+		return 0, err
 	}
 	log.Printf("[UpsertFile] Successfully inserted file with ID: %d", file.ID)
 
@@ -334,7 +344,7 @@ func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) 
 	if err != nil {
 		log.Printf("[UpsertFile] ERROR updating storage_used: %v", err)
 	}
-	return err
+	return size, err
 }
 
 func processShareKeys(ctx context.Context, tx bun.Tx, shareKeysJSON string, file *pkg.File) error {
