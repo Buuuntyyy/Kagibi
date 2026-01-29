@@ -33,7 +33,9 @@ func ListFilesHandler(c *gin.Context, db *bun.DB) {
 
 	log.Printf("ListFilesHandler: userID=%s path=%s", userID, cleanPath)
 
-	files, folders, err := pkg.ListItemsByUser(db, userID, cleanPath)
+	includeFolderSizes := c.Query("include_folder_sizes") == "1"
+
+	files, folders, err := pkg.ListItemsByUser(db, userID, cleanPath, includeFolderSizes)
 	if err != nil {
 		log.Printf("ListFilesHandler ERROR: Failed to list items - %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
