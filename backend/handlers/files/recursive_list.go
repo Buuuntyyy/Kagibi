@@ -2,11 +2,11 @@ package files
 
 import (
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"github.com/uptrace/bun"
 	"net/http"
 	"safercloud/backend/pkg"
 	"strings"
-	"github.com/gin-gonic/gin"
-	"github.com/uptrace/bun"
 )
 
 func ListAllFilesRecursiveHandler(c *gin.Context, db *bun.DB) {

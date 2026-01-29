@@ -103,6 +103,45 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 	streamFileFromS3(c, file)
 }
 
+// PreviewFileHandler streams the preview file directly using its ID
+func PreviewFileHandler(c *gin.Context, db *bun.DB) {
+	userIDInterface, _ := c.Get("user_id")
+	userID := userIDInterface.(string)
+	clientIP := c.ClientIP()
+
+	fileIDStr := c.Param("fileID")
+	fileID, err := strconv.ParseInt(fileIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file ID"})
+		return
+	}
+
+	// Rate limiting specific to downloads
+	if !checkDownloadRateLimit(userID, clientIP) {
+		log.Printf("SECURITY: Preview rate limit exceeded for user %s from IP %s", userID, clientIP)
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many download attempts"})
+		return
+	}
+
+	// Fetch preview file directly by ID (verify user ownership)
+	preview := new(pkg.File)
+	if err := db.NewSelect().Model(preview).
+		Where("id = ? AND user_id = ?", fileID, userID).
+		Scan(c.Request.Context()); err != nil {
+		// Security log
+		log.Printf("SECURITY: Unauthorized preview access attempt - UserID: %s, PreviewID: %d, IP: %s", userID, fileID, clientIP)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Preview not found"})
+		return
+	}
+
+	if preview.ID == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Preview not found"})
+		return
+	}
+
+	streamFileFromS3(c, preview)
+}
+
 func getFileWithPermission(ctx context.Context, db *bun.DB, fileID int64, userID string) (*pkg.File, error) {
 	// 1. Check Owner Access
 	if file, err := pkg.GetFile(db, fileID, userID); err == nil {
@@ -197,6 +236,7 @@ func streamFileFromS3(c *gin.Context, file *pkg.File) {
 	}
 
 	primaryKey := fmt.Sprintf("users/%s%s", file.UserID, normalizedPath)
+
 	output, err := s3storage.Client.GetObject(c.Request.Context(), &s3.GetObjectInput{
 		Bucket: aws.String(s3storage.BucketName),
 		Key:    aws.String(primaryKey),
