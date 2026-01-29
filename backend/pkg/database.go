@@ -87,7 +87,7 @@ func CreateFile(db *bun.DB, file *File) error {
 
 func CreateFolderDB(db *bun.DB, folder *Folder) error {
 	ctx := context.Background()
-	_, err := db.NewInsert().Model(folder).Exec(ctx)
+	_, err := db.NewInsert().Model(folder).Returning("id").Exec(ctx)
 	if err != nil {
 		return err
 	}
