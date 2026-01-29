@@ -192,6 +192,16 @@
                      <span class="slider"></span>
                   </label>
                </div>
+              <div class="pref-item">
+                <div class="pref-text">
+                  <span class="pref-title">Taille des dossiers</span>
+                  <span class="pref-desc">Afficher la taille des dossiers (calcul immédiat, hors previews)</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" v-model="preferenceStore.showFolderSizes">
+                  <span class="slider"></span>
+                </label>
+              </div>
             </div>
           </div>
         </section>

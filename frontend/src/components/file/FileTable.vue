@@ -88,7 +88,8 @@
 
             <!-- Size (Folder) -->
             <template v-else-if="col.key === 'size'">
-              -
+              <span v-if="showFolderSizes">{{ formatSize(folder.SizeBytes ?? folder.size_bytes ?? 0) }}</span>
+              <span v-else>-</span>
             </template>
             
             <!-- Default/Slot -->
@@ -228,6 +229,10 @@ const props = defineProps({
   selectedItems: {
     type: Array,
     default: () => []
+  },
+  showFolderSizes: {
+    type: Boolean,
+    default: false
   },
   columns: {
     type: Array,

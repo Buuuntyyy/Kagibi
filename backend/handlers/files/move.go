@@ -33,7 +33,7 @@ func MoveHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 	userIDInterface, _ := c.Get("user_id")
 	userID, _ := userIDInterface.(string)
 
-	oldPath, itemName, err := getItemInfo(c.Request.Context(), db, req.ID, req.Type, userID)
+	oldPath, itemName, itemSize, isPreview, err := getItemInfo(c.Request.Context(), db, req.ID, req.Type, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
@@ -56,26 +56,58 @@ func MoveHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 		return
 	}
 
+	if req.Type == "file" && !isPreview && itemSize > 0 {
+		oldParent := filepath.ToSlash(filepath.Dir(oldPath))
+		newParent := filepath.ToSlash(filepath.Dir(newPath))
+		if oldParent == "." {
+			oldParent = "/"
+		}
+		if newParent == "." {
+			newParent = "/"
+		}
+		if oldParent != newParent {
+			_ = pkg.UpdateFolderSizesForFolderPath(c.Request.Context(), db, userID, oldParent, -itemSize)
+			_ = pkg.UpdateFolderSizesForFolderPath(c.Request.Context(), db, userID, newParent, itemSize)
+		}
+	}
+
+	if req.Type == "folder" && itemSize > 0 {
+		oldParent := filepath.ToSlash(filepath.Dir(oldPath))
+		newParent := filepath.ToSlash(filepath.Dir(newPath))
+		if oldParent == "." {
+			oldParent = "/"
+		}
+		if newParent == "." {
+			newParent = "/"
+		}
+		if oldParent != newParent {
+			_ = pkg.UpdateFolderSizesForFolderPath(c.Request.Context(), db, userID, oldParent, -itemSize)
+			_ = pkg.UpdateFolderSizesForFolderPath(c.Request.Context(), db, userID, newParent, itemSize)
+		}
+	}
+
 	enqueueS3MoveTask(redisClient, userID, oldPath, newPath, req.Type == "folder")
 
 	c.JSON(http.StatusOK, gin.H{"message": "Item moved successfully", "newPath": newPath})
 }
 
-func getItemInfo(ctx context.Context, db *bun.DB, id int64, itemType, userID string) (string, string, error) {
+func getItemInfo(ctx context.Context, db *bun.DB, id int64, itemType, userID string) (string, string, int64, bool, error) {
 	if itemType == "file" {
 		file, err := pkg.GetFile(db, id, userID)
 		if err != nil {
-			return "", "", fmt.Errorf("File not found")
+			return "", "", 0, false, fmt.Errorf("File not found")
 		}
-		return file.Path, file.Name, nil
+		return file.Path, file.Name, file.Size, file.IsPreview, nil
 	}
 
 	var folder pkg.Folder
 	err := db.NewSelect().Model(&folder).Where("id = ? AND user_id = ?", id, userID).Scan(ctx)
 	if err != nil {
-		return "", "", fmt.Errorf("Folder not found")
+		return "", "", 0, false, fmt.Errorf("Folder not found")
 	}
-	return folder.Path, folder.Name, nil
+
+	folderSize, _ := pkg.GetFolderSize(ctx, db, folder.ID)
+	return folder.Path, folder.Name, folderSize, false, nil
 }
 
 func validateMove(ctx context.Context, db *bun.DB, req MoveRequest, userID, oldPath, itemName string) (string, error) {

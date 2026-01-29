@@ -92,7 +92,7 @@ func CreateFolderDB(db *bun.DB, folder *Folder) error {
 }
 
 // Lister les fichier d'un utilisateur
-func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, []FolderWithShare, error) {
+func ListItemsByUser(db *bun.DB, userID string, path string, includeFolderSizes bool) ([]FileWithShare, []FolderWithShare, error) {
 	start := time.Now()
 	ctx := context.Background()
 	var wg sync.WaitGroup
@@ -215,17 +215,23 @@ func ListItemsByUser(db *bun.DB, userID string, path string) ([]FileWithShare, [
 		var foldersPlain []Folder
 		var err error
 
+		q := db.NewSelect().Model(&foldersPlain)
+		if includeFolderSizes {
+			q = q.
+				ColumnExpr("?TableAlias.*").
+				ColumnExpr("COALESCE(fs.size_bytes, 0) AS size_bytes").
+				Join("LEFT JOIN folder_sizes AS fs ON fs.folder_id = ?TableAlias.id")
+		}
+
 		// 2.1 Fetch Folders
 		if path == "/" {
-			err = db.NewSelect().Model(&foldersPlain).
-				Where("user_id = ?", userID).
-				Where("path LIKE '/%' AND path NOT LIKE '%/%/%'").
+			err = q.Where("?TableAlias.user_id = ?", userID).
+				Where("?TableAlias.path LIKE '/%' AND ?TableAlias.path NOT LIKE '%/%/%'").
 				Scan(ctx)
 		} else {
 			searchPrefix := path + "/"
-			err = db.NewSelect().Model(&foldersPlain).
-				Where("user_id = ?", userID).
-				Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
+			err = q.Where("?TableAlias.user_id = ?", userID).
+				Where("?TableAlias.path LIKE ? AND ?TableAlias.path NOT LIKE ?", searchPrefix+"%", searchPrefix+"%/%").
 				Scan(ctx)
 		}
 
@@ -420,4 +426,12 @@ func GetFile(db *bun.DB, fileID int64, userID string) (*File, error) {
 	var file File
 	err := db.NewSelect().Model(&file).Where("id = ? AND user_id = ?", fileID, userID).Scan(ctx)
 	return &file, err
+}
+
+// Trouver un dossier par son ID
+func GetFolder(db *bun.DB, folderID int64, userID string) (*Folder, error) {
+	ctx := context.Background()
+	var folder Folder
+	err := db.NewSelect().Model(&folder).Where("id = ? AND user_id = ?", folderID, userID).Scan(ctx)
+	return &folder, err
 }

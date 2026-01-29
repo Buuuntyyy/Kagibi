@@ -66,6 +66,17 @@ func Migrate(db *bun.DB) error {
 		return fmt.Errorf("failed to add encrypted_key column to folder_shares: %w", err)
 	}
 
+	// Folder sizes table (with FK to folders)
+	_, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "folder_sizes" (
+		"folder_id" BIGINT PRIMARY KEY REFERENCES "folders"("id") ON DELETE CASCADE,
+		"user_id" VARCHAR NOT NULL,
+		"size_bytes" BIGINT NOT NULL DEFAULT 0,
+		"updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create folder_sizes table: %w", err)
+	}
+
 	// Update existing rows to have a default path if it's empty
 	_, err = db.ExecContext(ctx, `UPDATE "share_links" SET "path" = '' WHERE "path" IS NULL;`)
 	if err != nil {
@@ -84,6 +95,12 @@ func Migrate(db *bun.DB) error {
 	_, err = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_folders_user_path ON folders (user_id, path);`)
 	if err != nil {
 		log.Printf("Warning: failed to create idx_folders_user_path: %v", err)
+	}
+
+	// Index for folder sizes (User)
+	_, err = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_folder_sizes_user ON folder_sizes (user_id);`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_folder_sizes_user: %v", err)
 	}
 
 	// Index for finding shared folders (SharedWithUserID)

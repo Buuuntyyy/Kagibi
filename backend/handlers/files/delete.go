@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strconv"
 
 	"safercloud/backend/pkg"
@@ -48,7 +49,14 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
 		log.Printf("Successfully deleted S3 object: %s", s3Key)
 	}
 
-	// 3. Supprimer de la BDD
+	// 3. Mettre à jour la taille des dossiers (sauf preview)
+	if !file.IsPreview {
+		if err := pkg.UpdateFolderSizesForFile(c.Request.Context(), db, userID, file.Path, -file.Size); err != nil {
+			log.Printf("Failed to update folder sizes on delete: %v", err)
+		}
+	}
+
+	// 4. Supprimer de la BDD
 	if err := pkg.DeleteFile(db, fileID, userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la suppression en base"})
 		return
@@ -81,6 +89,24 @@ func DeleteFolderHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
 	// nécessiterait une fonction GetFolder similaire à GetFile.
 
 	// TODO: Implémenter la suppression physique récursive sécurisée pour les dossiers
+
+	folder, err := pkg.GetFolder(db, folderID, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Dossier introuvable"})
+		return
+	}
+
+	// Mettre à jour la taille des dossiers parents en fonction de la taille du dossier supprimé
+	if folderSize, err := pkg.GetFolderSize(c.Request.Context(), db, folderID); err == nil && folderSize > 0 {
+		parentPath := filepath.Dir(folder.Path)
+		if parentPath == "." {
+			parentPath = "/"
+		}
+		if err := pkg.UpdateFolderSizesForFolderPath(c.Request.Context(), db, userID, parentPath, -folderSize); err != nil {
+			log.Printf("Failed to update folder sizes on folder delete: %v", err)
+		}
+		_ = pkg.DeleteFolderSize(c.Request.Context(), db, folderID)
+	}
 
 	if err := pkg.DeleteFolder(db, folderID, userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la suppression en base"})

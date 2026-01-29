@@ -282,6 +282,12 @@ func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, 
 		return nil, fmt.Errorf("Transaction commit failed")
 	}
 
+	if !req.IsPreview {
+		if err := pkg.UpdateFolderSizesForFile(ctx, db, req.UserID, fileRecord.Path, fileRecord.Size); err != nil {
+			log.Printf("Failed to update folder sizes: %v", err)
+		}
+	}
+
 	// 7. Notify Storage Update
 	notifyStorageUpdate(db, wsManager, req.UserID)
 
