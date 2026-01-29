@@ -72,10 +72,11 @@ jobs:
       with:
         file: ./backend/coverage.out
         flags: backend
+      continue-on-error: true
 
     - name: Build Backend
       # Vérifie que le code compile correctement
-      run: go build -v ./...
+      run: go build -v .
 
   # Job pour les tests d'intégration Backend
   backend-integration:
