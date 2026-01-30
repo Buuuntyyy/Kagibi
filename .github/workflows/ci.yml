@@ -235,7 +235,7 @@ jobs:
         JWT_SECRET: test-secret-key-for-ci
         PORT: 8080
       run: |
-        go build -o server ./...
+        go build -o server .
         ./server &
         echo $! > server.pid
         sleep 5
