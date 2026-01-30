@@ -46,14 +46,13 @@ func TestCreateHandler(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		// Mock DB Expectations
-		// Expect INSERT into folders
-		// Bun utilise des arguments nommés ou positionnels, mais sqlmock attend des arguments précis.
-		// Ici, Bun génère une requête avec les valeurs directement dans le SQL pour certains drivers ou contextes,
-		// ou alors sqlmock ne capture pas bien les args.
-		// Pour simplifier le test avec Bun + sqlmock, on utilise une regex large et on ignore les args spécifiques
-		// car Bun gère l'interpolation différemment selon le dialecte.
+		// Expect INSERT into folders and RETURNING id
 		mock.ExpectQuery(`INSERT INTO "folders"`).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+		// Expect INSERT into folder_sizes
+		mock.ExpectQuery(`INSERT INTO "folder_sizes"`).
+			WillReturnRows(sqlmock.NewRows([]string{"folder_id"}).AddRow(1))
 
 		// Execute
 		w := httptest.NewRecorder()
