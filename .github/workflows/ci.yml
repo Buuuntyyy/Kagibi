@@ -47,7 +47,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21'
+        go-version: '1.25.4'
         cache-dependency-path: backend/go.sum
 
     - name: Install dependencies
@@ -116,7 +116,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21'
+        go-version: '1.25.4'
 
     - name: Run Integration Tests
       working-directory: ./backend
@@ -262,7 +262,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21'
+        go-version: '1.25.4'
 
     - name: Set up Node.js
       uses: actions/setup-node@v3
@@ -337,7 +337,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21'
+        go-version: '1.25.4'
 
     - name: Install dependencies
       working-directory: ./backend
