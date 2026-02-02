@@ -10,6 +10,7 @@
       <div class="drag-content">
         <span class="drag-icon">☁️</span>
         <span class="drag-text">Déposez vos fichiers ici</span>
+        <span class="drag-subtext">Plusieurs fichiers supportés</span>
       </div>
     </div>
     
@@ -30,7 +31,7 @@
         </button>
       </div>
     </div>
-    <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" />
+    <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" multiple />
     <div class="path-banner">
       
       <div class="breadcrumbs">
@@ -180,6 +181,8 @@ import { useAuthStore } from '../../stores/auth'
 import { useUIStore } from '../../stores/ui'
 import { usePreferencesStore } from '../../stores/preferences'
 import { useTagStore } from '../../stores/tags'
+import { useUploadStore } from '../../stores/uploads'
+import uploadQueueManager from '../../utils/uploadQueueManager'
 import InputDialog from '../InputDialog.vue'
 import TagDialog from '../TagDialog.vue'
 import ShareDialog from '../ShareDialog.vue'
@@ -195,6 +198,7 @@ const uiStore = useUIStore()
 const fileStore = useFileStore()
 const preferenceStore = usePreferencesStore()
 const tagStore = useTagStore()
+const uploadStore = useUploadStore()
 const selectedItems = ref([])
 const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
 const fileInput = ref(null)
@@ -909,9 +913,10 @@ const triggerFileInput = () => {
 }
 
 const handleFileUpload = async (event) => {
-  const file = event.target.files[0]
-  if (file) {
-    await fileStore.uploadFile(file)
+  const files = event.target.files
+  if (files && files.length > 0) {
+    // Use the new queue manager for multi-file uploads
+    await uploadQueueManager.addFiles(files, fileStore.currentPath)
     event.target.value = '' // Reset file input
   }
 }
@@ -946,10 +951,8 @@ const onDrop = async (e) => {
   isDragging.value = false
   const files = e.dataTransfer.files
   if (files.length > 0) {
-    // On upload les fichiers un par un
-    for (const file of files) {
-      await fileStore.uploadFile(file)
-    }
+    // Use the new queue manager for multi-file uploads
+    await uploadQueueManager.addFiles(files, fileStore.currentPath)
   }
 }
 
@@ -1363,6 +1366,12 @@ button {
 .drag-text {
   font-size: 1.5rem;
   font-weight: bold;
+}
+
+.drag-subtext {
+  font-size: 0.9rem;
+  opacity: 0.7;
+  margin-top: 0.5rem;
 }
 
 
