@@ -206,6 +206,13 @@ func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	filesG.GET("/download/:fileID", func(c *gin.Context) { files.DownloadFileHandler(c, db) })
 	filesG.GET("/preview/:fileID", func(c *gin.Context) { files.PreviewFileHandler(c, db) })
 	filesG.GET("/search", func(c *gin.Context) { files.SearchFilesHandler(c, db) })
+
+	// Direct-to-S3 Multipart Upload Routes
+	filesG.POST("/multipart/initiate", func(c *gin.Context) { files.InitiateMultipartHandler(c, db) })
+	filesG.POST("/multipart/complete", func(c *gin.Context) { files.CompleteMultipartHandler(c, db) })
+	filesG.POST("/multipart/abort", func(c *gin.Context) { files.AbortMultipartHandler(c, db) })
+	filesG.POST("/multipart/refresh-url", func(c *gin.Context) { files.RefreshPresignedURLsHandler(c, db) })
+	filesG.GET("/download/:fileID/presigned", func(c *gin.Context) { files.GetPresignedDownloadHandler(c, db) })
 }
 
 func registerFolderRoutes(g *gin.RouterGroup, db *bun.DB) {

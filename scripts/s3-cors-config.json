@@ -1,0 +1,30 @@
+{
+  "CORSRules": [
+    {
+      "ID": "SaferCloud-Multipart-Upload",
+      "AllowedOrigins": [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://your-production-domain.com"
+      ],
+      "AllowedMethods": [
+        "PUT",
+        "POST",
+        "GET",
+        "HEAD"
+      ],
+      "AllowedHeaders": [
+        "Content-Type",
+        "Content-Length",
+        "Content-MD5",
+        "x-amz-*"
+      ],
+      "ExposeHeaders": [
+        "ETag",
+        "x-amz-request-id",
+        "x-amz-id-2"
+      ],
+      "MaxAgeSeconds": 3600
+    }
+  ]
+}
