@@ -5,6 +5,7 @@ import { usePreferencesStore } from './preferences'
 import { encryptFile, decryptFile, generateMasterKey, wrapMasterKey, unwrapMasterKey, deriveKeyFromToken } from '../utils/crypto'
 import { encryptChunkWorker, decryptChunkedFileWorker, CHUNK_SIZE } from '../utils/crypto'
 import { generatePreview } from '../utils/previewGenerator'
+import { MultipartUploadManager, PART_SIZE, UploadState } from '../utils/multipartUpload'
 import sodium from 'libsodium-wrappers-sumo'
 
 // Compress image for preview display (reduces memory, not bandwidth)
@@ -64,6 +65,8 @@ export const useFileStore = defineStore('files', {
     uploadProgress: 0,
     isUploading: false,
     uploadingFileName: '',
+    uploadState: 'idle', // idle, encrypting, uploading, completing, error
+    currentUploadManager: null, // MultipartUploadManager instance
     
     // Preview State
     preview: {
@@ -609,105 +612,154 @@ export const useFileStore = defineStore('files', {
           console.error("Error checking active shares:", e);
       }
 
-      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-      // Calculate estimated encrypted size: original size + overhead (16 bytes salt + 12 bytes IV) per chunk
-      const overheadPerChunk = 28; 
-      const totalEncryptedSize = file.size + (totalChunks * overheadPerChunk);
-
-      let chunkIndex = 0;
-      let offset = 0;
-      let lastResponse = null;
+      // Setup upload state
       this.isUploading = true;
       this.uploadProgress = 0;
       this.uploadingFileName = file.name;
+      this.uploadState = 'encrypting';
+
+      // Create multipart upload manager
+      const uploadManager = new MultipartUploadManager({
+        onProgress: (percent, uploaded, total) => {
+          this.uploadProgress = percent;
+        },
+        onStateChange: (state) => {
+          if (state === UploadState.UPLOADING) {
+            this.uploadState = 'uploading';
+          } else if (state === UploadState.COMPLETED) {
+            this.uploadState = 'completing';
+          } else if (state === UploadState.FAILED || state === UploadState.ABORTED) {
+            this.uploadState = 'error';
+          }
+        },
+        onError: (error, partNumber) => {
+          console.error(`Upload error on part ${partNumber}:`, error);
+        }
+      });
+      this.currentUploadManager = uploadManager;
 
       try {
-        while(offset < file.size) {
-          let chunkBlob = file.slice(offset, offset + CHUNK_SIZE);
+        // Calculate total parts
+        const totalParts = Math.ceil(file.size / PART_SIZE);
+        
+        // Encrypt all chunks first (client-side ZK encryption)
+        const encryptedChunks = [];
+        let offset = 0;
+        let chunkIndex = 0;
+        
+        while (offset < file.size) {
+          let chunkBlob = file.slice(offset, offset + PART_SIZE);
           let chunkArrayBuffer = await chunkBlob.arrayBuffer();
-
-          let encryptedChunkBlob = await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex);
           
-          // Help GC: Release source buffer immediately
+          // Encrypt using existing worker-based encryption
+          let encryptedChunkBlob = await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex);
+          encryptedChunks.push(encryptedChunkBlob);
+          
+          // Help GC
           chunkArrayBuffer = null;
           chunkBlob = null;
-
-          let encryptedFile = new File([encryptedChunkBlob], file.name, { type: 'application/octet-stream' });
           
-          // Help GC: Release encrypted blob reference
-          encryptedChunkBlob = null;
-
-          const formData = new FormData()
-          formData.append('file', encryptedFile)
-          formData.append('path', uploadPath)
-          formData.append('chunk_index', chunkIndex)
-          formData.append('total_chunks', totalChunks)
-          formData.append('total_file_size', totalEncryptedSize) // Send total size for quota check
-          formData.append('encrypted_key', encryptedFileKey)
+          offset += PART_SIZE;
+          chunkIndex++;
           
-          // Send share keys only with the last chunk (or every chunk, but backend only uses it on commit)
-          // To be safe and simple, send with every chunk, backend ignores until commit.
-          if (Object.keys(shareKeysMap).length > 0) {
-              formData.append('share_keys', JSON.stringify(shareKeysMap));
-          }
+          // Update encryption progress (0-30% of total)
+          this.uploadProgress = Math.round((chunkIndex / totalParts) * 30);
+        }
 
-          if (isPreview) {
-              formData.append('is_preview', 'true');
-          }
-          if (previewID) {
-              formData.append('preview_id', previewID.toString());
-          }
+        // Calculate total encrypted size
+        const totalEncryptedSize = encryptedChunks.reduce((sum, chunk) => {
+          return sum + (chunk.size || chunk.byteLength || 0);
+        }, 0);
 
-          lastResponse = await api.post('/files/upload', formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
-            onUploadProgress: (progressEvent) => {
-                // Calculate global progress
-                const currentChunkProgress = progressEvent.loaded;
-                const previousProgress = chunkIndex * CHUNK_SIZE;
-                const totalProgress = previousProgress + currentChunkProgress;
-                this.uploadProgress = Math.min(Math.round((totalProgress / totalEncryptedSize) * 100), 100);
-            }
-          });
-          
-          // Help GC: Release file object
-          encryptedFile = null;
+        this.uploadState = 'uploading';
 
-          offset += CHUNK_SIZE;
-          chunkIndex += 1;
-        } 
+        // Initiate multipart upload with backend
+        await uploadManager.initiate(
+          file.name,
+          uploadPath,
+          'application/octet-stream',
+          totalEncryptedSize,
+          encryptedFileKey
+        );
+
+        // Upload parts directly to S3 (parallel with retry)
+        const completedParts = await uploadManager.uploadParts(encryptedChunks);
+
+        // Help GC
+        encryptedChunks.length = 0;
+
+        this.uploadState = 'completing';
+
+        // Complete the multipart upload
+        const result = await uploadManager.complete(completedParts, {
+          fileName: file.name,
+          filePath: uploadPath,
+          totalSize: totalEncryptedSize,
+          contentType: 'application/octet-stream',
+          encryptedKey: encryptedFileKey,
+          shareKeys: Object.keys(shareKeysMap).length > 0 ? JSON.stringify(shareKeysMap) : '',
+          previewId: previewID,
+          isPreview: isPreview
+        });
 
         if (!isPreview) {
-            this.fetchItems(this.currentPath)
-            // Mise à jour du quota utilisateur
-            await authStore.fetchUser()
+            this.fetchItems(this.currentPath);
+            // Update user quota
+            await authStore.fetchUser();
 
             // Add to history
-             if (lastResponse?.data?.file) {
-                 this.addToHistory({ 
-                     ...lastResponse.data.file, 
-                     type: 'file', 
-                     displayName: lastResponse.data.file.Name 
-                 });
+            if (result?.file) {
+                this.addToHistory({ 
+                    ...result.file, 
+                    type: 'file', 
+                    displayName: result.file.Name 
+                });
             }
         }
         
         // Reset progress after a short delay
         setTimeout(() => {
-            if (!isPreview) { // Only reset if main file
+            if (!isPreview) {
                 this.isUploading = false;
                 this.uploadProgress = 0;
+                this.uploadState = 'idle';
+                this.currentUploadManager = null;
             }
         }, 1000);
 
-        return lastResponse?.data?.file;
+        return result?.file;
 
       } catch (error) {
-        console.error("Erreur upload:", error);
-        alert("Erreur lors de l'envoi du fichier au serveur.");
+        console.error("Erreur upload multipart:", error);
+        
+        // Attempt to abort the upload
+        if (uploadManager) {
+          try {
+            await uploadManager.abort();
+          } catch (abortError) {
+            console.error("Error aborting upload:", abortError);
+          }
+        }
+        
+        alert("Erreur lors de l'envoi du fichier: " + error.message);
         this.isUploading = false;
         this.uploadProgress = 0;
+        this.uploadState = 'idle';
+        this.currentUploadManager = null;
+        throw error;
+      }
+    },
+
+    /**
+     * Cancel the current upload
+     */
+    async cancelUpload() {
+      if (this.currentUploadManager) {
+        await this.currentUploadManager.abort();
+        this.isUploading = false;
+        this.uploadProgress = 0;
+        this.uploadState = 'idle';
+        this.currentUploadManager = null;
       }
     },
     async createFolder(folderName) {
