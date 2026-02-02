@@ -11,7 +11,8 @@ export const useDownloadStore = defineStore('downloads', {
     // Current download session
     isActive: false,
     status: DownloadStatus.IDLE,
-    zipName: '',
+    downloadName: '',  // File name or ZIP name
+    isSingleFile: false,  // True for single file download (no ZIP)
     
     // Progress tracking
     totalFiles: 0,
@@ -91,7 +92,8 @@ export const useDownloadStore = defineStore('downloads', {
         [DownloadStatus.FETCHING_TREE]: 'Récupération de la structure...',
         [DownloadStatus.GENERATING_URLS]: 'Génération des URLs...',
         [DownloadStatus.DOWNLOADING]: 'Téléchargement en cours...',
-        [DownloadStatus.FINALIZING]: 'Finalisation du ZIP...',
+        [DownloadStatus.DECRYPTING]: 'Déchiffrement...',
+        [DownloadStatus.FINALIZING]: state.isSingleFile ? 'Finalisation...' : 'Finalisation du ZIP...',
         [DownloadStatus.COMPLETED]: 'Terminé',
         [DownloadStatus.ERROR]: 'Erreur',
         [DownloadStatus.ABORTED]: 'Annulé'
@@ -144,7 +146,8 @@ export const useDownloadStore = defineStore('downloads', {
       this.reset()
       this.isActive = true
       this.showManager = true
-      this.zipName = `${folderName}.zip`
+      this.downloadName = `${folderName}.zip`
+      this.isSingleFile = false
       
       await downloadManager.downloadFolder(folderId, folderName)
     },
@@ -156,11 +159,25 @@ export const useDownloadStore = defineStore('downloads', {
       this.reset()
       this.isActive = true
       this.showManager = true
-      this.zipName = zipName
+      this.downloadName = zipName
+      this.isSingleFile = false
       
       await downloadManager.downloadSelection(fileIds, folderIds, zipName)
     },
-    
+
+    /**
+     * Download a single file with progress tracking (no ZIP)
+     */
+    async downloadSingleFile(fileId, fileName, encryptedKey = null, fileSize = 0) {
+      this.reset()
+      this.isActive = true
+      this.showManager = true
+      this.downloadName = fileName
+      this.isSingleFile = true
+      
+      await downloadManager.downloadSingleFile(fileId, fileName, encryptedKey, fileSize)
+    },
+
     /**
      * Cancel current download
      */
@@ -178,10 +195,10 @@ export const useDownloadStore = defineStore('downloads', {
       this.processedFiles = progress.processedFiles
       this.totalSize = progress.totalSize
       this.bytesDownloaded = progress.bytesDownloaded
-      this.percent = progress.percent // Now based on bytes, not files
+      this.percent = progress.percent
       this.speed = progress.speed
       this.eta = progress.eta
-      // Files now include bytesDownloaded and size for individual progress
+      this.isSingleFile = progress.isSingleFile ?? this.isSingleFile
       this.files = progress.files || []
     },
     
@@ -237,7 +254,8 @@ export const useDownloadStore = defineStore('downloads', {
     reset() {
       this.isActive = false
       this.status = DownloadStatus.IDLE
-      this.zipName = ''
+      this.downloadName = ''
+      this.isSingleFile = false
       this.totalFiles = 0
       this.processedFiles = 0
       this.totalSize = 0

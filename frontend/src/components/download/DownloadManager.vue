@@ -13,7 +13,7 @@
               <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
             </svg>
             <span class="dm-title">
-              {{ downloadStore.minimized ? `${downloadStore.percent}%` : 'Téléchargement ZIP' }}
+              {{ downloadStore.minimized ? `${downloadStore.percent}%` : (downloadStore.isSingleFile ? 'Téléchargement' : 'Téléchargement ZIP') }}
             </span>
           </div>
           <div class="dm-header-right">
@@ -57,14 +57,14 @@
               <span class="dm-status-text" :class="statusClass">
                 {{ downloadStore.statusText }}
               </span>
-              <span class="dm-file-count">
+              <span v-if="!downloadStore.isSingleFile" class="dm-file-count">
                 {{ downloadStore.processedFiles }} / {{ downloadStore.totalFiles }} fichiers
               </span>
             </div>
             
-            <!-- Zip Name -->
-            <div class="dm-zip-name" :title="downloadStore.zipName">
-              📦 {{ downloadStore.zipName }}
+            <!-- Download Name -->
+            <div class="dm-zip-name" :title="downloadStore.downloadName">
+              {{ downloadStore.isSingleFile ? '📄' : '📦' }} {{ downloadStore.downloadName }}
             </div>
             
             <!-- Progress Bar -->
@@ -97,8 +97,8 @@
               <span>{{ downloadStore.error }}</span>
             </div>
             
-            <!-- File list (scrollable) -->
-            <div v-if="downloadStore.files.length > 0" class="dm-file-list">
+            <!-- File list (scrollable) - only for multi-file downloads -->
+            <div v-if="!downloadStore.isSingleFile && downloadStore.files.length > 0" class="dm-file-list">
               <div 
                 v-for="file in displayedFiles" 
                 :key="file.name" 
