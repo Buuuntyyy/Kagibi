@@ -18,7 +18,6 @@ func GetUserKeys(c *gin.Context, db *bun.DB) {
 	}
 
 	log.Printf("[GetKeys] Returning keys for user: %s", user.Email)
-	log.Printf("[GetKeys] Salt length: %d, EMK length: %d", len(user.Salt), len(user.EncryptedMasterKey))
 
 	// On renvoie UNIQUEMENT ce qui sert à déchiffrer la MasterKey
 	c.JSON(200, gin.H{

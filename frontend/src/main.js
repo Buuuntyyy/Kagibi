@@ -21,7 +21,6 @@ initSecurityMonitoring();
 window.addEventListener('load', () => {
   const isSecure = detectXSSAttempts();
   if (!isSecure) {
-    console.error('[App] XSS attempts detected at startup');
     getSecurityMonitor().logSecurityEvent(
       'XSS_DETECTED_AT_STARTUP',
       'high',
@@ -32,8 +31,6 @@ window.addEventListener('load', () => {
   // Configurer le monitoring continu des injections
   setupXSSMonitoring();
 });
-
-console.log('[App] Security enhancements loaded');
 
 app.use(router)
 app.mount('#app')

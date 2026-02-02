@@ -18,12 +18,11 @@ type visitor struct {
 // EndpointLimiter manages rate limits per endpoint
 type EndpointLimiter struct {
 	limiters map[string]*rate.Limiter
-	mu       sync.Mutex
+	mu       sync.RWMutex
 }
 
-// map to hold visitors
-var visitors = make(map[string]*visitor)
-var mu sync.Mutex
+// sync.Map for better concurrency on visitors
+var visitors sync.Map // map[string]*visitor
 var endpointLimiter *EndpointLimiter
 
 // Run a background goroutine to remove old entries from the visitors map
@@ -47,10 +46,10 @@ func NewEndpointLimiter() *EndpointLimiter {
 	}
 }
 
-// GetLimiter returns the appropriate limiter for an endpoint
+// GetLimiter returns the appropriate limiter for an endpoint (read-optimized)
 func (el *EndpointLimiter) GetLimiter(endpoint string) *rate.Limiter {
-	el.mu.Lock()
-	defer el.mu.Unlock()
+	el.mu.RLock()
+	defer el.mu.RUnlock()
 
 	if limiter, ok := el.limiters[endpoint]; ok {
 		return limiter
@@ -59,22 +58,22 @@ func (el *EndpointLimiter) GetLimiter(endpoint string) *rate.Limiter {
 }
 
 func getVisitor(ip string, endpoint string) *rate.Limiter {
-	mu.Lock()
-	defer mu.Unlock()
-
 	key := ip + "_" + endpoint
-	v, exists := visitors[key]
-	if !exists {
-		// Get the appropriate limiter for this endpoint
-		limiter := endpointLimiter.GetLimiter(endpoint)
-		// Include lastSeen time
-		visitors[key] = &visitor{limiter, time.Now()}
-		return limiter
+
+	// Fast path: check if visitor exists
+	if val, ok := visitors.Load(key); ok {
+		v := val.(*visitor)
+		v.lastSeen = time.Now()
+		return v.limiter
 	}
 
-	// Update lastSeen time
-	v.lastSeen = time.Now()
-	return v.limiter
+	// Slow path: create new visitor
+	limiter := endpointLimiter.GetLimiter(endpoint)
+	newVisitor := &visitor{limiter: limiter, lastSeen: time.Now()}
+
+	// Store or load existing (handles race)
+	actual, _ := visitors.LoadOrStore(key, newVisitor)
+	return actual.(*visitor).limiter
 }
 
 // cleanupVisitors removes visitors that haven't been seen for a while
@@ -82,13 +81,13 @@ func cleanupVisitors() {
 	for {
 		time.Sleep(time.Minute)
 
-		mu.Lock()
-		for key, v := range visitors {
+		visitors.Range(func(key, value interface{}) bool {
+			v := value.(*visitor)
 			if time.Since(v.lastSeen) > 3*time.Minute {
-				delete(visitors, key)
+				visitors.Delete(key)
 			}
-		}
-		mu.Unlock()
+			return true
+		})
 	}
 }
 

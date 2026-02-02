@@ -32,14 +32,6 @@ class SecurityMonitor {
       this.events.shift();
     }
 
-    // Log en console
-    const color = this.getSeverityColor(severity);
-    console.log(
-      `%c[SecurityMonitor] ${type}`,
-      `color: ${color}; font-weight: bold;`,
-      details
-    );
-
     // Envoyer au backend si severity élevée
     if (severity === 'critical' || severity === 'high') {
       this.reportToBackend(event);
@@ -55,22 +47,22 @@ class SecurityMonitor {
   }
 
   /**
-   * Couleur de sévérité pour console
+   * Sanitize les détails avant envoi (ZK: ne jamais envoyer de contenu potentiellement sensible)
    */
-  getSeverityColor(severity) {
-    const colors = {
-      low: '#FFA500',      // Orange
-      medium: '#FF6B6B',   // Rouge clair
-      high: '#FF0000',     // Rouge
-      critical: '#8B0000'  // Rouge foncé
+  sanitizeEventForBackend(event) {
+    return {
+      timestamp: event.timestamp,
+      type: event.type,
+      severity: event.severity,
+      // Ne pas envoyer: details, userAgent (fingerprinting)
     };
-    return colors[severity] || '#000000';
   }
 
   /**
    * Rapporte un événement au backend
    */
   async reportToBackend(event) {
+    const sanitizedEvent = this.sanitizeEventForBackend(event);
     try {
       // Essayer d'obtenir le token de Supabase
       let token = null;
@@ -97,18 +89,18 @@ class SecurityMonitor {
       const response = await fetch('/api/v1/security/report', {
         method: 'POST',
         headers,
-        body: JSON.stringify(event)
+        body: JSON.stringify(sanitizedEvent)
       });
 
       if (response.ok) {
-        console.log('[SecurityMonitor] Event reported to backend');
+        // Event reported successfully
       } else if (response.status === 401) {
-        console.debug('[SecurityMonitor] Not authenticated yet, event cached locally');
+        // Not authenticated yet, event cached locally
       } else {
-        console.warn(`[SecurityMonitor] Backend returned ${response.status}`);
+        // Backend returned non-OK status
       }
     } catch (error) {
-      console.debug('[SecurityMonitor] Cannot reach backend (normal before auth):', error.message);
+      // Cannot reach backend (normal before auth)
     }
   }
 
@@ -116,8 +108,6 @@ class SecurityMonitor {
    * Gère les activités suspectes (trop d'événements en peu de temps)
    */
   handleSuspiciousActivity() {
-    console.error('[SecurityMonitor] Suspicious activity detected!');
-    
     this.logSecurityEvent(
       'SUSPICIOUS_ACTIVITY_THRESHOLD_EXCEEDED',
       'critical',
@@ -238,8 +228,6 @@ export function initSecurityMonitoring() {
       );
     }
   });
-
-  console.log('[SecurityMonitoring] Initialized');
 }
 
 /**
