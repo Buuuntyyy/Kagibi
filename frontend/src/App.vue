@@ -7,6 +7,7 @@
   <WarnDialog />
   <DeleteConfirmDialog />
   <UploadManager />
+  <DownloadManager />
 </template>
 
 <script setup>
@@ -15,6 +16,7 @@ import P2PTransferDialog from './components/P2PTransferDialog.vue'
 import WarnDialog from './components/WarnDialog.vue'
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
 import UploadManager from './components/upload/UploadManager.vue'
+import DownloadManager from './components/download/DownloadManager.vue'
 import { useThemeStore } from './stores/theme'
 import { useAuthStore } from './stores/auth'
 import { useWebSocketStore } from './stores/websocket'

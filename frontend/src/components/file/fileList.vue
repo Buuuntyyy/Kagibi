@@ -97,8 +97,8 @@
         <div class="menu-item" @click.stop="handleContextAction('preview')" v-if="contextMenu.item.type === 'file'">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></span> Aperçu
         </div>
-        <div class="menu-item" @click.stop="handleContextAction('download')" v-if="contextMenu.item.type === 'file'">
-          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg></span> Télécharger
+        <div class="menu-item" @click.stop="handleContextAction('download')">
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg></span> {{ contextMenu.item.type === 'folder' ? 'Télécharger (ZIP)' : 'Télécharger' }}
         </div>
         <div class="menu-item" @click.stop="handleContextAction('rename')">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M14.06 9.02l.92.92L5.92 19H5v-.92l9.06-9.06M17.66 3c-.25 0-.51.1-.7.29l-1.83 1.83 3.75 3.75 1.83-1.83c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.2-.2-.45-.29-.71-.29zm-3.6 3.19L3 17.25V21h3.75L17.81 9.94l-3.75-3.75z"/></svg></span> Renommer
@@ -182,6 +182,7 @@ import { useUIStore } from '../../stores/ui'
 import { usePreferencesStore } from '../../stores/preferences'
 import { useTagStore } from '../../stores/tags'
 import { useUploadStore } from '../../stores/uploads'
+import { useDownloadStore } from '../../stores/downloads'
 import uploadQueueManager from '../../utils/uploadQueueManager'
 import InputDialog from '../InputDialog.vue'
 import TagDialog from '../TagDialog.vue'
@@ -199,6 +200,7 @@ const fileStore = useFileStore()
 const preferenceStore = usePreferencesStore()
 const tagStore = useTagStore()
 const uploadStore = useUploadStore()
+const downloadStore = useDownloadStore()
 const selectedItems = ref([])
 const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
 const fileInput = ref(null)
@@ -642,6 +644,9 @@ const handleContextAction = (action) => {
     case 'download':
       if (item.type === 'file') {
         fileStore.downloadFile(item.ID, item.Name, item.MimeType, false) // Force download
+      } else if (item.type === 'folder') {
+        // Download folder as ZIP
+        downloadStore.downloadFolder(item.ID, item.Name)
       }
       break
     case 'preview':
@@ -800,20 +805,41 @@ const goUp = () => {
   }
 }
 
-const downloadSelectedFiles = () => {
+const downloadSelectedFiles = async () => {
   const files = selectedItems.value.filter(i => i.type === 'file');
-  if (files.length === 0) return;
+  const folders = selectedItems.value.filter(i => i.type === 'folder');
+  
+  if (files.length === 0 && folders.length === 0) return;
 
-  if (files.length === 1) {
+  // Single file: direct download
+  if (files.length === 1 && folders.length === 0) {
     const file = files[0];
-    fileStore.downloadFile(file.ID, file.Name);
-  } else {
-    // Logic for downloading multiple files, e.g., zipping them first
-    alert("Le téléchargement de plusieurs fichiers en une fois (ex: zip) n'est pas encore implémenté. Les fichiers seront téléchargés individuellement.");
-    files.forEach(file => {
-      fileStore.downloadFile(file.ID, file.Name);
-    });
+    fileStore.downloadFile(file.ID, file.Name, file.MimeType);
+    return;
   }
+  
+  // Single folder: download as ZIP
+  if (folders.length === 1 && files.length === 0) {
+    const folder = folders[0];
+    await downloadStore.downloadFolder(folder.ID, folder.Name);
+    return;
+  }
+  
+  // Multiple items: download as selection ZIP
+  const fileIDs = files.map(f => f.ID);
+  const folderIDs = folders.map(f => f.ID);
+  
+  // Generate ZIP name from selection
+  let zipName = 'selection.zip';
+  if (files.length > 0 && folders.length === 0) {
+    zipName = `${files.length}_fichiers.zip`;
+  } else if (folders.length > 0 && files.length === 0) {
+    zipName = `${folders.length}_dossiers.zip`;
+  } else {
+    zipName = `selection_${files.length + folders.length}_elements.zip`;
+  }
+  
+  await downloadStore.downloadSelection(fileIDs, folderIDs, zipName);
 }
 
 const deleteSelectedItems = () => {

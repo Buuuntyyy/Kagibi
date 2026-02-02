@@ -213,12 +213,17 @@ func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	filesG.POST("/multipart/abort", func(c *gin.Context) { files.AbortMultipartHandler(c, db) })
 	filesG.POST("/multipart/refresh-url", func(c *gin.Context) { files.RefreshPresignedURLsHandler(c, db) })
 	filesG.GET("/download/:fileID/presigned", func(c *gin.Context) { files.GetPresignedDownloadHandler(c, db) })
+
+	// Batch Presign Routes (for ZIP download)
+	filesG.POST("/batch-presign", func(c *gin.Context) { files.BatchPresignDownloadHandler(c, db) })
+	filesG.POST("/selection-tree", func(c *gin.Context) { files.GetSelectionTreeHandler(c, db) })
 }
 
 func registerFolderRoutes(g *gin.RouterGroup, db *bun.DB) {
 	foldersG := g.Group("/folders")
 	foldersG.POST("/create", func(c *gin.Context) { folders.CreateHandler(c, db) })
 	foldersG.PUT("/:id/key", func(c *gin.Context) { folders.UpdateFolderKeyHandler(c, db) })
+	foldersG.GET("/:id/tree", func(c *gin.Context) { folders.GetFolderTreeHandler(c, db) })
 }
 
 func registerTagRoutes(g *gin.RouterGroup, db *bun.DB) {
