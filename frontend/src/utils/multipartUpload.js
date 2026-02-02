@@ -203,7 +203,6 @@ export class MultipartUploadManager {
       const xhr = new XMLHttpRequest()
       
       xhr.open('PUT', part.url, true)
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream')
       
       // Track upload progress for this part
       xhr.upload.onprogress = (event) => {
