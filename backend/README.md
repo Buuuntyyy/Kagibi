@@ -12,6 +12,8 @@ Le backend SaferCloud est une API Go qui respecte les principes **Zero-Knowledge
 - ✅ JWT validation via Supabase
 - ✅ Rate limiting avec `sync.Map`
 - ✅ WebSocket temps réel pour notifications
+- ✅ **Upload S3 Multipart** avec URLs présignées (direct client → S3)
+- ✅ **Download multi-fichiers** avec batch presigned URLs et folder tree
 - ✅ Logs sécurisés (aucune clé exposée)
 
 ---
@@ -108,6 +110,7 @@ backend/
 │   ├── files/
 │   │   ├── upload.go           # POST /files/upload (chunked)
 │   │   ├── download.go         # GET /files/download/:id
+│   │   ├── batch_presign.go    # POST /files/batch-presign, selection-tree
 │   │   ├── delete.go           # DELETE /files/file/:id
 │   │   ├── list.go             # GET /files/list/*path
 │   │   ├── move.go             # POST /files/move
@@ -116,6 +119,7 @@ backend/
 │   │
 │   ├── folders/
 │   │   ├── create.go           # POST /folders/create
+│   │   ├── tree.go             # GET /folders/:id/tree (récursif)
 │   │   └── update_key.go       # PUT /folders/:id/key
 │   │
 │   ├── friends/
@@ -246,6 +250,8 @@ users/550e8400-e29b-41d4-a716-446655440000/Documents/report.pdf.enc
 | GET | `/api/v1/files/list-recursive` | Liste complète récursive | ✅ |
 | GET | `/api/v1/files/download/:fileID` | Télécharger fichier | ✅ |
 | GET | `/api/v1/files/preview/:fileID` | Télécharger preview | ✅ |
+| POST | `/api/v1/files/batch-presign` | Génère URLs présignées en batch (max 500) | ✅ |
+| POST | `/api/v1/files/selection-tree` | Arborescence mixte fichiers + dossiers | ✅ |
 | DELETE | `/api/v1/files/file/:fileID` | Supprimer fichier | ✅ |
 | DELETE | `/api/v1/files/folder/:folderID` | Supprimer dossier (récursif) | ✅ |
 | POST | `/api/v1/files/bulk-delete` | Supprimer multiple | ✅ |
@@ -259,6 +265,7 @@ users/550e8400-e29b-41d4-a716-446655440000/Documents/report.pdf.enc
 | Méthode | Endpoint | Description | Auth |
 |---------|----------|-------------|------|
 | POST | `/api/v1/folders/create` | Créer dossier | ✅ |
+| GET | `/api/v1/folders/:id/tree` | Arborescence complète récursive | ✅ |
 | PUT | `/api/v1/folders/:id/key` | Mettre à jour clé chiffrée dossier | ✅ |
 
 ### Partages
@@ -309,7 +316,85 @@ users/550e8400-e29b-41d4-a716-446655440000/Documents/report.pdf.enc
 |---------|----------|-------------|------|
 | POST | `/api/v1/security/report` | Reporter événement sécurité | ✅ |
 | GET | `/api/v1/security/events` | Récupérer événements | ✅ |
+---
 
+## 📦 API Upload/Download Multi-Fichiers
+
+### Upload S3 Multipart
+
+| Endpoint | Méthode | Description |
+|----------|---------|-------------|
+| `/api/v1/multipart/initiate` | POST | Initie upload, retourne uploadID + URLs présignées |
+| `/api/v1/multipart/complete` | POST | Finalise upload avec ETags |
+| `/api/v1/multipart/abort` | POST | Annule upload, cleanup parts S3 |
+| `/api/v1/multipart/refresh-url` | POST | Régénère URLs expirées (180s TTL) |
+
+**Exemple `POST /multipart/initiate`**:
+```json
+// Request
+{
+  "filename": "document.pdf.enc",
+  "size": 104857600,
+  "encryptedName": "base64_encrypted_name",
+  "encryptedMasterKey": "base64_encrypted_key"
+}
+
+// Response
+{
+  "uploadID": "aws-s3-upload-id",
+  "fileID": "uuid",
+  "presignedURLs": [
+    { "partNumber": 1, "url": "https://s3...?X-Amz-Signature=..." }
+  ]
+}
+```
+
+### Download Multi-Fichiers (ZIP)
+
+| Endpoint | Méthode | Description |
+|----------|---------|-------------|
+| `/api/v1/folders/:id/tree` | GET | Arborescence complète avec chemins relatifs |
+| `/api/v1/files/batch-presign` | POST | Génère URLs présignées en batch (max 500, parallèle) |
+| `/api/v1/files/selection-tree` | POST | Arborescence mixte fichiers + dossiers sélectionnés |
+
+**Exemple `GET /folders/:id/tree`**:
+```json
+{
+  "root_folder": "Documents",
+  "total_size": 1073741824,
+  "total_files": 42,
+  "files": [
+    {
+      "id": "uuid",
+      "name": "report.pdf",
+      "relative_path": "Documents/2024/report.pdf",
+      "size": 1048576,
+      "encrypted_key": "base64...",
+      "mime_type": "application/pdf"
+    }
+  ],
+  "encrypted_keys": {
+    "folder_uuid": "encrypted_folder_key"
+  }
+}
+```
+
+**Exemple `POST /files/batch-presign`**:
+```json
+// Request
+{ "file_ids": ["uuid1", "uuid2", "uuid3"] }
+
+// Response
+{
+  "urls": [
+    { "file_id": "uuid1", "url": "https://s3.../presigned?..." },
+    { "file_id": "uuid2", "url": "https://s3.../presigned?..." }
+  ],
+  "expires_in": 300
+}
+```
+
+**Performance**: Génération parallèle avec sémaphore (10 concurrent), latence ~50ms pour 100 fichiers.
 ---
 
 ## 🔒 Sécurité
