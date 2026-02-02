@@ -455,7 +455,7 @@ const onShareIconHover = (isHovering, event) => {
 }
 
 .selection-col {
-  width: 32px;
+  width: 50px;
   text-align: center;
   padding-left: 10px;
 }
@@ -542,5 +542,17 @@ const onShareIconHover = (isHovering, event) => {
 .icon-svg {
   width: 20px; /* Reduced from 24px */
   height: 20px;
+}
+
+/* Checkbox styling - larger and more accessible */
+input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+}
+
+input[type="checkbox"]:hover {
+  transform: scale(1.1);
 }
 </style>
