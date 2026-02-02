@@ -264,9 +264,8 @@ const sortItems = (items) => {
 const columns = computed(() => {
   const cols = [];
   
-  if (selectedItems.value.length > 0) {
-    cols.push({ key: 'selection', label: '', headerClass: 'selection-col', cellClass: 'selection-col' });
-  }
+  // Always show selection column
+  cols.push({ key: 'selection', label: '', headerClass: 'selection-col', cellClass: 'selection-col' });
 
   cols.push(
     { key: 'icon', label: '', headerClass: 'icon-col', cellClass: 'icon-col' },
@@ -498,6 +497,19 @@ const navigateToPath = (path) => {
   fileStore.fetchItems(path)
 }
 
+const handleKeyboardDelete = (event) => {
+  // Only handle Delete key if we have selected items and focus is not on an input
+  if (event.key === 'Delete' && selectedItems.value.length > 0) {
+    const activeElement = document.activeElement;
+    // Don't delete if user is typing in an input or textarea
+    if (activeElement && ['INPUT', 'TEXTAREA'].includes(activeElement.tagName)) {
+      return;
+    }
+    event.preventDefault();
+    deleteSelectedItems();
+  }
+}
+
 onMounted(async () => {
   // If a pending navigation path is set (from Suggestions), use it
   if (fileStore.pendingNavigatePath) {
@@ -513,6 +525,9 @@ onMounted(async () => {
   }
   tagStore.fetchTags()
   document.addEventListener('click', closeContextMenu)
+  
+  // Add keyboard listener for Delete key
+  document.addEventListener('keydown', handleKeyboardDelete)
 })
 
 watch(() => fileStore.currentPath, () => {
@@ -521,6 +536,7 @@ watch(() => fileStore.currentPath, () => {
 
 onUnmounted(() => {
   document.removeEventListener('click', closeContextMenu)
+  document.removeEventListener('keydown', handleKeyboardDelete)
 })
 
 const openBackgroundContextMenu = async (event) => {
