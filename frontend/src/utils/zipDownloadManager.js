@@ -12,6 +12,7 @@
 import api from '../api'
 import { useAuthStore } from '../stores/auth'
 import { CHUNK_SIZE, IV_LENGTH } from './crypto'
+import sodium from 'libsodium-wrappers-sumo'
 
 // Constants
 const MAX_CONCURRENT_DOWNLOADS = 4
@@ -421,7 +422,9 @@ class ZipDownloadManager {
    */
   async importFileKey(encryptedKeyBase64) {
     // The encrypted key is wrapped with the master key
-    const encryptedKeyData = Uint8Array.from(atob(encryptedKeyBase64), c => c.charCodeAt(0))
+    // Use sodium.from_base64 for URL-safe base64 compatibility
+    await sodium.ready
+    const encryptedKeyData = sodium.from_base64(encryptedKeyBase64)
     
     // Extract IV and encrypted key
     const iv = encryptedKeyData.slice(0, 12)
