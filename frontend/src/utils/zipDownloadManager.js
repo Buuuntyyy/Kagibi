@@ -29,6 +29,7 @@ export const DownloadStatus = {
   FETCHING_TREE: 'fetching_tree',
   GENERATING_URLS: 'generating_urls',
   DOWNLOADING: 'downloading',
+  DECRYPTING: 'decrypting',
   FINALIZING: 'finalizing',
   COMPLETED: 'completed',
   ERROR: 'error',
@@ -87,6 +88,7 @@ class ZipDownloadManager {
     this.pendingQueue = []
     this.cryptoKey = null
     this.aborted = false
+    this.isSingleFile = false  // True when downloading a single file (no ZIP)
     
     // Throttling state for progress updates
     this._lastProgressTime = 0
@@ -139,6 +141,7 @@ class ZipDownloadManager {
     this.pendingQueue = []
     this.cryptoKey = null
     this.aborted = false
+    this.isSingleFile = false
     
     // Reset throttling state
     this._lastProgressTime = 0
@@ -275,6 +278,190 @@ class ZipDownloadManager {
       
     } catch (error) {
       this.handleError(error)
+    }
+  }
+
+  /**
+   * Download a single file with streaming progress (no ZIP)
+   * Uses the same UI as multi-file downloads for consistent UX
+   */
+  async downloadSingleFile(fileId, fileName, encryptedKey = null, fileSize = 0) {
+    this.reset()
+    this.isSingleFile = true
+    
+    this.setStatus(DownloadStatus.INITIALIZING)
+    this.sessionId = `single-${fileId}-${Date.now()}`
+    this.startTime = Date.now()
+    this.aborted = false
+    
+    try {
+      // Get crypto key
+      const authStore = useAuthStore()
+      this.cryptoKey = authStore.masterKey
+      if (!this.cryptoKey) {
+        throw new Error('Clé de déchiffrement non disponible')
+      }
+      
+      // Generate presigned URL
+      this.setStatus(DownloadStatus.GENERATING_URLS)
+      const presignResponse = await api.post('/files/batch-presign', { file_ids: [fileId] })
+      const urlInfo = presignResponse.data.urls[0]
+      
+      if (!urlInfo || urlInfo.error) {
+        throw new Error(urlInfo?.error || 'Impossible de générer l\'URL de téléchargement')
+      }
+      
+      // Create file task
+      const file = new FileDownloadTask({
+        id: fileId,
+        name: fileName,
+        relative_path: fileName,
+        size: fileSize || 0,
+        encrypted_key: encryptedKey || urlInfo.encrypted_key
+      })
+      file.presignedUrl = urlInfo.url
+      
+      this.files = [file]
+      this.totalFiles = 1
+      this.totalSize = fileSize || 0
+      
+      // Start streaming download
+      this.setStatus(DownloadStatus.DOWNLOADING)
+      await this.downloadAndDecryptSingleFile(file, fileName)
+      
+    } catch (error) {
+      this.handleError(error)
+    }
+  }
+
+  /**
+   * Download, decrypt and save a single file with streaming progress
+   */
+  async downloadAndDecryptSingleFile(file, fileName) {
+    file.status = 'downloading'
+    file.abortController = new AbortController()
+    
+    try {
+      // Import the file's encryption key
+      const fileKey = await this.importFileKey(file.encryptedKey)
+      
+      // Fetch with streaming
+      const response = await fetch(file.presignedUrl, {
+        signal: file.abortController.signal
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      
+      // Get size from Content-Length if not known
+      const contentLength = parseInt(response.headers.get('content-length') || '0', 10)
+      if (contentLength > 0) {
+        file.size = contentLength
+        this.totalSize = contentLength
+      }
+      
+      const reader = response.body.getReader()
+      let buffer = new Uint8Array(0)
+      let chunkIndex = 0
+      const decryptedChunks = []
+      
+      file.bytesDownloaded = 0
+      
+      // Stream and collect encrypted data
+      while (!this.aborted) {
+        const { done, value } = await reader.read()
+        
+        if (this.aborted) {
+          reader.cancel()
+          return
+        }
+        
+        if (value) {
+          // Append to buffer
+          const newBuffer = new Uint8Array(buffer.length + value.length)
+          newBuffer.set(buffer)
+          newBuffer.set(value, buffer.length)
+          buffer = newBuffer
+          
+          file.bytesDownloaded += value.length
+          this.bytesDownloaded += value.length
+          
+          // Update progress
+          if (file.size > 0) {
+            file.progress = Math.min(95, Math.round((file.bytesDownloaded / file.size) * 100))
+          }
+          
+          this.scheduleProgressUpdate()
+        }
+        
+        // Process complete encrypted chunks
+        while (buffer.length >= ENCRYPTED_CHUNK_SIZE && !this.aborted) {
+          const encryptedChunk = buffer.slice(0, ENCRYPTED_CHUNK_SIZE)
+          buffer = buffer.slice(ENCRYPTED_CHUNK_SIZE)
+          
+          // Decrypt chunk
+          const decrypted = await this.decryptChunk(encryptedChunk, fileKey, chunkIndex)
+          decryptedChunks.push(decrypted)
+          chunkIndex++
+        }
+        
+        if (done) {
+          // Process final partial chunk
+          if (buffer.length > 0 && !this.aborted) {
+            this.setStatus(DownloadStatus.DECRYPTING)
+            const decrypted = await this.decryptChunk(buffer, fileKey, chunkIndex)
+            decryptedChunks.push(decrypted)
+          }
+          break
+        }
+      }
+      
+      if (this.aborted) return
+      
+      // Combine all decrypted chunks
+      this.setStatus(DownloadStatus.FINALIZING)
+      const totalLength = decryptedChunks.reduce((sum, chunk) => sum + chunk.length, 0)
+      const completeFile = new Uint8Array(totalLength)
+      let offset = 0
+      for (const chunk of decryptedChunks) {
+        completeFile.set(chunk, offset)
+        offset += chunk.length
+      }
+      
+      // Create blob and trigger download
+      const blob = new Blob([completeFile])
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      
+      // Clean up after short delay
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+      
+      file.status = 'completed'
+      file.progress = 100
+      this.processedFiles = 1
+      
+      this.setStatus(DownloadStatus.COMPLETED)
+      this.callbacks.onComplete({
+        totalFiles: 1,
+        totalSize: totalLength,
+        duration: Date.now() - this.startTime
+      })
+      
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        file.status = 'aborted'
+      } else {
+        file.status = 'error'
+        file.error = error.message
+        console.error(`[DownloadManager] Error downloading ${file.name}:`, error)
+        this.handleError(error)
+      }
     }
   }
 
@@ -788,6 +975,7 @@ class ZipDownloadManager {
       percent: globalPercent,
       speed: instantSpeed,
       eta,
+      isSingleFile: this.isSingleFile,
       files: this.files.map(f => ({
         name: f.name,
         status: f.status,

@@ -6,7 +6,6 @@ import { encryptFile, decryptFile, generateMasterKey, wrapMasterKey, unwrapMaste
 import { encryptChunkWorker, decryptChunkedFileWorker, CHUNK_SIZE } from '../utils/crypto'
 import { generatePreview } from '../utils/previewGenerator'
 import { MultipartUploadManager, PART_SIZE, UploadState } from '../utils/multipartUpload'
-import { smartDownload, DownloadState } from '../utils/streamingDownload'
 import sodium from 'libsodium-wrappers-sumo'
 
 // Compress image for preview display (reduces memory, not bandwidth)
@@ -68,13 +67,6 @@ export const useFileStore = defineStore('files', {
     uploadingFileName: '',
     uploadState: 'idle', // idle, encrypting, uploading, completing, error
     currentUploadManager: null, // MultipartUploadManager instance
-
-    // Download State (Streaming)
-    downloadProgress: 0,
-    isDownloading: false,
-    downloadingFileName: '',
-    downloadState: 'idle', // idle, fetching_url, downloading, decrypting, saving, completed, error
-    currentDownloadAbort: null, // Abort function for current download
     
     // Preview State
     preview: {
@@ -356,74 +348,6 @@ export const useFileStore = defineStore('files', {
         parts.pop()
         const newPath = '/' + parts.join('/')
         this.fetchItems(newPath)
-    },
-
-    /**
-     * Streaming download with on-the-fly decryption
-     * Memory-efficient for large files (multi-GB)
-     */
-    async downloadFileStreaming(fileId, fileName) {
-      const authStore = useAuthStore();
-
-      if (!authStore.isAuthenticated || !authStore.masterKey) {
-        alert("Erreur d'authentification. Veuillez vous reconnecter.");
-        return;
-      }
-
-      this.isDownloading = true;
-      this.downloadProgress = 0;
-      this.downloadingFileName = fileName;
-      this.downloadState = 'fetching_url';
-
-      try {
-        const result = await smartDownload(fileId, authStore.masterKey, {
-          api,
-          onProgress: ({ percentage, downloadedBytes, totalBytes }) => {
-            this.downloadProgress = percentage;
-          },
-          onStateChange: (state) => {
-            this.downloadState = state;
-          },
-          onError: (error) => {
-            console.error('Streaming download error:', error);
-          }
-        });
-
-        if (result.abort) {
-          this.currentDownloadAbort = result.abort;
-        }
-
-        if (result.success) {
-          this.addToHistory({ id: fileId, type: 'file', displayName: fileName });
-        }
-
-        return result;
-
-      } catch (error) {
-        console.error('Download failed:', error);
-        alert('Erreur lors du téléchargement: ' + error.message);
-        throw error;
-      } finally {
-        setTimeout(() => {
-          this.isDownloading = false;
-          this.downloadProgress = 0;
-          this.downloadState = 'idle';
-          this.currentDownloadAbort = null;
-        }, 1000);
-      }
-    },
-
-    /**
-     * Cancel current streaming download
-     */
-    cancelDownload() {
-      if (this.currentDownloadAbort) {
-        this.currentDownloadAbort();
-        this.isDownloading = false;
-        this.downloadProgress = 0;
-        this.downloadState = 'idle';
-        this.currentDownloadAbort = null;
-      }
     },
 
     async downloadFile(fileId, fileName, mimeType='application/octet-stream', preview = false) {

@@ -658,8 +658,12 @@ const handleContextAction = (action) => {
 
   switch (action){
     case 'download':
-      if (item.type === 'file') {
-        fileStore.downloadFile(item.ID, item.Name, item.MimeType, false) // Force download
+      // If multiple items are selected, download them all
+      if (selectedItems.value.length > 1) {
+        downloadSelectedFiles()
+      } else if (item.type === 'file') {
+        // Use unified download popup for single file
+        downloadStore.downloadSingleFile(item.ID, item.Name, item.EncryptedKey, item.Size || 0)
       } else if (item.type === 'folder') {
         // Download folder as ZIP
         downloadStore.downloadFolder(item.ID, item.Name)
@@ -827,10 +831,10 @@ const downloadSelectedFiles = async () => {
   
   if (files.length === 0 && folders.length === 0) return;
 
-  // Single file: direct download
+  // Single file: download with progress popup (unified UX)
   if (files.length === 1 && folders.length === 0) {
     const file = files[0];
-    fileStore.downloadFile(file.ID, file.Name, file.MimeType);
+    await downloadStore.downloadSingleFile(file.ID, file.Name, file.EncryptedKey, file.Size || 0);
     return;
   }
   
