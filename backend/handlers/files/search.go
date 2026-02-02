@@ -29,6 +29,7 @@ func SearchFilesHandler(c *gin.Context, db *bun.DB) {
 		Model(&files).
 		Where("user_id = ?", userID).
 		Where("name ILIKE ?", "%"+query+"%"). // ILIKE pour insensible à la casse (PostgreSQL)
+		Where("is_preview = ?", false).       // Exclure les fichiers preview
 		Order("created_at DESC").
 		Scan(c.Request.Context())
 
