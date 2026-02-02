@@ -19,7 +19,6 @@ export const useWebSocketStore = defineStore('websocket', {
       // Get Supabase Token
       const { data: { session } } = await import('../supabase').then(m => m.supabase.auth.getSession());
       if (!session?.access_token) {
-          console.warn("WS: No auth token available, skipping connection");
           return;
       }
 
@@ -36,13 +35,10 @@ export const useWebSocketStore = defineStore('websocket', {
       
       // Append Token
       url += `?token=${session.access_token}`;
-
-      console.log(`Connecting to WebSocket at ${url}...`);
       
       this.socket = new WebSocket(url);
 
       this.socket.onopen = () => {
-        console.log('WebSocket connected');
         this.isConnected = true;
         this.reconnectInterval = 1000; // Reset reconnect interval
       };
@@ -57,16 +53,18 @@ export const useWebSocketStore = defineStore('websocket', {
       };
 
       this.socket.onclose = (event) => {
-        console.log('WebSocket disconnected', event.code, event.reason);
         this.isConnected = false;
         this.socket = null;
 
         // Attempt reconnect if not closed cleanly
         if (event.code !== 1000) {
+          // Exponential backoff with jitter
+          const jitter = Math.random() * 1000;
+          const delay = Math.min(this.reconnectInterval + jitter, this.maxReconnectInterval);
           setTimeout(() => {
             this.reconnectInterval = Math.min(this.reconnectInterval * 2, this.maxReconnectInterval);
             this.connect();
-          }, this.reconnectInterval);
+          }, delay);
         }
       };
 

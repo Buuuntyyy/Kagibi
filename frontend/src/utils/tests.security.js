@@ -17,11 +17,10 @@ console.log('%c=== TEST 1: SRI Verification ===', 'color: blue; font-weight: bol
     const hashHex = Array.from(new Uint8Array(hashBuffer))
       .map(b => b.toString(16).padStart(2, '0')).join('');
     
-    console.log('✅ Service Worker SHA-256:', hashHex);
+    console.log('✅ Service Worker SHA-256:', hashHex.substring(0, 16) + '...');
     console.log('✅ SRI Check: PASSED');
     
-    // Sauvegarder le hash pour comparaison future
-    localStorage.setItem('sw-crypto-hash', hashHex);
+    // Note: Hash non stocké en localStorage pour éviter fuite d'info
   } catch (error) {
     console.error('❌ SRI Check FAILED:', error);
   }
