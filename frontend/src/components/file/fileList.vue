@@ -47,6 +47,29 @@
         </span>
       </div>
     </div>
+
+    <!-- Selection Action Bar (fixed gap to prevent layout shift) -->
+    <div class="selection-gap">
+      <Transition name="selection-bar">
+        <div v-if="selectedItems.length > 0" class="selection-action-bar">
+          <div class="selection-actions">
+            <button class="action-btn download-action" @click.stop="downloadSelectedFiles" title="Télécharger">
+            <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
+            <span>Télécharger</span>
+          </button>
+          <button class="action-btn share-action" @click.stop="openShareForSelected" title="Partager" :disabled="selectedItems.length !== 1">
+            <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+            <span>Partager</span>
+          </button>
+          <button class="action-btn delete-action" @click.stop="deleteSelectedItems" title="Supprimer">
+            <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/></svg>
+            <span>Supprimer</span>
+          </button>
+          </div>
+          <span class="selection-count">{{ selectedItems.length }} élément{{ selectedItems.length > 1 ? 's' : '' }} sélectionné{{ selectedItems.length > 1 ? 's' : '' }}</span>
+        </div>
+      </Transition>
+    </div>
     
     <!-- Upload Progress Popup -->
     <div v-if="fileStore.isUploading" class="upload-popup">
@@ -714,9 +737,9 @@ const selectItem = (item, type, event) => {
   if (event.shiftKey && lastClickedIndex.value !== -1) {
     const start = Math.min(lastClickedIndex.value, currentIndex);
     const end = Math.max(lastClickedIndex.value, currentIndex);
-    const rangeToSelect = allItems.value.slice(start, end + 1).map((i, idx) => {
-      // Déterminer le type basé sur si c'est un fichier ou un dossier
-      const itemType = i.Path ? 'folder' : 'file';
+    const rangeToSelect = allItems.value.slice(start, end + 1).map((i) => {
+      // Préserver le type réel (déjà défini dans allItems)
+      const itemType = i.type || (i.Path ? 'folder' : 'file');
       return { ...i, type: itemType };
     });
     
@@ -749,8 +772,8 @@ const toggleItemSelection = (item, type, event) => {
     const start = Math.min(lastClickedIndex.value, currentIndex);
     const end = Math.max(lastClickedIndex.value, currentIndex);
     const rangeToSelect = allItems.value.slice(start, end + 1).map((i) => {
-      // Déterminer le type basé sur si c'est un fichier ou un dossier
-      const itemType = i.Path ? 'folder' : 'file';
+      // Préserver le type réel (déjà défini dans allItems)
+      const itemType = i.type || (i.Path ? 'folder' : 'file');
       return { ...i, type: itemType };
     });
 
@@ -952,6 +975,12 @@ const downloadFile = (file) => {
   
   const isPreviewable = previewTypes.includes(file.MimeType);
   fileStore.downloadFile(file.ID, file.Name, file.MimeType, isPreviewable);
+}
+
+const openShareForSelected = () => {
+  if (selectedItems.value.length !== 1) return;
+  const item = selectedItems.value[0];
+  openManageShareDialog(item, item.type);
 }
 
 const triggerFileInput = () => {
@@ -1469,5 +1498,113 @@ button {
 .date-column {
   font-size: 0.9em;
   color: #666;
+}
+
+/* Selection Action Bar */
+.selection-gap {
+  position: relative;
+  height: 56px;
+  margin: 0 1rem 0.5rem 1rem;
+}
+
+.selection-action-bar {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, var(--primary-color) 0%, #5a9fd4 100%);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(74, 144, 217, 0.3);
+}
+
+.selection-count {
+  color: white;
+  font-weight: 500;
+  font-size: 0.9rem;
+  margin-left: auto;
+}
+
+.selection-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+.action-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-btn svg {
+  flex-shrink: 0;
+}
+
+.download-action:hover:not(:disabled) {
+  background: rgba(76, 175, 80, 0.8);
+}
+
+.share-action:hover:not(:disabled) {
+  background: rgba(33, 150, 243, 0.8);
+}
+
+.delete-action:hover:not(:disabled) {
+  background: rgba(244, 67, 54, 0.8);
+}
+
+/* Selection Bar Animation */
+.selection-bar-enter-active {
+  animation: slideDown 0.2s ease-out;
+}
+
+.selection-bar-leave-active {
+  animation: slideUp 0.15s ease-in;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 60px;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 60px;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+    max-height: 0;
+  }
 }
 </style>
