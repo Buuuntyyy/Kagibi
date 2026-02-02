@@ -81,18 +81,13 @@ export const useAuthStore = defineStore('auth', {
         if (salt && encrypted_master_key) {
           try {
             await sodium.ready;
-            console.log('[Auth] Salt received from backend (hex):', salt.substring(0, 16) + '...');
-            console.log('[Auth] Encrypted master key (base64):', encrypted_master_key.substring(0, 32) + '...');
             
             const saltBytes = sodium.from_hex(salt);
-            console.log('[Auth] Salt converted to bytes, length:', saltBytes.length);
             
             // Le mot de passe sert toujours à déchiffrer la clé maître
             const kek = await deriveKeyFromPassword(credentials.password, saltBytes);
-            console.log('[Auth] KEK derived from password');
             
             this.masterKey = await unwrapMasterKey(encrypted_master_key, kek);
-            console.log('[Auth] Master key successfully unwrapped');
             
             // SECURITY: MasterKey stays in RAM only, NOT persisted to storage
             // Set up automatic session timeout for security (30 minutes)
@@ -132,13 +127,10 @@ export const useAuthStore = defineStore('auth', {
       // 1. Préparation de la cryptographie locale
       const salt = generateSalt();
       const saltHex = sodium.to_hex(salt);
-      console.log('[Auth] Register - Salt generated (hex):', saltHex.substring(0, 16) + '...');
-      console.log('[Auth] Register - Salt length:', salt.length);
 
       const masterKey = await generateMasterKey();
       const kek = await deriveKeyFromPassword(password, salt);
       const wrappedMasterKey = await wrapMasterKey(masterKey, kek);
-      console.log('[Auth] Register - Master key wrapped (base64):', wrappedMasterKey.substring(0, 32) + '...');
 
       // Generate Recovery Code
       const recoveryCode = generateRecoveryCode();
@@ -201,13 +193,8 @@ export const useAuthStore = defineStore('auth', {
         this.masterKey = masterKey;
         this.isAuthenticated = true;
         
-        // Persist master key
-        try {
-            const exportedKey = await window.crypto.subtle.exportKey("jwk", masterKey);
-            sessionStorage.setItem("safercloud_mk", JSON.stringify(exportedKey));
-        } catch (e) {
-            console.error("Failed to persist master key after register", e);
-        }
+        // SECURITY: MasterKey stays in RAM only, NOT persisted to storage
+        this.setupSessionTimeout();
 
         // Fetch user completely
         await this.fetchUser();
@@ -235,7 +222,6 @@ export const useAuthStore = defineStore('auth', {
         this.isAuthenticated = false;
         this.user = null;
         this.masterKey = null;
-        sessionStorage.removeItem("safercloud_mk");
         localStorage.removeItem("safercloud_user");
         router.push({ name: 'Login' });
       }
@@ -283,8 +269,6 @@ export const useAuthStore = defineStore('auth', {
         const newSaltHex = sodium.to_hex(newSalt);
         const newKek = await deriveKeyFromPassword(newPassword, newSalt);
         const newEncryptedMasterKey = await wrapMasterKey(this.masterKey, newKek);
-
-        console.log("Updating salt and encrypted master key on backend...");
         // On appelle votre API pour mettre à jour Salt + EncryptedMasterKey
         // Note: l'API ne vérifie plus 'current_password' car c'est Supabase qui gère l'auth.
         // Cependant, pour sécuriser cet appel critique, votre backend pourrait demander de re-confirmer
@@ -296,17 +280,8 @@ export const useAuthStore = defineStore('auth', {
           new_encrypted_master_key: newEncryptedMasterKey
         });
 
-        // 3. Mise à jour de la sessionStorage avec la MÊME masterKey 
-        // (elle n'a pas changé, seule sa réencapsulation a changé)
-        try {
-          const exportedKey = await window.crypto.subtle.exportKey("jwk", this.masterKey);
-          sessionStorage.setItem("safercloud_mk", JSON.stringify(exportedKey));
-          console.log("Master key persisted to sessionStorage after password change");
-        } catch (e) {
-          console.error("Failed to update persisted master key:", e);
-        }
-
-        console.log("Password update completed successfully");
+        // SECURITY: MasterKey stays in RAM only - no persistence needed
+        // The key remains valid in memory for current session
       } catch (error) {
         console.error("Password update failed:", error);
         throw error;

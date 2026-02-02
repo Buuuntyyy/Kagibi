@@ -280,17 +280,16 @@ export function detectXSSAttempts() {
     // Scripts inline sans nonce sont suspects (sauf les scripts SRI avec nonce)
     if (script.textContent && !hasNonce && !isModule && !isSRI) {
       unAuthorizedScripts.push({
-        script,
         reason: 'Inline script without nonce',
-        content: script.textContent.substring(0, 100)
+        hasContent: true,
+        length: script.textContent.length
       });
     }
     
     if (isInlineEvent) {
       unAuthorizedScripts.push({
-        script,
         reason: 'Inline event handler detected',
-        handler: script.getAttribute('onload') || script.getAttribute('onerror')
+        handlerType: script.hasAttribute('onload') ? 'onload' : 'onerror'
       });
     }
   });
@@ -327,9 +326,9 @@ export function setupXSSMonitoring() {
                 node.parentNode.removeChild(node);
               }
               
-              // Notifier l'utilisateur
+              // Notifier l'utilisateur (sans exposer le contenu du script)
               window.dispatchEvent(new CustomEvent('xss-attack-detected', {
-                detail: { script: node.textContent.substring(0, 100) }
+                detail: { detected: true, scriptLength: node.textContent.length }
               }));
             }
           }

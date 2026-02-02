@@ -141,15 +141,6 @@ func GetSecurityEvents(c *gin.Context)
    - ReportSecurityEvent handler
    - GetSecurityEvents handler
    - Backend reporting logic
-
-✨ SECURITY_ENHANCEMENTS.md
-   - Documentation détaillée des modifications
-   - Architecture et flux
-
-✨ SECURITY_ENHANCEMENTS_USAGE_GUIDE.md
-   - Guide d'utilisation pratique
-   - Exemples de code
-   - Checklist de déploiement
 ```
 
 ---
@@ -336,8 +327,6 @@ window.SecurityTests.exportSecurityEvents()
 
 ## 📚 Documentation
 
-- [SECURITY_ENHANCEMENTS.md](./SECURITY_ENHANCEMENTS.md) - Architecture complète
-- [SECURITY_ENHANCEMENTS_USAGE_GUIDE.md](./SECURITY_ENHANCEMENTS_USAGE_GUIDE.md) - Guide d'utilisation
 - [SECURITY_AUDIT_REPORT.md](./SECURITY_AUDIT_REPORT.md) - Audit original
 - [SECURITY_FIXES_SUMMARY.md](./SECURITY_FIXES_SUMMARY.md) - Résumé des correctifs
 

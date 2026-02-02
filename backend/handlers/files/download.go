@@ -22,34 +22,36 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// Rate limiter for downloads
-var downloadAttempts = make(map[string][]time.Time)
-var downloadMutex sync.Mutex
+// Rate limiter for downloads - using sync.Map for better concurrency
+var downloadAttempts sync.Map // map[string][]time.Time
 
 func checkDownloadRateLimit(userID, ip string) bool {
-	downloadMutex.Lock()
-	defer downloadMutex.Unlock()
-
 	key := userID + "_" + ip
 	now := time.Now()
 
+	// Load or create entry
+	val, _ := downloadAttempts.Load(key)
+	var attempts []time.Time
+	if val != nil {
+		attempts = val.([]time.Time)
+	}
+
 	// Clean old attempts (> 1 minute)
-	if attempts, ok := downloadAttempts[key]; ok {
-		var recent []time.Time
-		for _, t := range attempts {
-			if now.Sub(t) < time.Minute {
-				recent = append(recent, t)
-			}
+	var recent []time.Time
+	for _, t := range attempts {
+		if now.Sub(t) < time.Minute {
+			recent = append(recent, t)
 		}
-		downloadAttempts[key] = recent
 	}
 
 	// Check limit (max 200 downloads per minute for blob streaming)
-	if len(downloadAttempts[key]) >= 200 {
+	if len(recent) >= 200 {
+		downloadAttempts.Store(key, recent)
 		return false
 	}
 
-	downloadAttempts[key] = append(downloadAttempts[key], now)
+	recent = append(recent, now)
+	downloadAttempts.Store(key, recent)
 	return true
 }
 
