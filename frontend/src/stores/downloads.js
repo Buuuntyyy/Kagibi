@@ -171,15 +171,17 @@ export const useDownloadStore = defineStore('downloads', {
     
     /**
      * Handle progress updates from manager
+     * Progress is now bytes-based for smooth granular updates
      */
     handleProgress(progress) {
       this.totalFiles = progress.totalFiles
       this.processedFiles = progress.processedFiles
       this.totalSize = progress.totalSize
       this.bytesDownloaded = progress.bytesDownloaded
-      this.percent = progress.percent
+      this.percent = progress.percent // Now based on bytes, not files
       this.speed = progress.speed
       this.eta = progress.eta
+      // Files now include bytesDownloaded and size for individual progress
       this.files = progress.files || []
     },
     

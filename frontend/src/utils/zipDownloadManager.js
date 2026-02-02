@@ -58,6 +58,12 @@ class FileDownloadTask {
 /**
  * Manages multi-file downloads with ZIP streaming
  */
+/**
+ * Throttle interval for progress updates (ms)
+ * Using ~60fps for smooth UI updates without overwhelming the main thread
+ */
+const PROGRESS_THROTTLE_MS = 16
+
 class ZipDownloadManager {
   constructor() {
     this.sessionId = null
@@ -81,6 +87,11 @@ class ZipDownloadManager {
     this.pendingQueue = []
     this.cryptoKey = null
     this.aborted = false
+    
+    // Throttling state for progress updates
+    this._lastProgressTime = 0
+    this._progressScheduled = false
+    this._rafId = null
   }
 
   /**
@@ -106,9 +117,41 @@ class ZipDownloadManager {
   }
 
   /**
+   * Reset all state for a new download
+   */
+  reset() {
+    // Cancel any pending progress update
+    if (this._rafId) {
+      cancelAnimationFrame(this._rafId)
+      this._rafId = null
+    }
+    
+    this.sessionId = null
+    this.status = DownloadStatus.IDLE
+    this.files = []
+    this.totalSize = 0
+    this.totalFiles = 0
+    this.processedFiles = 0
+    this.bytesDownloaded = 0
+    this.bytesWritten = 0
+    this.startTime = null
+    this.activeDownloads.clear()
+    this.pendingQueue = []
+    this.cryptoKey = null
+    this.aborted = false
+    
+    // Reset throttling state
+    this._lastProgressTime = 0
+    this._progressScheduled = false
+  }
+
+  /**
    * Download a single folder as ZIP
    */
   async downloadFolder(folderId, folderName) {
+    // Reset all state before starting new download
+    this.reset()
+    
     this.setStatus(DownloadStatus.INITIALIZING)
     this.sessionId = `folder-${folderId}-${Date.now()}`
     this.startTime = Date.now()
@@ -169,6 +212,9 @@ class ZipDownloadManager {
    * Download multiple selected items as ZIP
    */
   async downloadSelection(fileIds, folderIds, zipName = 'selection.zip') {
+    // Reset all state before starting new download
+    this.reset()
+    
     this.setStatus(DownloadStatus.INITIALIZING)
     this.sessionId = `selection-${Date.now()}`
     this.startTime = Date.now()
@@ -371,9 +417,17 @@ class ZipDownloadManager {
           newBuffer.set(value, buffer.length)
           buffer = newBuffer
           
+          // Update byte counters
           file.bytesDownloaded += value.length
           this.bytesDownloaded += value.length
-          this.reportProgress()
+          
+          // Update individual file progress (percentage based on encrypted size)
+          if (file.size > 0) {
+            file.progress = Math.min(99, Math.round((file.bytesDownloaded / file.size) * 100))
+          }
+          
+          // Throttled progress report
+          this.scheduleProgressUpdate()
         }
         
         // Process complete encrypted chunks
@@ -537,6 +591,7 @@ class ZipDownloadManager {
 
   /**
    * Fallback download using in-memory ZIP (for browsers without Service Worker)
+   * Uses streaming progress tracking for smooth UI updates
    */
   async downloadWithFallback(fileName) {
     // Dynamic import fflate
@@ -549,16 +604,48 @@ class ZipDownloadManager {
       
       try {
         file.status = 'downloading'
+        file.bytesDownloaded = 0
         
         // Import file key
         const fileKey = await this.importFileKey(file.encryptedKey)
         
-        // Download entire file
+        // Download with streaming progress tracking
         const response = await fetch(file.presignedUrl)
-        const encryptedData = new Uint8Array(await response.arrayBuffer())
         
-        file.bytesDownloaded = encryptedData.length
-        this.bytesDownloaded += encryptedData.length
+        // Get content length for progress calculation
+        const contentLength = parseInt(response.headers.get('content-length') || '0', 10)
+        if (contentLength > 0 && file.size === 0) {
+          file.size = contentLength
+        }
+        
+        // Stream the response with progress tracking
+        const reader = response.body.getReader()
+        const chunks = []
+        
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          
+          chunks.push(value)
+          file.bytesDownloaded += value.length
+          this.bytesDownloaded += value.length
+          
+          // Update individual file progress
+          if (file.size > 0) {
+            file.progress = Math.min(99, Math.round((file.bytesDownloaded / file.size) * 100))
+          }
+          
+          this.scheduleProgressUpdate()
+        }
+        
+        // Combine chunks into single array
+        const encryptedLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+        const encryptedData = new Uint8Array(encryptedLength)
+        let encPos = 0
+        for (const chunk of chunks) {
+          encryptedData.set(chunk, encPos)
+          encPos += chunk.length
+        }
         
         // Decrypt all chunks
         const decryptedParts = []
@@ -575,12 +662,12 @@ class ZipDownloadManager {
         }
         
         // Combine decrypted parts
-        const totalLength = decryptedParts.reduce((sum, part) => sum + part.length, 0)
-        const combined = new Uint8Array(totalLength)
-        let pos = 0
+        const decryptedLength = decryptedParts.reduce((sum, part) => sum + part.length, 0)
+        const combined = new Uint8Array(decryptedLength)
+        let decPos = 0
         for (const part of decryptedParts) {
-          combined.set(part, pos)
-          pos += part.length
+          combined.set(part, decPos)
+          decPos += part.length
         }
         
         // Add to ZIP structure
@@ -648,13 +735,49 @@ class ZipDownloadManager {
   }
 
   /**
+   * Schedule a throttled progress update using requestAnimationFrame
+   * This prevents overwhelming the UI with thousands of updates per second
+   */
+  scheduleProgressUpdate() {
+    if (this._progressScheduled) return
+    
+    const now = performance.now()
+    const timeSinceLastUpdate = now - this._lastProgressTime
+    
+    if (timeSinceLastUpdate >= PROGRESS_THROTTLE_MS) {
+      // Enough time has passed, update immediately
+      this._lastProgressTime = now
+      this.reportProgress()
+    } else {
+      // Schedule update for next animation frame
+      this._progressScheduled = true
+      this._rafId = requestAnimationFrame(() => {
+        this._progressScheduled = false
+        this._lastProgressTime = performance.now()
+        this.reportProgress()
+      })
+    }
+  }
+
+  /**
    * Report progress to callbacks
+   * Calculates global progress based on total bytes downloaded vs total size
    */
   reportProgress() {
     const elapsed = Date.now() - this.startTime
-    const speed = this.bytesDownloaded / (elapsed / 1000) // bytes per second
+    const elapsedSeconds = elapsed / 1000
+    
+    // Calculate speed with smoothing (exponential moving average)
+    const instantSpeed = elapsedSeconds > 0 ? this.bytesDownloaded / elapsedSeconds : 0
+    
+    // Calculate remaining time
     const remaining = this.totalSize - this.bytesDownloaded
-    const eta = speed > 0 ? Math.ceil(remaining / speed) : 0
+    const eta = instantSpeed > 0 ? Math.ceil(remaining / instantSpeed) : 0
+    
+    // Global progress: bytes-based, not file-based
+    const globalPercent = this.totalSize > 0 
+      ? Math.min(100, Math.round((this.bytesDownloaded / this.totalSize) * 100))
+      : 0
     
     const progress = {
       status: this.status,
@@ -662,13 +785,15 @@ class ZipDownloadManager {
       processedFiles: this.processedFiles,
       totalSize: this.totalSize,
       bytesDownloaded: this.bytesDownloaded,
-      percent: Math.round((this.bytesDownloaded / this.totalSize) * 100),
-      speed,
+      percent: globalPercent,
+      speed: instantSpeed,
       eta,
       files: this.files.map(f => ({
         name: f.name,
         status: f.status,
         progress: f.progress,
+        bytesDownloaded: f.bytesDownloaded,
+        size: f.size,
         error: f.error
       }))
     }
@@ -700,3 +825,71 @@ export const downloadManager = new ZipDownloadManager()
 
 // Export class for testing
 export { ZipDownloadManager }
+
+/**
+ * Utility function: Track stream progress with throttling
+ * Wraps a ReadableStream to report progress without blocking the data flow
+ * 
+ * @param {ReadableStream} stream - The input stream to track
+ * @param {Function} onProgress - Callback(bytesRead) called on each chunk
+ * @param {number} throttleMs - Minimum ms between progress callbacks (default: 16ms ~60fps)
+ * @returns {ReadableStream} - A new stream that passes through all data while tracking progress
+ * 
+ * @example
+ * const response = await fetch(url)
+ * const trackedStream = trackStreamProgress(
+ *   response.body,
+ *   (bytes) => console.log(`Downloaded: ${bytes}`),
+ *   16
+ * )
+ * const reader = trackedStream.getReader()
+ */
+export function trackStreamProgress(stream, onProgress, throttleMs = PROGRESS_THROTTLE_MS) {
+  let totalBytesRead = 0
+  let lastReportTime = 0
+  let pendingReport = false
+  let rafId = null
+  
+  const reader = stream.getReader()
+  
+  return new ReadableStream({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read()
+        
+        if (done) {
+          // Final progress report
+          if (rafId) cancelAnimationFrame(rafId)
+          onProgress(totalBytesRead)
+          controller.close()
+          return
+        }
+        
+        totalBytesRead += value.length
+        controller.enqueue(value)
+        
+        // Throttled progress reporting
+        const now = performance.now()
+        if (now - lastReportTime >= throttleMs) {
+          lastReportTime = now
+          onProgress(totalBytesRead)
+        } else if (!pendingReport) {
+          pendingReport = true
+          rafId = requestAnimationFrame(() => {
+            pendingReport = false
+            lastReportTime = performance.now()
+            onProgress(totalBytesRead)
+          })
+        }
+      } catch (error) {
+        if (rafId) cancelAnimationFrame(rafId)
+        controller.error(error)
+      }
+    },
+    
+    cancel(reason) {
+      if (rafId) cancelAnimationFrame(rafId)
+      reader.cancel(reason)
+    }
+  })
+}
