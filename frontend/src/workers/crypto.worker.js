@@ -1,15 +1,22 @@
-// Configuration
-const IV_LENGTH = 12;
-const TAG_LENGTH = 128; // bits
+// ============================================================================
+// AES-GCM Crypto Worker - NIST SP 800-38D Compliant
+// ============================================================================
+
+// Configuration - NIST SP 800-38D Section 5.2.1.1
+const NONCE_LENGTH = 12;      // 96 bits - recommended for AES-GCM
+const TAG_LENGTH_BITS = 128;  // 128 bits - maximum security
+const TAG_LENGTH_BYTES = 16;
+
+// Per-worker nonce tracking to detect reuse attempts (defense in depth)
+const usedNonces = new Set();
+const MAX_NONCE_CACHE = 10000; // Prevent memory exhaustion
 
 self.onmessage = async (e) => {
-  const { type, fileChunk, key, chunkIndex, totalChunks } = e.data;
+  const { type, fileChunk, key, chunkIndex, baseNonce } = e.data;
 
   try {
     if (type === 'ENCRYPT') {
-      const result = await encryptChunk(fileChunk, key);
-      // On renvoie le résultat au thread principal
-      // On utilise 'transferable objects' ([result]) pour éviter la copie mémoire (très rapide)
+      const result = await encryptChunk(fileChunk, key, chunkIndex, baseNonce);
       self.postMessage({ 
         type: 'ENCRYPT_SUCCESS', 
         encryptedChunk: result, 
@@ -25,35 +32,109 @@ self.onmessage = async (e) => {
       }, [result]);
     }
   } catch (error) {
-    self.postMessage({ type: 'ERROR', error: error.message });
+    self.postMessage({ type: 'ERROR', error: error.message, chunkIndex });
   }
 };
 
-async function encryptChunk(chunk, key) {
-  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+/**
+ * Generates a deterministic nonce from base nonce + chunk index.
+ * Structure: [8 bytes base nonce] + [4 bytes chunk index (LE)]
+ * 
+ * @param {Uint8Array} baseNonce - 8-byte random base
+ * @param {number} chunkIndex - Chunk counter
+ * @returns {Uint8Array} 12-byte nonce
+ */
+function generateChunkNonce(baseNonce, chunkIndex) {
+  const nonce = new Uint8Array(NONCE_LENGTH);
+  
+  if (baseNonce && baseNonce.length === 8) {
+    // Deterministic: base nonce + counter
+    nonce.set(new Uint8Array(baseNonce), 0);
+    const view = new DataView(nonce.buffer, 8, 4);
+    view.setUint32(0, chunkIndex, true);
+  } else {
+    // Fallback: pure random (legacy compatibility)
+    crypto.getRandomValues(nonce);
+  }
+  
+  return nonce;
+}
+
+/**
+ * Encrypts a chunk using AES-GCM with NIST-compliant nonce.
+ * Output format: [Nonce (12B)] + [Ciphertext] + [Tag (16B)]
+ * 
+ * @param {ArrayBuffer} chunk - Plaintext chunk
+ * @param {CryptoKey} key - AES-GCM key
+ * @param {number} chunkIndex - Chunk index for deterministic nonce
+ * @param {Uint8Array} baseNonce - 8-byte base nonce (optional)
+ * @returns {ArrayBuffer} Encrypted chunk with nonce prepended
+ */
+async function encryptChunk(chunk, key, chunkIndex, baseNonce) {
+  // Generate nonce
+  const nonce = generateChunkNonce(baseNonce, chunkIndex);
+  
+  // Defense in depth: check for nonce reuse within this worker session
+  const nonceHex = Array.from(nonce).map(b => b.toString(16).padStart(2, '0')).join('');
+  if (usedNonces.has(nonceHex)) {
+    throw new Error('CRITICAL: Nonce reuse detected! Aborting encryption.');
+  }
+  
+  // Track nonce (with memory limit)
+  if (usedNonces.size >= MAX_NONCE_CACHE) {
+    usedNonces.clear(); // Reset on overflow (acceptable for defense-in-depth)
+  }
+  usedNonces.add(nonceHex);
+
+  // Encrypt with AES-GCM
   const encryptedContent = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv, tagLength: TAG_LENGTH },
+    { 
+      name: "AES-GCM", 
+      iv: nonce, 
+      tagLength: TAG_LENGTH_BITS 
+    },
     key,
     chunk
   );
 
-  // Concaténation IV + Data
-  const combined = new Uint8Array(iv.byteLength + encryptedContent.byteLength);
-  combined.set(iv);
-  combined.set(new Uint8Array(encryptedContent), iv.byteLength);
+  // Serialize: [Nonce (12B)] + [Ciphertext + Tag]
+  const combined = new Uint8Array(NONCE_LENGTH + encryptedContent.byteLength);
+  combined.set(nonce, 0);
+  combined.set(new Uint8Array(encryptedContent), NONCE_LENGTH);
 
-  return combined.buffer; // Renvoie un ArrayBuffer
+  return combined.buffer;
 }
 
-async function decryptChunk(chunk, key) {
-  // chunk est un ArrayBuffer
-  const iv = chunk.slice(0, IV_LENGTH);
-  const data = chunk.slice(IV_LENGTH);
+/**
+ * Decrypts a chunk using AES-GCM.
+ * Input format: [Nonce (12B)] + [Ciphertext] + [Tag (16B)]
+ * 
+ * @param {ArrayBuffer} encryptedChunk - Encrypted chunk with nonce
+ * @param {CryptoKey} key - AES-GCM key
+ * @returns {ArrayBuffer} Decrypted plaintext
+ */
+async function decryptChunk(encryptedChunk, key) {
+  const data = new Uint8Array(encryptedChunk);
+  
+  // Validate minimum size: nonce + tag + 1 byte
+  const MIN_SIZE = NONCE_LENGTH + TAG_LENGTH_BYTES + 1;
+  if (data.length < MIN_SIZE) {
+    throw new Error(`Invalid encrypted chunk: too short (${data.length} < ${MIN_SIZE})`);
+  }
 
+  // Extract nonce and ciphertext
+  const nonce = data.slice(0, NONCE_LENGTH);
+  const ciphertextWithTag = data.slice(NONCE_LENGTH);
+
+  // Decrypt with AES-GCM (tag verification is automatic)
   const decryptedContent = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: new Uint8Array(iv), tagLength: TAG_LENGTH },
+    { 
+      name: "AES-GCM", 
+      iv: nonce, 
+      tagLength: TAG_LENGTH_BITS 
+    },
     key,
-    data
+    ciphertextWithTag
   );
 
   return decryptedContent;
