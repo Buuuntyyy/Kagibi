@@ -392,12 +392,13 @@ func AbortMultipartHandler(c *gin.Context, db *bun.DB) {
 	c.JSON(http.StatusOK, gin.H{"message": "Upload aborted successfully"})
 }
 
-// GetPresignedDownloadHandler generates a temporary presigned URL for download
+// GetPresignedDownloadHandler generates a temporary presigned URL for streaming download
 func GetPresignedDownloadHandler(c *gin.Context, db *bun.DB) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
 	defer cancel()
 
 	userID := c.GetString("user_id")
+	clientIP := c.ClientIP()
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
@@ -410,10 +411,17 @@ func GetPresignedDownloadHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// Verify access permission
+	// Rate limiting
+	if !checkDownloadRateLimit(userID, clientIP) {
+		log.Printf("SECURITY: Presigned download rate limit exceeded - UserID: %s, IP: %s", userID, clientIP)
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests"})
+		return
+	}
+
+	// Verify access permission (owner, direct share, or folder share)
 	file, err := getFileWithPermission(ctx, db, fileID, userID)
 	if err != nil {
-		log.Printf("SECURITY: Unauthorized presigned download - UserID: %s, FileID: %d", userID, fileID)
+		log.Printf("SECURITY: Unauthorized presigned download - UserID: %s, FileID: %d, IP: %s", userID, fileID, clientIP)
 		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
 		return
 	}
@@ -428,12 +436,13 @@ func GetPresignedDownloadHandler(c *gin.Context, db *bun.DB) {
 	}
 	s3Key := fmt.Sprintf("users/%s%s", file.UserID, normalizedPath)
 
-	// Generate presigned GET URL
+	// Generate presigned GET URL with streaming-optimized headers
 	presigner := s3.NewPresignClient(s3storage.Client)
 	presignReq, err := presigner.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket:                     aws.String(s3storage.BucketName),
 		Key:                        aws.String(s3Key),
 		ResponseContentDisposition: aws.String(fmt.Sprintf("attachment; filename=\"%s\"", file.Name)),
+		ResponseCacheControl:       aws.String("no-store, no-cache, must-revalidate"),
 	}, func(opts *s3.PresignOptions) {
 		opts.Expires = DownloadPresignTTL
 	})
@@ -444,14 +453,20 @@ func GetPresignedDownloadHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	log.Printf("Presigned download URL generated - UserID: %s, FileID: %d", userID, fileID)
+	log.Printf("Presigned streaming download URL generated - UserID: %s, FileID: %d, Size: %d", userID, fileID, file.Size)
 
+	// Return URL with decryption metadata
 	c.JSON(http.StatusOK, gin.H{
-		"url":        presignReq.URL,
-		"expires_in": int(DownloadPresignTTL.Seconds()),
-		"file_name":  file.Name,
-		"file_size":  file.Size,
-		"mime_type":  file.MimeType,
+		"url":            presignReq.URL,
+		"expires_in":     int(DownloadPresignTTL.Seconds()),
+		"file_name":      file.Name,
+		"file_size":      file.Size,
+		"mime_type":      file.MimeType,
+		"encrypted_key":  file.EncryptedKey,
+		"encryption_alg": "AES-GCM-256",
+		"chunk_size":     10 * 1024 * 1024, // 10MB - must match frontend CHUNK_SIZE
+		"iv_length":      12,
+		"tag_length":     16,
 	})
 }
 
