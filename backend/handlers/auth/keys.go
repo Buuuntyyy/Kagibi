@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"log"
 	"safercloud/backend/pkg"
 
 	"github.com/gin-gonic/gin"
@@ -16,8 +15,6 @@ func GetUserKeys(c *gin.Context, db *bun.DB) {
 		c.JSON(404, gin.H{"error": "Profil introuvable"})
 		return
 	}
-
-	log.Printf("[GetKeys] Returning keys for user: %s", user.Email)
 
 	// On renvoie UNIQUEMENT ce qui sert à déchiffrer la MasterKey
 	c.JSON(200, gin.H{
