@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -172,11 +173,10 @@ func InitiateMultipartHandler(c *gin.Context, db *bun.DB) {
 		remainingSize -= thisPartSize
 
 		presignReq, err := presigner.PresignUploadPart(ctx, &s3.UploadPartInput{
-			Bucket:        aws.String(s3storage.BucketName),
-			Key:           aws.String(s3Key),
-			UploadId:      aws.String(uploadID),
-			PartNumber:    aws.Int32(int32(i)),
-			ContentLength: aws.Int64(thisPartSize), // Force Content-Length restriction
+			Bucket:     aws.String(s3storage.BucketName),
+			Key:        aws.String(s3Key),
+			UploadId:   aws.String(uploadID),
+			PartNumber: aws.Int32(int32(i)),
 		}, func(opts *s3.PresignOptions) {
 			opts.Expires = PresignTTL
 		})
@@ -259,6 +259,11 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 			ETag:       aws.String(etag),
 		})
 	}
+
+	// Ensure parts are sorted by PartNumber (S3 requires ascending order)
+	sort.Slice(completedParts, func(i, j int) bool {
+		return *completedParts[i].PartNumber < *completedParts[j].PartNumber
+	})
 
 	// Complete the multipart upload on S3
 	_, err := s3storage.Client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
@@ -504,11 +509,10 @@ func RefreshPresignedURLsHandler(c *gin.Context, db *bun.DB) {
 
 	presigner := s3.NewPresignClient(s3storage.Client)
 	presignReq, err := presigner.PresignUploadPart(ctx, &s3.UploadPartInput{
-		Bucket:        aws.String(s3storage.BucketName),
-		Key:           aws.String(req.Key),
-		UploadId:      aws.String(req.UploadID),
-		PartNumber:    aws.Int32(int32(req.PartNumber)),
-		ContentLength: aws.Int64(req.PartSize),
+		Bucket:     aws.String(s3storage.BucketName),
+		Key:        aws.String(req.Key),
+		UploadId:   aws.String(req.UploadID),
+		PartNumber: aws.Int32(int32(req.PartNumber)),
 	}, func(opts *s3.PresignOptions) {
 		opts.Expires = PresignTTL
 	})
