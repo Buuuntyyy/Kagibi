@@ -45,7 +45,7 @@
       <section>
         <h2>6. Durée de conservation</h2>
         <p>Vos données sont conservées pendant toute la durée de l'utilisation du service (tant que votre compte est actif).</p>
-        <p>En cas de suppression de compte, vos données personnelles et fichiers seront supprimés de nos serveurs actifs sous un délai de [DELAI, ex: 30 jours]. Certaines données (logs) peuvent être conservées plus longtemps pour répondre à des obligations légales, pour une durée n'excédant pas celle prévue par la loi.</p>
+        <p>En cas de suppression de compte, vos données personnelles et fichiers seront supprimés de nos serveurs actifs sous un délai de 30 jours. Certaines données (logs) peuvent être conservées plus longtemps pour répondre à des obligations légales, pour une durée n'excédant pas celle prévue par la loi.</p>
       </section>
 
       <section>

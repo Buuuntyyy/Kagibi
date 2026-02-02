@@ -6,6 +6,8 @@ backend/uploads/*
 backend/.env
 frontend/.env
 
+frontend/utils/tests.security.js
+
 docker/dump.sql
 docker/.env
 docker/init.sql

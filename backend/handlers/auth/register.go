@@ -75,7 +75,6 @@ func RegisterHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	log.Printf("[Register] Creating user profile for email: %s", req.Email)
-	log.Printf("[Register] Salt length: %d, EMK length: %d", len(req.Salt), len(req.EncryptedMasterKey))
 
 	// Crée l'utilisateur
 	if err := pkg.CreateUser(db, user); err != nil {
