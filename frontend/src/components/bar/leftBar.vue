@@ -132,7 +132,7 @@
     </div>
   </div>
 
-    <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" />
+    <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" multiple />
     <div class="dialogs">
       <InputDialog 
         v-model:isOpen="inputDialog.isOpen"
@@ -152,6 +152,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useFileStore } from '../../stores/files'
 import { useFriendStore } from '../../stores/friends'
+import { uploadQueueManager } from '../../utils/uploadQueueManager'
 import InputDialog from '../InputDialog.vue'
 import FriendsSidebar from '../FriendsSidebar.vue'
 
@@ -275,9 +276,10 @@ const triggerUpload = () => {
 }
 
 const handleFileUpload = async (event) => {
-  const file = event.target.files[0]
-  if (file) {
-    await fileStore.uploadFile(file)
+  const files = event.target.files
+  if (files && files.length > 0) {
+    // Use the queue manager for multi-file uploads
+    await uploadQueueManager.addFiles(files, fileStore.currentPath)
     event.target.value = ''
   }
 }
