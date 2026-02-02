@@ -11,6 +11,8 @@ Le frontend SaferCloud est une SPA Vue.js 3 qui implémente une architecture **Z
 - ✅ Dérivation de clés avec Argon2id (64MB RAM, 4 passes)
 - ✅ Web Workers pour chiffrement async
 - ✅ Service Worker pour gestion de session sécurisée
+- ✅ **Upload multi-fichiers** avec queue et progress tracking
+- ✅ **Download multi-fichiers ZIP** avec streaming et décryptage
 - ✅ RSA-OAEP 4096 bits pour partages
 - ✅ WebRTC P2P pour transferts directs
 
@@ -29,6 +31,7 @@ Le frontend SaferCloud est une SPA Vue.js 3 qui implémente une architecture **Z
 | **libsodium-wrappers-sumo** | 0.7.15 | Argon2id + utilitaires crypto |
 | **PrimeVue** | 4.4.1 | Composants UI |
 | **pdfjs-dist** | 5.4.530 | Aperçu PDF |
+| **fflate** | 0.8.x | ZIP streaming (Service Worker) |
 | **Vitest** | 1.6.1 | Tests unitaires |
 
 ---
@@ -151,6 +154,44 @@ await fileStore.uploadFile(file, currentPath)
 // → Met à jour la liste
 ```
 
+#### `stores/uploads.js`
+- **Queue Multi-Fichiers**: Gestion de file d'attente pour uploads simultanés
+- **Concurrence Limitée**: 3 fichiers max en parallèle (configurable)
+- **Progress Tracking**: Progress individuel et global avec vitesse/ETA
+- **États**: `pending` → `encrypting` → `uploading` → `completing` → `completed`
+- **Retry**: Retry automatique avec backoff exponentiel
+- **Annulation**: Individuelle ou globale avec cleanup S3
+
+```javascript
+import { useUploadStore } from '@/stores/uploads'
+const uploadStore = useUploadStore()
+
+// Ajouter plusieurs fichiers à la queue
+await uploadStore.addFiles(fileList, '/Documents')
+// → Enqueue automatiquement
+// → Démarre le traitement
+// → Progress tracking en temps réel
+```
+
+#### `stores/downloads.js`
+- **Download Multi-Fichiers**: Téléchargement de dossiers/sélections en ZIP
+- **Service Worker ZIP**: Assemblage streaming avec fflate (level 0)
+- **Concurrence**: 4 fichiers téléchargés en parallèle
+- **Progress**: Tracking avec vitesse et ETA
+- **États**: `idle` → `fetching_tree` → `generating_urls` → `downloading` → `finalizing` → `completed`
+
+```javascript
+import { useDownloadStore } from '@/stores/downloads'
+const downloadStore = useDownloadStore()
+
+// Télécharger un dossier complet en ZIP
+await downloadStore.downloadFolder(folderId, 'Documents')
+// → Récupère l'arborescence
+// → Génère batch presigned URLs
+// → Stream + decrypt + ZIP
+// → Téléchargement automatique
+```
+
 #### `stores/websocket.js`
 - **Connexion WS**: WebSocket persistant avec auto-reconnect
 - **Backoff exponentiel**: Avec jitter pour éviter thundering herd
@@ -184,6 +225,13 @@ Effectue le chiffrement/déchiffrement dans un thread séparé pour éviter de b
 - ✅ Stockage temporaire MasterKey (extractable: false)
 - ✅ Reset timeout sur activité utilisateur
 
+`public/download-worker.js` gère:
+- ✅ Interception routes `/download-stream/*`
+- ✅ Assemblage ZIP streaming avec fflate (compression level 0)
+- ✅ Communication via MessageChannel
+- ✅ Backpressure handling avec ReadableStream
+- ✅ Messages: `INIT_DOWNLOAD`, `ADD_FILE`, `FINALIZE`, `ABORT`
+
 ---
 
 ## 📁 Structure des Fichiers
@@ -213,12 +261,17 @@ frontend/
 │   ├── stores/                     # Pinia State Management
 │   │   ├── auth.js                 # Auth + Crypto (MasterKey)
 │   │   ├── files.js                # CRUD fichiers + chiffrement
+│   │   ├── uploads.js              # Queue multi-fichiers upload
+│   │   ├── downloads.js            # Download multi-fichiers ZIP
 │   │   ├── friends.js              # Système d'amis
 │   │   ├── p2p.js                  # WebRTC peer-to-peer
 │   │   └── websocket.js            # WebSocket client
 │   │
 │   ├── utils/                      # Utilitaires
 │   │   ├── crypto.js               # Fonctions AES, RSA, Argon2id
+│   │   ├── multipartUpload.js      # Upload S3 multipart avec retry
+│   │   ├── uploadQueueManager.js   # Gestionnaire queue multi-fichiers
+│   │   ├── zipDownloadManager.js   # Download multi-fichiers ZIP streaming
 │   │   ├── secureCrypto.js         # XSS monitoring, rate limiting
 │   │   └── securityMonitoring.js   # Monitoring événements sécurité
 │   │
@@ -237,7 +290,8 @@ frontend/
 │       └── index.js                # Configuration routes
 │
 ├── public/
-│   └── sw-crypto.js                # Service Worker session
+│   ├── sw-crypto.js                # Service Worker session
+│   └── download-worker.js          # Service Worker ZIP streaming
 │
 ├── index.html                      # Template HTML
 ├── vite.config.js                  # Config Vite
