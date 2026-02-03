@@ -114,5 +114,39 @@ func Migrate(db *bun.DB) error {
 		log.Printf("Warning: failed to create idx_folder_shares_user: %v", err)
 	}
 
+	// --- BILLING TABLES ---
+
+	// Billing invoices table
+	_, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "billing_invoices" (
+		"id" VARCHAR PRIMARY KEY,
+		"lago_invoice_id" VARCHAR UNIQUE NOT NULL,
+		"user_id" VARCHAR NOT NULL,
+		"invoice_number" VARCHAR NOT NULL,
+		"status" VARCHAR NOT NULL DEFAULT 'draft',
+		"payment_status" VARCHAR NOT NULL DEFAULT 'pending',
+		"currency" VARCHAR NOT NULL DEFAULT 'EUR',
+		"total_amount_cents" BIGINT NOT NULL DEFAULT 0,
+		"payment_link_id" VARCHAR,
+		"payment_link_url" VARCHAR,
+		"issuing_date" TIMESTAMPTZ NOT NULL,
+		"created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		"updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		log.Printf("Warning: failed to create billing_invoices table: %v", err)
+	}
+
+	// Index for billing invoices (user_id)
+	_, err = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_billing_invoices_user ON billing_invoices (user_id);`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_billing_invoices_user: %v", err)
+	}
+
+	// Index for billing invoices (payment_status)
+	_, err = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_billing_invoices_payment_status ON billing_invoices (payment_status);`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_billing_invoices_payment_status: %v", err)
+	}
+
 	return nil
 }
