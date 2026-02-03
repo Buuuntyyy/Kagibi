@@ -11,6 +11,7 @@ import PrivacyPolicy from '../views/PrivacyPolicy.vue'
 import FriendsView from '../views/FriendsView.vue'
 import P2PView from '../views/P2PView.vue'
 import HomeView from '../views/HomeView.vue'
+import BillingDashboard from '../components/billing/BillingDashboard.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -57,6 +58,11 @@ const routes = [
         path: 'friends',
         name: 'Friends',
         component: FriendsView
+      },
+      {
+        path: 'billing',
+        name: 'Billing',
+        component: BillingDashboard
       }
     ]
   },

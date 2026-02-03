@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"safercloud/backend/handlers/auth"
+	"safercloud/backend/handlers/billing"
 	"safercloud/backend/handlers/files"
 	"safercloud/backend/handlers/folders"
 	"safercloud/backend/handlers/friends"
@@ -170,6 +171,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, w
 	registerFriendRoutes(protected, friendHandler)
 	registerShareRoutes(protected, db, wsManager)
 	registerSecurityRoutes(protected)
+	registerBillingRoutes(router, api, protected, db)
 
 	// WebSocket & System
 	router.GET("/ws", func(c *gin.Context) { ws.ConnectHandler(c, wsManager, redisClient, db, jwks) })
@@ -263,6 +265,42 @@ func registerSecurityRoutes(g *gin.RouterGroup) {
 	securityG := g.Group("/security")
 	securityG.POST("/report", func(c *gin.Context) { security.ReportSecurityEvent(c) })
 	securityG.GET("/events", func(c *gin.Context) { security.GetSecurityEvents(c) })
+}
+
+func registerBillingRoutes(router *gin.Engine, api *gin.RouterGroup, protected *gin.RouterGroup, db *bun.DB) {
+	// Initialize payment provider (use mock in test mode, Mollie in production)
+	var paymentProvider billing.PaymentProvider
+	if os.Getenv("BILLING_TEST_MODE") == "true" {
+		log.Println("[Billing] Using MockPaymentProvider (test mode)")
+		paymentProvider = billing.NewMockPaymentProvider()
+	} else {
+		mollieProvider, err := billing.NewMolliePaymentProviderFromEnv()
+		if err != nil {
+			log.Printf("[Billing] Warning: Mollie not configured: %v", err)
+			paymentProvider = billing.NewMockPaymentProvider()
+		} else {
+			log.Println("[Billing] Using MolliePaymentProvider")
+			paymentProvider = mollieProvider
+		}
+	}
+
+	// Initialize usage collector
+	usageCollector := billing.NewUsageCollectorFromEnv()
+	usageCollector.Start()
+
+	// Initialize services
+	webhookHandler := billing.NewLagoWebhookHandlerFromEnv(db, paymentProvider)
+	billingService := billing.NewBillingServiceFromEnv(db, paymentProvider, usageCollector)
+
+	// Public webhook endpoint (Lago calls this)
+	api.POST("/webhooks/lago", webhookHandler.HandleWebhook)
+
+	// Protected billing endpoints
+	billingG := protected.Group("/billing")
+	billingG.GET("/plan", billingService.GetCurrentPlan)
+	billingG.GET("/invoices", billingService.GetInvoices)
+	billingG.GET("/invoices/:invoiceID/payment-link", billingService.GetPaymentLink)
+	billingG.GET("/pending-invoices", webhookHandler.GetPendingInvoices)
 }
 
 func startServer(router *gin.Engine) {
