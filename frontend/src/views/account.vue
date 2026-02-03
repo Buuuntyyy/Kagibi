@@ -274,7 +274,7 @@ const preferenceStore = usePreferencesStore()
 const loading = ref(true)
 
 const navigateToBilling = () => {
-  router.push('/dashboard/billing')
+  router.push('/billing')
 }
 
 const usernameForm = ref({
