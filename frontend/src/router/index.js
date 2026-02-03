@@ -58,13 +58,14 @@ const routes = [
         path: 'friends',
         name: 'Friends',
         component: FriendsView
-      },
-      {
-        path: 'billing',
-        name: 'Billing',
-        component: BillingDashboard
       }
     ]
+  },
+  {
+    path: '/billing',
+    name: 'Billing',
+    component: BillingDashboard,
+    meta: { requiresAuth: true }
   },
   {
     path: '/p2p',
