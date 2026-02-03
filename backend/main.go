@@ -174,6 +174,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, w
 	// WebSocket & System
 	router.GET("/ws", func(c *gin.Context) { ws.ConnectHandler(c, wsManager, redisClient, db, jwks) })
 	protected.GET("/ice-config", ws.GetICEConfigHandler)
+	router.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	router.GET("/api/v1/ping", func(c *gin.Context) { c.JSON(200, gin.H{"message": "pong", "version": "2.2"}) })
 }
 
