@@ -12,9 +12,27 @@ import FriendsView from '../views/FriendsView.vue'
 import P2PView from '../views/P2PView.vue'
 import HomeView from '../views/HomeView.vue'
 import BillingDashboard from '../components/billing/BillingDashboard.vue'
+import LandingHome from '../views/landing/HomeView.vue'
+import LandingPricing from '../views/landing/PricingView.vue'
+import LandingTransfer from '../views/landing/TransferView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
+  {
+    path: '/',
+    name: 'LandingHome',
+    component: LandingHome,
+  },
+  {
+    path: '/pricing',
+    name: 'Pricing',
+    component: LandingPricing,
+  },
+  {
+    path: '/transfer',
+    name: 'Transfer',
+    component: LandingTransfer,
+  },
   {
     path: '/login',
     name: 'Login',
