@@ -14,7 +14,7 @@
           <span class="plan-value">{{ formatPlanName(authStore.user?.plan) }}</span>
         </div>
       </div>
-      <button class="btn-upgrade">Mettre à niveau</button>
+      <button class="btn-upgrade" @click="navigateToBilling">Mettre à niveau</button>
     </div>
 
     <div v-if="loading" class="loading-state">
@@ -272,6 +272,10 @@ const router = useRouter()
 const authStore = useAuthStore()
 const preferenceStore = usePreferencesStore()
 const loading = ref(true)
+
+const navigateToBilling = () => {
+  router.push('/dashboard/billing')
+}
 
 const usernameForm = ref({
   newName: ''
