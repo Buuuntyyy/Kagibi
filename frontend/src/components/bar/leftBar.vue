@@ -101,7 +101,7 @@
       </div>
     </div>
 
-    <div class="storage-section">
+    <div class="storage-section" @click="navigateTo('/dashboard/billing')" style="cursor: pointer;">
       <div class="storage-info" v-if="!isCollapsed">
         <span class="storage-label">Stockage</span>
         <span class="storage-value">{{ formattedStorageUsed }} / {{ formattedStorageLimit }}</span>
