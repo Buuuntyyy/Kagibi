@@ -186,6 +186,7 @@ func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	usersG.GET("/me", func(c *gin.Context) { users.MeHandler(c, db) })
 	usersG.POST("/change-password", func(c *gin.Context) { users.UpdatePasswordHandler(c, db) })
 	usersG.PUT("/profile", func(c *gin.Context) { users.UpdateProfileHandler(c, db) })
+	usersG.PUT("/avatar", func(c *gin.Context) { users.UpdateAvatarHandler(c, db) })
 	usersG.POST("/recent", func(c *gin.Context) { users.AddRecentActivityHandler(c, db) })
 	usersG.GET("/recent", func(c *gin.Context) { users.GetRecentActivityHandler(c, db) })
 	usersG.POST("/keys", func(c *gin.Context) { keys.UpdateKeysHandler(c, db) })
