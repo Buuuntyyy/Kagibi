@@ -12,7 +12,6 @@ import (
 
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/s3storage"
-	"safercloud/backend/pkg/ws"
 	"safercloud/backend/utils"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -22,7 +21,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-func DeleteFileHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
+func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 	fileID, err := strconv.ParseInt(c.Param("fileID"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID de fichier invalide"})
@@ -67,18 +66,13 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
 		return
 	}
 
-	// Notify WebSocket about storage update
-	var user pkg.User
-	if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c); err == nil {
-		wsManager.SendToUser(userID, ws.MsgStorageUpdate, map[string]interface{}{
-			"storage_used": user.StorageUsed,
-		})
-	}
+	// Notify via Supabase Realtime about storage update
+	notifyStorageUpdate(c.Request.Context(), db, userID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Fichier supprimé avec succès"})
 }
 
-func DeleteFolderHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
+func DeleteFolderHandler(c *gin.Context, db *bun.DB) {
 	folderID, err := strconv.ParseInt(c.Param("folderID"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID de dossier invalide"})
@@ -110,13 +104,8 @@ func DeleteFolderHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
 		return
 	}
 
-	// Notify WebSocket about storage update
-	var user pkg.User
-	if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c); err == nil {
-		wsManager.SendToUser(userID, ws.MsgStorageUpdate, map[string]interface{}{
-			"storage_used": user.StorageUsed,
-		})
-	}
+	// Notify via Supabase Realtime about storage update
+	notifyStorageUpdate(c.Request.Context(), db, userID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Dossier supprimé avec succès"})
 }

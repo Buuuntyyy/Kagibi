@@ -37,7 +37,10 @@
       </div>
       <div v-else class="friends-grid">
         <div v-for="friend in friendStore.acceptedFriends" :key="friend.id" class="friend-card">
-          <div class="friend-avatar">{{ getInitials(friend.name) }}</div>
+          <div class="friend-avatar-wrapper">
+            <div class="friend-avatar">{{ getInitials(friend.name) }}</div>
+            <div class="online-indicator" :class="{ online: friend.online }" :title="friend.online ? 'En ligne' : 'Hors ligne'"></div>
+          </div>
           <div class="friend-info">
             <div class="friend-name">{{ friend.name }}</div>
             <div class="friend-email">{{ friend.email }}</div>
@@ -180,10 +183,15 @@ const submitAddFriend = async () => {
   addMessage.value = ''
   try {
     await friendStore.sendRequest(friendCodeInput.value)
-    addMessage.value = "Demande envoyée avec succès !"
+    addMessage.value = "Demande envoyée avec succès ! Consultez l'onglet 'En attente' pour voir vos demandes."
     addMessageType.value = "success"
     friendCodeInput.value = ''
-    // Switch to pending tab after short delay? No, better stay to add more
+    // Auto-switch to pending tab after 2 seconds
+    setTimeout(() => {
+      if (addMessageType.value === 'success') {
+        activeTab.value = 'pending'
+      }
+    }, 2000)
   } catch (err) {
     addMessage.value = err
     addMessageType.value = "error"
@@ -294,6 +302,11 @@ const confirmRemove = (friend) => {
   box-shadow: 0 4px 12px rgba(0,0,0,0.05);
 }
 
+.friend-avatar-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
 .friend-avatar {
   background: var(--primary-color);
   color: white;
@@ -306,6 +319,23 @@ const confirmRemove = (friend) => {
   font-weight: bold;
   font-size: 1.2rem;
   flex-shrink: 0;
+}
+
+.online-indicator {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  background: #666;
+  border: 2px solid var(--background-color);
+  border-radius: 50%;
+  transition: background 0.3s;
+}
+
+.online-indicator.online {
+  background: #4ade80;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
 }
 
 .friend-avatar.small {

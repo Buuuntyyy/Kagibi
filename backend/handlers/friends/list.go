@@ -5,7 +5,6 @@ import (
 	"context"
 	"net/http"
 	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/ws"
 
 	"github.com/uptrace/bun"
 
@@ -19,16 +18,15 @@ type FriendResponse struct {
 	Status    string `json:"status"`              // pending_sent, pending_received, accepted
 	RequestID int64  `json:"requestId,omitempty"` // ID of the friendship row, useful for cancelling/accepting
 	PublicKey string `json:"public_key"`          // NEW: Required for encrypted sharing
-	Online    bool   `json:"online"`              // REALTIME STATUS
+	Online    bool   `json:"online"`              // REALTIME STATUS - Now handled by Supabase Presence
 }
 
 type FriendHandler struct {
 	DB *bun.DB
-	WS *ws.Manager
 }
 
-func NewFriendHandler(db *bun.DB, ws *ws.Manager) *FriendHandler {
-	return &FriendHandler{DB: db, WS: ws}
+func NewFriendHandler(db *bun.DB) *FriendHandler {
+	return &FriendHandler{DB: db}
 }
 
 func (h *FriendHandler) ListFriends(c *gin.Context) {
@@ -73,10 +71,8 @@ func (h *FriendHandler) processSingleFriendship(ctx context.Context, currentUser
 		return nil
 	}
 
-	isOnline := false
-	if h.WS != nil {
-		isOnline = h.WS.IsUserOnline(otherUser.ID)
-	}
+	// Online status is now managed by Supabase Presence on the frontend
+	// The backend no longer tracks real-time presence
 
 	return &FriendResponse{
 		ID:        otherUser.ID,
@@ -85,7 +81,7 @@ func (h *FriendHandler) processSingleFriendship(ctx context.Context, currentUser
 		Status:    status,
 		RequestID: f.ID,
 		PublicKey: otherUser.PublicKey,
-		Online:    isOnline,
+		Online:    false, // Presence now managed by Supabase Presence API on frontend
 	}
 }
 
