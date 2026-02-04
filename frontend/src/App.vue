@@ -1,17 +1,21 @@
 <template>
-  <Navbar v-if="!isLandingPage" />
-  <main :class="isLandingPage ? 'landing-content' : 'content'">
-    <router-view />
-  </main>
-  <P2PTransferDialog v-if="!isLandingPage" />
-  <WarnDialog v-if="!isLandingPage" />
-  <DeleteConfirmDialog v-if="!isLandingPage" />
-  <UploadManager v-if="!isLandingPage" />
-  <DownloadManager v-if="!isLandingPage" />
+  <div class="app-container">
+    <Navbar v-if="!isLandingPage" />
+    <main :class="isLandingPage ? 'landing-content' : 'content'">
+      <router-view />
+    </main>
+    <Footer v-if="!isLandingPage" />
+    <P2PTransferDialog v-if="!isLandingPage" />
+    <WarnDialog v-if="!isLandingPage" />
+    <DeleteConfirmDialog v-if="!isLandingPage" />
+    <UploadManager v-if="!isLandingPage" />
+    <DownloadManager v-if="!isLandingPage" />
+  </div>
 </template>
 
 <script setup>
 import Navbar from './components/layout/navbar.vue'
+import Footer from './components/layout/Footer.vue'
 import P2PTransferDialog from './components/P2PTransferDialog.vue'
 import WarnDialog from './components/WarnDialog.vue'
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
@@ -69,12 +73,17 @@ body {
   line-height: 1.6;
 }
 
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
 .content {
   padding-top: 60px; /* Hauteur de la navbar */
   flex-grow: 1;
   display: flex;
   flex-direction: column;
-  height: 100vh;
   overflow: hidden;
 }
 
