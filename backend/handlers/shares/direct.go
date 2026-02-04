@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/ws"
 	"strconv"
 	"strings"
 	"time"
@@ -25,7 +25,7 @@ type CreateDirectShareRequest struct {
 	FolderFolderKeys map[int64]string `json:"folder_folder_keys"` // For folders: Map of subFolderID -> SubFolderKey encrypted with FolderKey
 }
 
-func CreateDirectShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
+func CreateDirectShareHandler(c *gin.Context, db *bun.DB) {
 	var req CreateDirectShareRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
@@ -53,7 +53,7 @@ func CreateDirectShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager)
 		return
 	}
 
-	sendShareNotifications(c, wsManager, req.FriendID)
+	sendShareNotifications(c, db, req.FriendID)
 	c.JSON(http.StatusCreated, gin.H{"message": "Resource shared successfully"})
 }
 
@@ -137,18 +137,23 @@ func upsertFolderSubFolderKeys(ctx context.Context, db *bun.DB, parentID int64, 
 	return err
 }
 
-func sendShareNotifications(c *gin.Context, wsManager *ws.Manager, friendID string) {
-	wsManager.SendToUser(friendID, ws.MsgStorageUpdate, map[string]interface{}{
+func sendShareNotifications(c *gin.Context, db *bun.DB, friendID string) {
+	// Notify friend via Supabase Realtime
+	if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, friendID, "storage_update", map[string]interface{}{
 		"action": "share_received",
-	})
+	}); err != nil {
+		log.Printf("Failed to emit storage_update event: %v", err)
+	}
 	userID := c.GetString("user_id")
-	wsManager.SendToUser(userID, ws.MsgStorageUpdate, map[string]interface{}{
+	if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, userID, "storage_update", map[string]interface{}{
 		"action": "share_created",
-	})
+	}); err != nil {
+		log.Printf("Failed to emit storage_update event: %v", err)
+	}
 }
 
 // RemoveDirectShareHandler revokes a direct share with a friend
-func RemoveDirectShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
+func RemoveDirectShareHandler(c *gin.Context, db *bun.DB) {
 	currentUserID := c.GetString("user_id")
 	shareIDStr := sanitizeInput(c.Query("id"))
 	resourceType := c.Query("resource_type")
@@ -172,14 +177,20 @@ func RemoveDirectShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager)
 			handleRemoveError(c, err)
 			return
 		}
-		wsManager.SendToUser(friendID, ws.MsgStorageUpdate, map[string]interface{}{
+		// Notify friend via Supabase Realtime
+		if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, friendID, "storage_update", map[string]interface{}{
 			"action": "share_revoked_by_owner",
-		})
+		}); err != nil {
+			log.Printf("Failed to emit storage_update event: %v", err)
+		}
 	}
 
-	wsManager.SendToUser(currentUserID, ws.MsgStorageUpdate, map[string]interface{}{
+	// Notify self via Supabase Realtime
+	if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, currentUserID, "storage_update", map[string]interface{}{
 		"action": "share_revoked",
-	})
+	}); err != nil {
+		log.Printf("Failed to emit storage_update event: %v", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Share revoked"})
 }

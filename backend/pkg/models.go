@@ -2,6 +2,7 @@
 package pkg
 
 import (
+	"context"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -173,4 +174,40 @@ type RecentActivity struct {
 	File       *File     `bun:"rel:belongs-to,join:file_id=id"`
 	Folder     *Folder   `bun:"rel:belongs-to,join:folder_id=id"`
 	AccessedAt time.Time `bun:"accessed_at,nullzero,notnull,default:current_timestamp"`
+}
+
+// RealtimeEvent represents an event for Supabase Realtime
+type RealtimeEvent struct {
+	bun.BaseModel `bun:"table:realtime_events"`
+
+	ID        int64                  `bun:"id,pk,autoincrement"`
+	UserID    string                 `bun:"user_id,notnull"`
+	EventType string                 `bun:"event_type,notnull"`
+	Payload   map[string]interface{} `bun:"payload,type:jsonb"`
+	CreatedAt time.Time              `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+}
+
+// P2PSignal represents a WebRTC signaling message
+type P2PSignal struct {
+	bun.BaseModel `bun:"table:p2p_signals"`
+
+	ID         int64                  `bun:"id,pk,autoincrement"`
+	SenderID   string                 `bun:"sender_id,notnull"`
+	TargetID   string                 `bun:"target_id,notnull"`
+	SignalType string                 `bun:"signal_type,notnull"`
+	Payload    map[string]interface{} `bun:"payload,type:jsonb"`
+	CreatedAt  time.Time              `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	Consumed   bool                   `bun:"consumed,notnull,default:false"`
+}
+
+// EmitRealtimeEvent inserts an event into the realtime_events table
+// Supabase Realtime will broadcast it to subscribed clients
+func EmitRealtimeEvent(ctx context.Context, db *bun.DB, userID, eventType string, payload map[string]interface{}) error {
+	event := &RealtimeEvent{
+		UserID:    userID,
+		EventType: eventType,
+		Payload:   payload,
+	}
+	_, err := db.NewInsert().Model(event).Exec(ctx)
+	return err
 }

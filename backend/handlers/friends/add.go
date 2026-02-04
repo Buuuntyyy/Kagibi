@@ -2,11 +2,11 @@
 package friends
 
 import (
+	"log"
 	"net/http"
 	"time"
 
 	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/ws"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -68,14 +68,18 @@ func (h *FriendHandler) AddFriend(c *gin.Context) {
 		return
 	}
 
-	// Notify target user
-	h.WS.SendToUser(targetUser.ID, ws.MsgFriendUpdate, map[string]interface{}{
+	// Notify target user via Supabase Realtime
+	if err := pkg.EmitRealtimeEvent(c.Request.Context(), h.DB, targetUser.ID, "friend_update", map[string]interface{}{
 		"action": "friend_request_received",
-	})
+	}); err != nil {
+		log.Printf("Failed to emit friend_update event: %v", err)
+	}
 	// Notify sender
-	h.WS.SendToUser(currentUserID, ws.MsgFriendUpdate, map[string]interface{}{
+	if err := pkg.EmitRealtimeEvent(c.Request.Context(), h.DB, currentUserID, "friend_update", map[string]interface{}{
 		"action": "friend_request_sent",
-	})
+	}); err != nil {
+		log.Printf("Failed to emit friend_update event: %v", err)
+	}
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Demande d'ami envoyée"})
 }
@@ -104,14 +108,18 @@ func (h *FriendHandler) AcceptFriend(c *gin.Context) {
 		return
 	}
 
-	// Notify requester
-	h.WS.SendToUser(friendship.UserID1, ws.MsgFriendUpdate, map[string]interface{}{
+	// Notify requester via Supabase Realtime
+	if err := pkg.EmitRealtimeEvent(c.Request.Context(), h.DB, friendship.UserID1, "friend_update", map[string]interface{}{
 		"action": "friend_request_accepted",
-	})
+	}); err != nil {
+		log.Printf("Failed to emit friend_update event: %v", err)
+	}
 	// Notify accepter
-	h.WS.SendToUser(currentUserID, ws.MsgFriendUpdate, map[string]interface{}{
+	if err := pkg.EmitRealtimeEvent(c.Request.Context(), h.DB, currentUserID, "friend_update", map[string]interface{}{
 		"action": "friend_request_accepted",
-	})
+	}); err != nil {
+		log.Printf("Failed to emit friend_update event: %v", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Ami accepté"})
 }

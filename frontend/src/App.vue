@@ -19,13 +19,13 @@ import UploadManager from './components/upload/UploadManager.vue'
 import DownloadManager from './components/download/DownloadManager.vue'
 import { useThemeStore } from './stores/theme'
 import { useAuthStore } from './stores/auth'
-import { useWebSocketStore } from './stores/websocket'
+import { useRealtimeStore } from './stores/realtime'
 import { watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 const themeStore = useThemeStore()
 const authStore = useAuthStore()
-const wsStore = useWebSocketStore()
+const realtimeStore = useRealtimeStore()
 const route = useRoute()
 
 // Check if current route is a landing page
@@ -33,12 +33,12 @@ const isLandingPage = computed(() => {
   return ['LandingHome', 'Pricing', 'Transfer'].includes(route.name)
 })
 
-// Connect WebSocket when authenticated
+// Connect Supabase Realtime when authenticated
 watch(() => authStore.isAuthenticated, (isAuthenticated) => {
   if (isAuthenticated) {
-    wsStore.connect()
+    realtimeStore.connect()
   } else {
-    wsStore.disconnect()
+    realtimeStore.disconnect()
   }
 }, { immediate: true })
 </script>
