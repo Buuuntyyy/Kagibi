@@ -101,8 +101,8 @@ onMounted(() => {
 }
 
 .auth-container {
-  width: 100%;
-  max-width: 400px;
+  width: 80%;
+  max-width: 800px;
   padding: 2.5rem;
   border-radius: 12px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
