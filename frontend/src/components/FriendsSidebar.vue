@@ -11,7 +11,14 @@
            <div v-for="req in friendStore.pendingReceived" :key="req.id" class="pending-item">
               <div class="pending-header">
                   <div class="avatar-compact small">
-                      {{ getInitials(req.name) }}
+                      <img 
+                        v-if="req.avatar_url" 
+                        :src="req.avatar_url" 
+                        :alt="req.name"
+                        class="avatar-image"
+                        @error="(e) => e.target.style.display = 'none'"
+                      />
+                      <span v-else class="avatar-initials">{{ getInitials(req.name) }}</span>
                   </div>
                   <div class="pending-info">
                       <span class="pending-name">{{ req.name }}</span>
@@ -32,7 +39,14 @@
            <div v-for="req in friendStore.pendingSent" :key="req.id" class="pending-item sent">
               <div class="pending-header">
                   <div class="avatar-compact small">
-                      {{ getInitials(req.name) }}
+                      <img 
+                        v-if="req.avatar_url" 
+                        :src="req.avatar_url" 
+                        :alt="req.name"
+                        class="avatar-image"
+                        @error="(e) => e.target.style.display = 'none'"
+                      />
+                      <span v-else class="avatar-initials">{{ getInitials(req.name) }}</span>
                   </div>
                   <div class="pending-info">
                       <span class="pending-name">{{ req.name }}</span>
@@ -49,7 +63,14 @@
         <!-- ACCEPTED FRIENDS -->
         <div v-for="friend in friendStore.acceptedFriends" :key="friend.id" class="friend-item-compact">
           <div class="avatar-compact">
-              {{ getInitials(friend.name) }}
+              <img 
+                v-if="friend.avatar_url" 
+                :src="friend.avatar_url" 
+                :alt="friend.name"
+                class="avatar-image"
+                @error="(e) => e.target.style.display = 'none'"
+              />
+              <span v-else class="avatar-initials">{{ getInitials(friend.name) }}</span>
               <span v-if="friend.online" class="status-dot"></span>
           </div>
           <span class="name-compact">{{ friend.name }}</span>
@@ -266,8 +287,7 @@ const deleteFriend = (friend) => {
 .avatar-compact {
   width: 28px;
   height: 28px;
-  background-color: #f1f3f4; 
-  color: #5f6368;
+  background: linear-gradient(135deg, #f1f3f4 0%, #e1e3e6 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -276,6 +296,25 @@ const deleteFriend = (friend) => {
   font-weight: 500;
   position: relative;
   flex-shrink: 0;
+  overflow: hidden;
+  transition: transform 0.3s ease;
+}
+
+.avatar-compact:hover {
+  transform: scale(1.05);
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.3s ease;
+}
+
+.avatar-initials {
+  color: #5f6368;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .status-dot {
