@@ -13,11 +13,12 @@ import (
 // Ne renvoie que les informations nécessaires pour :
 // - Upload/Download (id, storage_used, storage_limit, plan)
 // - Partage (public_key, encrypted_private_key, friend_code, id)
-// - Affichage UI (name, email, created_at)
+// - Affichage UI (name, email, avatar_url, created_at)
 type UserResponse struct {
 	ID                  string    `json:"id"`
 	Name                string    `json:"name"`
 	Email               string    `json:"email"`
+	AvatarURL           string    `json:"avatar_url"`
 	StorageUsed         int64     `json:"storage_used"`
 	StorageLimit        int64     `json:"storage_limit"`
 	Plan                string    `json:"plan"`
@@ -55,6 +56,7 @@ func MeHandler(c *gin.Context, db *bun.DB) {
 		ID:                  user.ID,
 		Name:                user.Name,
 		Email:               user.Email,
+		AvatarURL:           user.AvatarURL,
 		StorageUsed:         user.StorageUsed,
 		StorageLimit:        user.StorageLimit,
 		Plan:                user.Plan,
