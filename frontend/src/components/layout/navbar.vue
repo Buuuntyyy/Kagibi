@@ -22,7 +22,7 @@
               class="avatar-image"
               @error="handleImageError"
             />
-            <div v-else class="avatar-fallback">
+            <div class="avatar-fallback" :style="{ display: authStore.user?.avatar_url ? 'none' : 'flex' }">
               {{ getInitials(authStore.user?.name) }}
             </div>
           </div>
@@ -54,7 +54,10 @@ const getInitials = (name) => {
 }
 
 const handleImageError = (event) => {
+  // Hide the broken image and show fallback initials
   event.target.style.display = 'none'
+  const fallback = event.target.nextElementSibling
+  if (fallback) fallback.style.display = 'flex'
 }
 </script>
 
@@ -136,10 +139,10 @@ nav {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--primary-color, #6B7FD7) 0%, var(--secondary-color, #9370DB) 100%);
+  background-color: var(--card-color, #f0f0f0);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
   cursor: pointer;
-  border: 2px solid transparent;
+  border: 2px solid var(--border-color, #e0e0e0);
 }
 
 .user-avatar:hover {
@@ -156,9 +159,16 @@ nav {
 }
 
 .avatar-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: white;
   font-weight: 600;
   font-size: 0.875rem;
   letter-spacing: 0.5px;
+  background: linear-gradient(135deg, var(--primary-color, #6B7FD7) 0%, var(--secondary-color, #9370DB) 100%);
+  border-radius: 50%;
 }
 </style>

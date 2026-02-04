@@ -25,6 +25,10 @@
           </button>
         </div>
       </div>
+      <div class="form-group">
+        <label>Avatar</label>
+        <AvatarSelector v-model="selectedAvatar" />
+      </div>
       <button type="submit" class="btn-submit" :disabled="loading">
         <span v-if="loading" class="spinner"></span>
         <span v-else>S'inscrire</span>
@@ -82,10 +86,12 @@
 import { ref } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
+import AvatarSelector from '../AvatarSelector.vue'
 
 const username = ref('')
 const email = ref('')
 const password = ref('')
+const selectedAvatar = ref('/avatars/default.png')
 const error = ref('')
 const recoveryCode = ref('')
 const loading = ref(false)
@@ -100,7 +106,7 @@ const submit = async () => {
   error.value = ''
   loading.value = true
   try {
-    const code = await authStore.register(username.value, email.value, password.value)
+    const code = await authStore.register(username.value, email.value, password.value, selectedAvatar.value)
     recoveryCode.value = code
   } catch (err) {
     console.error(err)

@@ -30,28 +30,25 @@ import { computed } from 'vue'
 const props = defineProps({
   modelValue: {
     type: String,
-    default: '/avatars/default.svg'
+    default: '/avatars/default.png'
   }
 })
 
 const emit = defineEmits(['update:modelValue'])
 
-// Liste des avatars disponibles
-const avatars = computed(() => {
-  const avatarList = [
-    { url: '/avatars/default.svg', name: 'Avatar par défaut' }
-  ]
-  
-  // Générer avatars 1-9
-  for (let i = 1; i <= 9; i++) {
-    avatarList.push({
-      url: `/avatars/avatar${i}.svg`,
-      name: `Avatar ${i}`
-    })
-  }
-  
-  return avatarList
-})
+// Liste des avatars disponibles (correspondant aux fichiers réels)
+const avatars = computed(() => [
+  { url: '/avatars/default.png', name: 'Avatar par défaut' },
+  { url: '/avatars/boy.png', name: 'Garçon' },
+  { url: '/avatars/girl.png', name: 'Fille' },
+  { url: '/avatars/cat.png', name: 'Chat' },
+  { url: '/avatars/dog.png', name: 'Chien' },
+  { url: '/avatars/fox.png', name: 'Renard' },
+  { url: '/avatars/rabbit.png', name: 'Lapin' },
+  { url: '/avatars/panda.png', name: 'Panda' },
+  { url: '/avatars/gorilla.png', name: 'Gorille' },
+  { url: '/avatars/chicken.png', name: 'Poulet' }
+])
 
 const selectAvatar = (url) => {
   emit('update:modelValue', url)

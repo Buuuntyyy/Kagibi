@@ -11,9 +11,10 @@ import (
 type User struct {
 	bun.BaseModel `bun:"table:profiles,alias:p"`
 
-	ID    string `bun:"id,pk"`
-	Name  string `bun:"name,notnull"`
-	Email string `bun:"email,unique,notnull"`
+	ID        string `bun:"id,pk"`
+	Name      string `bun:"name,notnull"`
+	Email     string `bun:"email,unique,notnull"`
+	AvatarURL string `bun:"avatar_url,notnull,default:'/avatars/default.png'" json:"avatar_url"`
 	// PasswordHash removed as it is handled by Supabase
 	Salt                       string    `bun:"salt,notnull" json:"salt"`
 	EncryptedMasterKey         string    `bun:"encrypted_master_key,notnull" json:"encrypted_master_key"`

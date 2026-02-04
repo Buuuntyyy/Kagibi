@@ -121,7 +121,7 @@ export const useAuthStore = defineStore('auth', {
         throw error; // Re-throw for the UI to handle
       }
     },
-    async register(username, email, password) {
+    async register(username, email, password, avatarUrl = '/avatars/default.png') {
       await sodium.ready;
       
       // 1. Préparation de la cryptographie locale
@@ -177,6 +177,7 @@ export const useAuthStore = defineStore('auth', {
         const payload = {
           name: username,
           email: email,
+          avatar_url: avatarUrl,
           // Pas de password envoyé à votre backend !
           salt: saltHex,
           encrypted_master_key: wrappedMasterKey,
@@ -431,6 +432,20 @@ export const useAuthStore = defineStore('auth', {
       }, THIRTY_MINUTES);
       
       console.log('[Security] Session timeout set to 30 minutes');
+    },
+    async updateAvatar(avatarUrl) {
+      try {
+        await api.put('/users/avatar', { avatar_url: avatarUrl })
+        
+        // Update local user state
+        if (this.user) {
+          this.user.avatar_url = avatarUrl
+          this.persistUserToStorage()
+        }
+      } catch (error) {
+        console.error('Failed to update avatar:', error)
+        throw error
+      }
     }
   },
 })

@@ -16,8 +16,9 @@ import (
 var validate = validator.New()
 
 type RegisterRequest struct {
-	Name  string `json:"name" validate:"required"`
-	Email string `json:"email" validate:"required,email"`
+	Name      string `json:"name" validate:"required"`
+	Email     string `json:"email" validate:"required,email"`
+	AvatarURL string `json:"avatar_url"`
 	// Password removed (handled by Supabase)
 	Salt                       string `json:"salt" validate:"required"`
 	EncryptedMasterKey         string `json:"encrypted_master_key" validate:"required"`
@@ -59,10 +60,17 @@ func RegisterHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	// Set default avatar if not provided
+	avatarURL := req.AvatarURL
+	if avatarURL == "" {
+		avatarURL = "/avatars/default.png"
+	}
+
 	user := &pkg.User{
-		ID:    userID, // Use Supabase ID
-		Name:  req.Name,
-		Email: req.Email,
+		ID:        userID, // Use Supabase ID
+		Name:      req.Name,
+		Email:     req.Email,
+		AvatarURL: avatarURL,
 		// PasswordHash: removed
 		Salt:                       req.Salt,
 		EncryptedMasterKey:         req.EncryptedMasterKey,
