@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/s3storage"
-	"safercloud/backend/pkg/ws"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -19,7 +18,7 @@ type BulkDeleteRequest struct {
 	FileIDs []int64 `json:"file_ids" binding:"required"`
 }
 
-func BulkDeleteHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
+func BulkDeleteHandler(c *gin.Context, db *bun.DB) {
 	var req BulkDeleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Liste d'IDs invalide"})
@@ -116,13 +115,8 @@ func BulkDeleteHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
 		}
 	}
 
-	// Notify WebSocket about storage update
-	var user pkg.User
-	if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c); err == nil {
-		wsManager.SendToUser(userID, ws.MsgStorageUpdate, map[string]interface{}{
-			"storage_used": user.StorageUsed,
-		})
-	}
+	// Notify via Supabase Realtime about storage update
+	notifyStorageUpdate(c.Request.Context(), db, userID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Fichiers supprimés avec succès"})
 }

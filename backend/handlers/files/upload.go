@@ -17,7 +17,6 @@ import (
 
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/workers"
-	"safercloud/backend/pkg/ws"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -74,7 +73,7 @@ func validatePath(inputPath string) (string, error) {
 	return cleanPath, nil
 }
 
-func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client, wsManager *ws.Manager) {
+func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 	userID := c.GetString("user_id")
 
 	req, err := parseUploadRequest(c, userID)
@@ -111,7 +110,7 @@ func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client, wsMana
 	}
 
 	// Finalize Upload
-	fileRecord, err := finalizeUpload(c.Request.Context(), db, redisClient, wsManager, req, fileHeader, tempFilePath)
+	fileRecord, err := finalizeUpload(c.Request.Context(), db, redisClient, req, fileHeader, tempFilePath)
 	if err != nil {
 		// Attempt cleanup
 		os.Remove(tempFilePath)
@@ -215,7 +214,7 @@ func handleChunkAssembly(fileHeader *multipart.FileHeader, userID string, req Up
 	return tempFilePath, nil
 }
 
-func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, wsManager *ws.Manager, req UploadRequest, fileHeader *multipart.FileHeader, tempFilePath string) (*pkg.File, error) {
+func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, req UploadRequest, fileHeader *multipart.FileHeader, tempFilePath string) (*pkg.File, error) {
 	// 1. Verify file size
 	fi, err := os.Stat(tempFilePath)
 	if err != nil {
@@ -289,8 +288,8 @@ func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, 
 		}
 	}
 
-	// 7. Notify Storage Update
-	notifyStorageUpdate(db, wsManager, req.UserID)
+	// 7. Notify Storage Update via Supabase Realtime
+	notifyStorageUpdate(ctx, db, req.UserID)
 
 	return fileRecord, nil
 }
@@ -378,11 +377,14 @@ func processShareKeys(ctx context.Context, tx bun.Tx, shareKeysJSON string, file
 	return nil
 }
 
-func notifyStorageUpdate(db *bun.DB, wsManager *ws.Manager, userID string) {
+func notifyStorageUpdate(ctx context.Context, db *bun.DB, userID string) {
 	var updatedUser pkg.User
-	if err := db.NewSelect().Model(&updatedUser).Where("id = ?", userID).Scan(context.Background()); err == nil {
-		wsManager.SendToUser(userID, ws.MsgStorageUpdate, map[string]interface{}{
+	if err := db.NewSelect().Model(&updatedUser).Where("id = ?", userID).Scan(ctx); err == nil {
+		payload := map[string]interface{}{
 			"storage_used": updatedUser.StorageUsed,
-		})
+		}
+		if err := pkg.EmitRealtimeEvent(ctx, db, userID, "storage_update", payload); err != nil {
+			log.Printf("Failed to emit storage_update event: %v", err)
+		}
 	}
 }

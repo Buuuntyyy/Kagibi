@@ -14,7 +14,6 @@ require (
 	github.com/go-redis/redismock/v8 v8.11.5
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1
 	github.com/mollie/mollie-api-golang v0.9.14
 	github.com/stretchr/testify v1.11.1

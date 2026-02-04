@@ -14,12 +14,10 @@ import (
 	"safercloud/backend/handlers/shares"
 	"safercloud/backend/handlers/tags"
 	"safercloud/backend/handlers/users"
-	"safercloud/backend/handlers/ws"
 	"safercloud/backend/middleware"
 	"safercloud/backend/pkg"
 	"safercloud/backend/pkg/s3storage"
 	"safercloud/backend/pkg/workers"
-	wsPkg "safercloud/backend/pkg/ws"
 	"strings"
 
 	"time"
@@ -33,7 +31,7 @@ import (
 )
 
 func main() {
-	log.Println("Starting SaferCloud Backend v2.2 (Refactored)...")
+	log.Println("Starting SaferCloud Backend v3.0 (Supabase Realtime)...")
 
 	loadEnv()
 	initS3()
@@ -47,15 +45,14 @@ func main() {
 	workers.StartWorker(redisClient)
 	workers.StartCleanupWorker(db)
 
-	// Initialize Managers
-	wsManager := wsPkg.NewManager()
-	friendHandler := friends.NewFriendHandler(db, wsManager)
+	// Initialize Handlers (no more WebSocket Manager)
+	friendHandler := friends.NewFriendHandler(db)
 	jwks, jwtSecret := initAuth()
 
 	// Setup Server
 	router := setupRouter()
 
-	registerRoutes(router, db, redisClient, wsManager, jwks, jwtSecret, friendHandler)
+	registerRoutes(router, db, redisClient, jwks, jwtSecret, friendHandler)
 
 	startServer(router)
 }
@@ -145,7 +142,7 @@ func setupRouter() *gin.Engine {
 	return router
 }
 
-func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, wsManager *wsPkg.Manager, jwks keyfunc.Keyfunc, jwtSecret string, friendHandler *friends.FriendHandler) {
+func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, jwks keyfunc.Keyfunc, jwtSecret string, friendHandler *friends.FriendHandler) {
 	api := router.Group("/api/v1")
 
 	// Authentication Routes (Public + Protected)
@@ -165,19 +162,18 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, w
 	protected.Use(middleware.AuthMiddleware(jwks, jwtSecret))
 
 	registerUserRoutes(protected, db, redisClient)
-	registerFileRoutes(protected, db, redisClient, wsManager)
+	registerFileRoutes(protected, db, redisClient)
 	registerFolderRoutes(protected, db)
 	registerTagRoutes(protected, db)
 	registerFriendRoutes(protected, friendHandler)
-	registerShareRoutes(protected, db, wsManager)
+	registerShareRoutes(protected, db)
 	registerSecurityRoutes(protected)
 	registerBillingRoutes(router, api, protected, db)
+	registerP2PRoutes(protected, db)
 
-	// WebSocket & System
-	router.GET("/ws", func(c *gin.Context) { ws.ConnectHandler(c, wsManager, redisClient, db, jwks) })
-	protected.GET("/ice-config", ws.GetICEConfigHandler)
+	// System
 	router.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
-	router.GET("/api/v1/ping", func(c *gin.Context) { c.JSON(200, gin.H{"message": "pong", "version": "2.2"}) })
+	router.GET("/api/v1/ping", func(c *gin.Context) { c.JSON(200, gin.H{"message": "pong", "version": "3.0"}) })
 }
 
 func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Client) {
@@ -195,14 +191,14 @@ func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	usersG.POST("/keys", func(c *gin.Context) { keys.UpdateKeysHandler(c, db) })
 }
 
-func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Client, wsManager *wsPkg.Manager) {
+func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Client) {
 	filesG := g.Group("/files")
-	filesG.POST("/upload", func(c *gin.Context) { files.UploadHandler(c, db, redisClient, wsManager) })
+	filesG.POST("/upload", func(c *gin.Context) { files.UploadHandler(c, db, redisClient) })
 	filesG.GET("/list-recursive", func(c *gin.Context) { files.ListAllFilesRecursiveHandler(c, db) })
 	filesG.GET("/list/*path", func(c *gin.Context) { files.ListFilesHandler(c, db) })
-	filesG.POST("/bulk-delete", func(c *gin.Context) { files.BulkDeleteHandler(c, db, wsManager) })
-	filesG.DELETE("/file/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db, wsManager) })
-	filesG.DELETE("/folder/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db, wsManager) })
+	filesG.POST("/bulk-delete", func(c *gin.Context) { files.BulkDeleteHandler(c, db) })
+	filesG.DELETE("/file/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db) })
+	filesG.DELETE("/folder/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db) })
 	filesG.POST("/move", func(c *gin.Context) { files.MoveHandler(c, db, redisClient) })
 	filesG.POST("/rename", func(c *gin.Context) { files.RenameHandler(c, db, redisClient) })
 	filesG.POST("/tags", func(c *gin.Context) { files.UpdateTagsHandler(c, db) })
@@ -245,26 +241,111 @@ func registerFriendRoutes(g *gin.RouterGroup, h *friends.FriendHandler) {
 	friendsG.DELETE("/:id/reject", h.RejectFriend)
 }
 
-func registerShareRoutes(g *gin.RouterGroup, db *bun.DB, wsManager *wsPkg.Manager) {
+func registerShareRoutes(g *gin.RouterGroup, db *bun.DB) {
 	sharesG := g.Group("/shares")
 	sharesG.GET("/list", func(c *gin.Context) { shares.ListSharesHandler(c, db) })
 	sharesG.POST("/link", func(c *gin.Context) { shares.CreateShareLinkHandler(c, db) })
-	sharesG.POST("/direct", func(c *gin.Context) { shares.CreateDirectShareHandler(c, db, wsManager) })
+	sharesG.POST("/direct", func(c *gin.Context) { shares.CreateDirectShareHandler(c, db) })
 	sharesG.GET("/direct", func(c *gin.Context) { shares.ListDirectSharesForResourceHandler(c, db) })
-	sharesG.DELETE("/direct", func(c *gin.Context) { shares.RemoveDirectShareHandler(c, db, wsManager) })
+	sharesG.DELETE("/direct", func(c *gin.Context) { shares.RemoveDirectShareHandler(c, db) })
 	sharesG.GET("/check-path", func(c *gin.Context) { shares.GetActiveSharesForPathHandler(c, db) })
 	sharesG.GET("/file/:fileID", func(c *gin.Context) { shares.GetShareForResourceHandler(c, db) })
 	sharesG.GET("/direct/folder/:folderID/content", func(c *gin.Context) { shares.GetSharedFolderContentHandler(c, db) })
 	sharesG.DELETE("/link/:shareID", func(c *gin.Context) { shares.DeleteShareLinkHandler(c, db) })
 	sharesG.GET("/with-me", func(c *gin.Context) { shares.ListImportedSharesHandler(c, db) })
 	sharesG.POST("/with-me", func(c *gin.Context) { shares.ImportShareHandler(c, db) })
-	sharesG.DELETE("/with-me/:id", func(c *gin.Context) { shares.RemoveImportedShareHandler(c, db, wsManager) })
+	sharesG.DELETE("/with-me/:id", func(c *gin.Context) { shares.RemoveImportedShareHandler(c, db) })
 }
 
 func registerSecurityRoutes(g *gin.RouterGroup) {
 	securityG := g.Group("/security")
 	securityG.POST("/report", func(c *gin.Context) { security.ReportSecurityEvent(c) })
 	securityG.GET("/events", func(c *gin.Context) { security.GetSecurityEvents(c) })
+}
+
+// P2P Signaling Routes (replaces WebSocket signaling)
+func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
+	p2pG := g.Group("/p2p")
+
+	// Send a P2P signal to another user
+	p2pG.POST("/signal", func(c *gin.Context) {
+		userID, _ := c.Get("user_id")
+		var req struct {
+			TargetUserID string                 `json:"target_user_id" binding:"required"`
+			SignalType   string                 `json:"signal_type" binding:"required"`
+			Payload      map[string]interface{} `json:"payload" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+
+		signal := &pkg.P2PSignal{
+			SenderID:   userID.(string),
+			TargetID:   req.TargetUserID,
+			SignalType: req.SignalType,
+			Payload:    req.Payload,
+		}
+
+		if _, err := db.NewInsert().Model(signal).Exec(c.Request.Context()); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to send signal"})
+			return
+		}
+
+		c.JSON(200, gin.H{"status": "sent", "signal_id": signal.ID})
+	})
+
+	// Poll for pending P2P signals
+	p2pG.GET("/signals", func(c *gin.Context) {
+		userID, _ := c.Get("user_id")
+		var signals []pkg.P2PSignal
+
+		err := db.NewSelect().
+			Model(&signals).
+			Where("target_id = ? AND consumed = false", userID).
+			Order("created_at ASC").
+			Scan(c.Request.Context())
+
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to fetch signals"})
+			return
+		}
+
+		// Mark fetched signals as consumed
+		if len(signals) > 0 {
+			var ids []int64
+			for _, s := range signals {
+				ids = append(ids, s.ID)
+			}
+			db.NewUpdate().Model((*pkg.P2PSignal)(nil)).
+				Set("consumed = true").
+				Where("id IN (?)", bun.In(ids)).
+				Exec(c.Request.Context())
+		}
+
+		c.JSON(200, gin.H{"signals": signals})
+	})
+
+	// ICE Configuration (TURN/STUN servers)
+	p2pG.GET("/ice-config", func(c *gin.Context) {
+		turnURL := os.Getenv("TURN_SERVER_URL")
+		turnUser := os.Getenv("TURN_USERNAME")
+		turnCred := os.Getenv("TURN_CREDENTIAL")
+
+		iceServers := []map[string]interface{}{
+			{"urls": []string{"stun:stun.l.google.com:19302"}},
+		}
+
+		if turnURL != "" {
+			iceServers = append(iceServers, map[string]interface{}{
+				"urls":       []string{turnURL},
+				"username":   turnUser,
+				"credential": turnCred,
+			})
+		}
+
+		c.JSON(200, gin.H{"iceServers": iceServers})
+	})
 }
 
 func registerBillingRoutes(router *gin.Engine, api *gin.RouterGroup, protected *gin.RouterGroup, db *bun.DB) {
