@@ -26,7 +26,13 @@
       <!-- Left Column: User Profile -->
       <div class="user-card">
         <div class="avatar-large">
-          {{ getInitials(authStore.user?.name) }}
+          <img 
+            v-if="authStore.user?.avatar_url" 
+            :src="authStore.user.avatar_url" 
+            :alt="authStore.user?.name"
+            @error="(e) => e.target.style.display = 'none'"
+          />
+          <span v-else class="avatar-initials">{{ getInitials(authStore.user?.name) }}</span>
         </div>
         <div class="user-info">
           <h2>{{ authStore.user?.name || 'Utilisateur' }}</h2>
@@ -61,6 +67,33 @@
               <button class="btn-secondary" @click="handleUpdateUsername" :disabled="updatingUsername">
                 {{ updatingUsername ? 'Mise à jour...' : 'Modifier' }}
               </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="section-header">
+            <h3>Avatar</h3>
+          </div>
+          <div class="section-body">
+            <div class="avatar-section">
+              <div class="current-avatar-display">
+                <div class="avatar-preview">
+                  <img 
+                    v-if="authStore.user?.avatar_url" 
+                    :src="authStore.user.avatar_url" 
+                    :alt="authStore.user?.name"
+                  />
+                  <span v-else class="avatar-initials">{{ getInitials(authStore.user?.name) }}</span>
+                </div>
+                <p class="avatar-hint">Sélectionnez un nouvel avatar ci-dessous</p>
+              </div>
+              <AvatarSelector v-model="selectedAvatar" />
+              <div class="form-actions">
+                <button class="btn-primary" @click="handleUpdateAvatar" :disabled="updatingAvatar || selectedAvatar === authStore.user?.avatar_url">
+                  {{ updatingAvatar ? 'Mise à jour...' : 'Enregistrer l\'avatar' }}
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -263,15 +296,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { usePreferencesStore } from '../stores/preferences'
+import AvatarSelector from '../components/AvatarSelector.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const preferenceStore = usePreferencesStore()
 const loading = ref(true)
+const selectedAvatar = ref('/avatars/default.png')
+const updatingAvatar = ref(false)
 
 const navigateToBilling = () => {
   router.push('/billing')
@@ -327,11 +363,19 @@ onMounted(async () => {
     await authStore.fetchUser()
     if (authStore.user) {
       usernameForm.value.newName = authStore.user.name
+      selectedAvatar.value = authStore.user.avatar_url || '/avatars/default.png'
     }
   } catch (e) {
     console.error("Error loading profile", e)
   } finally {
     loading.value = false
+  }
+})
+
+// Watch for user changes to update selectedAvatar
+watch(() => authStore.user?.avatar_url, (newAvatar) => {
+  if (newAvatar) {
+    selectedAvatar.value = newAvatar
   }
 })
 
@@ -426,6 +470,30 @@ const handleUpdatePassword = async () => {
     showError('Erreur', errorMessage)
   } finally {
     updatingPassword.value = false
+  }
+}
+
+const handleUpdateAvatar = async () => {
+  if (!selectedAvatar.value) {
+    showError('Erreur', 'Veuillez sélectionner un avatar.')
+    return
+  }
+
+  if (selectedAvatar.value === authStore.user?.avatar_url) {
+    showError('Erreur', 'Veuillez sélectionner un avatar différent.')
+    return
+  }
+
+  updatingAvatar.value = true
+  try {
+    await authStore.updateAvatar(selectedAvatar.value)
+    showSuccess('Succès', 'Votre avatar a été mis à jour avec succès !')
+  } catch (error) {
+    console.error("Failed to update avatar:", error)
+    const errorMessage = error.response?.data?.error || error.message || 'Erreur lors de la mise à jour de l\'avatar.'
+    showError('Erreur', errorMessage)
+  } finally {
+    updatingAvatar.value = false
   }
 }
 </script>
@@ -580,6 +648,13 @@ const handleUpdatePassword = async () => {
   font-weight: bold;
   margin-bottom: 1.5rem;
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+.avatar-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .user-info h2 {
@@ -952,5 +1027,53 @@ input:checked + .slider:before {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* Avatar Section */
+.avatar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.current-avatar-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--background-color);
+  border-radius: 8px;
+}
+
+.avatar-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  position: relative;
+}
+
+.avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-preview .avatar-initials {
+  color: white;
+  font-size: 2rem;
+  font-weight: bold;
+}
+
+.avatar-hint {
+  font-size: 0.85rem;
+  color: var(--secondary-text-color);
+  margin: 0;
 }
 </style>
