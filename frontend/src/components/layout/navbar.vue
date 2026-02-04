@@ -13,7 +13,20 @@
       </button>
       <router-link v-if="!authStore.isAuthenticated" to="/login">Connexion / Inscription</router-link>
       <template v-else>
-        <router-link to="/account">Mon Compte</router-link>
+        <router-link to="/account" class="user-avatar-link" :title="authStore.user?.name || 'Mon Compte'">
+          <div class="user-avatar">
+            <img 
+              v-if="authStore.user?.avatar_url" 
+              :src="authStore.user.avatar_url" 
+              :alt="authStore.user?.name"
+              class="avatar-image"
+              @error="handleImageError"
+            />
+            <div v-else class="avatar-fallback">
+              {{ getInitials(authStore.user?.name) }}
+            </div>
+          </div>
+        </router-link>
         <a @click.prevent="logout" href="#">Se déconnecter</a>
       </template>
     </div>
@@ -33,6 +46,15 @@ const router = useRouter()
 const logout = async () => {
   await authStore.logout()
   router.push({ name: 'Login' })
+}
+
+const getInitials = (name) => {
+  if (!name) return '?'
+  return name.substring(0, 2).toUpperCase()
+}
+
+const handleImageError = (event) => {
+  event.target.style.display = 'none'
 }
 </script>
 
@@ -64,12 +86,12 @@ nav {
 .nav-links {
   display: flex;
   align-items: center;
+  gap: 1rem;
 }
 
 .nav-links a {
   color: var(--main-text-color);
   text-decoration: none;
-  margin-left: 1rem;
 }
 
 .nav-links a:hover {
@@ -80,7 +102,6 @@ nav {
   background: none;
   border: none;
   cursor: pointer;
-  margin-left: 1rem;
   color: var(--main-text-color);
   display: flex;
   align-items: center;
@@ -96,5 +117,48 @@ nav {
 .icon-svg {
   width: 24px;
   height: 24px;
+}
+
+.user-avatar-link {
+  text-decoration: none !important;
+}
+
+.user-avatar-link:hover {
+  text-decoration: none !important;
+  opacity: 0.9;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--primary-color, #6B7FD7) 0%, var(--secondary-color, #9370DB) 100%);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+
+.user-avatar:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(107, 127, 215, 0.3);
+  border-color: var(--primary-color, #6B7FD7);
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.3s ease;
+}
+
+.avatar-fallback {
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: 0.5px;
 }
 </style>
