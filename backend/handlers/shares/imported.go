@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/ws"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -206,7 +205,7 @@ func ImportShareHandler(c *gin.Context, db *bun.DB) {
 }
 
 // RemoveImportedShareHandler removes a share from the "Shared With Me" list
-func RemoveImportedShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manager) {
+func RemoveImportedShareHandler(c *gin.Context, db *bun.DB) {
 	userID := c.GetString("user_id")
 	id := sanitizeID(c.Param("id"))
 	shareType := sanitizeID(c.Query("type"))
@@ -229,15 +228,19 @@ func RemoveImportedShareHandler(c *gin.Context, db *bun.DB, wsManager *ws.Manage
 	}
 
 	if ownerIDToNotify != "" {
-		wsManager.SendToUser(ownerIDToNotify, ws.MsgStorageUpdate, map[string]interface{}{
+		if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, ownerIDToNotify, "storage_update", map[string]interface{}{
 			"action": "share_revoked_by_recipient",
-		})
+		}); err != nil {
+			log.Printf("Failed to emit storage_update event: %v", err)
+		}
 	}
 
 	// Also notify self
-	wsManager.SendToUser(userID, ws.MsgStorageUpdate, map[string]interface{}{
+	if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, userID, "storage_update", map[string]interface{}{
 		"action": "share_removed_from_imported",
-	})
+	}); err != nil {
+		log.Printf("Failed to emit storage_update event: %v", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Removed from shared with me"})
 }

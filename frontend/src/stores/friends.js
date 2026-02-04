@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import api from '../api'
+import { useRealtimeStore } from './realtime'
 
 export const useFriendStore = defineStore('friends', {
   state: () => ({
@@ -20,6 +21,12 @@ export const useFriendStore = defineStore('friends', {
       try {
         const response = await api.get('/friends')
         this.friends = response.data || []
+        
+        // Initialize online status from realtime store
+        const realtimeStore = useRealtimeStore()
+        this.friends.forEach(friend => {
+          friend.online = realtimeStore.isUserOnline(friend.id)
+        })
       } catch (err) {
         this.error = err.message
       } finally {

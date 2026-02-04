@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { useWebSocketStore } from './websocket'
+import { useRealtimeStore } from './realtime'
 import { useAuthStore } from './auth'
 import { useUIStore } from './ui'
 import sodium from 'libsodium-wrappers-sumo'
@@ -14,14 +14,14 @@ import { API_BASE_URL } from '../api'
 
 // Fonction utilitaire pour récupérer la config ICE depuis le backend
 async function fetchICEConfig() {
-    console.log("[P2P] Fetching ICE Config (v2 - Secure)..."); // Debug marker
+    console.log("[P2P] Fetching ICE Config (v3 - Supabase Realtime)...");
     try {
         const token = localStorage.getItem('token');
-        const response = await axios.get(`${API_BASE_URL}/ice-config`, {
+        const response = await axios.get(`${API_BASE_URL}/p2p/ice-config`, {
             headers: { Authorization: `Bearer ${token}` }
         });
         if (response.data && response.data.iceServers) {
-            console.log("[P2P] Retrived ICE Servers:", response.data.iceServers);
+            console.log("[P2P] Retrieved ICE Servers:", response.data.iceServers);
             return { iceServers: response.data.iceServers };
         }
     } catch (e) {
@@ -117,7 +117,7 @@ export const useP2PStore = defineStore('p2p', {
          console.log("Using RTC Config:", rtcConfig);
 
          const pc = new RTCPeerConnection(rtcConfig);
-         const socketStore = useWebSocketStore();
+         const realtimeStore = useRealtimeStore();
          const uiStore = useUIStore();
 
          pc.oniceconnectionstatechange = () => {
@@ -138,7 +138,7 @@ export const useP2PStore = defineStore('p2p', {
 
          pc.onicecandidate = e => {
              if(e.candidate) {
-                 socketStore.sendSignal(friend.id, 'candidate', {
+                 realtimeStore.sendP2PSignal(friend.id, 'candidate', {
                      candidate: e.candidate,
                      transferId: transferId
                  });
@@ -162,7 +162,7 @@ export const useP2PStore = defineStore('p2p', {
          const offer = await pc.createOffer();
          await pc.setLocalDescription(offer);
 
-         socketStore.sendSignal(friend.id, 'offer', {
+         realtimeStore.sendP2PSignal(friend.id, 'offer', {
              sdp: offer,
              transferId: transferId,
              meta: {
@@ -212,7 +212,7 @@ export const useP2PStore = defineStore('p2p', {
         // Fetch ICE Config from backend
         const rtcConfig = await fetchICEConfig();
         const pc = new RTCPeerConnection(rtcConfig);
-        const socketStore = useWebSocketStore();
+        const realtimeStore = useRealtimeStore();
         const uiStore = useUIStore();
 
         // We don't necessarily need to send transferId back for candidates, but good practice.
@@ -235,7 +235,7 @@ export const useP2PStore = defineStore('p2p', {
 
         pc.onicecandidate = e => {
              if(e.candidate) {
-                 socketStore.sendSignal(offerData.senderId, 'candidate', {
+                 realtimeStore.sendP2PSignal(offerData.senderId, 'candidate', {
                      candidate: e.candidate,
                      transferId: transferId
                  });
@@ -281,7 +281,7 @@ export const useP2PStore = defineStore('p2p', {
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         
-        socketStore.sendSignal(offerData.senderId, 'answer', {
+        realtimeStore.sendP2PSignal(offerData.senderId, 'answer', {
             sdp: answer,
             transferId: transferId
         });

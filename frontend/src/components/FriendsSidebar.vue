@@ -5,9 +5,9 @@
         <p class="empty-text">Aucun ami</p>
       </div>
       <div v-else class="friends-list-compact">
-        <!-- PENDING REQUESTS -->
+        <!-- PENDING REQUESTS RECEIVED -->
         <div v-if="friendStore.pendingReceived.length > 0" class="pending-section">
-           <div class="section-label">DEMANDES ({{ friendStore.pendingReceived.length }})</div>
+           <div class="section-label">DEMANDES REÇUES ({{ friendStore.pendingReceived.length }})</div>
            <div v-for="req in friendStore.pendingReceived" :key="req.id" class="pending-item">
               <div class="pending-header">
                   <div class="avatar-compact small">
@@ -21,6 +21,26 @@
               <div class="pending-actions">
                   <button @click="friendStore.acceptRequest(req.requestId)" class="btn-xs accept">Accepter</button>
                   <button @click="friendStore.rejectRequest(req.requestId)" class="btn-xs reject">Refuser</button>
+              </div>
+           </div>
+           <div class="divider-mini"></div>
+        </div>
+
+        <!-- PENDING REQUESTS SENT -->
+        <div v-if="friendStore.pendingSent.length > 0" class="pending-section">
+           <div class="section-label">DEMANDES ENVOYÉES ({{ friendStore.pendingSent.length }})</div>
+           <div v-for="req in friendStore.pendingSent" :key="req.id" class="pending-item sent">
+              <div class="pending-header">
+                  <div class="avatar-compact small">
+                      {{ getInitials(req.name) }}
+                  </div>
+                  <div class="pending-info">
+                      <span class="pending-name">{{ req.name }}</span>
+                      <span class="pending-sub">En attente de réponse</span>
+                  </div>
+              </div>
+              <div class="pending-status">
+                  <span class="status-badge">En attente</span>
               </div>
            </div>
            <div class="divider-mini"></div>
@@ -59,7 +79,9 @@ onMounted(() => {
 })
 
 const hasFriendsOrRequests = computed(() => {
-    return friendStore.acceptedFriends.length > 0 || friendStore.pendingReceived.length > 0
+    return friendStore.acceptedFriends.length > 0 || 
+           friendStore.pendingReceived.length > 0 || 
+           friendStore.pendingSent.length > 0
 })
 
 const getInitials = (name) => {
@@ -171,6 +193,25 @@ const deleteFriend = (friend) => {
 .btn-xs.reject {
     background-color: #f1f3f4;
     color: #333;
+}
+
+.pending-item.sent {
+    background-color: #fffbf0;
+    border-color: #ffd966;
+}
+
+.pending-status {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.status-badge {
+    background-color: #ffd966;
+    color: #333;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 500;
 }
 
 .divider-mini {
