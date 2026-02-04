@@ -1,0 +1,229 @@
+/* Avatar animations */
+
+@keyframes avatarFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes avatarPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(107, 127, 215, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 8px rgba(107, 127, 215, 0);
+  }
+}
+
+@keyframes avatarRotate {
+  from {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(0.8);
+  }
+  to {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@keyframes avatarSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes avatarBounce {
+  0%, 100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(0.95);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  75% {
+    transform: scale(0.98);
+  }
+}
+
+@keyframes checkmarkSuccess {
+  0% {
+    transform: scale(0) rotate(0deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2) rotate(180deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(360deg);
+    opacity: 1;
+  }
+}
+
+/* Animation classes */
+.avatar-fade-in {
+  animation: avatarFadeIn 0.4s ease-out;
+}
+
+.avatar-pulse {
+  animation: avatarPulse 0.6s ease-in-out;
+}
+
+.avatar-rotate {
+  animation: avatarRotate 0.6s ease-in-out;
+}
+
+.avatar-slide-in {
+  animation: avatarSlideIn 0.4s ease-out;
+}
+
+.avatar-bounce {
+  animation: avatarBounce 0.5s ease-in-out;
+}
+
+.avatar-success {
+  animation: avatarPulse 0.6s ease-in-out, checkmarkSuccess 0.4s ease-out 0.2s;
+}
+
+/* Avatar change transition group */
+.avatar-change-enter-active {
+  transition: all 0.4s ease-out;
+}
+
+.avatar-change-leave-active {
+  transition: all 0.3s ease-in;
+}
+
+.avatar-change-enter-from {
+  opacity: 0;
+  transform: scale(0.8) rotate(-180deg);
+}
+
+.avatar-change-leave-to {
+  opacity: 0;
+  transform: scale(0.8) rotate(180deg);
+}
+
+/* Hover effect for avatar selection */
+.avatar-selectable {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.avatar-selectable:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(107, 127, 215, 0.3);
+}
+
+.avatar-selectable:active {
+  transform: scale(0.95);
+}
+
+/* Loading spinner for avatar upload */
+@keyframes avatarSpinner {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.avatar-loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: avatarSpinner 0.8s linear infinite;
+}
+
+/* Success checkmark overlay */
+.avatar-success-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(52, 168, 83, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  animation: avatarFadeIn 0.3s ease-out;
+}
+
+.avatar-success-checkmark {
+  width: 50%;
+  height: 50%;
+  stroke: white;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  animation: checkmarkSuccess 0.4s ease-out;
+}
+
+/* Online status dot pulse animation */
+@keyframes statusDotPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+.status-dot-animated {
+  animation: statusDotPulse 2s ease-in-out infinite;
+}
+
+/* Avatar update flash effect */
+@keyframes avatarFlash {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.05);
+  }
+}
+
+.avatar-updating {
+  animation: avatarFlash 0.5s ease-in-out;
+  position: relative;
+}
+
+.avatar-updating::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(107, 127, 215, 0.3), rgba(147, 112, 219, 0.3));
+  border-radius: 50%;
+  animation: avatarPulse 1s ease-in-out infinite;
+}
