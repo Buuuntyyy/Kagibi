@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 	"safercloud/backend/handlers/auth"
-	"safercloud/backend/handlers/billing"
+	billinghandlers "safercloud/backend/handlers/billing"
 	"safercloud/backend/handlers/files"
 	"safercloud/backend/handlers/folders"
 	"safercloud/backend/handlers/friends"
@@ -16,6 +16,7 @@ import (
 	"safercloud/backend/handlers/users"
 	"safercloud/backend/middleware"
 	"safercloud/backend/pkg"
+	billingpkg "safercloud/backend/pkg/billing"
 	"safercloud/backend/pkg/s3storage"
 	"safercloud/backend/pkg/workers"
 	"strings"
@@ -35,6 +36,7 @@ func main() {
 
 	loadEnv()
 	initS3()
+	initBillingProvider()
 
 	db := pkg.NewDB()
 	migrateDB(db)
@@ -68,6 +70,25 @@ func initS3() {
 		log.Printf("Warning: S3 not configured: %v", err)
 	} else {
 		log.Println("S3 Storage initialized successfully")
+	}
+}
+
+// initBillingProvider initialise le provider de facturation
+// Utilise MockProvider par défaut (open-source) ou WebhookProvider si configuré
+func initBillingProvider() {
+	billingURL := os.Getenv("BILLING_SERVICE_URL")
+	billingSecret := os.Getenv("BILLING_SERVICE_SECRET")
+
+	if billingURL != "" && billingSecret != "" {
+		// Mode production: utiliser le service de billing externe
+		provider := billingpkg.NewWebhookProvider(billingURL, billingSecret)
+		billingpkg.SetProvider(provider)
+		log.Println("[Billing] WebhookProvider initialized - connected to external billing service")
+	} else {
+		// Mode dev/open-source: utiliser le mock provider
+		provider := billingpkg.NewMockProvider()
+		billingpkg.SetProvider(provider)
+		log.Println("[Billing] MockProvider initialized - free plan mode (5GB storage)")
 	}
 }
 
@@ -168,7 +189,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, j
 	registerFriendRoutes(protected, friendHandler)
 	registerShareRoutes(protected, db)
 	registerSecurityRoutes(protected)
-	registerBillingRoutes(router, api, protected, db)
+	registerBillingRoutes(api, protected)
 	registerP2PRoutes(protected, db)
 
 	// System
@@ -349,40 +370,17 @@ func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 	})
 }
 
-func registerBillingRoutes(router *gin.Engine, api *gin.RouterGroup, protected *gin.RouterGroup, db *bun.DB) {
-	// Initialize payment provider (use mock in test mode, Mollie in production)
-	var paymentProvider billing.PaymentProvider
-	if os.Getenv("BILLING_TEST_MODE") == "true" {
-		log.Println("[Billing] Using MockPaymentProvider (test mode)")
-		paymentProvider = billing.NewMockPaymentProvider()
-	} else {
-		mollieProvider, err := billing.NewMolliePaymentProviderFromEnv()
-		if err != nil {
-			log.Printf("[Billing] Warning: Mollie not configured: %v", err)
-			paymentProvider = billing.NewMockPaymentProvider()
-		} else {
-			log.Println("[Billing] Using MolliePaymentProvider")
-			paymentProvider = mollieProvider
-		}
-	}
+// registerBillingRoutes enregistre les routes de facturation
+// Utilise le nouveau système de provider pluggable
+func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup) {
+	// Routes publiques (liste des plans)
+	api.GET("/billing/plans", billinghandlers.GetPlansHandler)
 
-	// Initialize usage collector
-	usageCollector := billing.NewUsageCollectorFromEnv()
-	usageCollector.Start()
+	// Webhook receiver (pour le service de billing externe)
+	billinghandlers.RegisterWebhookRoute(api)
 
-	// Initialize services
-	webhookHandler := billing.NewLagoWebhookHandlerFromEnv(db, paymentProvider)
-	billingService := billing.NewBillingServiceFromEnv(db, paymentProvider, usageCollector)
-
-	// Public webhook endpoint (Lago calls this)
-	api.POST("/webhooks/lago", webhookHandler.HandleWebhook)
-
-	// Protected billing endpoints
-	billingG := protected.Group("/billing")
-	billingG.GET("/plan", billingService.GetCurrentPlan)
-	billingG.GET("/invoices", billingService.GetInvoices)
-	billingG.GET("/invoices/:invoiceID/payment-link", billingService.GetPaymentLink)
-	billingG.GET("/pending-invoices", webhookHandler.GetPendingInvoices)
+	// Routes protégées
+	billinghandlers.RegisterRoutes(protected, middleware.AuthMiddleware(nil, os.Getenv("SUPABASE_JWT_SECRET")))
 }
 
 func startServer(router *gin.Engine) {
