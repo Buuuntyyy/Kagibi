@@ -25,14 +25,8 @@
     <div v-else class="content-grid">
       <!-- Left Column: User Profile -->
       <div class="user-card">
-        <div class="avatar-large">
-          <img 
-            v-if="authStore.user?.avatar_url" 
-            :src="authStore.user.avatar_url" 
-            :alt="authStore.user?.name"
-            @error="(e) => e.target.style.display = 'none'"
-          />
-          <span v-else class="avatar-initials">{{ getInitials(authStore.user?.name) }}</span>
+        <div class="avatar-container">
+          <AvatarSelector v-model="selectedAvatar" />
         </div>
         <div class="user-info">
           <h2>{{ authStore.user?.name || 'Utilisateur' }}</h2>
@@ -67,33 +61,6 @@
               <button class="btn-secondary" @click="handleUpdateUsername" :disabled="updatingUsername">
                 {{ updatingUsername ? 'Mise à jour...' : 'Modifier' }}
               </button>
-            </div>
-          </div>
-        </section>
-
-        <section class="settings-section">
-          <div class="section-header">
-            <h3>Avatar</h3>
-          </div>
-          <div class="section-body">
-            <div class="avatar-section">
-              <div class="current-avatar-display">
-                <div class="avatar-preview">
-                  <img 
-                    v-if="authStore.user?.avatar_url" 
-                    :src="authStore.user.avatar_url" 
-                    :alt="authStore.user?.name"
-                  />
-                  <span v-else class="avatar-initials">{{ getInitials(authStore.user?.name) }}</span>
-                </div>
-                <p class="avatar-hint">Sélectionnez un nouvel avatar ci-dessous</p>
-              </div>
-              <AvatarSelector v-model="selectedAvatar" />
-              <div class="form-actions">
-                <button class="btn-primary" @click="handleUpdateAvatar" :disabled="updatingAvatar || selectedAvatar === authStore.user?.avatar_url">
-                  {{ updatingAvatar ? 'Mise à jour...' : 'Enregistrer l\'avatar' }}
-                </button>
-              </div>
             </div>
           </div>
         </section>
@@ -247,6 +214,7 @@
              <div class="legal-links">
                 <router-link to="/cgu" class="legal-link">Conditions Générales d'Utilisation</router-link>
                 <router-link to="/privacy" class="legal-link">Politique de Confidentialité</router-link>
+                <router-link to="/credits" class="legal-link">Mentions légales et crédits</router-link>
              </div>
            </div>
         </section>
@@ -376,6 +344,26 @@ onMounted(async () => {
 watch(() => authStore.user?.avatar_url, (newAvatar) => {
   if (newAvatar) {
     selectedAvatar.value = newAvatar
+  }
+})
+
+// Auto-save avatar when selection changes
+watch(selectedAvatar, async (newAvatar, oldAvatar) => {
+  // Only save if avatar actually changed and it's different from current user avatar
+  if (newAvatar && oldAvatar && newAvatar !== oldAvatar && authStore.user?.avatar_url !== newAvatar) {
+    try {
+      updatingAvatar.value = true
+      await authStore.updateAvatar(newAvatar)
+      showSuccess('Succès', 'Votre avatar a été mis à jour avec succès !')
+    } catch (error) {
+      console.error('Failed to update avatar:', error)
+      const errorMessage = error.response?.data?.error || error.message || 'Erreur lors de la mise à jour de l\'avatar.'
+      showError('Erreur', errorMessage)
+      // Revert to previous avatar on error
+      selectedAvatar.value = oldAvatar
+    } finally {
+      updatingAvatar.value = false
+    }
   }
 })
 
@@ -635,26 +623,10 @@ const handleUpdateAvatar = async () => {
   top: 2rem;
 }
 
-.avatar-large {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  background-color: var(--primary-color);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2.5rem;
-  font-weight: bold;
+.avatar-container {
   margin-bottom: 1.5rem;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-  overflow: hidden;
-}
-
-.avatar-large img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  display: flex;
+  justify-content: center;
 }
 
 .user-info h2 {
