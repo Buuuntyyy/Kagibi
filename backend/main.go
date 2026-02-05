@@ -74,8 +74,18 @@ func initS3() {
 }
 
 // initBillingProvider initialise le provider de facturation
-// Utilise MockProvider par défaut (open-source) ou WebhookProvider si configuré
+// BILLING_ENABLED=false : DisabledProvider (self-hosted, illimité)
+// BILLING_SERVICE_URL set : WebhookProvider (production avec service externe)
+// Par défaut : MockProvider (dev avec limite 5Go)
 func initBillingProvider() {
+	// Vérifier si le billing est complètement désactivé (mode self-hosted)
+	if os.Getenv("BILLING_ENABLED") == "false" {
+		provider := billingpkg.NewDisabledProvider()
+		billingpkg.SetProvider(provider)
+		log.Println("[Billing] DISABLED - Self-hosted mode (unlimited storage)")
+		return
+	}
+
 	billingURL := os.Getenv("BILLING_SERVICE_URL")
 	billingSecret := os.Getenv("BILLING_SERVICE_SECRET")
 

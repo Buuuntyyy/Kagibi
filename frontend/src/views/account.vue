@@ -6,7 +6,7 @@
     </div>
 
     <!-- Plan Banner -->
-    <div class="plan-banner" v-if="!loading && authStore.user">
+    <div class="plan-banner" v-if="!loading && authStore.user && billingStore.showSubscriptionUI">
       <div class="plan-content">
         <span class="plan-icon">🌟</span>
         <div class="plan-details">
@@ -40,7 +40,7 @@
 
       <!-- Right Column: Settings -->
       <div class="settings-container">
-        
+
         <!-- Account Settings -->
         <section class="settings-section">
           <div class="section-header">
@@ -51,10 +51,10 @@
               <div class="input-group">
                 <label>
                   Nom d'utilisateur
-                  <input 
-                    type="text" 
-                    v-model="usernameForm.newName" 
-                    :placeholder="authStore.user?.name" 
+                  <input
+                    type="text"
+                    v-model="usernameForm.newName"
+                    :placeholder="authStore.user?.name"
                   />
                 </label>
               </div>
@@ -75,15 +75,15 @@
                 <label>
                   Mot de passe actuel
                   <div class="password-input-wrapper">
-                    <input 
-                      :type="showCurrentPassword ? 'text' : 'password'" 
-                      v-model="passwordForm.current" 
-                      required 
-                      placeholder="••••••••" 
+                    <input
+                      :type="showCurrentPassword ? 'text' : 'password'"
+                      v-model="passwordForm.current"
+                      required
+                      placeholder="••••••••"
                     />
-                    <button 
-                      type="button" 
-                      class="toggle-password-btn" 
+                    <button
+                      type="button"
+                      class="toggle-password-btn"
                       @click="showCurrentPassword = !showCurrentPassword"
                       title="Afficher/Masquer"
                     >
@@ -104,15 +104,15 @@
                   <label>
                     Nouveau mot de passe
                     <div class="password-input-wrapper">
-                      <input 
-                        :type="showNewPassword ? 'text' : 'password'" 
-                        v-model="passwordForm.new" 
-                        required 
-                        placeholder="••••••••" 
+                      <input
+                        :type="showNewPassword ? 'text' : 'password'"
+                        v-model="passwordForm.new"
+                        required
+                        placeholder="••••••••"
                       />
-                      <button 
-                        type="button" 
-                        class="toggle-password-btn" 
+                      <button
+                        type="button"
+                        class="toggle-password-btn"
                         @click="showNewPassword = !showNewPassword"
                         title="Afficher/Masquer"
                       >
@@ -132,15 +132,15 @@
                   <label>
                     Confirmer
                     <div class="password-input-wrapper">
-                      <input 
-                        :type="showConfirmPassword ? 'text' : 'password'" 
-                        v-model="passwordForm.confirm" 
-                        required 
-                        placeholder="••••••••" 
+                      <input
+                        :type="showConfirmPassword ? 'text' : 'password'"
+                        v-model="passwordForm.confirm"
+                        required
+                        placeholder="••••••••"
                       />
-                      <button 
-                        type="button" 
-                        class="toggle-password-btn" 
+                      <button
+                        type="button"
+                        class="toggle-password-btn"
                         @click="showConfirmPassword = !showConfirmPassword"
                         title="Afficher/Masquer"
                       >
@@ -267,11 +267,13 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useBillingStore } from '../stores/billing'
 import { usePreferencesStore } from '../stores/preferences'
 import AvatarSelector from '../components/AvatarSelector.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const billingStore = useBillingStore()
 const preferenceStore = usePreferencesStore()
 const loading = ref(true)
 const selectedAvatar = ref('/avatars/default.png')
@@ -422,17 +424,17 @@ const handleUpdatePassword = async () => {
     showError('Erreur', 'Les nouveaux mots de passe ne correspondent pas.')
     return
   }
-  
+
   if (passwordForm.value.new.length < 20) {
     showError('Erreur', 'Le nouveau mot de passe doit contenir au moins 20 caractères.')
     return
   }
-  
+
   updatingPassword.value = true
   try {
     await authStore.updatePassword(passwordForm.value.current, passwordForm.value.new)
     showSuccess('Succès', 'Votre mot de passe a été mis à jour avec succès !')
-    
+
     // Reset the form
     passwordForm.value.current = ''
     passwordForm.value.new = ''
@@ -442,9 +444,9 @@ const handleUpdatePassword = async () => {
     showConfirmPassword.value = false
   } catch (error) {
     console.error("Failed to update password:", error)
-    
+
     let errorMessage = 'Erreur lors de la mise à jour du mot de passe.'
-    
+
     if (error.response) {
       if (error.response.status === 401) {
         errorMessage = 'Mot de passe actuel incorrect.'
@@ -454,7 +456,7 @@ const handleUpdatePassword = async () => {
     } else if (error.message) {
       errorMessage = error.message
     }
-    
+
     showError('Erreur', errorMessage)
   } finally {
     updatingPassword.value = false
@@ -577,7 +579,7 @@ const handleUpdateAvatar = async () => {
     gap: 1rem;
     text-align: center;
   }
-  
+
   .plan-content {
     flex-direction: column;
   }
@@ -839,10 +841,10 @@ input:focus {
   flex-shrink: 0;
 }
 
-.toggle-switch input { 
-  opacity: 0; 
-  width: 0; 
-  height: 0; 
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 
 .slider {
