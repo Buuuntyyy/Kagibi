@@ -57,7 +57,7 @@
         </svg>
         <span>Peer-to-peer</span>
       </div>
-      
+
       <!-- Friends Accordion -->
       <div class="friends-accordion" :class="{ open: friendsOpen }">
         <div class="menu-item" @click="toggleFriendsAccordion">
@@ -90,7 +90,7 @@
                       </svg>
                   </button>
                 </div>
-                
+
                 <div v-if="showAddFriendMenu" class="add-friend-popup" @click.stop>
                     <input id="add-friend-input" v-model="newFriendId" placeholder="Code ami..." @keydown.enter="addFriend" />
                     <button @click="addFriend" class="confirm-add">OK</button>
@@ -101,7 +101,7 @@
       </div>
     </div>
 
-    <div class="storage-section" @click="navigateTo('/billing')" style="cursor: pointer;">
+    <div class="storage-section" v-if="billingStore.showSubscriptionUI" @click="navigateTo('/billing')" style="cursor: pointer;">
       <div class="storage-info" v-if="!isCollapsed">
         <span class="storage-label">Stockage</span>
         <span class="storage-value">{{ formattedStorageUsed }} / {{ formattedStorageLimit }}</span>
@@ -134,7 +134,7 @@
 
     <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" multiple />
     <div class="dialogs">
-      <InputDialog 
+      <InputDialog
         v-model:isOpen="inputDialog.isOpen"
         :title="inputDialog.title"
         :defaultValue="inputDialog.defaultValue"
@@ -152,6 +152,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useFileStore } from '../../stores/files'
 import { useFriendStore } from '../../stores/friends'
+import { useBillingStore } from '../../stores/billing'
 import { uploadQueueManager } from '../../utils/uploadQueueManager'
 import InputDialog from '../InputDialog.vue'
 import FriendsSidebar from '../FriendsSidebar.vue'
@@ -163,6 +164,7 @@ const props = defineProps({
 const authStore = useAuthStore()
 const fileStore = useFileStore()
 const friendStore = useFriendStore()
+const billingStore = useBillingStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -752,7 +754,7 @@ const storageLimitGB = computed(() => {
     border-radius: 8px;
 }
 .toggle-icon {
-    width: 20px; 
+    width: 20px;
     height: 20px;
 }
 
