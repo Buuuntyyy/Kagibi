@@ -3,8 +3,9 @@ package billing
 import (
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	billingpkg "safercloud/backend/pkg/billing"
+
+	"github.com/gin-gonic/gin"
 )
 
 // GetCurrentPlanHandler retourne le plan actuel de l'utilisateur
