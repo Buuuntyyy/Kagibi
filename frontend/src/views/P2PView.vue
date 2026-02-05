@@ -26,7 +26,19 @@
                                   class="friend-chip"
                                   @click="selectedFriend = friend"
                                >
-                                  <div class="avatar-mini">{{ getInitials(friend.name) }}</div>
+                                  <div class="avatar-mini-wrapper">
+                                      <div class="avatar-mini">
+                                          <img 
+                                            v-if="normalizeAvatarUrl(friend.avatar_url)" 
+                                            :src="normalizeAvatarUrl(friend.avatar_url)" 
+                                            :alt="friend.name"
+                                            class="avatar-image"
+                                            @error="(e) => e.target.style.display = 'none'"
+                                          />
+                                          <span v-else class="avatar-initials-mini">{{ getInitials(friend.name) }}</span>
+                                      </div>
+                                      <span class="status-dot-mini"></span>
+                                  </div>
                                   <span>{{ friend.name }}</span>
                                </div>
                            </div>
@@ -34,7 +46,19 @@
                     </div>
                     <div v-else class="selected-friend-display" style="width: fit-content">
                         <div class="friend-chip selected">
-                            <div class="avatar-mini">{{ getInitials(selectedFriend.name) }}</div>
+                            <div class="avatar-mini-wrapper">
+                                <div class="avatar-mini">
+                                    <img 
+                                      v-if="normalizeAvatarUrl(selectedFriend.avatar_url)" 
+                                      :src="normalizeAvatarUrl(selectedFriend.avatar_url)" 
+                                      :alt="selectedFriend.name"
+                                      class="avatar-image"
+                                      @error="(e) => e.target.style.display = 'none'"
+                                    />
+                                    <span v-else class="avatar-initials-mini">{{ getInitials(selectedFriend.name) }}</span>
+                                </div>
+                                <span class="status-dot-mini"></span>
+                            </div>
                             <span>{{ selectedFriend.name }}</span>
                             <button class="close-btn" @click="selectedFriend = null">×</button>
                         </div>
@@ -115,6 +139,14 @@ onMounted(() => {
 const getInitials = (name) => {
     if (!name) return '?'
     return name.substring(0, 2).toUpperCase()
+}
+
+const normalizeAvatarUrl = (url) => {
+  if (!url) return null
+  if (url.startsWith('http')) return url
+  if (url.startsWith('/avatars/')) return url
+  const cleanUrl = url.startsWith('/') ? url.substring(1) : url
+  return `/avatars/${cleanUrl}`
 }
 
 const formatSize = (bytes) => {
@@ -283,6 +315,38 @@ const startTransfer = async () => {
     align-items: center;
     justify-content: center;
     font-size: 0.7rem;
+    overflow: hidden;
+    position: relative;
+}
+
+.avatar-mini-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.avatar-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.avatar-initials-mini {
+    color: #5f6368;
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+.status-dot-mini {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    background-color: #34a853;
+    border-radius: 50%;
+    border: 2px solid white;
+    z-index: 1;
 }
 
 .drop-area {
