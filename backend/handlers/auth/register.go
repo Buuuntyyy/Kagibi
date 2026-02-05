@@ -64,6 +64,14 @@ func RegisterHandler(c *gin.Context, db *bun.DB) {
 	avatarURL := req.AvatarURL
 	if avatarURL == "" {
 		avatarURL = "/avatars/default.png"
+	} else {
+		// Ensure avatar URL has the correct path prefix
+		if !strings.HasPrefix(avatarURL, "/avatars/") && !strings.HasPrefix(avatarURL, "http") {
+			// If it's just the filename, prepend /avatars/
+			if !strings.Contains(avatarURL, "/") {
+				avatarURL = "/avatars/" + avatarURL
+			}
+		}
 	}
 
 	user := &pkg.User{

@@ -3,6 +3,7 @@ package users
 import (
 	"net/http"
 	"safercloud/backend/pkg"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -29,6 +30,17 @@ func UpdateAvatarHandler(c *gin.Context, db *bun.DB) {
 	if req.AvatarURL == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Avatar URL cannot be empty"})
 		return
+	}
+
+	// Ensure avatar URL has the correct path prefix
+	if !strings.HasPrefix(req.AvatarURL, "/avatars/") && !strings.HasPrefix(req.AvatarURL, "http") {
+		// If it's just the filename, prepend /avatars/
+		if !strings.Contains(req.AvatarURL, "/") {
+			req.AvatarURL = "/avatars/" + req.AvatarURL
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid avatar URL format"})
+			return
+		}
 	}
 
 	// Update avatar in database

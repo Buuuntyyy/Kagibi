@@ -4,7 +4,6 @@
     <main :class="isLandingPage ? 'landing-content' : 'content'">
       <router-view />
     </main>
-    <Footer v-if="!isLandingPage" />
     <P2PTransferDialog v-if="!isLandingPage" />
     <WarnDialog v-if="!isLandingPage" />
     <DeleteConfirmDialog v-if="!isLandingPage" />
@@ -15,7 +14,6 @@
 
 <script setup>
 import Navbar from './components/layout/navbar.vue'
-import Footer from './components/layout/Footer.vue'
 import P2PTransferDialog from './components/P2PTransferDialog.vue'
 import WarnDialog from './components/WarnDialog.vue'
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'

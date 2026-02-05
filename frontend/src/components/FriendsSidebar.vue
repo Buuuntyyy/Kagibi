@@ -40,8 +40,8 @@
               <div class="pending-header">
                   <div class="avatar-compact small">
                       <img 
-                        v-if="req.avatar_url" 
-                        :src="req.avatar_url" 
+                        v-if="normalizeAvatarUrl(req.avatar_url)" 
+                        :src="normalizeAvatarUrl(req.avatar_url)" 
                         :alt="req.name"
                         class="avatar-image"
                         @error="(e) => e.target.style.display = 'none'"
@@ -62,16 +62,18 @@
 
         <!-- ACCEPTED FRIENDS -->
         <div v-for="friend in friendStore.acceptedFriends" :key="friend.id" class="friend-item-compact">
-          <div class="avatar-compact">
-              <img 
-                v-if="friend.avatar_url" 
-                :src="friend.avatar_url" 
-                :alt="friend.name"
-                class="avatar-image"
-                @error="(e) => e.target.style.display = 'none'"
-              />
-              <span v-else class="avatar-initials">{{ getInitials(friend.name) }}</span>
-              <span v-if="friend.online" class="status-dot"></span>
+          <div class="avatar-wrapper">
+            <div class="avatar-compact">
+                <img 
+                  v-if="normalizeAvatarUrl(friend.avatar_url)" 
+                  :src="normalizeAvatarUrl(friend.avatar_url)" 
+                  :alt="friend.name"
+                  class="avatar-image"
+                  @error="(e) => e.target.style.display = 'none'"
+                />
+                <span v-else class="avatar-initials">{{ getInitials(friend.name) }}</span>
+            </div>
+            <span v-if="friend.online" class="status-dot"></span>
           </div>
           <span class="name-compact">{{ friend.name }}</span>
           <button class="delete-friend-btn" @click.stop="deleteFriend(friend)" title="Supprimer cet ami">
@@ -108,6 +110,14 @@ const hasFriendsOrRequests = computed(() => {
 const getInitials = (name) => {
   if (!name) return '?'
   return name.substring(0, 2).toUpperCase()
+}
+
+const normalizeAvatarUrl = (url) => {
+  if (!url) return null
+  if (url.startsWith('http')) return url
+  if (url.startsWith('/avatars/')) return url
+  const cleanUrl = url.startsWith('/') ? url.substring(1) : url
+  return `/avatars/${cleanUrl}`
 }
 
 const deleteFriend = (friend) => {
@@ -284,6 +294,13 @@ const deleteFriend = (friend) => {
     height: 16px;
 }
 
+.avatar-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .avatar-compact {
   width: 28px;
   height: 28px;
@@ -296,7 +313,6 @@ const deleteFriend = (friend) => {
   font-weight: 500;
   position: relative;
   flex-shrink: 0;
-  overflow: hidden;
   transition: transform 0.3s ease;
 }
 
@@ -309,6 +325,7 @@ const deleteFriend = (friend) => {
   height: 100%;
   object-fit: cover;
   transition: opacity 0.3s ease;
+  border-radius: 50%;
 }
 
 .avatar-initials {
@@ -319,13 +336,14 @@ const deleteFriend = (friend) => {
 
 .status-dot {
   position: absolute;
-  bottom: -1px;
-  right: -1px;
+  bottom: -2px;
+  right: -2px;
   width: 10px;
   height: 10px;
   background-color: #34a853; 
   border-radius: 50%;
-  border: 2px solid white;
+  border: 2px solid var(--card-color);
+  z-index: 1;
 }
 
 .name-compact {

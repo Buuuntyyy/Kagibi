@@ -8,6 +8,7 @@ import PublicShare from '../views/PublicShare.vue'
 import PublicBrowse from '../views/PublicBrowse.vue'
 import TermsOfService from '../views/TermsOfService.vue'
 import PrivacyPolicy from '../views/PrivacyPolicy.vue'
+import Credits from '../views/Credits.vue'
 import FriendsView from '../views/FriendsView.vue'
 import P2PView from '../views/P2PView.vue'
 import HomeView from '../views/HomeView.vue'
@@ -47,6 +48,11 @@ const routes = [
     path: '/privacy',
     name: 'PrivacyPolicy',
     component: PrivacyPolicy,
+  },
+  {
+    path: '/credits',
+    name: 'Credits',
+    component: Credits,
   },
   {
     path: '/dashboard',
