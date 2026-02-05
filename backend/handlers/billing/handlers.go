@@ -2,11 +2,49 @@ package billing
 
 import (
 	"net/http"
+	"os"
 
 	billingpkg "safercloud/backend/pkg/billing"
 
 	"github.com/gin-gonic/gin"
 )
+
+// GetBillingStatusHandler retourne si le billing est activé
+// GET /api/billing/status
+func GetBillingStatusHandler(c *gin.Context) {
+	enabled := os.Getenv("BILLING_ENABLED") != "false"
+
+	provider := billingpkg.GetProvider()
+	var providerType string
+
+	if !enabled {
+		providerType = "disabled"
+	} else if provider == nil {
+		providerType = "none"
+	} else {
+		// Détecter le type de provider
+		switch provider.(type) {
+		case *billingpkg.DisabledProvider:
+			providerType = "disabled"
+		case *billingpkg.MockProvider:
+			providerType = "mock"
+		case *billingpkg.WebhookProvider:
+			providerType = "webhook"
+		default:
+			providerType = "unknown"
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"enabled":       enabled,
+		"provider_type": providerType,
+		"features": gin.H{
+			"subscriptions": enabled && providerType != "disabled",
+			"quotas":        enabled && providerType != "disabled",
+			"invoices":      enabled && providerType == "webhook",
+		},
+	})
+}
 
 // GetCurrentPlanHandler retourne le plan actuel de l'utilisateur
 // GET /api/billing/plan
@@ -224,7 +262,8 @@ func UpgradePlanHandler(c *gin.Context) {
 func RegisterRoutes(router *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
 	billing := router.Group("/billing")
 	{
-		// Routes publiques (liste des plans)
+		// Routes publiques
+		billing.GET("/status", GetBillingStatusHandler)
 		billing.GET("/plans", GetPlansHandler)
 
 		// Routes authentifiées
