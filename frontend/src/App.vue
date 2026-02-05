@@ -21,18 +21,25 @@ import UploadManager from './components/upload/UploadManager.vue'
 import DownloadManager from './components/download/DownloadManager.vue'
 import { useThemeStore } from './stores/theme'
 import { useAuthStore } from './stores/auth'
+import { useBillingStore } from './stores/billing'
 import { useRealtimeStore } from './stores/realtime'
-import { watch, computed } from 'vue'
+import { watch, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 
 const themeStore = useThemeStore()
 const authStore = useAuthStore()
+const billingStore = useBillingStore()
 const realtimeStore = useRealtimeStore()
 const route = useRoute()
 
 // Check if current route is a landing page
 const isLandingPage = computed(() => {
   return ['LandingHome', 'Pricing', 'Transfer'].includes(route.name)
+})
+
+// Fetch billing status on app mount
+onMounted(() => {
+  billingStore.fetchBillingStatus()
 })
 
 // Connect Supabase Realtime when authenticated
