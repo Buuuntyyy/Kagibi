@@ -10,14 +10,27 @@ import {
 import sodium from 'libsodium-wrappers-sumo'
 
 export const useAuthStore = defineStore('auth', {
-  state: () => ({
-    isAuthenticated: false,
-    user: null,
-    masterKey: null,
-    privateKey: null, // RSA Private Key (Unwrapped)
-    publicKey: null,  // RSA Public Key (CryptoKey)
-    sessionTimeoutId: null, // Timeout handler for security (30 minutes)
-  }),
+  state: () => {
+    // Restore user data from localStorage for instant display
+    let cachedUser = null
+    try {
+      const stored = localStorage.getItem('safercloud_user')
+      if (stored) {
+        cachedUser = JSON.parse(stored)
+      }
+    } catch (e) {
+      console.error('Failed to restore user from localStorage:', e)
+    }
+    
+    return {
+      isAuthenticated: false,
+      user: cachedUser, // Pre-populate with cached data for instant avatar display
+      masterKey: null,
+      privateKey: null, // RSA Private Key (Unwrapped)
+      publicKey: null,  // RSA Public Key (CryptoKey)
+      sessionTimeoutId: null, // Timeout handler for security (30 minutes)
+    }
+  },
   actions: {
     // --- Key Management Helpers ---
     async ensureRSAKeys(masterKey) {
