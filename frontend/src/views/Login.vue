@@ -1,59 +1,131 @@
 <template>
   <div class="auth-page">
-    <div class="auth-container card">
-      <Transition name="auth-flip" mode="out-in">
-        <div v-if="mode === 'login'" key="login">
-          <h1>Se connecter</h1>
-          <LoginComponent />
-          
-          <div class="security-msg">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+    <div class="auth-layout">
+      <!-- Left Column: Branding & Value Proposition -->
+      <div class="auth-branding">
+        <div class="brand-header">
+          <div class="logo-placeholder">
+            <svg viewBox="0 0 24 24" fill="none" class="logo-icon" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-            <p>
-              Pour votre sécurité, nous recommandons l'utilisation d'un gestionnaire de mots de passe comme <strong>Bitwarden</strong> ou <strong>KeePass</strong>.
-            </p>
           </div>
+          <h1>SaferCloud</h1>
+        </div>
 
-          <div class="oauth-unavailable">
-            <small>⚠️ La connexion via des fournisseurs tiers (Google/GitHub) est désactivée car elle est incompatible avec notre chiffrement de bout en bout (Zéro-Knowledge).</small>
+        <h2 class="auth-tagline"> Contrôlez vos données à n'importe quel moment, où que vous soyez. </h2>
+
+        <div class="features-grid">
+          <div class="feature-item">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-svg">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </div>
+            <div class="feature-text">
+              <h3>Chiffrement E2E</h3>
+              <p>Vos fichiers sont chiffrés avant même de quitter votre appareil.</p>
+            </div>
           </div>
-
-          <div class="auth-links">
-            <p>
-              Pas encore de compte ? <a href="#" @click.prevent="mode = 'register'">S'inscrire</a>
-            </p>
-            <p>
-              Mot de passe oublié ? <a href="#" @click.prevent="mode = 'recovery'">Récupérer mon compte</a>
-            </p>
+          <div class="feature-item">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-svg">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
+            </div>
+            <div class="feature-text">
+              <h3>Zero-Knowledge</h3>
+              <p>Nous ne connaissons que votre adresse email, votre pseudo et votre avatar.</p>
+            </div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-svg">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </div>
+            <div class="feature-text">
+              <h3>Partage Sécurisé</h3>
+              <p>Partagez sans compromis avec des liens protégés et expirables.</p>
+            </div>
           </div>
         </div>
-        <div v-else-if="mode === 'register'" key="register">
-          <h1>Créer un compte</h1>
-          <RegisterComponent />
+      </div>
 
-          <div class="security-msg warning">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="info-icon">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-              <line x1="12" y1="9" x2="12" y2="13"></line>
-              <line x1="12" y1="17" x2="12.01" y2="17"></line>
-            </svg>
-            <p>
-              <strong>Attention :</strong> Si vous perdez votre mot de passe, vos fichiers seront définitivement perdus. Nous ne pouvons PAS le réinitialiser.
-            </p>
+      <!-- Right Column: Authentication Forms -->
+      <div class="auth-interaction">
+        <Transition name="fade-slide" mode="out-in">
+          <div v-if="mode === 'login'" key="login" class="auth-form-container">
+            <div class="form-header">
+              <h2>Connexion</h2>
+              <p>Heureux de vous revoir</p>
+            </div>
+
+            <LoginComponent />
+
+            <div class="auth-separator">
+              <span>Sécurité</span>
+            </div>
+
+            <div class="security-note">
+              <p>Nous recommandons vivement l'usage d'un <strong>gestionnaire de mots de passe</strong> :</p>
+              <ul class="pwd-manager-list">
+                <li><a href="https://keepass.info/help/base/first_steps.html" target="_blank" rel="noopener noreferrer">Tutoriel KeePass</a> (Gratuit & Local)</li>
+                <li><a href="https://bitwarden.com/help/" target="_blank" rel="noopener noreferrer">Tutoriel Bitwarden</a> (Cloud & Open Source)</li>
+              </ul>
+            </div>
+
+            <div class="auth-footer">
+              <p>
+                Pas encore de compte ?
+                <a href="#" @click.prevent="mode = 'register'" class="action-link">Créer un compte gratuit</a>
+              </p>
+              <p>
+                <a href="#" @click.prevent="mode = 'recovery'" class="dimmed-link">Mot de passe oublié ?</a>
+              </p>
+            </div>
           </div>
-          <div class="auth-links">
-            <p>
-              Déjà un compte ? <a href="#" @click.prevent="mode = 'login'">Se connecter</a>
-            </p>
+
+          <div v-else-if="mode === 'register'" key="register" class="auth-form-container">
+            <div class="form-header">
+              <h2>Inscription</h2>
+              <p>Commencez à sécuriser vos fichiers aujourd'hui.</p>
+            </div>
+
+            <RegisterComponent />
+
+            <div class="security-warning">
+              <div class="warning-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-svg-alert">
+                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                   <line x1="12" y1="9" x2="12" y2="13"></line>
+                   <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+              </div>
+              <p>Votre mot de passe est votre clé de chiffrement. Il ne peut PAS être réinitialisé par nous.</p>
+            </div>
+
+            <div class="auth-footer">
+              <p>
+                Déjà un compte ?
+                <a href="#" @click.prevent="mode = 'login'" class="action-link">Se connecter</a>
+              </p>
+            </div>
           </div>
-        </div>
-        <div v-else-if="mode === 'recovery'" key="recovery">
-          <RecoveryComponent @cancel="mode = 'login'" @success="mode = 'login'" />
-        </div>
-      </Transition>
+
+          <div v-else-if="mode === 'recovery'" key="recovery" class="auth-form-container">
+            <div class="form-header">
+              <h2>Récupération</h2>
+              <p>Utilisez votre code de secours.</p>
+            </div>
+            <RecoveryComponent @cancel="mode = 'login'" @success="mode = 'login'" />
+          </div>
+        </Transition>
+      </div>
     </div>
   </div>
 </template>
@@ -71,18 +143,14 @@ const fileStore = useFileStore()
 const authStore = useAuthStore()
 
 onMounted(() => {
-  // Nettoyage des données de la session précédente pour éviter les fuites de données entre comptes
+  // Reset states
   fileStore.recentFolders = []
   fileStore.recentFiles = []
   fileStore.folders = []
   fileStore.files = []
   fileStore.currentPath = '/'
-
-  // Force la suppression du cache local pour éviter la persistance des données (fichiers suggérés) après un rafraîchissement
   localStorage.removeItem('files')
   localStorage.removeItem('file')
-
-  // Sécurité : Suppression explicite des clés et tokens de la mémoire et du stockage
   authStore.privateKey = null
   authStore.publicKey = null
   authStore.masterKey = null
@@ -93,101 +161,300 @@ onMounted(() => {
 
 <style scoped>
 .auth-page {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: calc(100vh - 60px); /* Adjust based on navbar height */
+  /* Removed min-height + align-items center which caused top-overflow clipping */
+  height: 100vh;
+  width: 100%;
   background-color: var(--background-color);
-}
-
-.auth-container {
-  width: 80%;
-  max-width: 800px;
-  padding: 2.5rem;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  text-align: center;
-  perspective: 1000px;
-}
-
-.auth-flip-enter-active,
-.auth-flip-leave-active {
-  transition: all 0.4s ease-in-out;
-}
-
-.auth-flip-enter-from {
-  opacity: 0;
-  transform: rotateY(-90deg);
-}
-
-.auth-flip-leave-to {
-  opacity: 0;
-  transform: rotateY(90deg);
-}
-
-h1 {
-  font-size: 1.8rem;
-  margin-bottom: 2rem;
-  color: var(--main-text-color);
-  font-weight: 600;
-}
-
-.auth-links {
-  margin-top: 1.5rem;
-  font-size: 0.9rem;
-  color: var(--secondary-text-color);
-}
-
-.auth-links p {
-  margin: 0.5rem 0;
-}
-
-a {
-  color: var(--primary-color);
-  font-weight: 500;
-  transition: color 0.2s;
-}
-
-a:hover {
-  color: var(--accent-color);
-  text-decoration: underline;
-}
-
-.security-msg {
-  background-color: rgba(52, 152, 219, 0.1);
-  border: 1px solid rgba(52, 152, 219, 0.3);
-  color: var(--main-text-color);
-  padding: 0.75rem;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  margin-top: 1.5rem;
+  overflow-y: auto; /* Enable page scrolling if content is taller than viewport */
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  flex-direction: column;
+}
+
+.auth-layout {
+  /* Use margin: auto within the flex/block container to center vertically safe */
+  margin: auto;
+  padding: 4rem 2rem; /* Give some breathing room when scrolling */
+
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+  max-width: 1100px;
+  gap: 2rem;
+  align-items: center;
+}
+
+/* Left Column: Branding */
+.auth-branding {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  color: var(--main-text-color);
+}
+
+.brand-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.logo-placeholder {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.logo-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.auth-branding h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(to right, var(--primary-color), var(--accent-color));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.auth-tagline {
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0;
+  opacity: 0.9;
+}
+
+.features-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.feature-item {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  padding: 1rem;
+  border-radius: 16px;
+  background-color: var(--background-color); /* Matches page bg, but border gives shape */
+  border: 1px solid var(--border-color);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  /* Ensure text doesn't center itself weirdly */
+  justify-content: flex-start;
+  height: auto;
+}
+
+.feature-item:hover {
+  transform: translateY(-3px);
+  border-color: var(--primary-color);
+  box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.1);
+  background-color: var(--card-color);
+}
+
+.feature-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background-color: rgba(52, 152, 219, 0.08);
+  color: var(--primary-color);
+  flex-shrink: 0;
+}
+
+.icon-svg {
+  width: 24px;
+  height: 24px;
+  stroke: currentColor;
+  stroke-width: 2px;
+}
+
+.feature-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   text-align: left;
 }
 
-.security-msg.warning {
-  background-color: rgba(231, 76, 60, 0.1);
-  border-color: rgba(231, 76, 60, 0.3);
-  color: var(--danger-color, #e74c3c);
-}
-
-.info-icon {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.security-msg p {
+.feature-text h3 {
+  font-size: 1.05rem;
   margin: 0;
+  font-weight: 600;
+  color: var(--main-text-color);
 }
 
-.oauth-unavailable {
-  margin-top: 1rem;
-  font-size: 1rem;
+.feature-text p {
+  margin: 0;
+  font-size: 0.9rem;
   color: var(--secondary-text-color);
-  opacity: 0.8;
-  font-style: italic;
-  padding: 0 1rem;
+  line-height: 1.4;
+}
+
+/* Right Column: Interaction */
+.auth-interaction {
+  width: 100%;
+  max-width: 480px;
+  margin-left: auto;
+}
+
+.auth-form-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.form-header h2 {
+  font-size: 2rem;
+  margin: 0 0 0.5rem 0;
+  color: var(--main-text-color);
+}
+
+.form-header p {
+  margin: 0;
+  color: var(--secondary-text-color);
+  font-size: 1.1rem;
+}
+
+/* Security Note & Warning */
+.security-note {
+  font-size: 0.9rem;
+  color: var(--secondary-text-color);
+  background: rgba(52, 152, 219, 0.05);
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 3px solid var(--primary-color);
+}
+
+.security-note p { margin: 0; }
+
+.pwd-manager-list {
+  margin: 0.5rem 0 0 0;
+  padding-left: 1.2rem;
+  text-align: left;
+}
+
+.pwd-manager-list li {
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+}
+.icon-svg-alert {
+  width: 24px;
+  height: 24px;
+  stroke: var(--danger-color);
+
+}
+
+.security-warning {
+  display: flex;
+  gap: 1rem;
+  background: rgba(231, 76, 60, 0.05);
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(231, 76, 60, 0.2);
+  color: var(--danger-color, #e74c3c);
+  font-size: 0.9rem;
+  align-items: center;
+}
+
+.warning-icon { font-size: 1.5rem; }
+.security-warning p { margin: 0; }
+
+/* Footer Links */
+.auth-separator {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--secondary-text-color);
+  font-size: 0.85rem;
+  margin: 0.5rem 0;
+}
+
+.auth-separator::before,
+.auth-separator::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.auth-separator span {
+  padding: 0 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.auth-footer {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.auth-footer p { margin: 0; }
+
+.action-link {
+  color: var(--primary-color);
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 1.05rem;
+}
+
+.action-link:hover { text-decoration: underline; }
+
+.dimmed-link {
+  color: var(--secondary-text-color);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.dimmed-link:hover { color: var(--main-text-color); }
+
+/* Transitions */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .auth-layout {
+    grid-template-columns: 1fr;
+    max-width: 500px;
+    gap: 3rem;
+  }
+
+  .auth-branding {
+    text-align: center;
+    align-items: center;
+  }
+
+  .feature-item {
+    text-align: left; /* Keep features readable */
+  }
+
+  .auth-interaction {
+    margin: 0 auto;
+  }
 }
 </style>
