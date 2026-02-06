@@ -219,6 +219,42 @@
            </div>
         </section>
 
+        <!-- Portabilité - RGPD Article 20 -->
+        <section class="settings-section">
+          <div class="section-header">
+            <h3>Portabilité des données</h3>
+          </div>
+          <div class="section-body">
+            <div class="portability-item">
+              <div class="portability-info">
+                <p class="portability-desc">
+                  Conformement au RGPD (Article 20) et a la Loi Informatique et Libertes (Article 55),
+                  vous pouvez exporter l'intégralité de vos données personnelles dans un format
+                  structuré, couramment utilisé et lisible par machine (JSON).
+                </p>
+                <p class="portability-details">
+                  L'export inclut votre profil, l'arborescence de vos fichiers et dossiers,
+                  vos tags, vos liens de partage, vos contacts et votre activité récente.
+                </p>
+              </div>
+              <div class="portability-actions">
+                <button
+                  class="btn-primary"
+                  @click="handleExportData"
+                  :disabled="exportingData"
+                >
+                  <svg v-if="!exportingData" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.5rem; vertical-align: middle;">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  {{ exportingData ? 'Export en cours...' : 'Exporter mes données' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- Danger Zone - RGPD Article 17 -->
         <section class="settings-section danger-zone">
           <div class="section-header">
@@ -228,7 +264,7 @@
             <div class="danger-zone-item">
               <div class="danger-zone-info">
                 <h4>Supprimer ce compte</h4>
-                <p>Cette action est definitive et entraine la suppression de toutes vos donnees.</p>
+                <p>Cette action est définitive et entraîne la suppression de toutes vos données.</p>
               </div>
               <button @click="showDeleteModal = true" class="btn-danger-outline">
                 Supprimer ce compte
@@ -295,6 +331,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useBillingStore } from '../stores/billing'
 import { usePreferencesStore } from '../stores/preferences'
+import api from '../api'
 import AvatarSelector from '../components/AvatarSelector.vue'
 import DeleteAccountDialog from '../components/DeleteAccountDialog.vue'
 
@@ -342,6 +379,7 @@ const successModal = ref({
 const showDeleteModal = ref(false)
 const deleteConfirmationText = ref('')
 const isDeletingAccount = ref(false)
+const exportingData = ref(false)
 
 const closeErrorModal = () => {
   errorModal.value.show = false
@@ -522,6 +560,31 @@ const handleUpdateAvatar = async () => {
     showError('Erreur', errorMessage)
   } finally {
     updatingAvatar.value = false
+  }
+}
+
+// RGPD Article 20 - Droit a la portabilite
+const handleExportData = async () => {
+  exportingData.value = true
+  try {
+    const response = await api.get('/users/export', { responseType: 'blob' })
+    const blob = new Blob([response.data], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const date = new Date().toISOString().split('T')[0]
+    link.href = url
+    link.download = `safercloud-export-${date}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    showSuccess('Export termine', 'Vos donnees ont ete exportees avec succes au format JSON.')
+  } catch (error) {
+    console.error('Failed to export data:', error)
+    const errorMessage = error.response?.data?.error || error.message || 'Erreur lors de l\'export des donnees.'
+    showError('Erreur', errorMessage)
+  } finally {
+    exportingData.value = false
   }
 }
 
@@ -1013,6 +1076,37 @@ input:checked + .slider:before {
 
 .legal-link:hover {
   text-decoration: underline;
+}
+
+/* Portability Section */
+.portability-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.portability-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.portability-desc {
+  color: var(--secondary-text-color);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.portability-details {
+  color: var(--secondary-text-color);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.portability-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* Spinner */
