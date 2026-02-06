@@ -17,3 +17,5 @@ docker/.s3keys
 docker/.ovhkeys
 docker/dump_inserts.sql
 frontend/.env
+
+RELEASE_STRATEGY.md
