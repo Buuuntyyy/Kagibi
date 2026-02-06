@@ -1,14 +1,24 @@
 <template>
   <div v-if="!recoveryCode">
     <form @submit.prevent="submit" class="auth-form">
-      <div class="form-group">
-        <label>Nom d'utilisateur</label>
-        <input v-model="username" type="text" required class="form-control" placeholder="Votre nom" />
+      <div class="form-row-top">
+        <div class="avatar-sidebar">
+          <label class="field-label">Avatar</label>
+          <AvatarSelector v-model="selectedAvatar" />
+        </div>
+
+        <div class="identity-fields">
+          <div class="form-group">
+            <label>Nom d'utilisateur</label>
+            <input v-model="username" type="text" required class="form-control" placeholder="Votre nom" />
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input v-model="email" type="email" required class="form-control" placeholder="votre@email.com" />
+          </div>
+        </div>
       </div>
-      <div class="form-group">
-        <label>Email</label>
-        <input v-model="email" type="email" required class="form-control" placeholder="votre@email.com" />
-      </div>
+
       <div class="form-group">
         <label>Mot de passe</label>
         <div class="password-input-wrapper">
@@ -25,10 +35,7 @@
           </button>
         </div>
       </div>
-      <div class="form-group">
-        <label>Avatar</label>
-        <AvatarSelector v-model="selectedAvatar" />
-      </div>
+
       <button type="submit" class="btn-submit" :disabled="loading">
         <span v-if="loading" class="spinner"></span>
         <span v-else>S'inscrire</span>
@@ -48,7 +55,7 @@
       <button @click="copyCode" class="btn-secondary">Copier le code</button>
       <button class="btn-submit" @click="showConfirmModal = true" :disabled="!codeCopied">Continuer vers le Dashboard</button>
     </div>
-    
+
     <!-- Toast Notification -->
     <div v-if="showNotification" class="toast-notification">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toast-icon">
@@ -71,7 +78,14 @@
         <div class="modal-body">
           <p><strong>Avez-vous sauvegardé votre code de récupération ?</strong></p>
           <p>Nous vous recommandons d'utiliser un gestionnaire de mots de passe (comme <strong>Bitwarden</strong>, <strong>1Password</strong>, ou <strong>KeePass</strong>) pour sauvegarder ce code de récupération ainsi que vos identifiants de connexion.</p>
-          <p class="warning-text"><b>⚠️ Sans ce code, vous ne pourrez pas récupérer votre compte si vous oubliez votre mot de passe.</b></p>
+          <p class="warning-text">
+            <svg viewBox="0 0 24 24" fill="none" class="inline-alert-icon" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <b>Sans ce code, vous ne pourrez pas récupérer votre compte si vous oubliez votre mot de passe.</b>
+          </p>
         </div>
         <div class="modal-footer">
           <button class="btn-cancel" @click="showConfirmModal = false">Annuler</button>
@@ -121,7 +135,7 @@ const copyCode = () => {
   navigator.clipboard.writeText(recoveryCode.value)
   codeCopied.value = true
   showNotification.value = true
-  
+
   // Hide notification after 3 seconds
   setTimeout(() => {
     showNotification.value = false
@@ -151,32 +165,54 @@ const finishRegistration = async () => {
   text-align: left;
 }
 
+.form-row-top {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+.avatar-sidebar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.identity-fields {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .form-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-label {
+/* Ensure consistent label styling */
+label,
+.field-label {
   font-size: 0.9rem;
   font-weight: 500;
   color: var(--secondary-text-color);
 }
 
 .form-control {
-  padding: 10px 12px;
+  padding: 14px 16px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background-color: var(--background-color);
   color: var(--main-text-color);
-  font-size: 1rem;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  font-size: 1.05rem;
+  transition: all 0.2s ease;
 }
 
 .form-control:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.1);
   background-color: var(--card-color);
 }
 
@@ -406,6 +442,16 @@ label {
   padding: 0.75rem;
   border-radius: 6px;
   margin-top: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.inline-alert-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .modal-footer {
@@ -487,13 +533,13 @@ label {
   .recovery-display {
     width: 95%;
   }
-  
+
   .toast-notification {
     width: 90%;
     left: 5%;
     transform: none;
   }
-  
+
   @keyframes slideUpToast {
     from {
       opacity: 0;
