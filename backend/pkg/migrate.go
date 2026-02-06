@@ -148,5 +148,19 @@ func Migrate(db *bun.DB) error {
 		log.Printf("Warning: failed to create idx_billing_invoices_payment_status: %v", err)
 	}
 
+	// --- RGPD Article 17 - Droit à l'effacement ---
+
+	// Add deleted_at column to profiles table for soft delete
+	_, err = db.ExecContext(ctx, `ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMPTZ;`)
+	if err != nil {
+		log.Printf("Warning: failed to add deleted_at column to profiles: %v", err)
+	}
+
+	// Index for filtering active accounts (deleted_at IS NULL)
+	_, err = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_profiles_deleted_at ON profiles (deleted_at) WHERE deleted_at IS NULL;`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_profiles_deleted_at: %v", err)
+	}
+
 	return nil
 }

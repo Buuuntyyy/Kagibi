@@ -16,19 +16,20 @@ type User struct {
 	Email     string `bun:"email,unique,notnull"`
 	AvatarURL string `bun:"avatar_url,notnull,default:'/avatars/default.png'" json:"avatar_url"`
 	// PasswordHash removed as it is handled by Supabase
-	Salt                       string    `bun:"salt,notnull" json:"salt"`
-	EncryptedMasterKey         string    `bun:"encrypted_master_key,notnull" json:"encrypted_master_key"`
-	EncryptedMasterKeyRecovery string    `bun:"encrypted_master_key_recovery,notnull" json:"encrypted_master_key_recovery"`
-	RecoveryHash               string    `bun:"recovery_hash,notnull" json:"recovery_hash"`
-	RecoverySalt               string    `bun:"recovery_salt,notnull" json:"recovery_salt"`
-	StorageUsed                int64     `bun:"storage_used,notnull,default:0" json:"storage_used"`
-	StorageLimit               int64     `bun:"storage_limit,notnull,default:16106127360" json:"storage_limit"` // Default 15GB
-	Plan                       string    `bun:"plan,notnull,default:'free'" json:"plan"`
-	FriendCode                 string    `bun:"friend_code,unique,notnull" json:"friend_code"`      // Short unique code for friends
-	PublicKey                  string    `bun:"public_key" json:"public_key"`                       // RSA Public Key (Standard PEM format)
-	EncryptedPrivateKey        string    `bun:"encrypted_private_key" json:"encrypted_private_key"` // RSA Private Key (Encrypted with MasterKey)
-	CreatedAt                  time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
-	UpdatedAt                  time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
+	Salt                       string     `bun:"salt,notnull" json:"salt"`
+	EncryptedMasterKey         string     `bun:"encrypted_master_key,notnull" json:"encrypted_master_key"`
+	EncryptedMasterKeyRecovery string     `bun:"encrypted_master_key_recovery,notnull" json:"encrypted_master_key_recovery"`
+	RecoveryHash               string     `bun:"recovery_hash,notnull" json:"recovery_hash"`
+	RecoverySalt               string     `bun:"recovery_salt,notnull" json:"recovery_salt"`
+	StorageUsed                int64      `bun:"storage_used,notnull,default:0" json:"storage_used"`
+	StorageLimit               int64      `bun:"storage_limit,notnull,default:16106127360" json:"storage_limit"` // Default 15GB
+	Plan                       string     `bun:"plan,notnull,default:'free'" json:"plan"`
+	FriendCode                 string     `bun:"friend_code,unique,notnull" json:"friend_code"`      // Short unique code for friends
+	PublicKey                  string     `bun:"public_key" json:"public_key"`                       // RSA Public Key (Standard PEM format)
+	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"` // RSA Private Key (Encrypted with MasterKey)
+	CreatedAt                  time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	UpdatedAt                  time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
+	DeletedAt                  *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"` // RGPD Article 17 - Soft delete
 }
 
 type Friendship struct {
