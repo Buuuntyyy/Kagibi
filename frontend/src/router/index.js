@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Dashboard from '../views/dashboard.vue'
 import Login from '../views/Login.vue'
 import Account from '../views/account.vue'
+import AccountSettings from '../views/AccountSettings.vue'
 import SharedElements from '../components/sharedElements.vue'
 import FileBrowser from '../components/FileBrowser.vue'
 import PublicShare from '../views/PublicShare.vue'
@@ -101,6 +102,12 @@ const routes = [
     path: '/account',
     name: 'Account',
     component: Account,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/settings',
+    name: 'AccountSettings',
+    component: AccountSettings,
     meta: { requiresAuth: true },
   },
   {
