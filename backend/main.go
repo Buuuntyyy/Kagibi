@@ -46,6 +46,7 @@ func main() {
 	// Start Workers
 	workers.StartWorker(redisClient)
 	workers.StartCleanupWorker(db)
+	workers.StartAccountCleanupWorker(db) // RGPD Article 17 - Nettoyage comptes supprimés
 
 	// Initialize Handlers (no more WebSocket Manager)
 	friendHandler := friends.NewFriendHandler(db)
@@ -211,6 +212,7 @@ func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	g.POST("/auth/register", func(c *gin.Context) { auth.RegisterHandler(c, db) })
 	g.GET("/auth/keys", func(c *gin.Context) { auth.GetUserKeys(c, db) })
 	g.POST("/auth/logout", func(c *gin.Context) { auth.LogoutHandler(c, redisClient) })
+	g.DELETE("/auth/account", func(c *gin.Context) { auth.DeleteAccount(db)(c) }) // RGPD Article 17 - Droit à l'effacement
 
 	usersG := g.Group("/users")
 	usersG.GET("/", func(c *gin.Context) { users.ListUsersHandler(c, db) })
