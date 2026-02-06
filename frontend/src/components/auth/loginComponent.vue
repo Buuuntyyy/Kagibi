@@ -90,19 +90,19 @@ label {
 }
 
 .form-control {
-  padding: 10px 12px;
+  padding: 14px 16px; /* Larger padding for clearer inputs */
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background-color: var(--background-color);
   color: var(--main-text-color);
-  font-size: 1rem;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  font-size: 1.05rem; /* Slightly larger font */
+  transition: all 0.2s ease;
 }
 
 .form-control:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.1);
   background-color: var(--card-color);
 }
 

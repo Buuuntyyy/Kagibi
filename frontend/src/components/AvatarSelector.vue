@@ -25,16 +25,16 @@
               </button>
             </div>
             <div class="avatar-grid">
-              <div 
-                v-for="avatar in avatars" 
+              <div
+                v-for="avatar in avatars"
                 :key="avatar.url"
                 class="avatar-option"
                 :class="{ selected: normalizedModelValue === avatar.url }"
                 @click="selectAvatar(avatar.url)"
                 :title="avatar.name"
               >
-                <img 
-                  :src="avatar.url" 
+                <img
+                  :src="avatar.url"
                   :alt="avatar.name"
                   loading="lazy"
                 />
@@ -88,18 +88,18 @@ const selectAvatar = (url) => {
 // Normalize the current avatar URL to match the list
 const normalizedModelValue = computed(() => {
   if (!props.modelValue) return '/avatars/default.png'
-  
+
   const url = props.modelValue
-  
+
   // If URL starts with http, return as-is
   if (url.startsWith('http')) return url
-  
+
   // If URL already starts with /avatars/, return as-is
   if (url.startsWith('/avatars/')) return url
-  
+
   // If URL starts with /, remove it
   const cleanUrl = url.startsWith('/') ? url.substring(1) : url
-  
+
   // Add /avatars/ prefix
   return `/avatars/${cleanUrl}`
 })
@@ -114,13 +114,13 @@ const getCurrentAvatarName = () => {
 /* Vue compacte */
 .current-avatar-compact {
   position: relative;
-  width: 100px;
-  height: 100px;
+  width: 140px; /* Increased to match height of 2 inputs + gap roughly */
+  height: 140px;
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
   transition: all 0.3s ease;
-  border: 3px solid var(--border-color);
+  /* border: 3px solid var(--border-color); Removed border */
 }
 
 .current-avatar-compact:hover {
@@ -297,12 +297,12 @@ const getCurrentAvatarName = () => {
     grid-template-columns: repeat(4, 1fr);
     gap: 10px;
   }
-  
+
   .modal-content {
     max-width: 100%;
     max-height: 90vh;
   }
-  
+
   .current-avatar-compact {
     width: 80px;
     height: 80px;
