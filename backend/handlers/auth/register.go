@@ -2,11 +2,15 @@ package auth
 
 import (
 	"crypto/rand"
+	"fmt"
+	"io"
 	"log"
 	"math/big"
 	"net/http"
+	"os"
 	"safercloud/backend/pkg"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -95,13 +99,76 @@ func RegisterHandler(c *gin.Context, db *bun.DB) {
 	// Crée l'utilisateur
 	if err := pkg.CreateUser(db, user); err != nil {
 		log.Printf("Error creating user profile: %v", err)
+
+		// Si c'est une erreur de contrainte unique, l'utilisateur existe déjà
+		// Pas besoin de supprimer de Supabase
 		if strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "duplicate key") {
 			c.JSON(http.StatusConflict, gin.H{"error": "Profil déjà existant"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la création du profil"})
+
+		// Pour toute autre erreur, supprimer l'utilisateur de Supabase
+		// pour éviter les comptes orphelins (dans auth.users mais pas dans profiles)
+		log.Printf("[Register] ⚠️ Profile creation failed, cleaning up Supabase auth.users entry for user %s", userID)
+		if cleanupErr := deleteUserFromSupabaseAuth(userID); cleanupErr != nil {
+			log.Printf("[Register] ⚠️ Failed to cleanup Supabase user after profile creation failure: %v", cleanupErr)
+		} else {
+			log.Printf("[Register] ✅ Cleaned up orphaned Supabase user %s", userID)
+		}
+
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la création du profil. Veuillez réessayer."})
 		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Profil créé avec succès"})
+}
+
+// deleteUserFromSupabaseAuth supprime un utilisateur de Supabase auth.users
+// Utilisé pour nettoyer les comptes orphelins si la création du profil échoue
+func deleteUserFromSupabaseAuth(userID string) error {
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	adminKey := os.Getenv("SUPABASE_ADMIN_KEY")
+	if adminKey == "" {
+		adminKey = os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+	}
+
+	if supabaseURL == "" || adminKey == "" {
+		log.Printf("[Register] ⚠️ SUPABASE_URL or admin key not set, cannot cleanup orphaned user")
+		return fmt.Errorf("supabase credentials not configured")
+	}
+
+	// Endpoint Admin API pour supprimer un utilisateur
+	url := fmt.Sprintf("%s/auth/v1/admin/users/%s", supabaseURL, userID)
+
+	// Créer la requête DELETE
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Headers nécessaires
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", adminKey))
+	req.Header.Set("apikey", adminKey)
+
+	// Exécuter la requête
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to execute DELETE request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Lire la réponse
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Vérifier le code de statut
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("supabase admin API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
 }
