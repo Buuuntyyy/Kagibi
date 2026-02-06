@@ -218,8 +218,34 @@
              </div>
            </div>
         </section>
+
+        <!-- Danger Zone - RGPD Article 17 -->
+        <section class="settings-section danger-zone">
+          <div class="section-header">
+            <h3>Zone sensible</h3>
+          </div>
+          <div class="section-body danger-zone-body">
+            <div class="danger-zone-item">
+              <div class="danger-zone-info">
+                <h4>Supprimer ce compte</h4>
+                <p>Cette action est definitive et entraine la suppression de toutes vos donnees.</p>
+              </div>
+              <button @click="showDeleteModal = true" class="btn-danger-outline">
+                Supprimer ce compte
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
+
+    <DeleteAccountDialog
+      v-model="showDeleteModal"
+      v-model:deleteConfirmationText="deleteConfirmationText"
+      :isDeletingAccount="isDeletingAccount"
+      @confirm="handleDeleteAccount"
+      @close="closeDeleteModal"
+    />
 
     <!-- Error Modal -->
     <div v-if="errorModal.show" class="error-modal-overlay" @click="closeErrorModal">
@@ -270,6 +296,7 @@ import { useAuthStore } from '../stores/auth'
 import { useBillingStore } from '../stores/billing'
 import { usePreferencesStore } from '../stores/preferences'
 import AvatarSelector from '../components/AvatarSelector.vue'
+import DeleteAccountDialog from '../components/DeleteAccountDialog.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -312,12 +339,23 @@ const successModal = ref({
   message: ''
 })
 
+const showDeleteModal = ref(false)
+const deleteConfirmationText = ref('')
+const isDeletingAccount = ref(false)
+
 const closeErrorModal = () => {
   errorModal.value.show = false
 }
 
 const closeSuccessModal = () => {
   successModal.value.show = false
+}
+
+const closeDeleteModal = () => {
+  if (!isDeletingAccount.value) {
+    showDeleteModal.value = false
+    deleteConfirmationText.value = ''
+  }
 }
 
 const showError = (title, message) => {
@@ -484,6 +522,50 @@ const handleUpdateAvatar = async () => {
     showError('Erreur', errorMessage)
   } finally {
     updatingAvatar.value = false
+  }
+}
+
+const handleDeleteAccount = async () => {
+  if (deleteConfirmationText.value !== 'SUPPRIMER DEFINITIVEMENT') {
+    showError('Erreur', 'Veuillez taper "SUPPRIMER DEFINITIVEMENT" pour confirmer la suppression irréversible')
+    return
+  }
+
+  // Confirmation supplémentaire pour éviter les suppressions accidentelles
+  const finalConfirm = confirm(
+    'DERNIERE CONFIRMATION\n\n' +
+    'Votre compte et TOUTES vos donnees seront SUPPRIMES IMMEDIATEMENT.\n\n' +
+    'Cette action est DEFINITIVEMENT IRREVERSIBLE.\n\n' +
+    'AUCUNE RECUPERATION ne sera possible.\n\n' +
+    'Etes-vous absolument certain(e) ?'
+  )
+
+  if (!finalConfirm) {
+    return
+  }
+
+  isDeletingAccount.value = true
+
+  try {
+    await authStore.deleteAccount('SUPPRIMER')
+
+    // Redirection vers la page d'accueil
+    router.push('/')
+
+    // Notification de succès
+    alert(
+      'Votre compte a ete definitivement supprime.\n\n' +
+      'Toutes vos donnees sont irrecuperables.\n\n' +
+      'Conformement au RGPD (Article 17), vos donnees personnelles ont ete effacees.'
+    )
+
+  } catch (error) {
+    console.error('Failed to delete account:', error)
+    const errorMessage = error.response?.data?.error || error.message || 'Erreur lors de la suppression du compte.'
+    showError('Erreur', errorMessage)
+  } finally {
+    isDeletingAccount.value = false
+    closeDeleteModal()
   }
 }
 </script>
@@ -668,6 +750,31 @@ const handleUpdateAvatar = async () => {
   overflow: hidden;
 }
 
+.settings-section.danger-zone .section-header {
+  background: var(--card-color);
+}
+
+.settings-section.danger-zone .section-header h3 {
+  color: var(--main-text-color);
+}
+
+.danger-zone-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.danger-zone-info h4 {
+  margin: 0 0 0.5rem 0;
+  color: var(--main-text-color);
+}
+
+.danger-zone-info p {
+  margin: 0;
+  color: var(--secondary-text-color);
+}
+
 .section-header {
   padding: 1.5rem;
   border-bottom: 1px solid var(--border-color);
@@ -795,6 +902,23 @@ input:focus {
 .btn-secondary:hover {
   border-color: var(--primary-color);
   color: var(--primary-color);
+}
+
+.btn-danger-outline {
+  background-color: transparent;
+  border: 1px solid var(--error-color);
+  color: var(--error-color);
+  padding: 0.8rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.btn-danger-outline:hover {
+  background-color: rgba(239, 68, 68, 0.08);
+  border-color: var(--error-color);
+  color: var(--error-color);
 }
 
 .form-actions {
@@ -1006,6 +1130,104 @@ input:checked + .slider:before {
 /* Avatar Section */
 .avatar-section {
   display: flex;
+
+/* Danger Zone Section */
+.danger-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.warning-text-subtle {
+  color: var(--secondary-text-color);
+  line-height: 1.6;
+  margin: 0 0 0.5rem 0;
+}
+
+.danger-details {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+
+.danger-summary {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  user-select: none;
+  color: var(--secondary-text-color);
+  font-weight: 500;
+  list-style: none;
+  transition: background-color 0.2s;
+}
+
+.danger-summary::-webkit-details-marker {
+  display: none;
+}
+
+.danger-summary::before {
+  content: "▶";
+  display: inline-block;
+  margin-right: 0.5rem;
+  transition: transform 0.2s;
+  font-size: 0.75rem;
+}
+
+details[open] .danger-summary::before {
+  transform: rotate(90deg);
+}
+
+.danger-summary:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.warning-list-subtle {
+  list-style: none;
+  padding: 0 1.5rem 0.5rem 2rem;
+  margin: 0;
+}
+
+.warning-list-subtle li {
+  padding: 0.3rem 0;
+  color: var(--secondary-text-color);
+  line-height: 1.5;
+  position: relative;
+}
+
+.warning-list-subtle li::before {
+  content: "•";
+  position: absolute;
+  left: -1rem;
+  color: #dc3545;
+}
+
+.rgpd-note {
+  padding: 0 1.5rem 1rem 1.5rem;
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--secondary-text-color);
+  font-style: italic;
+}
+
+.btn-delete-account {
+  background-color: transparent;
+  color: #dc3545;
+  border: 1px solid #dc3545;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+  align-self: flex-start;
+  margin-top: 0.5rem;
+}
+
+.btn-delete-account:hover {
+  background-color: #dc3545;
+  color: white;
+}
+
   flex-direction: column;
   gap: 1.5rem;
 }
