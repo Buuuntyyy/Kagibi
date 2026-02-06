@@ -62,7 +62,10 @@ func main() {
 
 func loadEnv() {
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found")
+		log.Printf("Warning: Could not load .env file: %v", err)
+		log.Println("Using environment variables or defaults")
+	} else {
+		log.Println("✓ .env file loaded successfully")
 	}
 }
 
@@ -385,13 +388,10 @@ func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 // registerBillingRoutes enregistre les routes de facturation
 // Utilise le nouveau système de provider pluggable
 func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup) {
-	// Routes publiques (liste des plans)
-	api.GET("/billing/plans", billinghandlers.GetPlansHandler)
-
 	// Webhook receiver (pour le service de billing externe)
 	billinghandlers.RegisterWebhookRoute(api)
 
-	// Routes protégées
+	// Toutes les routes (publiques + protégées)
 	billinghandlers.RegisterRoutes(protected, middleware.AuthMiddleware(nil, os.Getenv("SUPABASE_JWT_SECRET")))
 }
 
