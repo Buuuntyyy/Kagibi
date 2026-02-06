@@ -2,10 +2,10 @@ import { defineStore } from 'pinia'
 import api from '../api'
 import router from '../router'
 import { supabase } from '../supabase'
-import { 
-  deriveKeyFromPassword, generateSalt, generateMasterKey, wrapMasterKey, unwrapMasterKey, 
+import {
+  deriveKeyFromPassword, generateSalt, generateMasterKey, wrapMasterKey, unwrapMasterKey,
   generateRecoveryCode, deriveKeyFromRecoveryCode, hashRecoveryCode,
-  generateRSAKeyPair, exportKeyToPEM, importKeyFromPEM, encryptPrivateKey, decryptPrivateKey 
+  generateRSAKeyPair, exportKeyToPEM, importKeyFromPEM, encryptPrivateKey, decryptPrivateKey
 } from '../utils/crypto'
 import sodium from 'libsodium-wrappers-sumo'
 
@@ -21,7 +21,7 @@ export const useAuthStore = defineStore('auth', {
     } catch (e) {
       console.error('Failed to restore user from localStorage:', e)
     }
-    
+
     return {
       isAuthenticated: false,
       user: cachedUser, // Pre-populate with cached data for instant avatar display
@@ -35,24 +35,24 @@ export const useAuthStore = defineStore('auth', {
     // --- Key Management Helpers ---
     async ensureRSAKeys(masterKey) {
        if (!this.user) return;
-       
+
        await sodium.ready; // Ensure sodium is ready before base64 ops
 
        // Si l'utilisateur n'a pas encore de clés (migration ou nouvel utilisateur)
        if (!this.user.public_key || !this.user.encrypted_private_key) {
            console.log("Generating RSA keys for user...");
            const keyPair = await generateRSAKeyPair();
-           
+
            const publicKeyPEM = await exportKeyToPEM(keyPair.publicKey, 'spki');
            // Encrypt private key with Master Key
            const encryptedPrivateKey = await encryptPrivateKey(keyPair.privateKey, masterKey);
-           
+
            // Send to server
            await api.post('/users/keys', {
                public_key: publicKeyPEM,
                encrypted_private_key: encryptedPrivateKey
            });
-           
+
            this.user.public_key = publicKeyPEM;
            this.user.encrypted_private_key = encryptedPrivateKey;
            this.privateKey = keyPair.privateKey;
@@ -88,20 +88,20 @@ export const useAuthStore = defineStore('auth', {
           console.error("Failed to fetch keys from backend:", err);
           throw new Error("Impossible de récupérer les clés de chiffrement du serveur.");
         }
-        
+
         const { salt, encrypted_master_key } = keysResponse.data;
 
         if (salt && encrypted_master_key) {
           try {
             await sodium.ready;
-            
+
             const saltBytes = sodium.from_hex(salt);
-            
+
             // Le mot de passe sert toujours à déchiffrer la clé maître
             const kek = await deriveKeyFromPassword(credentials.password, saltBytes);
-            
+
             this.masterKey = await unwrapMasterKey(encrypted_master_key, kek);
-            
+
             // SECURITY: MasterKey stays in RAM only, NOT persisted to storage
             // Set up automatic session timeout for security (30 minutes)
             this.setupSessionTimeout();
@@ -113,7 +113,7 @@ export const useAuthStore = defineStore('auth', {
             console.error("Decryption failed during login:", decryptError);
             throw new Error("Impossible de déchiffrer vos clés. Votre mot de passe est-il correct ?");
           }
-          
+
         } else {
           this.masterKey = null;
           throw new Error("Pas de clés de chiffrement trouvées sur le serveur. Veuillez contacter le support.");
@@ -136,7 +136,7 @@ export const useAuthStore = defineStore('auth', {
     },
     async register(username, email, password, avatarUrl = '/avatars/default.png') {
       await sodium.ready;
-      
+
       // 1. Préparation de la cryptographie locale
       const salt = generateSalt();
       const saltHex = sodium.to_hex(salt);
@@ -148,7 +148,7 @@ export const useAuthStore = defineStore('auth', {
       // Generate Recovery Code
       const recoveryCode = generateRecoveryCode();
       const recoveryHash = await hashRecoveryCode(recoveryCode);
-      
+
       // Encrypt Master Key with Recovery Code
       const recoveryKek = await deriveKeyFromRecoveryCode(recoveryCode, salt);
       const wrappedMasterKeyRecovery = await wrapMasterKey(masterKey, recoveryKek);
@@ -169,7 +169,7 @@ export const useAuthStore = defineStore('auth', {
         })
 
         if (error) throw error
-        
+
         // Check for missing session (Email Confirmation enabled case)
         if (!data.session && data.user) {
             throw new Error("L'inscription nécessite que la confirmation d'email soit DÉSACTIVÉE dans Supabase. Les clés de chiffrement générées ne peuvent pas être sauvegardées sans session active.")
@@ -206,7 +206,7 @@ export const useAuthStore = defineStore('auth', {
         // Initialize state for immediate usage (Auto-Login)
         this.masterKey = masterKey;
         this.isAuthenticated = true;
-        
+
         // SECURITY: MasterKey stays in RAM only, NOT persisted to storage
         this.setupSessionTimeout();
 
@@ -214,7 +214,7 @@ export const useAuthStore = defineStore('auth', {
         await this.fetchUser();
 
       } catch (err) {
-        // En cas d'erreur backend, on essaie de nettoyer le compte Supabase ? 
+        // En cas d'erreur backend, on essaie de nettoyer le compte Supabase ?
         // Idéalement oui, mais pour l'instant on renvoie l'erreur
         if (err.response && err.response.data && err.response.data.error) {
           throw new Error(err.response.data.error)
@@ -238,6 +238,49 @@ export const useAuthStore = defineStore('auth', {
         this.masterKey = null;
         localStorage.removeItem("safercloud_user");
         router.push({ name: 'Login' });
+      }
+    },
+
+    /**
+     * Supprime le compte utilisateur (RGPD Article 17 - Droit à l'effacement)
+     * 1. Soft delete backend (données cryptographiques effacées immédiatement)
+     * 2. Nettoyage local (clés, session)
+     * @param {string} confirmation - Doit être "SUPPRIMER" pour confirmer
+     */
+    async deleteAccount(confirmation) {
+      if (!this.isAuthenticated) {
+        throw new Error("Non authentifié");
+      }
+
+      if (confirmation !== 'SUPPRIMER') {
+        throw new Error("Confirmation invalide. Tapez 'SUPPRIMER' pour confirmer.");
+      }
+
+      try {
+        // 1. Appel API backend (soft delete + effacement clés crypto)
+        const response = await api.delete('/auth/account', {
+          data: { confirmation: 'SUPPRIMER' }
+        });
+
+        // 2. Nettoyage local complet
+        this.masterKey = null;
+        this.privateKey = null;
+        this.publicKey = null;
+        this.user = null;
+        this.isAuthenticated = false;
+
+        // 3. Nettoyage localStorage
+        localStorage.removeItem('safercloud_user');
+
+        console.log('[RGPD] ✅ Account deleted successfully');
+        return response.data;
+
+      } catch (error) {
+        console.error("[RGPD] Account deletion failed:", error);
+        throw new Error(
+          error.response?.data?.error ||
+          "Erreur lors de la suppression du compte"
+        );
       }
     },
     // Old checkAuth removed to avoid duplication
@@ -266,7 +309,7 @@ export const useAuthStore = defineStore('auth', {
       }
 
       await sodium.ready;
-      
+
       try {
         // 1. Mise à jour via Supabase (auth.users)
         console.log("Updating password in Supabase...");
@@ -278,7 +321,7 @@ export const useAuthStore = defineStore('auth', {
 
         // 2. Mise à jour des clés chiffrées sur votre Backend (profiles)
         // Car le "KEK" qui protège la MasterKey dépend du mot de passe !
-        
+
         const newSalt = generateSalt(); // Nouveau sel pour la nouvelle clé crypto
         const newSaltHex = sodium.to_hex(newSalt);
         const newKek = await deriveKeyFromPassword(newPassword, newSalt);
@@ -288,7 +331,7 @@ export const useAuthStore = defineStore('auth', {
         // Cependant, pour sécuriser cet appel critique, votre backend pourrait demander de re-confirmer
         // l'ancien mot de passe, mais avec Supabase c'est complexe.
         // Pour l'instant on fait confiance à la session active.
-        
+
         await api.post('/users/change-password', {
           new_salt: newSaltHex,
           new_encrypted_master_key: newEncryptedMasterKey
@@ -330,13 +373,13 @@ export const useAuthStore = defineStore('auth', {
         throw error;
       }
     },
-    async checkAuth() { 
+    async checkAuth() {
       // Cette fonction devrait être appelée au chargement de l'app (App.vue)
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (session?.access_token) {
           // Session Supabase active !
-          
+
           // SECURITY: MasterKey is NOT persisted. User must re-login after page reload.
           // This prevents XSS attacks from stealing the key from storage.
           if (!this.masterKey) {
@@ -365,11 +408,11 @@ export const useAuthStore = defineStore('auth', {
     },
     async recoverAccount(email, recoveryCode, newPassword) {
         await sodium.ready;
-        
+
         // 1. Get encrypted blob from server
         const initResponse = await api.post('/auth/recovery/init', { email });
         const { encrypted_master_key_recovery, salt } = initResponse.data;
-        
+
         if (!encrypted_master_key_recovery) {
             throw new Error("Recovery not available for this account.");
         }
@@ -391,7 +434,7 @@ export const useAuthStore = defineStore('auth', {
         const newSaltHex = sodium.to_hex(newSalt);
         const newKek = await deriveKeyFromPassword(newPassword, newSalt);
         const newEncryptedMasterKey = await wrapMasterKey(masterKey, newKek);
-        
+
         // 5. Calculate recovery hash for proof
         const recoveryHash = await hashRecoveryCode(recoveryCode);
 
@@ -403,10 +446,10 @@ export const useAuthStore = defineStore('auth', {
             new_salt: newSaltHex,
             new_encrypted_master_key: newEncryptedMasterKey
         });
-        
+
         // Set up security timeout for recovered session
         this.setupSessionTimeout();
-        
+
         return true;
     },
     // --- Storage Persistence Helpers ---
@@ -436,20 +479,20 @@ export const useAuthStore = defineStore('auth', {
       if (this.sessionTimeoutId) {
         clearTimeout(this.sessionTimeoutId);
       }
-      
+
       // Set 30-minute timeout for security
       const THIRTY_MINUTES = 30 * 60 * 1000;
       this.sessionTimeoutId = setTimeout(() => {
         console.warn('[Security] Session timeout - logging out');
         this.logout();
       }, THIRTY_MINUTES);
-      
+
       console.log('[Security] Session timeout set to 30 minutes');
     },
     async updateAvatar(avatarUrl) {
       try {
         await api.put('/users/avatar', { avatar_url: avatarUrl })
-        
+
         // Update local user state
         if (this.user) {
           this.user.avatar_url = avatarUrl
