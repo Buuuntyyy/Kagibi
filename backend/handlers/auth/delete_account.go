@@ -3,8 +3,10 @@ package auth
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"safercloud/backend/pkg"
@@ -28,7 +30,7 @@ type DeleteAccountRequest struct {
 // - AUCUNE période de grâce : données définitivement irrécupérables
 func DeleteAccount(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID := c.GetString("userID")
+		userID := c.GetString("user_id")
 		if userID == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Utilisateur non authentifié"})
 			return
@@ -61,6 +63,13 @@ func DeleteAccount(db *bun.DB) gin.HandlerFunc {
 		}
 
 		log.Printf("[RGPD] 🗑️ Starting IMMEDIATE and COMPLETE deletion for user: %s (email: %s)", userID, user.Email)
+
+		// 1.5 Supprimer depuis Supabase (Admin API)
+		if err := deleteUserFromSupabase(userID); err != nil {
+			log.Printf("[RGPD] ⚠️ Failed to delete from Supabase: %v (continuing with local deletion)", err)
+		} else {
+			log.Printf("[RGPD] ✅ User deleted from Supabase auth.users")
+		}
 
 		// 2. SUPPRESSION IMMÉDIATE DES FICHIERS S3 (asynchrone pour ne pas bloquer)
 		go deleteUserFilesFromS3(ctx, db, userID)
@@ -170,10 +179,12 @@ func DeleteAccount(db *bun.DB) gin.HandlerFunc {
 			log.Printf("[RGPD] Failed to delete friendships for user %s: %v", userID, err)
 		}
 
-		// 12. HARD DELETE de l'utilisateur (IMMÉDIAT - IRRÉVERSIBLE)
+		// 12. HARD DELETE du profil (IMMÉDIAT - IRRÉVERSIBLE)
+		// ForceDelete est requis car le modèle utilise soft_delete (deleted_at).
 		_, err = db.NewDelete().
 			Model(&user).
 			Where("id = ?", userID).
+			ForceDelete().
 			Exec(ctx)
 
 		if err != nil {
@@ -278,4 +289,55 @@ func deleteUserFilesFromS3(ctx context.Context, db *bun.DB, userID string) {
 	if orphanCount > 0 {
 		log.Printf("[RGPD] ✅ Deleted %d orphan files from S3 for user %s", orphanCount, userID)
 	}
+}
+
+// deleteUserFromSupabase supprime l'utilisateur du service d'authentification Supabase
+// Utilise l'Admin API avec SUPABASE_ADMIN_KEY
+func deleteUserFromSupabase(userID string) error {
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	adminKey := os.Getenv("SUPABASE_ADMIN_KEY")
+	if adminKey == "" {
+		adminKey = os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+	}
+
+	if supabaseURL == "" || adminKey == "" {
+		// Supabase non disponible ou non configuré, continuer sans erreur
+		log.Printf("[RGPD] ⚠️ SUPABASE_URL or SUPABASE_ADMIN_KEY/SUPABASE_SERVICE_ROLE_KEY not set, skipping Supabase deletion")
+		return nil
+	}
+
+	// Endpoint Admin API pour supprimer un utilisateur
+	url := fmt.Sprintf("%s/auth/v1/admin/users/%s", supabaseURL, userID)
+
+	// Créer la requête DELETE
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Headers nécessaires
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", adminKey))
+	req.Header.Set("apikey", adminKey)
+
+	// Exécuter la requête
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to execute DELETE request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Lire la réponse
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Vérifier le code de statut
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("supabase admin API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
 }
