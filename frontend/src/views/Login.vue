@@ -38,7 +38,7 @@
             </div>
             <div class="feature-text">
               <h3>Zero-Knowledge</h3>
-              <p>Nous ne connaissons que votre adresse email, votre pseudo et votre avatar.</p>
+              <p>Nous ne connaissons que votre adresse email, votre pseudo et votre avatar. <strong>Aucune pub, aucun cookie, aucun suivi.</strong></p>
             </div>
           </div>
           <div class="feature-item">
@@ -49,8 +49,8 @@
               </svg>
             </div>
             <div class="feature-text">
-              <h3>Partage Sécurisé</h3>
-              <p>Partagez sans compromis avec des liens protégés et expirables.</p>
+              <h3>Partages Sécurisés, Directs et Confidentiels</h3>
+              <p>Échangez vos fichiers en P2P chiffré, sans serveur intermédiaire, avec contrôle d'accès et expiration.</p>
             </div>
           </div>
         </div>
@@ -106,7 +106,7 @@
                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
                 </svg>
               </div>
-              <p>Votre mot de passe est votre clé de chiffrement. Il ne peut PAS être réinitialisé par nous.</p>
+              <p>Votre mot de passe est primordial. Il permet de déchiffrer toutes vos données. Veillez à le conserver en lieu sûr.</p>
             </div>
 
             <div class="auth-footer">
@@ -173,12 +173,11 @@ onMounted(() => {
 .auth-layout {
   /* Use margin: auto within the flex/block container to center vertically safe */
   margin: auto;
-  padding: 4rem 2rem; /* Give some breathing room when scrolling */
-
+  padding: 2rem 2rem; /* Give some breathing room when scrolling */
   display: grid;
   grid-template-columns: 1fr 1fr;
   width: 100%;
-  max-width: 1100px;
+  max-width: 80%;
   gap: 2rem;
   align-items: center;
 }
