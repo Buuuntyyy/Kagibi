@@ -226,6 +226,7 @@ func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	usersG.POST("/recent", func(c *gin.Context) { users.AddRecentActivityHandler(c, db) })
 	usersG.GET("/recent", func(c *gin.Context) { users.GetRecentActivityHandler(c, db) })
 	usersG.POST("/keys", func(c *gin.Context) { keys.UpdateKeysHandler(c, db) })
+	usersG.GET("/export", func(c *gin.Context) { users.ExportUserDataHandler(c, db) }) // RGPD Article 20 - Droit à la portabilité
 }
 
 func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Client) {
