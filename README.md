@@ -419,7 +419,7 @@ aws s3api put-bucket-lifecycle-configuration \
 | **Format fil** | `[Nonce 12B] ‖ [Ciphertext] ‖ [Tag 16B]` |
 | **Détection réutilisation** | Defense-in-depth avec Set tracking (10,000 limite/session) |
 
-**Sources** : 
+**Sources** :
 - NIST SP 800-38D §8.2.1 - Recommandation 96 bits pour IV déterministes
 - NIST SP 800-38D §8.3 - Limite 2^32 invocations
 - ANSSI - Guide de sélection d'algorithmes cryptographiques (2021)
@@ -551,6 +551,108 @@ GitHub Actions exécute automatiquement:
 | [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md) | Audit sécurité complet (28 Jan 2026) |
 | [SECURITY_FIXES_SUMMARY.md](SECURITY_FIXES_SUMMARY.md) | Résumé des correctifs |
 | [CHANGELOG.md](CHANGELOG.md) | Historique des versions |
+
+---
+
+## ❓ Pourquoi pas de connexion OAuth ?
+
+### TL;DR
+**L'authentification via Google, Facebook, Apple, etc. est incompatible avec l'architecture Zero-Knowledge de SaferCloud.**
+
+### Explication détaillée
+
+#### Le problème fondamental
+
+SaferCloud utilise un **chiffrement Zero-Knowledge** où :
+1. Votre **mot de passe** est la **seule source** pour dériver votre clé de chiffrement (via Argon2id)
+2. Cette clé **n'existe que dans votre navigateur** et n'est **jamais envoyée** au serveur
+3. Le serveur ne peut **jamais déchiffrer** vos fichiers
+
+#### Pourquoi OAuth ne fonctionne pas ?
+
+Avec OAuth (Google/Facebook/Apple) :
+- ✅ Vous vous connectez facilement
+- ❌ **Mais vous n'avez pas de mot de passe SaferCloud**
+- ❌ Sans mot de passe → **Impossible de dériver la clé de chiffrement**
+- ❌ Sans clé → **Vos fichiers restent inaccessibles**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ ARCHITECTURE ZERO-KNOWLEDGE                              │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  Mot de passe utilisateur                               │
+│         ↓                                                │
+│  Argon2id (64MB RAM, 4 passes)                          │
+│         ↓                                                │
+│  KEK (Key Encryption Key)                               │
+│         ↓                                                │
+│  Déchiffre MasterKey stockée côté serveur               │
+│         ↓                                                │
+│  MasterKey déchiffre tous les fichiers                  │
+│                                                          │
+│  ⚠️  SANS MOT DE PASSE → AUCUNE CLÉ POSSIBLE           │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Solutions envisagées (et pourquoi elles échouent)
+
+##### Option 1 : Générer un mot de passe aléatoire
+**Problème** : L'utilisateur doit le sauvegarder quelque part → perd l'avantage d'OAuth
+
+##### Option 2 : Utiliser le token OAuth comme clé
+**Problème** :
+- Les tokens OAuth changent à chaque connexion
+- Si Google révoque le token → **Tous vos fichiers sont perdus**
+- Le token transite par le serveur → **Ce n'est plus Zero-Knowledge**
+
+##### Option 3 : Stocker la clé sur le serveur
+**Problème** :
+- Le serveur peut déchiffrer vos fichiers
+- **Ce n'est plus Zero-Knowledge**
+- Vous devez nous faire confiance (contraire à la philosophie du projet)
+
+#### Comparaison avec d'autres services
+
+| Service | OAuth | Zero-Knowledge | Explication |
+|---------|-------|----------------|-------------|
+| **Google Drive** | ✅ | ❌ | Google peut lire vos fichiers |
+| **Dropbox** | ✅ | ❌ | Dropbox peut lire vos fichiers |
+| **OneDrive** | ✅ | ❌ | Microsoft peut lire vos fichiers |
+| **ProtonDrive** | ❌ | ✅ | Mot de passe obligatoire (comme nous) |
+| **Tresorit** | ❌ | ✅ | Mot de passe obligatoire |
+| **SaferCloud** | ❌ | ✅ | **Vie privée > Commodité** |
+
+#### Recommandation : Utilisez un gestionnaire de mots de passe
+
+Pour concilier sécurité et commodité :
+- **Bitwarden** (open-source, gratuit, sync cloud)
+- **KeePassXC** (open-source, gratuit, local)
+- **1Password** (payant, très bon UX)
+
+**Avantages** :
+- Connexion en 1 clic (auto-remplissage)
+- Génération de mots de passe forts (20+ caractères)
+- Synchronisation multi-appareils
+- Compatible avec notre architecture Zero-Knowledge
+
+#### Pourquoi nous ne changerons pas d'avis
+
+> **"Si c'est gratuit, c'est vous le produit."**
+
+SaferCloud est conçu pour que :
+- Nous ne puissions **jamais** lire vos fichiers
+- Une fuite de notre base de données soit **inutile** aux attaquants
+- Une ordonnance judiciaire ne puisse **pas** nous forcer à révéler vos données
+
+**OAuth briserait cette garantie.**
+
+#### Cas d'usage : Récupération de compte
+
+Même sans OAuth, SaferCloud offre une solution de secours :
+- **Code de récupération** généré à l'inscription (256 bits)
+- Stockez-le dans votre gestionnaire de mots de passe
+- Permet de régénérer votre clé en cas d'oubli du mot de passe
 
 ---
 
