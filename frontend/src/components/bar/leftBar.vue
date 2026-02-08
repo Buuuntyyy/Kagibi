@@ -147,7 +147,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useFileStore } from '../../stores/files'
@@ -175,6 +175,11 @@ const showAddFriendMenu = ref(false)
 const newFriendId = ref('')
 const showLeftInfo = ref(false)
 const isCollapsed = ref(false)
+
+// Auto-collapse menu on P2P page
+watch(() => route.name, (newRouteName) => {
+  isCollapsed.value = newRouteName === 'P2P'
+}, { immediate: true })
 
 const closeAddFriendMenu = () => {
     if (showAddFriendMenu.value) {

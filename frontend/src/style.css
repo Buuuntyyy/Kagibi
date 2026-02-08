@@ -26,48 +26,48 @@ html, body {
 }
 
 [data-theme="light"] {
-  /* PALETTE "CHILL DAY" - Moderne & Aérée */
-  --primary-color: #6366f1;       /* Indigo 500: Plus moderne que le bleu standard */
-  --secondary-color: #10b981;     /* Emerald 500: Vert menthe frais */
-  --accent-color: #4f46e5;        /* Indigo 600 */
-  
-  --main-text-color: #1e293b;     /* Slate 800: Moins dur que le noir pur */
-  --secondary-text-color: #64748b; /* Slate 500 */
-  
-  --background-color: #f1f5f9;    /* Slate 100: Gris-bleu très pâle, très doux */
-  --hover-background-color: #e2e8f0; /* Slate 200 */
+  /* PALETTE "WARM CORAL" - Moderne, Chaleureuse & Dynamique */
+  --primary-color: #FA7268;       /* Coral: Énergique et accessible */
+  --secondary-color: #C62368;     /* Raspberry: Sophistiqué et riche */
+  --accent-color: #D4405B;        /* Fusion Coral-Raspberry: Plus profond */
+
+  --main-text-color: #2D1B22;     /* Gris très sombre avec pointe de bordeaux */
+  --secondary-text-color: #6B5860; /* Gris chaud moyen */
+
+  --background-color: #FFF9F8;    /* Blanc cassé très légèrement teinté de chaud */
+  --hover-background-color: #FFE8E3; /* Beige très clair teinté Coral */
 
   --card-color: #ffffff;
-  --border-color: #cbd5e1;        /* Slate 300 */
-  
-  --error-color: #ef4444;         /* Red 500 : Plus pastel */
-  --success-color: #22c55e;       /* Green 500 */
-  --warning-color: #f59e0b;       /* Amber 500 */
-  
+  --border-color: #F0D9D1;        /* Beige-rosé très pâle pour douceur */
+
+  --error-color: #E63946;         /* Red adapté aux tons chauds */
+  --success-color: #2A9D8F;       /* Teal chaud-vert pour contraste */
+  --warning-color: #E9A827;       /* Amber chaud pour harmonie */
+
   color-scheme: light;
 }
 
 [data-theme="dark"] {
-  /* PALETTE "DEEP NIGHT" - Profonde & Reposante */
-  /* Inversion de la logique précédente: Fond sombre, cartes plus claires */
-  
-  --primary-color: #818cf8;       /* Indigo 400: Lumineux sur fond sombre */
-  --secondary-color: #34d399;     /* Emerald 400 */
-  --accent-color: #6366f1;        /* Indigo 500 */
-  
-  --main-text-color: #f8fafc;     /* Slate 50: Blanc cassé, pas agressif */
-  --secondary-text-color: #94a3b8; /* Slate 400 */
-  
-  --background-color: #0f172a;    /* Slate 900: Fond profond (Base) */
-  --card-color: #1e293b;          /* Slate 800: Surface élevée (Carte) */
-  --border-color: #334155;        /* Slate 700 */
-  
-  --hover-background-color: #334155; /* Slate 700 */
-  
-  --error-color: #f87171;         /* Red 400 */
-  --success-color: #4ade80;       /* Green 400 */
-  --warning-color: #fbbf24;       /* Amber 400 */
-  
+  /* PALETTE "DEEP CHERRY" - Profonde, Luxe & Reposante */
+  /* Fond aubergine très sombre, couleurs primaires vibrantes sur ce fond */
+
+  --primary-color: #FF8B7F;       /* Coral plus lumineux pour accessibilité (WCAG AA) */
+  --secondary-color: #E94478;     /* Raspberry plus vibrant sur fond sombre */
+  --accent-color: #FF6B5C;        /* Coral saturé pour les CTAs */
+
+  --main-text-color: #FCF0EE;     /* Crème très claire, pas agressif */
+  --secondary-text-color: #D4A9A1; /* Beige-rose pour la hiérarchie */
+
+  --background-color: #120A0E;    /* Noir cerise/aubergine très sombre */
+  --card-color: #1C1117;          /* Surface légèrement plus claire que le fond */
+  --border-color: #3D2A31;        /* Bordeaux très sombre pour les bordures */
+
+  --hover-background-color: #2D1B22; /* Gris très sombre avec pointe de bordeaux */
+
+  --error-color: #FF7B7B;         /* Red clair pour lisibilité */
+  --success-color: #3DB88F;       /* Teal-vert pour contraste avec Coral */
+  --warning-color: #F5C555;       /* Amber clair pour harmonie */
+
   color-scheme: dark;
 }
 
@@ -119,5 +119,3 @@ button:focus-visible {
   background-color: var(--card-color);
   border: 1px solid var(--border-color);
 }
-
-
