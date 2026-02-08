@@ -166,6 +166,16 @@
           </div>
         </section>
 
+        <!-- MFA Settings -->
+        <section class="settings-section">
+          <div class="section-header">
+            <h3>Authentification à deux facteurs</h3>
+          </div>
+          <div class="section-body">
+            <MFASettings />
+          </div>
+        </section>
+
         <section class="settings-section">
           <div class="section-header">
              <h3>Préférences</h3>
@@ -322,6 +332,14 @@
         </div>
       </div>
     </div>
+
+    <!-- MFA Challenge Modal -->
+    <MFAChallengeModal
+      v-model="showMFAChallenge"
+      :context="mfaChallengeContext"
+      @verified="onMFAVerified"
+      @cancelled="onMFACancelled"
+    />
   </div>
 </template>
 
@@ -331,21 +349,27 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useBillingStore } from '../stores/billing'
 import { usePreferencesStore } from '../stores/preferences'
+import { useMFA } from '../utils/useMFA'
 import api from '../api'
 import AvatarSelector from '../components/AvatarSelector.vue'
 import DeleteAccountDialog from '../components/DeleteAccountDialog.vue'
+import MFASettings from '../components/MFASettings.vue'
+import MFAChallengeModal from '../components/MFAChallengeModal.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const billingStore = useBillingStore()
 const preferenceStore = usePreferencesStore()
+const { isMFARequired } = useMFA()
+
+// MFA Challenge state
+const showMFAChallenge = ref(false)
+const mfaChallengeContext = ref('destructive')
+const pendingAction = ref(null) // Will store the action to execute after MFA verification
+
 const loading = ref(true)
 const selectedAvatar = ref('/avatars/default.png')
 const updatingAvatar = ref(false)
-
-const navigateToBilling = () => {
-  router.push('/billing')
-}
 
 const usernameForm = ref({
   newName: ''
@@ -402,6 +426,27 @@ const showError = (title, message) => {
 
 const showSuccess = (title, message) => {
   successModal.value = { show: true, title, message }
+}
+
+const onMFAVerified = async () => {
+  showMFAChallenge.value = false
+  if (pendingAction.value) {
+    const action = pendingAction.value
+    pendingAction.value = null
+    try {
+      await action()
+    } catch (error) {
+      console.error('Error executing pending action after MFA:', error)
+      const errorMessage = error.response?.data?.error || error.message || 'Erreur lors de l\'exécution de l\'action.'
+      showError('Erreur', errorMessage)
+    }
+  }
+}
+
+const onMFACancelled = () => {
+  showMFAChallenge.value = false
+  pendingAction.value = null
+  showError('Action annulée', 'La vérification MFA a été annulée. Votre action n\'a pas été exécutée.')
 }
 
 onMounted(async () => {
@@ -506,6 +551,28 @@ const handleUpdatePassword = async () => {
     return
   }
 
+  // Check if MFA is required for destructive actions
+  try {
+    const mfaRequired = await isMFARequired('destructive')
+    if (mfaRequired) {
+      // Store the action to execute after MFA verification
+      pendingAction.value = async () => {
+        await executePasswordUpdate()
+      }
+      mfaChallengeContext.value = 'destructive'
+      showMFAChallenge.value = true
+      return
+    }
+  } catch (err) {
+    console.error('Error checking MFA requirement:', err)
+    // Continue without MFA if check fails (not critical)
+  }
+
+  // Execute password update directly if MFA not required
+  await executePasswordUpdate()
+}
+
+const executePasswordUpdate = async () => {
   updatingPassword.value = true
   try {
     await authStore.updatePassword(passwordForm.value.current, passwordForm.value.new)
@@ -607,6 +674,28 @@ const handleDeleteAccount = async () => {
     return
   }
 
+  // Check if MFA is required for destructive actions
+  try {
+    const mfaRequired = await isMFARequired('destructive')
+    if (mfaRequired) {
+      // Store the action to execute after MFA verification
+      pendingAction.value = async () => {
+        await executeDeleteAccount()
+      }
+      mfaChallengeContext.value = 'destructive'
+      showMFAChallenge.value = true
+      return
+    }
+  } catch (err) {
+    console.error('Error checking MFA requirement:', err)
+    // Continue without MFA if check fails (not critical)
+  }
+
+  // Execute deletion directly if MFA not required
+  await executeDeleteAccount()
+}
+
+const executeDeleteAccount = async () => {
   isDeletingAccount.value = true
 
   try {
