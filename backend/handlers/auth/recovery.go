@@ -1,8 +1,14 @@
 package auth
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"safercloud/backend/pkg"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -65,6 +71,12 @@ func RecoveryFinishHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	// Update Supabase password first (Admin API)
+	if err := updateSupabasePassword(user.ID, req.NewPassword); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update auth password"})
+		return
+	}
+
 	// Update user
 	// We only update the encryption keys. Password hash is no longer stored here.
 	user.Salt = req.NewSalt
@@ -77,4 +89,50 @@ func RecoveryFinishHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Keys reset successfully"})
+}
+
+func updateSupabasePassword(userID, newPassword string) error {
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	adminKey := os.Getenv("SUPABASE_ADMIN_KEY")
+	if adminKey == "" {
+		adminKey = os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+	}
+
+	if supabaseURL == "" || adminKey == "" {
+		return fmt.Errorf("supabase credentials not configured")
+	}
+
+	payload := map[string]string{"password": newPassword}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/auth/v1/admin/users/%s", supabaseURL, userID)
+	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", adminKey))
+	req.Header.Set("apikey", adminKey)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("supabase admin API returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	return nil
 }
