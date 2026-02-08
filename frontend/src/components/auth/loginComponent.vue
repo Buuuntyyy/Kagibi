@@ -30,18 +30,28 @@
     </button>
     <p v-if="error" class="error-message">{{ error }}</p>
   </form>
+
+  <!-- MFA Challenge Modal -->
+  <MFAChallengeModal
+    v-model="showMFAChallenge"
+    context="login"
+    @verified="onMFAVerified"
+    @cancelled="onMFACancelled"
+  />
 </template>
 
 <script setup>
 import { ref } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
+import MFAChallengeModal from '../MFAChallengeModal.vue'
 
 const email = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
 const showPassword = ref(false)
+const showMFAChallenge = ref(false)
 const authStore = useAuthStore()
 const router = useRouter()
 
@@ -49,8 +59,13 @@ const login = async () => {
   error.value = ''
   loading.value = true
   try {
-    const success = await authStore.login({email: email.value, password: password.value})
-    if (success) {
+    const result = await authStore.login({email: email.value, password: password.value})
+
+    if (result === 'mfa_required') {
+      // Show MFA challenge modal
+      showMFAChallenge.value = true
+    } else if (result) {
+      // Login successful without MFA
       router.push({ name: 'Home' })
     } else {
       error.value = 'Identifiants invalides'
@@ -66,6 +81,20 @@ const login = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const onMFAVerified = () => {
+  // MFA verified successfully, redirect to Home
+  authStore.pendingMFAVerification = false
+  router.push({ name: 'Home' })
+}
+
+const onMFACancelled = () => {
+  // User cancelled MFA, logout
+  showMFAChallenge.value = false
+  authStore.pendingMFAVerification = false
+  authStore.logout()
+  error.value = 'Authentification MFA annulée'
 }
 </script>
 
