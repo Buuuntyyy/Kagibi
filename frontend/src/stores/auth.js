@@ -8,6 +8,7 @@ import {
   generateRSAKeyPair, exportKeyToPEM, importKeyFromPEM, encryptPrivateKey, decryptPrivateKey
 } from '../utils/crypto'
 import sodium from 'libsodium-wrappers-sumo'
+import { useMFA } from '../utils/useMFA'
 
 export const useAuthStore = defineStore('auth', {
   state: () => {
@@ -29,6 +30,7 @@ export const useAuthStore = defineStore('auth', {
       privateKey: null, // RSA Private Key (Unwrapped)
       publicKey: null,  // RSA Public Key (CryptoKey)
       sessionTimeoutId: null, // Timeout handler for security (30 minutes)
+      pendingMFAVerification: false, // True if user needs to complete MFA challenge
     }
   },
   actions: {
@@ -125,6 +127,21 @@ export const useAuthStore = defineStore('auth', {
         await this.fetchUser();
         // Persist user data to localStorage (non-sensitive fields only)
         this.persistUserToStorage();
+
+        // Check if MFA is required for login
+        const mfa = useMFA()
+        try {
+          const mfaRequired = await mfa.isMFARequired('login')
+          if (mfaRequired) {
+            console.log('[Auth] MFA required for login, setting pending state')
+            this.pendingMFAVerification = true
+            return 'mfa_required' // Signal to UI that MFA is needed
+          }
+        } catch (mfaErr) {
+          console.warn('[Auth] Failed to check MFA requirement:', mfaErr)
+          // Continue without MFA check on error
+        }
+
         router.push({ name: 'Home' });
         return true
       } catch (error) {
