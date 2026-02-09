@@ -33,13 +33,13 @@ func StartAccountCleanupWorker(db *bun.DB) {
 		}
 	}()
 
-	log.Println("[RGPD] ✅ Maintenance Worker started (orphan cleanup + failed deletions recovery)")
+	log.Println("[RGPD] Maintenance Worker started (orphan cleanup + failed deletions recovery)")
 }
 
 func cleanupOrphansAndFailedDeletions(db *bun.DB) {
 	ctx := context.Background()
 
-	log.Println("[RGPD] 🔍 Starting maintenance: checking for orphans and failed deletions...")
+	log.Println("[RGPD] Starting maintenance: checking for orphans and failed deletions...")
 
 	// 1. SÉCURITÉ : Vérifier les comptes avec deleted_at (ne devrait pas exister avec hard delete)
 	//    Si trouvés = suppression immédiate a échoué, les nettoyer maintenant
@@ -50,10 +50,10 @@ func cleanupOrphansAndFailedDeletions(db *bun.DB) {
 		Scan(ctx)
 
 	if err != nil {
-		log.Printf("[RGPD] ❌ Failed to check for accounts with deleted_at flag: %v", err)
+		log.Printf("[RGPD] Failed to check for accounts with deleted_at flag: %v", err)
 	} else if len(users) > 0 {
-		log.Printf("[RGPD] 🚨 Found %d accounts with deleted_at flag (immediate deletion failed)", len(users))
-		log.Println("[RGPD] ⚡ Performing emergency hard delete now...")
+		log.Printf("[RGPD] Found %d accounts with deleted_at flag (immediate deletion failed)", len(users))
+		log.Println("[RGPD] Performing emergency hard delete now...")
 
 		for _, user := range users {
 			cleanupUserData(ctx, db, user)
@@ -66,14 +66,14 @@ func cleanupOrphansAndFailedDeletions(db *bun.DB) {
 	// 3. TODO : Nettoyer les fichiers S3 orphelins (fichiers S3 sans entrée DB)
 	// Note : Nécessite de scanner tout S3, opération coûteuse - à implémenter si nécessaire
 
-	log.Println("[RGPD] ✅ Maintenance completed")
+	log.Println("[RGPD] Maintenance completed")
 }
 
 // cleanupUserData effectue le hard delete complet d'un utilisateur et de toutes ses données
 // Utilisé comme filet de sécurité si la suppression immédiate a échoué
 func cleanupUserData(ctx context.Context, db *bun.DB, user pkg.User) {
 	userID := user.ID
-	log.Printf("[RGPD] 🗑️ Emergency cleanup for user: %s", userID)
+	log.Printf("[RGPD] Emergency cleanup for user: %s", userID)
 	// 1. Récupérer tous les fichiers de l'utilisateur
 	var files []pkg.File
 	err := db.NewSelect().
@@ -82,7 +82,7 @@ func cleanupUserData(ctx context.Context, db *bun.DB, user pkg.User) {
 		Scan(ctx)
 
 	if err != nil {
-		log.Printf("[RGPD] ❌ Failed to fetch files for user %s: %v", userID, err)
+		log.Printf("[RGPD] Failed to fetch files for user %s: %v", userID, err)
 	} else {
 		// 2. Supprimer chaque fichier de S3
 		for _, file := range files {
@@ -94,7 +94,7 @@ func cleanupUserData(ctx context.Context, db *bun.DB, user pkg.User) {
 					Key:    aws.String(s3Key),
 				})
 				if err != nil {
-					log.Printf("[RGPD] ⚠️ Failed to delete S3 file %s: %v", s3Key, err)
+					log.Printf("[RGPD] Failed to delete S3 file %s: %v", s3Key, err)
 				}
 			}
 		}
@@ -109,7 +109,7 @@ func cleanupUserData(ctx context.Context, db *bun.DB, user pkg.User) {
 		Where("user_id = ?", userID).
 		Exec(ctx)
 	if err != nil {
-		log.Printf("[RGPD] ❌ Failed to delete files for user %s: %v", userID, err)
+		log.Printf("[RGPD] Failed to delete files for user %s: %v", userID, err)
 	}
 
 	// 5. Hard delete des dossiers
@@ -118,7 +118,7 @@ func cleanupUserData(ctx context.Context, db *bun.DB, user pkg.User) {
 		Where("user_id = ?", userID).
 		Exec(ctx)
 	if err != nil {
-		log.Printf("[RGPD] ❌ Failed to delete folders for user %s: %v", userID, err)
+		log.Printf("[RGPD] Failed to delete folders for user %s: %v", userID, err)
 	}
 
 	// 6. Hard delete des tags
@@ -127,7 +127,7 @@ func cleanupUserData(ctx context.Context, db *bun.DB, user pkg.User) {
 		Where("user_id = ?", userID).
 		Exec(ctx)
 	if err != nil {
-		log.Printf("[RGPD] ❌ Failed to delete tags for user %s: %v", userID, err)
+		log.Printf("[RGPD] Failed to delete tags for user %s: %v", userID, err)
 	}
 
 	// 7. Hard delete des activités récentes
@@ -136,7 +136,7 @@ func cleanupUserData(ctx context.Context, db *bun.DB, user pkg.User) {
 		Where("user_id = ?", userID).
 		Exec(ctx)
 	if err != nil {
-		log.Printf("[RGPD] ❌ Failed to delete recent activities for user %s: %v", userID, err)
+		log.Printf("[RGPD] Failed to delete recent activities for user %s: %v", userID, err)
 	}
 
 	// 8. Hard delete de l'utilisateur
@@ -146,9 +146,9 @@ func cleanupUserData(ctx context.Context, db *bun.DB, user pkg.User) {
 		Exec(ctx)
 
 	if err != nil {
-		log.Printf("[RGPD] ❌ Failed to hard delete user %s: %v", userID, err)
+		log.Printf("[RGPD] Failed to hard delete user %s: %v", userID, err)
 	} else {
-		log.Printf("[RGPD] ✅ Hard deleted account: %s", userID)
+		log.Printf("[RGPD] Hard deleted account: %s", userID)
 	}
 }
 
@@ -161,16 +161,16 @@ func cleanupOrphanFiles(ctx context.Context, db *bun.DB) {
 		Count(ctx)
 
 	if err != nil {
-		log.Printf("[RGPD] ❌ Failed to count orphan files: %v", err)
+		log.Printf("[RGPD] Failed to count orphan files: %v", err)
 		return
 	}
 
 	if count == 0 {
-		log.Println("[RGPD] ✅ No orphan files found")
+		log.Println("[RGPD] No orphan files found")
 		return
 	}
 
-	log.Printf("[RGPD] 🧹 Found %d orphan files (user deleted but files remain)", count)
+	log.Printf("[RGPD] Found %d orphan files (user deleted but files remain)", count)
 
 	// Supprimer les fichiers orphelins
 	result, err := db.NewDelete().
@@ -179,12 +179,12 @@ func cleanupOrphanFiles(ctx context.Context, db *bun.DB) {
 		Exec(ctx)
 
 	if err != nil {
-		log.Printf("[RGPD] ❌ Failed to delete orphan files: %v", err)
+		log.Printf("[RGPD] Failed to delete orphan files: %v", err)
 		return
 	}
 
 	rowsAffected, _ := result.RowsAffected()
-	log.Printf("[RGPD] ✅ Deleted %d orphan files from database", rowsAffected)
+	log.Printf("[RGPD] Deleted %d orphan files from database", rowsAffected)
 }
 
 func cleanupS3Prefix(ctx context.Context, userID string) {
@@ -203,7 +203,7 @@ func cleanupS3Prefix(ctx context.Context, userID string) {
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
-			log.Printf("[RGPD] ⚠️ Failed to list S3 objects for prefix %s: %v", prefix, err)
+			log.Printf("[RGPD] Failed to list S3 objects for prefix %s: %v", prefix, err)
 			break
 		}
 
@@ -213,7 +213,7 @@ func cleanupS3Prefix(ctx context.Context, userID string) {
 				Key:    obj.Key,
 			})
 			if err != nil && !strings.Contains(err.Error(), "NoSuchKey") {
-				log.Printf("[RGPD] ⚠️ Failed to delete orphan S3 object %s: %v", *obj.Key, err)
+				log.Printf("[RGPD] Failed to delete orphan S3 object %s: %v", *obj.Key, err)
 			}
 		}
 	}

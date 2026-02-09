@@ -1,24 +1,24 @@
-# 🔧 Backend SaferCloud - Go API + Zero-Knowledge Architecture
+# Backend SaferCloud - Go API + Zero-Knowledge Architecture
 
 **API REST** qui stocke uniquement des données chiffrées et ne possède aucune clé de déchiffrement.
 
 ---
 
-## 📋 Vue d'ensemble
+## Vue d'ensemble
 
 Le backend SaferCloud est une API Go qui respecte les principes **Zero-Knowledge** :
-- ✅ Stocke uniquement `EncryptedMasterKey` (inutilisable sans password)
-- ✅ Fichiers chiffrés dans S3/MinIO
-- ✅ JWT validation via Supabase
-- ✅ Rate limiting avec `sync.Map`
-- ✅ WebSocket temps réel pour notifications
-- ✅ **Upload S3 Multipart** avec URLs présignées (direct client → S3)
-- ✅ **Download multi-fichiers** avec batch presigned URLs et folder tree
-- ✅ Logs sécurisés (aucune clé exposée)
+- Stocke uniquement `EncryptedMasterKey` (inutilisable sans password)
+- Fichiers chiffrés dans S3/MinIO
+- JWT validation via Supabase
+- Rate limiting avec `sync.Map`
+- WebSocket temps réel pour notifications
+- **Upload S3 Multipart** avec URLs présignées (direct client → S3)
+- **Download multi-fichiers** avec batch presigned URLs et folder tree
+- Logs sécurisés (aucune clé exposée)
 
 ---
 
-## 🛠️ Stack Technique
+## Stack Technique
 
 | Technologie | Version | Rôle |
 |-------------|---------|------|
@@ -34,7 +34,7 @@ Le backend SaferCloud est une API Go qui respecte les principes **Zero-Knowledge
 
 ---
 
-## 🚀 Démarrage Rapide
+## Démarrage Rapide
 
 ### Prérequis
 
@@ -229,96 +229,96 @@ users/550e8400-e29b-41d4-a716-446655440000/Documents/report.pdf.enc
 
 ---
 
-## 🌐 API Endpoints
+## API Endpoints
 
 ### Authentification
 
 | Méthode | Endpoint | Description | Auth |
 |---------|----------|-------------|------|
-| POST | `/api/v1/auth/register` | Inscription + génération MasterKey | ❌ |
-| GET | `/api/v1/auth/keys` | Récupérer Salt + EncryptedMasterKey | ✅ |
-| POST | `/api/v1/auth/logout` | Déconnexion (invalide JWT dans Redis) | ✅ |
-| POST | `/api/v1/auth/recovery/init` | Initialiser récupération compte | ❌ |
-| POST | `/api/v1/auth/recovery/finish` | Finaliser récupération avec recovery code | ❌ |
+| POST | `/api/v1/auth/register` | Inscription + génération MasterKey | Non |
+| GET | `/api/v1/auth/keys` | Récupérer Salt + EncryptedMasterKey | Oui |
+| POST | `/api/v1/auth/logout` | Déconnexion (invalide JWT dans Redis) | Oui |
+| POST | `/api/v1/auth/recovery/init` | Initialiser récupération compte | Non |
+| POST | `/api/v1/auth/recovery/finish` | Finaliser récupération avec recovery code | Non |
 
 ### Fichiers
 
 | Méthode | Endpoint | Description | Auth |
 |---------|----------|-------------|------|
-| POST | `/api/v1/files/upload` | Upload fichier chiffré (multipart) | ✅ |
-| GET | `/api/v1/files/list/*path` | Liste fichiers/dossiers | ✅ |
-| GET | `/api/v1/files/list-recursive` | Liste complète récursive | ✅ |
-| GET | `/api/v1/files/download/:fileID` | Télécharger fichier | ✅ |
-| GET | `/api/v1/files/preview/:fileID` | Télécharger preview | ✅ |
-| POST | `/api/v1/files/batch-presign` | Génère URLs présignées en batch (max 500) | ✅ |
-| POST | `/api/v1/files/selection-tree` | Arborescence mixte fichiers + dossiers | ✅ |
-| DELETE | `/api/v1/files/file/:fileID` | Supprimer fichier | ✅ |
-| DELETE | `/api/v1/files/folder/:folderID` | Supprimer dossier (récursif) | ✅ |
-| POST | `/api/v1/files/bulk-delete` | Supprimer multiple | ✅ |
-| POST | `/api/v1/files/move` | Déplacer fichier/dossier | ✅ |
-| POST | `/api/v1/files/rename` | Renommer fichier/dossier | ✅ |
-| POST | `/api/v1/files/tags` | Mettre à jour tags | ✅ |
-| GET | `/api/v1/files/search?q=query` | Recherche fichiers | ✅ |
+| POST | `/api/v1/files/upload` | Upload fichier chiffré (multipart) | Oui |
+| GET | `/api/v1/files/list/*path` | Liste fichiers/dossiers | Oui |
+| GET | `/api/v1/files/list-recursive` | Liste complète récursive | Oui |
+| GET | `/api/v1/files/download/:fileID` | Télécharger fichier | Oui |
+| GET | `/api/v1/files/preview/:fileID` | Télécharger preview | Oui |
+| POST | `/api/v1/files/batch-presign` | Génère URLs présignées en batch (max 500) | Oui |
+| POST | `/api/v1/files/selection-tree` | Arborescence mixte fichiers + dossiers | Oui |
+| DELETE | `/api/v1/files/file/:fileID` | Supprimer fichier | Oui |
+| DELETE | `/api/v1/files/folder/:folderID` | Supprimer dossier (récursif) | Oui |
+| POST | `/api/v1/files/bulk-delete` | Supprimer multiple | Oui |
+| POST | `/api/v1/files/move` | Déplacer fichier/dossier | Oui |
+| POST | `/api/v1/files/rename` | Renommer fichier/dossier | Oui |
+| POST | `/api/v1/files/tags` | Mettre à jour tags | Oui |
+| GET | `/api/v1/files/search?q=query` | Recherche fichiers | Oui |
 
 ### Dossiers
 
 | Méthode | Endpoint | Description | Auth |
 |---------|----------|-------------|------|
-| POST | `/api/v1/folders/create` | Créer dossier | ✅ |
-| GET | `/api/v1/folders/:id/tree` | Arborescence complète récursive | ✅ |
-| PUT | `/api/v1/folders/:id/key` | Mettre à jour clé chiffrée dossier | ✅ |
+| POST | `/api/v1/folders/create` | Créer dossier | Oui |
+| GET | `/api/v1/folders/:id/tree` | Arborescence complète récursive | Oui |
+| PUT | `/api/v1/folders/:id/key` | Mettre à jour clé chiffrée dossier | Oui |
 
 ### Partages
 
 | Méthode | Endpoint | Description | Auth |
 |---------|----------|-------------|------|
-| POST | `/api/v1/shares/link` | Créer lien public | ✅ |
-| POST | `/api/v1/shares/direct` | Partager avec utilisateur | ✅ |
-| GET | `/api/v1/shares/list` | Lister mes partages | ✅ |
-| DELETE | `/api/v1/shares/link/:shareID` | Supprimer lien | ✅ |
-| DELETE | `/api/v1/shares/direct` | Révoquer partage user | ✅ |
-| GET | `/api/v1/shares/with-me` | Fichiers partagés avec moi | ✅ |
-| GET | `/api/v1/public/share/:token` | Accéder partage public | ❌ |
-| GET | `/api/v1/public/share/:token/download` | Télécharger partage public | ❌ |
+| POST | `/api/v1/shares/link` | Créer lien public | Oui |
+| POST | `/api/v1/shares/direct` | Partager avec utilisateur | Oui |
+| GET | `/api/v1/shares/list` | Lister mes partages | Oui |
+| DELETE | `/api/v1/shares/link/:shareID` | Supprimer lien | Oui |
+| DELETE | `/api/v1/shares/direct` | Révoquer partage user | Oui |
+| GET | `/api/v1/shares/with-me` | Fichiers partagés avec moi | Oui |
+| GET | `/api/v1/public/share/:token` | Accéder partage public | Non |
+| GET | `/api/v1/public/share/:token/download` | Télécharger partage public | Non |
 
 ### Utilisateurs
 
 | Méthode | Endpoint | Description | Auth |
 |---------|----------|-------------|------|
-| GET | `/api/v1/users/me` | Profil utilisateur | ✅ |
-| PUT | `/api/v1/users/profile` | Mettre à jour profil | ✅ |
-| POST | `/api/v1/users/change-password` | Changer mot de passe | ✅ |
-| GET | `/api/v1/users/` | Lister utilisateurs (search) | ✅ |
-| POST | `/api/v1/users/recent` | Ajouter activité récente | ✅ |
-| GET | `/api/v1/users/recent` | Récupérer activité récente | ✅ |
-| POST | `/api/v1/users/keys` | Mettre à jour clés RSA | ✅ |
+| GET | `/api/v1/users/me` | Profil utilisateur | Oui |
+| PUT | `/api/v1/users/profile` | Mettre à jour profil | Oui |
+| POST | `/api/v1/users/change-password` | Changer mot de passe | Oui |
+| GET | `/api/v1/users/` | Lister utilisateurs (search) | Oui |
+| POST | `/api/v1/users/recent` | Ajouter activité récente | Oui |
+| GET | `/api/v1/users/recent` | Récupérer activité récente | Oui |
+| POST | `/api/v1/users/keys` | Mettre à jour clés RSA | Oui |
 
 ### Amis
 
 | Méthode | Endpoint | Description | Auth |
 |---------|----------|-------------|------|
-| GET | `/api/v1/friends` | Lister amis | ✅ |
-| POST | `/api/v1/friends` | Ajouter ami (friend_code) | ✅ |
-| DELETE | `/api/v1/friends/:id` | Supprimer ami | ✅ |
-| PUT | `/api/v1/friends/:id/accept` | Accepter demande | ✅ |
-| DELETE | `/api/v1/friends/:id/reject` | Rejeter demande | ✅ |
+| GET | `/api/v1/friends` | Lister amis | Oui |
+| POST | `/api/v1/friends` | Ajouter ami (friend_code) | Oui |
+| DELETE | `/api/v1/friends/:id` | Supprimer ami | Oui |
+| PUT | `/api/v1/friends/:id/accept` | Accepter demande | Oui |
+| DELETE | `/api/v1/friends/:id/reject` | Rejeter demande | Oui |
 
 ### WebSocket
 
 | Endpoint | Description | Auth |
 |----------|-------------|------|
-| `GET /ws?token=<JWT>` | Connexion WebSocket | ✅ (via query param) |
-| `GET /ice-config` | Config TURN pour WebRTC | ✅ |
+| `GET /ws?token=<JWT>` | Connexion WebSocket | Oui (via query param) |
+| `GET /ice-config` | Config TURN pour WebRTC | Oui |
 
 ### Sécurité
 
 | Méthode | Endpoint | Description | Auth |
 |---------|----------|-------------|------|
-| POST | `/api/v1/security/report` | Reporter événement sécurité | ✅ |
-| GET | `/api/v1/security/events` | Récupérer événements | ✅ |
+| POST | `/api/v1/security/report` | Reporter événement sécurité | Oui |
+| GET | `/api/v1/security/events` | Récupérer événements | Oui |
 ---
 
-## 📦 API Upload/Download Multi-Fichiers
+## API Upload/Download Multi-Fichiers
 
 ### Upload S3 Multipart
 
@@ -397,7 +397,7 @@ users/550e8400-e29b-41d4-a716-446655440000/Documents/report.pdf.enc
 **Performance**: Génération parallèle avec sémaphore (10 concurrent), latence ~50ms pour 100 fichiers.
 ---
 
-## 🔒 Sécurité
+## Sécurité
 
 ### Middleware Auth
 
@@ -482,7 +482,7 @@ func TestCreateFolderHandler(t *testing.T) {
     // Mock: CreateFolderDB returns folder with ID
     mock.ExpectQuery("INSERT INTO folders").
         WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-    
+
     // Mock: INSERT folder_sizes
     mock.ExpectExec("INSERT INTO folder_sizes").
         WillReturnResult(sqlmock.NewResult(1, 1))
@@ -495,7 +495,7 @@ func TestCreateFolderHandler(t *testing.T) {
 
 ---
 
-## 📊 Performance
+## Performance
 
 ### Optimisations Appliquées
 
@@ -516,7 +516,7 @@ func TestCreateFolderHandler(t *testing.T) {
 
 ---
 
-## 🚀 Déploiement
+## Déploiement
 
 ### Build Production
 
@@ -566,7 +566,7 @@ air
 
 ---
 
-## 📚 Ressources
+## Ressources
 
 - [Gin Framework](https://gin-gonic.com/)
 - [Bun ORM](https://bun.uptrace.dev/)
