@@ -1,7 +1,10 @@
 <template>
-  <div class="p2p-page">
-    <div class="p2p-container">
-      <div class="main-card">
+  <div class="dashboard-container">
+    <LeftBar />
+    <div class="main-content">
+      <div class="p2p-page">
+        <div class="p2p-container">
+          <div class="main-card">
         <div class="card-header">
            <h2>Transfert P2P Sécurisé</h2>
            <p>Envoyez des fichiers directement à vos amis connectés, sans passer par le serveur.</p>
@@ -20,17 +23,17 @@
                                Aucun ami en ligne
                            </div>
                            <div v-else class="friends-grid">
-                               <div 
-                                  v-for="friend in onlineFriends" 
-                                  :key="friend.id" 
+                               <div
+                                  v-for="friend in onlineFriends"
+                                  :key="friend.id"
                                   class="friend-chip"
                                   @click="selectedFriend = friend"
                                >
                                   <div class="avatar-mini-wrapper">
                                       <div class="avatar-mini">
-                                          <img 
-                                            v-if="normalizeAvatarUrl(friend.avatar_url)" 
-                                            :src="normalizeAvatarUrl(friend.avatar_url)" 
+                                          <img
+                                            v-if="normalizeAvatarUrl(friend.avatar_url)"
+                                            :src="normalizeAvatarUrl(friend.avatar_url)"
                                             :alt="friend.name"
                                             class="avatar-image"
                                             @error="(e) => e.target.style.display = 'none'"
@@ -48,9 +51,9 @@
                         <div class="friend-chip selected">
                             <div class="avatar-mini-wrapper">
                                 <div class="avatar-mini">
-                                    <img 
-                                      v-if="normalizeAvatarUrl(selectedFriend.avatar_url)" 
-                                      :src="normalizeAvatarUrl(selectedFriend.avatar_url)" 
+                                    <img
+                                      v-if="normalizeAvatarUrl(selectedFriend.avatar_url)"
+                                      :src="normalizeAvatarUrl(selectedFriend.avatar_url)"
                                       :alt="selectedFriend.name"
                                       class="avatar-image"
                                       @error="(e) => e.target.style.display = 'none'"
@@ -72,9 +75,9 @@
                 <div class="step-content">
                     <h3>Fichier</h3>
                     <input type="file" id="p2p-file-input" @change="handleFileSelect" style="display: none" />
-                    
-                    <div v-if="!selectedFile" 
-                         class="drop-area" 
+
+                    <div v-if="!selectedFile"
+                         class="drop-area"
                          :class="{ 'pulse': selectedFriend && !selectedFile }"
                          @click="selectedFriend && triggerFileSelect()"
                          @dragover.prevent
@@ -110,6 +113,8 @@
         </div>
       </div>
     </div>
+    </div>
+    </div>
   </div>
 </template>
 
@@ -118,6 +123,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useFriendStore } from '../stores/friends'
 import { useAuthStore } from '../stores/auth'
 import { useP2PStore } from '../stores/p2p'
+import LeftBar from '../components/bar/leftBar.vue'
 
 const friendStore = useFriendStore()
 const authStore = useAuthStore()
@@ -188,6 +194,23 @@ const startTransfer = async () => {
 </script>
 
 <style scoped>
+.dashboard-container {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  background-color: var(--background-color);
+}
+
+.main-content {
+  flex-grow: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-top-left-radius: 30px;
+  background-color: var(--card-color);
+}
+
 .p2p-page {
     background-color: var(--background-color);
     min-height: 100vh;

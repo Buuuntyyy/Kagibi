@@ -5,7 +5,7 @@
        @dragleave.prevent="onDragLeave"
        @drop.prevent="onDrop"
        @contextmenu.prevent="openBackgroundContextMenu">
-       
+
     <div v-if="isDragging" class="drag-overlay">
       <div class="drag-content">
         <span class="drag-icon">☁️</span>
@@ -13,7 +13,7 @@
         <span class="drag-subtext">Plusieurs fichiers supportés</span>
       </div>
     </div>
-    
+
     <div class="toolbar" v-if="preferenceStore.showToolBar">
       <div class="toolbar-left">
         <button @click="triggerFileInput" class="btn-add-file">Ajouter un fichier</button>
@@ -33,11 +33,11 @@
     </div>
     <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" multiple />
     <div class="path-banner">
-      
+
       <div class="breadcrumbs">
         <span v-for="(segment, index) in pathSegments" :key="index" class="breadcrumb-segment">
-          <span 
-            class="breadcrumb-link" 
+          <span
+            class="breadcrumb-link"
             :class="{ 'current': index === pathSegments.length - 1 }"
             @click="navigateToPath(segment.path)"
           >
@@ -70,7 +70,7 @@
         </div>
       </Transition>
     </div>
-    
+
     <!-- Upload Progress Popup -->
     <div v-if="fileStore.isUploading" class="upload-popup">
       <div class="popup-header">
@@ -87,7 +87,7 @@
         </div>
       </div>
     </div>
-    <FileTable 
+    <FileTable
       :folders="filteredFolders"
       :files="filteredFiles"
       :selectedItems="selectedItems"
@@ -152,7 +152,7 @@
       </template>
     </div>
 
-    <InputDialog 
+    <InputDialog
       v-model:isOpen="inputDialog.isOpen"
       :title="inputDialog.title"
       :defaultValue="inputDialog.defaultValue"
@@ -160,7 +160,7 @@
       @confirm="handleInputConfirm"
       @cancel="handleInputCancel"
     />
-    <TagDialog 
+    <TagDialog
       v-model:isOpen="tagDialog.isOpen"
       :initialTags="tagDialog.initialTags"
       @confirm="handleTagConfirm"
@@ -192,6 +192,12 @@
       :status="fileStore.preview.status"
       @close="fileStore.preview.show = false"
     />
+    <MFAChallengeModal
+      v-model="showMFAChallenge"
+      :context="mfaChallengeContext"
+      @verified="onMFAVerified"
+      @cancelled="onMFACancelled"
+    />
   </div>
 </template>
 
@@ -206,6 +212,7 @@ import { usePreferencesStore } from '../../stores/preferences'
 import { useTagStore } from '../../stores/tags'
 import { useUploadStore } from '../../stores/uploads'
 import { useDownloadStore } from '../../stores/downloads'
+import { useMFA } from '../../utils/useMFA'
 import uploadQueueManager from '../../utils/uploadQueueManager'
 import InputDialog from '../InputDialog.vue'
 import TagDialog from '../TagDialog.vue'
@@ -215,6 +222,7 @@ import MoveDialog from '../MoveDialog.vue';
 import ManageShareDialog from '../ManageShareDialog.vue';
 import FilePreview from './FilePreview.vue';
 import FileTable from './FileTable.vue';
+import MFAChallengeModal from '../MFAChallengeModal.vue';
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -224,6 +232,13 @@ const preferenceStore = usePreferencesStore()
 const tagStore = useTagStore()
 const uploadStore = useUploadStore()
 const downloadStore = useDownloadStore()
+const { isMFARequired } = useMFA()
+
+// MFA Challenge state
+const showMFAChallenge = ref(false)
+const mfaChallengeContext = ref('download')
+const pendingDownload = ref(null) // Will store the download action to execute after MFA verification
+
 const selectedItems = ref([])
 const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
 const fileInput = ref(null)
@@ -286,7 +301,7 @@ const sortItems = (items) => {
 
 const columns = computed(() => {
   const cols = [];
-  
+
   // Always show selection column
   cols.push({ key: 'selection', label: '', headerClass: 'selection-col', cellClass: 'selection-col' });
 
@@ -488,17 +503,17 @@ const pathSegments = computed(() => {
 
   const path = fileStore.currentPath
   const segments = [{ name: 'Mon Drive', path: '/' }]
-  
+
   if (path === '/') return segments
 
   const parts = path.split('/').filter(p => p)
   let currentBuild = ''
-  
+
   parts.forEach(part => {
     currentBuild += '/' + part
     segments.push({ name: part, path: currentBuild })
   })
-  
+
   return segments
 })
 
@@ -548,7 +563,7 @@ onMounted(async () => {
   }
   tagStore.fetchTags()
   document.addEventListener('click', closeContextMenu)
-  
+
   // Add keyboard listener for Delete key
   document.addEventListener('keydown', handleKeyboardDelete)
 })
@@ -564,7 +579,7 @@ onUnmounted(() => {
 
 const openBackgroundContextMenu = async (event) => {
   if (!preferenceStore.enableContextMenu) return;
-  
+
   // Deselect items when clicking on background
   selectedItems.value = []
 
@@ -579,11 +594,11 @@ const openBackgroundContextMenu = async (event) => {
     y: -9999,
     item: null
   }
-  
+
   await nextTick()
 
   // Measure dynamic size
-  let menuWidth = 200; 
+  let menuWidth = 200;
   let menuHeight = 220;
   if (contextMenuRef.value) {
     menuWidth = contextMenuRef.value.offsetWidth
@@ -614,12 +629,12 @@ const openBackgroundContextMenu = async (event) => {
 
 const openContextMenu = async (event, item, type) => {
   if (!preferenceStore.enableContextMenu) return;
-  
+
   // If item is not already selected, select it (exclusive selection)
   if(!isSelected(item, type)) {
     selectedItems.value = [{...item, type}]
   }
-  
+
   // Get mouse position
   let x = event.clientX;
   let y = event.clientY;
@@ -634,7 +649,7 @@ const openContextMenu = async (event, item, type) => {
   await nextTick()
 
   // Measure dynamic size
-  let menuWidth = 200; 
+  let menuWidth = 200;
   let menuHeight = 250;
   if (contextMenuRef.value) {
     menuWidth = contextMenuRef.value.offsetWidth
@@ -665,7 +680,7 @@ const openContextMenu = async (event, item, type) => {
 
 const handleContextAction = (action) => {
   const item = contextMenu.value.item
-  
+
   if (action === 'add-file') {
     triggerFileInput()
     closeContextMenu()
@@ -742,7 +757,7 @@ const selectItem = (item, type, event) => {
       const itemType = i.type || (i.Path ? 'folder' : 'file');
       return { ...i, type: itemType };
     });
-    
+
     selectedItems.value = rangeToSelect;
 
   } else if (event.ctrlKey || event.metaKey) {
@@ -785,17 +800,17 @@ const toggleItemSelection = (item, type, event) => {
       }
     });
     selectedItems.value = newSelection;
-    
+
   } else {
     // Standard toggle behavior
     const isItemSelected = isSelected(item, type);
-    
+
     if (isItemSelected) {
       selectedItems.value = selectedItems.value.filter(i => !(i.ID === item.ID && i.type === type));
     } else {
       selectedItems.value.push(itemWithType);
     }
-    
+
     // Update last clicked index ONLY on direct click (not range select) for anchor
     lastClickedIndex.value = currentIndex;
   }
@@ -816,7 +831,7 @@ const isSelected = (item, type) => {
 
 const openFolder = (folder) => {
   const folderName = folder.Name || folder.name;
-  
+
   if (fileStore.viewMode === 'shared') {
       fileStore.navigateShared(folder.ID, folderName);
       selectedItems.value = [];
@@ -825,11 +840,11 @@ const openFolder = (folder) => {
 
   // Add to history
   const fullPath = fileStore.currentPath === '/' ? '/' + folderName : fileStore.currentPath + '/' + folderName;
-  fileStore.addToHistory({ 
+  fileStore.addToHistory({
       ID: folder.ID,
-      name: folderName, 
-      path: fullPath, 
-      type: 'folder' 
+      name: folderName,
+      path: fullPath,
+      type: 'folder'
   });
 
   selectedItems.value = [] // Deselect items when navigating
@@ -851,27 +866,49 @@ const goUp = () => {
 const downloadSelectedFiles = async () => {
   const files = selectedItems.value.filter(i => i.type === 'file');
   const folders = selectedItems.value.filter(i => i.type === 'folder');
-  
+
   if (files.length === 0 && folders.length === 0) return;
 
+  // Check if MFA is required for downloads
+  try {
+    const mfaRequired = await isMFARequired('download')
+    if (mfaRequired) {
+      // Store the action to execute after MFA verification
+      pendingDownload.value = async () => {
+        await executeDownloadSelectedFiles(files, folders)
+      }
+      mfaChallengeContext.value = 'download'
+      showMFAChallenge.value = true
+      return
+    }
+  } catch (err) {
+    console.error('Error checking MFA requirement:', err)
+    // Continue without MFA if check fails (not critical)
+  }
+
+  // Execute download directly if MFA not required
+  await executeDownloadSelectedFiles(files, folders)
+}
+
+const executeDownloadSelectedFiles = async (files, folders) => {
   // Single file: download with progress popup (unified UX)
   if (files.length === 1 && folders.length === 0) {
     const file = files[0];
     await downloadStore.downloadSingleFile(file.ID, file.Name, file.EncryptedKey, file.Size || 0);
     return;
   }
-  
+
   // Single folder: download as ZIP
   if (folders.length === 1 && files.length === 0) {
     const folder = folders[0];
     await downloadStore.downloadFolder(folder.ID, folder.Name);
     return;
   }
-  
+
   // Multiple items: download as selection ZIP
   const fileIDs = files.map(f => f.ID);
   const folderIDs = folders.map(f => f.ID);
-  
+
   // Generate ZIP name from selection
   let zipName = 'selection.zip';
   if (files.length > 0 && folders.length === 0) {
@@ -881,7 +918,7 @@ const downloadSelectedFiles = async () => {
   } else {
     zipName = `selection_${files.length + folders.length}_elements.zip`;
   }
-  
+
   await downloadStore.downloadSelection(fileIDs, folderIDs, zipName);
 }
 
@@ -895,21 +932,21 @@ const deleteSelectedItems = () => {
     onConfirm: async () => {
       const fileIDs = selectedItems.value.filter(i => i.type === 'file').map(i => i.ID);
       const folderIDs = selectedItems.value.filter(i => i.type === 'folder').map(i => i.ID);
-      
+
       if (fileIDs.length > 0) {
           await fileStore.deleteFiles(fileIDs);
       }
-      
+
       // Delete folders one by one for now as bulk delete folders is not implemented
       for (const folderID of folderIDs) {
           await api.delete(`/files/folder/${folderID}`);
       }
-      
+
       // Refresh list if we deleted folders manually (deleteFiles already refreshes)
       if (folderIDs.length > 0 && fileIDs.length === 0) {
           fileStore.fetchItems(fileStore.currentPath);
       }
-      
+
       selectedItems.value = [] // Clear selection after deletion
     }
   });
@@ -917,10 +954,10 @@ const deleteSelectedItems = () => {
 
 const renameSelectedItem = async () => {
   if (selectedItems.value.length !== 1) return;
-  
+
   const item = selectedItems.value[0];
   const newName = await openInputDialog("Entrez le nouveau nom :", item.Name);
-  
+
   if (newName && newName !== item.Name) {
     try {
       await fileStore.renameItem(item.ID, item.type, newName);
@@ -944,12 +981,12 @@ const removeTag = async (item, type, tagToRemove) => {
 
 const updateTags = async () => {
   if (selectedItems.value.length !== 1) return;
-  
+
   const item = selectedItems.value[0];
   const currentTags = item.Tags || [];
-  
+
   const newTags = await openTagDialog(currentTags);
-  
+
   if (newTags !== null) {
     try {
       await fileStore.updateTags(item.ID, item.type, newTags);
@@ -960,20 +997,39 @@ const updateTags = async () => {
   }
 }
 
-const downloadFile = (file) => {
+const downloadFile = async (file) => {
   fileStore.addToHistory({ ...file, type: 'file' });
-  
+
   const previewTypes = [
-    'application/pdf', 
-    'image/jpeg', 
-    'image/png', 
-    'image/gif', 
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/gif',
     'image/webp',
     'text/plain',
     'application/json'
   ];
-  
+
   const isPreviewable = previewTypes.includes(file.MimeType);
+
+  // Check if MFA is required for downloads
+  try {
+    const mfaRequired = await isMFARequired('download')
+    if (mfaRequired) {
+      // Store the action to execute after MFA verification
+      pendingDownload.value = async () => {
+        fileStore.downloadFile(file.ID, file.Name, file.MimeType, isPreviewable)
+      }
+      mfaChallengeContext.value = 'download'
+      showMFAChallenge.value = true
+      return
+    }
+  } catch (err) {
+    console.error('Error checking MFA requirement:', err)
+    // Continue without MFA if check fails (not critical)
+  }
+
+  // Execute download directly if MFA not required
   fileStore.downloadFile(file.ID, file.Name, file.MimeType, isPreviewable);
 }
 
@@ -1034,12 +1090,12 @@ const onDrop = async (e) => {
 const onDragStart = (item, type, event) => {
   event.dataTransfer.effectAllowed = 'move'
   event.dataTransfer.dropEffect = 'move'
-  
+
   let itemsToDrag = []
-  
+
   // Check if the dragged item is in the selection
   const isSelected = selectedItems.value.some(i => i.ID === item.ID && i.type === type)
-  
+
   if (isSelected && selectedItems.value.length > 0) {
       itemsToDrag = selectedItems.value.map(i => ({ id: i.ID, type: i.type }))
   } else {
@@ -1061,15 +1117,15 @@ const onDropOnFolder = async (targetFolder, event) => {
   event.currentTarget.classList.remove('drag-over-target')
   isDragging.value = false
   const data = event.dataTransfer.getData('application/json')
-  if (!data) return 
+  if (!data) return
 
   try {
     const parsed = JSON.parse(data)
     const items = parsed.items || [parsed] // Handle potential backward compatibility or single item structure
-    
+
     // Filter out the target folder itself if it's being dragged (cannot move folder into itself)
     const validItems = items.filter(item => !(item.id === targetFolder.ID && item.type === 'folder'))
-    
+
     if (validItems.length > 0) {
         await fileStore.moveItems(validItems, targetFolder.Path)
     }
@@ -1089,15 +1145,33 @@ const onDropOnParent = async (event) => {
   try {
     const parsed = JSON.parse(data)
     const items = parsed.items || [parsed]
-    
+
     const parts = fileStore.currentPath.split('/').filter(p => p)
     parts.pop()
     const parentPath = parts.length > 0 ? '/' + parts.join('/') : '/'
-    
+
     await fileStore.moveItems(items, parentPath)
   } catch (e) {
     console.error("Invalid drag data", e)
   }
+}
+
+const onMFAVerified = async () => {
+  showMFAChallenge.value = false
+  if (pendingDownload.value) {
+    const action = pendingDownload.value
+    pendingDownload.value = null
+    try {
+      await action()
+    } catch (error) {
+      console.error('Error executing pending download after MFA:', error)
+    }
+  }
+}
+
+const onMFACancelled = () => {
+  showMFAChallenge.value = false
+  pendingDownload.value = null
 }
 </script>
 
