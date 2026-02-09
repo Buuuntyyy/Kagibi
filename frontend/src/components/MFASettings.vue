@@ -1,13 +1,13 @@
 <template>
   <div class="mfa-settings">
     <!-- MFA Status Header -->
-    <div class="mfa-status-header">
+    <div class="mfa-status-header" :class="{ active: isMFAVerified }">
       <div class="status-indicator" :class="{ active: isMFAVerified }">
-        <svg v-if="isMFAVerified" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2L2 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
-          <polyline points="9 12 11 14 15 10"/>
+        <svg v-if="isMFAVerified" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
         </svg>
-        <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+        <svg v-else viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 2L2 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
         </svg>
       </div>
@@ -104,11 +104,17 @@
     </div>
 
     <!-- MFA Restrictions (only shown when MFA is verified) -->
-    <div v-if="isMFAVerified && !showEnrollmentFlow" class="mfa-restrictions">
-      <h5>Quand exiger le code MFA ?</h5>
-      <p class="restrictions-desc">
-        Choisissez quand vous souhaitez être invité à entrer votre code MFA.
-      </p>
+    <details v-if="isMFAVerified && !showEnrollmentFlow" class="mfa-restrictions" open>
+      <summary class="restrictions-summary">
+        <h5>Quand exiger le code MFA ?</h5>
+        <svg class="chevron-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </summary>
+      <div class="restrictions-content">
+        <p class="restrictions-desc">
+          Choisissez quand vous souhaitez être invité à entrer votre code MFA.
+        </p>
 
       <div class="restriction-list">
         <!-- Login Restriction -->
@@ -191,7 +197,8 @@
           Désactiver le MFA
         </button>
       </div>
-    </div>
+      </div>
+    </details>
 
     <!-- Disable MFA Confirmation Modal -->
     <div v-if="showDisableConfirm" class="modal-overlay" @click="showDisableConfirm = false">
@@ -437,11 +444,22 @@ function filterNumericInput(event) {
   background: var(--hover-background-color);
   border-radius: 12px;
   border: 1px solid var(--border-color);
+  transition: all 0.3s ease;
+}
+
+.mfa-status-header.active {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.mfa-status-header.active .status-indicator {
+  background: rgba(34, 197, 94, 0.15);
+  color: rgb(22, 163, 74);
 }
 
 .status-indicator {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -715,7 +733,47 @@ function filterNumericInput(event) {
   background: var(--card-color);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 2rem;
+  padding: 0;
+  overflow: hidden;
+}
+
+.restrictions-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem 2rem;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  transition: background-color 0.2s;
+}
+
+.restrictions-summary::-webkit-details-marker {
+  display: none;
+}
+
+.restrictions-summary:hover {
+  background: var(--hover-background-color);
+}
+
+.restrictions-summary h5 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--main-text-color);
+}
+
+.chevron-icon {
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+  color: var(--secondary-text-color);
+}
+
+.mfa-restrictions[open] .chevron-icon {
+  transform: rotate(180deg);
+}
+
+.restrictions-content {
+  padding: 0 2rem 2rem 2rem;
 }
 
 .mfa-restrictions h5 {
