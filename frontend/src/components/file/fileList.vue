@@ -48,9 +48,10 @@
       </div>
     </div>
 
-    <!-- Selection Action Bar (fixed gap to prevent layout shift) -->
-    <div class="selection-gap">
+    <!-- Selection Action Bar / Security Tip Bar -->
+    <div class="selection-gap" :class="{ 'has-content': selectedItems.length > 0 || !mfaSettings.mfa_enabled }">
       <Transition name="selection-bar">
+        <!-- Selection Actions -->
         <div v-if="selectedItems.length > 0" class="selection-action-bar">
           <div class="selection-actions">
             <button class="action-btn download-action" @click.stop="downloadSelectedFiles" title="Télécharger">
@@ -67,6 +68,35 @@
           </button>
           </div>
           <span class="selection-count">{{ selectedItems.length }} élément{{ selectedItems.length > 1 ? 's' : '' }} sélectionné{{ selectedItems.length > 1 ? 's' : '' }}</span>
+        </div>
+
+        <!-- Security Tip Bar (shown when no items selected) -->
+        <div v-else-if="!mfaSettings.mfa_enabled" class="security-tip-bar" @click="navigateToSecurity">
+          <div class="tip-content">
+            <svg class="tip-icon" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor">
+              <path d="M0 0h24v24H0V0z" fill="none"/>
+              <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+            </svg>
+            <span class="tip-text">💡 <strong>Conseil :</strong> Activez l'authentification à deux facteurs (MFA) pour sécuriser votre compte</span>
+          </div>
+          <svg class="security-lock" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor">
+            <path d="M0 0h24v24H0V0z" fill="none"/>
+            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/>
+          </svg>
+        </div>
+
+        <div v-else-if="mfaSettings.mfa_enabled" class="security-tip-bar success">
+          <div class="tip-content">
+            <svg class="tip-icon" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor">
+              <path d="M0 0h24v24H0V0z" fill="none"/>
+              <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+            </svg>
+            <span class="tip-text">✅ <strong>Sécurisé :</strong> Utilisez un gestionnaire de mots de passe pour protéger vos identifiants</span>
+          </div>
+          <svg class="security-lock" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor">
+            <path d="M0 0h24v24H0V0z" fill="none"/>
+            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/>
+          </svg>
         </div>
       </Transition>
     </div>
@@ -238,6 +268,12 @@ const { isMFARequired } = useMFA()
 const showMFAChallenge = ref(false)
 const mfaChallengeContext = ref('download')
 const pendingDownload = ref(null) // Will store the download action to execute after MFA verification
+
+// Security settings for tip bar
+const mfaSettings = ref({
+  mfa_enabled: false,
+  mfa_verified: false
+})
 
 const selectedItems = ref([])
 const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
@@ -566,7 +602,24 @@ onMounted(async () => {
 
   // Add keyboard listener for Delete key
   document.addEventListener('keydown', handleKeyboardDelete)
+
+  // Load MFA security settings for tip bar
+  loadSecuritySettings()
 })
+
+const loadSecuritySettings = async () => {
+  try {
+    const response = await api.get('/users/security-settings')
+    mfaSettings.value = response.data
+  } catch (error) {
+    console.error('Failed to load security settings:', error)
+    // Keep default values (MFA disabled)
+  }
+}
+
+const navigateToSecurity = () => {
+  router.push({ name: 'Account' })
+}
 
 watch(() => fileStore.currentPath, () => {
   selectedItems.value = []
@@ -1447,20 +1500,28 @@ button {
 }
 
 .btn-close {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
+  background: rgba(200, 200, 200, 0.3);
+  border: 1px solid rgba(100, 100, 100, 0.3);
+  font-size: 1.8rem;
   cursor: pointer;
-  padding: 0;
-  line-height: 0.8;
-  color: var(--secondary-text-color);
-  width: auto;
-  height: auto;
+  padding: 0px 6px;
+  line-height: 1;
+  color: #000 !important;
+  opacity: 1 !important;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .btn-close:hover {
-  color: var(--main-text-color);
-  background: none;
+  background: rgba(150, 150, 150, 0.5);
+  color: #000 !important;
+  border-color: rgba(80, 80, 80, 0.5);
 }
 
 .popup-content {
@@ -1574,16 +1635,23 @@ button {
   color: #666;
 }
 
-/* Selection Action Bar */
+/* Selection Action Bar / Security Tip Bar */
 .selection-gap {
   position: relative;
   height: 56px;
-  margin: 0 1rem 0.5rem 1rem;
+  margin: 0 0 0.5rem 0;
+  transition: all 0.3s ease;
+  z-index: 10;
+  overflow: visible;
+}
+
+.selection-gap.has-content {
+  margin-bottom: 0.5rem;
 }
 
 .selection-action-bar {
   position: absolute;
-  inset: 0;
+  inset: 0 1rem 0 1rem;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -1645,6 +1713,67 @@ button {
 
 .delete-action:hover:not(:disabled) {
   background: rgba(244, 67, 54, 0.8);
+}
+
+/* Security Tip Bar */
+.security-tip-bar {
+  position: absolute;
+  inset: 0 1rem 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #ff9800 0%, #ff6f00 100%);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.security-tip-bar:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 12px rgba(255, 152, 0, 0.4);
+}
+
+.security-tip-bar.success {
+  background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+  cursor: default;
+}
+
+.security-tip-bar.success:hover {
+  transform: none;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+.tip-content {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 1;
+}
+
+.tip-icon {
+  flex-shrink: 0;
+  fill: white;
+  opacity: 0.9;
+}
+
+.tip-text {
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.tip-text strong {
+  font-weight: 600;
+}
+
+.security-lock {
+  flex-shrink: 0;
+  fill: white;
+  opacity: 0.85;
+  margin-left: 1rem;
 }
 
 /* Selection Bar Animation */
