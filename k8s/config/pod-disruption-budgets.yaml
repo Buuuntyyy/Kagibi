@@ -1,0 +1,64 @@
+---
+# PodDisruptionBudget for Backend - ensures at least 2 pods are available
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend-pdb
+  namespace: safercloud
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: backend
+
+---
+# PodDisruptionBudget for Frontend - ensures at least 2 pods are available
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+  namespace: safercloud
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: frontend
+
+---
+# PodDisruptionBudget for Website - ensures at least 1 pod is available
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: website-pdb
+  namespace: safercloud
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: website
+
+---
+# PodDisruptionBudget for PostgreSQL - ensures at least 2 pods are available
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: postgres-pdb
+  namespace: safercloud
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: postgres
+
+---
+# PodDisruptionBudget for Redis - ensures at least 2 pods are available
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  namespace: safercloud
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: redis
