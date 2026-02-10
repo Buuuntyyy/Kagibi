@@ -20,20 +20,13 @@
         </div>
         <div class="header-actions">
           <button v-if="hasActiveUploads" @click.stop="cancelAll" class="btn-action btn-cancel" title="Annuler tout">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-            </svg>
+            ⊗
           </button>
           <button @click.stop="toggleCollapsed" class="btn-action btn-collapse" :title="isCollapsed ? 'Développer' : 'Réduire'">
-            <svg :class="{ rotated: !isCollapsed }" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
+            {{ isCollapsed ? '▶' : '▼' }}
           </button>
           <button @click.stop="closeManager" class="btn-action btn-close" title="Fermer">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
+            ✕
           </button>
         </div>
       </div>
@@ -48,9 +41,9 @@
       <!-- Upload List -->
       <Transition name="expand">
         <div v-show="!isCollapsed" class="upload-list">
-          <div 
-            v-for="upload in sortedUploads" 
-            :key="upload.id" 
+          <div
+            v-for="upload in sortedUploads"
+            :key="upload.id"
             class="upload-item"
             :class="statusClass(upload.status)"
           >
@@ -95,9 +88,9 @@
 
             <!-- Actions -->
             <div class="item-actions">
-              <button 
-                v-if="isActive(upload.status) || upload.status === 'pending'" 
-                @click="cancelUpload(upload.id)" 
+              <button
+                v-if="isActive(upload.status) || upload.status === 'pending'"
+                @click="cancelUpload(upload.id)"
                 class="btn-item btn-cancel"
                 title="Annuler"
               >
@@ -106,9 +99,9 @@
                   <line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </button>
-              <button 
-                v-if="upload.status === 'failed'" 
-                @click="retryUpload(upload.id)" 
+              <button
+                v-if="upload.status === 'failed'"
+                @click="retryUpload(upload.id)"
                 class="btn-item btn-retry"
                 title="Réessayer"
               >
@@ -117,9 +110,9 @@
                   <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
                 </svg>
               </button>
-              <button 
-                v-if="['completed', 'failed', 'cancelled'].includes(upload.status)" 
-                @click="removeUpload(upload.id)" 
+              <button
+                v-if="['completed', 'failed', 'cancelled'].includes(upload.status)"
+                @click="removeUpload(upload.id)"
                 class="btn-item btn-remove"
                 title="Retirer de la liste"
               >
@@ -323,14 +316,6 @@ function truncateError(error) {
 
 .btn-cancel:hover {
   color: var(--error-color, #e74c3c);
-}
-
-.btn-collapse svg {
-  transition: transform 0.3s ease;
-}
-
-.btn-collapse svg.rotated {
-  transform: rotate(180deg);
 }
 
 /* Overall Progress */

@@ -1,6 +1,6 @@
 <template>
   <nav>
-    <router-link to="/" class="brand">SaferCloud</router-link>
+    <router-link to="/dashboard" class="brand">SaferCloud</router-link>
     <SearchBar v-if="authStore.isAuthenticated" />
     <div class="nav-links">
       <button @click="themeStore.toggleTheme" class="theme-toggle" :title="themeStore.theme === 'light' ? 'Mode sombre' : 'Mode clair'">
@@ -15,9 +15,9 @@
       <template v-else>
         <router-link to="/account" class="user-avatar-link" :title="authStore.user?.name || 'Mon Compte'">
           <div class="user-avatar">
-            <img 
-              v-if="authStore.user?.avatar_url" 
-              :src="authStore.user.avatar_url" 
+            <img
+              v-if="authStore.user?.avatar_url"
+              :src="authStore.user.avatar_url"
               :alt="authStore.user?.name"
               class="avatar-image"
               @error="handleImageError"
