@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
 	"safercloud/backend/handlers/auth"
 	billinghandlers "safercloud/backend/handlers/billing"
 	"safercloud/backend/handlers/files"
@@ -17,9 +19,11 @@ import (
 	"safercloud/backend/middleware"
 	"safercloud/backend/pkg"
 	billingpkg "safercloud/backend/pkg/billing"
+	"safercloud/backend/pkg/monitoring"
 	"safercloud/backend/pkg/s3storage"
 	"safercloud/backend/pkg/workers"
 	"strings"
+	"syscall"
 
 	"time"
 
@@ -52,12 +56,18 @@ func main() {
 	friendHandler := friends.NewFriendHandler(db)
 	jwks, jwtSecret := initAuth()
 
+	// Démarrer le serveur de métriques Prometheus (port 9090)
+	metricsServer := monitoring.NewServer(9090)
+	if err := metricsServer.Start(); err != nil {
+		log.Printf("Warning: Failed to start metrics server: %v", err)
+	}
+
 	// Setup Server
 	router := setupRouter()
 
 	registerRoutes(router, db, redisClient, jwks, jwtSecret, friendHandler)
 
-	startServer(router)
+	startServerWithGracefulShutdown(router, metricsServer)
 }
 
 func loadEnv() {
@@ -173,6 +183,9 @@ func setupRouter() *gin.Engine {
 
 	router.Use(middleware.SecureHeaders())
 	router.Use(middleware.RateLimitMiddleware())
+
+	// Middleware de métriques Prometheus
+	router.Use(middleware.MetricsMiddleware())
 
 	return router
 }
@@ -401,5 +414,49 @@ func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup) {
 func startServer(router *gin.Engine) {
 	if err := router.Run(":8080"); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
+	}
+}
+
+// startServerWithGracefulShutdown démarre le serveur avec un arrêt gracieux
+func startServerWithGracefulShutdown(router *gin.Engine, metricsServer *monitoring.Server) {
+	// Configuration du serveur HTTP principal
+	srv := &http.Server{
+		Addr:         ":8080",
+		Handler:      router,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	// Démarrage du serveur principal dans une goroutine
+	go func() {
+		log.Println("Serveur principal démarré sur le port 8080")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to run server: %v", err)
+		}
+	}()
+
+	// Configuration du canal pour les signaux système
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	// Attente du signal d'arrêt
+	<-quit
+	log.Println("\nSignal d'arrêt reçu, arrêt gracieux en cours...")
+
+	// Contexte avec timeout pour le shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Arrêt du serveur de métriques
+	if err := metricsServer.Shutdown(ctx); err != nil {
+		log.Printf("Erreur lors de l'arrêt du serveur de métriques: %v", err)
+	}
+
+	// Arrêt du serveur principal
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("Erreur lors de l'arrêt du serveur principal: %v", err)
+	} else {
+		log.Println("✓ Serveur arrêté gracieusement")
 	}
 }

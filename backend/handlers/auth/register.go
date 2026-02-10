@@ -109,11 +109,11 @@ func RegisterHandler(c *gin.Context, db *bun.DB) {
 
 		// Pour toute autre erreur, supprimer l'utilisateur de Supabase
 		// pour éviter les comptes orphelins (dans auth.users mais pas dans profiles)
-		log.Printf("[Register] ⚠️ Profile creation failed, cleaning up Supabase auth.users entry for user %s", userID)
+		log.Printf("[Register] Profile creation failed, cleaning up Supabase auth.users entry for user %s", userID)
 		if cleanupErr := deleteUserFromSupabaseAuth(userID); cleanupErr != nil {
-			log.Printf("[Register] ⚠️ Failed to cleanup Supabase user after profile creation failure: %v", cleanupErr)
+			log.Printf("[Register] Failed to cleanup Supabase user after profile creation failure: %v", cleanupErr)
 		} else {
-			log.Printf("[Register] ✅ Cleaned up orphaned Supabase user %s", userID)
+			log.Printf("[Register] Cleaned up orphaned Supabase user %s", userID)
 		}
 
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la création du profil. Veuillez réessayer."})
@@ -133,7 +133,7 @@ func deleteUserFromSupabaseAuth(userID string) error {
 	}
 
 	if supabaseURL == "" || adminKey == "" {
-		log.Printf("[Register] ⚠️ SUPABASE_URL or admin key not set, cannot cleanup orphaned user")
+		log.Printf("[Register] SUPABASE_URL or admin key not set, cannot cleanup orphaned user")
 		return fmt.Errorf("supabase credentials not configured")
 	}
 
