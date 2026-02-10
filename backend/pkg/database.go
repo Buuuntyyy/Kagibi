@@ -85,6 +85,20 @@ func CreateFile(db *bun.DB, file *File) error {
 	return err
 }
 
+// FolderExistsByPath vérifie si un dossier existe déjà pour cet utilisateur avec ce path exact
+func FolderExistsByPath(db *bun.DB, userID string, path string) (bool, error) {
+	ctx := context.Background()
+	count, err := db.NewSelect().
+		Model((*Folder)(nil)).
+		Where("user_id = ?", userID).
+		Where("path = ?", path).
+		Count(ctx)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func CreateFolderDB(db *bun.DB, folder *Folder) error {
 	ctx := context.Background()
 	_, err := db.NewInsert().Model(folder).Returning("id").Exec(ctx)

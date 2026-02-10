@@ -40,6 +40,18 @@ func CreateHandler(c *gin.Context, db *bun.DB) {
 
 	logicalPath := filepath.ToSlash(filepath.Join(req.Path, req.Name))
 
+	// Vérifier si un dossier existe déjà avec ce path pour cet utilisateur
+	exists, err := pkg.FolderExistsByPath(db, userID, logicalPath)
+	if err != nil {
+		log.Printf("Error checking folder existence: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la vérification du dossier"})
+		return
+	}
+	if exists {
+		c.JSON(http.StatusConflict, gin.H{"error": "Un dossier avec ce nom existe déjà à cet emplacement"})
+		return
+	}
+
 	userRoot := filepath.Join("uploads", userID)
 
 	diskPath, err := utils.SecureJoin(userRoot, logicalPath)
