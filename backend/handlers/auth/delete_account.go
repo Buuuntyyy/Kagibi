@@ -62,13 +62,13 @@ func DeleteAccount(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 
-		log.Printf("[RGPD] 🗑️ Starting IMMEDIATE and COMPLETE deletion for user: %s (email: %s)", userID, user.Email)
+		log.Printf("[RGPD] Starting IMMEDIATE and COMPLETE deletion for user: %s (email: %s)", userID, user.Email)
 
 		// 1.5 Supprimer depuis Supabase (Admin API)
 		if err := deleteUserFromSupabase(userID); err != nil {
-			log.Printf("[RGPD] ⚠️ Failed to delete from Supabase: %v (continuing with local deletion)", err)
+			log.Printf("[RGPD] Failed to delete from Supabase: %v (continuing with local deletion)", err)
 		} else {
-			log.Printf("[RGPD] ✅ User deleted from Supabase auth.users")
+			log.Printf("[RGPD] User deleted from Supabase auth.users")
 		}
 
 		// 2. SUPPRESSION IMMÉDIATE DES FICHIERS S3 (asynchrone pour ne pas bloquer)
@@ -80,10 +80,10 @@ func DeleteAccount(db *bun.DB) gin.HandlerFunc {
 			Where("user_id = ?", userID).
 			Exec(ctx)
 		if err != nil {
-			log.Printf("[RGPD] ⚠️ Failed to delete files for user %s: %v", userID, err)
+			log.Printf("[RGPD] Failed to delete files for user %s: %v", userID, err)
 		} else {
 			rowsAffected, _ := result.RowsAffected()
-			log.Printf("[RGPD] ✅ Deleted %d files from DB for user %s", rowsAffected, userID)
+			log.Printf("[RGPD] Deleted %d files from DB for user %s", rowsAffected, userID)
 		}
 
 		// 4. HARD DELETE des dossiers en DB (IMMÉDIAT)
@@ -92,10 +92,10 @@ func DeleteAccount(db *bun.DB) gin.HandlerFunc {
 			Where("user_id = ?", userID).
 			Exec(ctx)
 		if err != nil {
-			log.Printf("[RGPD] ⚠️ Failed to delete folders for user %s: %v", userID, err)
+			log.Printf("[RGPD] Failed to delete folders for user %s: %v", userID, err)
 		} else {
 			rowsAffected, _ := result.RowsAffected()
-			log.Printf("[RGPD] ✅ Deleted %d folders from DB for user %s", rowsAffected, userID)
+			log.Printf("[RGPD] Deleted %d folders from DB for user %s", rowsAffected, userID)
 		}
 
 		// 5. HARD DELETE des tags (IMMÉDIAT)
@@ -104,11 +104,11 @@ func DeleteAccount(db *bun.DB) gin.HandlerFunc {
 			Where("user_id = ?", userID).
 			Exec(ctx)
 		if err != nil {
-			log.Printf("[RGPD] ⚠️ Failed to delete tags for user %s: %v", userID, err)
+			log.Printf("[RGPD] Failed to delete tags for user %s: %v", userID, err)
 		} else {
 			rowsAffected, _ := result.RowsAffected()
 			if rowsAffected > 0 {
-				log.Printf("[RGPD] ✅ Deleted %d tags for user %s", rowsAffected, userID)
+				log.Printf("[RGPD] Deleted %d tags for user %s", rowsAffected, userID)
 			}
 		}
 
@@ -118,11 +118,11 @@ func DeleteAccount(db *bun.DB) gin.HandlerFunc {
 			Where("user_id = ?", userID).
 			Exec(ctx)
 		if err != nil {
-			log.Printf("[RGPD] ⚠️ Failed to delete recent activities for user %s: %v", userID, err)
+			log.Printf("[RGPD] Failed to delete recent activities for user %s: %v", userID, err)
 		} else {
 			rowsAffected, _ := result.RowsAffected()
 			if rowsAffected > 0 {
-				log.Printf("[RGPD] ✅ Deleted %d activities for user %s", rowsAffected, userID)
+				log.Printf("[RGPD] Deleted %d activities for user %s", rowsAffected, userID)
 			}
 		}
 
@@ -188,14 +188,13 @@ func DeleteAccount(db *bun.DB) gin.HandlerFunc {
 			Exec(ctx)
 
 		if err != nil {
-			log.Printf("[RGPD] ❌ Failed to hard delete user %s: %v", userID, err)
+			log.Printf("[RGPD] Failed to hard delete user %s: %v", userID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la suppression définitive"})
 			return
 		}
 
-		log.Printf("[RGPD] ✅ COMPLETE DELETION: Account PERMANENTLY deleted: %s (email: %s)", userID, user.Email)
-		log.Printf("[RGPD] 🚨 IRRÉVERSIBLE: All user data deleted from DB. S3 cleanup running in background.")
-
+		log.Printf("[RGPD] COMPLETE DELETION: Account PERMANENTLY deleted: %s (email: %s)", userID, user.Email)
+		log.Printf("[RGPD] IRRÉVERSIBLE: All user data deleted from DB. S3 cleanup running in background.")
 		c.JSON(http.StatusOK, gin.H{
 			"success":      true,
 			"message":      "Votre compte a été DÉFINITIVEMENT supprimé. Toutes vos données sont IRRÉCUPÉRABLES.",
@@ -222,7 +221,7 @@ func deleteUserFilesFromS3(ctx context.Context, db *bun.DB, userID string) {
 		Scan(ctx)
 
 	if err != nil {
-		log.Printf("[RGPD] ⚠️ Failed to fetch files for S3 cleanup (user %s): %v", userID, err)
+		log.Printf("[RGPD] Failed to fetch files for S3 cleanup (user %s): %v", userID, err)
 		return
 	}
 
@@ -231,7 +230,7 @@ func deleteUserFilesFromS3(ctx context.Context, db *bun.DB, userID string) {
 		return
 	}
 
-	log.Printf("[RGPD] 🗑️ Starting S3 cleanup: %d files for user %s", len(files), userID)
+	log.Printf("[RGPD] Starting S3 cleanup: %d files for user %s", len(files), userID)
 
 	successCount := 0
 	errorCount := 0
@@ -251,14 +250,14 @@ func deleteUserFilesFromS3(ctx context.Context, db *bun.DB, userID string) {
 		})
 
 		if err != nil {
-			log.Printf("[RGPD] ⚠️ Failed to delete S3 file %s: %v", s3Key, err)
+			log.Printf("[RGPD] Failed to delete S3 file %s: %v", s3Key, err)
 			errorCount++
 		} else {
 			successCount++
 		}
 	}
 
-	log.Printf("[RGPD] ✅ S3 cleanup completed for user %s: %d succeeded, %d failed", userID, successCount, errorCount)
+	log.Printf("[RGPD] S3 cleanup completed for user %s: %d succeeded, %d failed", userID, successCount, errorCount)
 
 	// Nettoyer le préfixe utilisateur (sécurité supplémentaire pour les fichiers orphelins)
 	prefix := fmt.Sprintf("users/%s/", userID)
@@ -271,7 +270,7 @@ func deleteUserFilesFromS3(ctx context.Context, db *bun.DB, userID string) {
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
-			log.Printf("[RGPD] ⚠️ Failed to list orphan files for user %s: %v", userID, err)
+			log.Printf("[RGPD] Failed to list orphan files for user %s: %v", userID, err)
 			break
 		}
 
@@ -287,7 +286,7 @@ func deleteUserFilesFromS3(ctx context.Context, db *bun.DB, userID string) {
 	}
 
 	if orphanCount > 0 {
-		log.Printf("[RGPD] ✅ Deleted %d orphan files from S3 for user %s", orphanCount, userID)
+		log.Printf("[RGPD] Deleted %d orphan files from S3 for user %s", orphanCount, userID)
 	}
 }
 
@@ -302,7 +301,7 @@ func deleteUserFromSupabase(userID string) error {
 
 	if supabaseURL == "" || adminKey == "" {
 		// Supabase non disponible ou non configuré, continuer sans erreur
-		log.Printf("[RGPD] ⚠️ SUPABASE_URL or SUPABASE_ADMIN_KEY/SUPABASE_SERVICE_ROLE_KEY not set, skipping Supabase deletion")
+		log.Printf("[RGPD] SUPABASE_URL or SUPABASE_ADMIN_KEY/SUPABASE_SERVICE_ROLE_KEY not set, skipping Supabase deletion")
 		return nil
 	}
 

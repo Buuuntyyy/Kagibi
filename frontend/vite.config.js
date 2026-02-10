@@ -11,5 +11,12 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    sourcemap: false,
+  },
+  server: {
+    sourcemap: false,
+  },
+  define: {
+    'process.env.DEBUG': false,
   },
 })
