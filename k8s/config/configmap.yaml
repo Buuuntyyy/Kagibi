@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: safercloud-config
+  namespace: safercloud
+data:
+  # Database Configuration
+  POSTGRES_DB: "mydb"
+  POSTGRES_HOST: "postgres-service"
+  POSTGRES_PORT: "5432"
+
+  # Redis Configuration
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+
+  # Backend Configuration
+  BACKEND_PORT: "8080"
+  GIN_MODE: "release"
+
+  # Frontend Configuration
+  VITE_API_URL: "https://api.safercloud.com"
+
+  # Storage Configuration
+  UPLOAD_PATH: "/uploads"
+
+  # Monitoring
+  ENABLE_METRICS: "true"
+  METRICS_PORT: "9090"
