@@ -27,4 +27,6 @@ backend/node_modules/
 frontend/dist/
 backend/bin/
 
+scripts/s3-cors-config.json
+
 RELEASE_STRATEGY.md
