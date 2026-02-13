@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"safercloud/backend/pkg"
+	"safercloud/backend/pkg/monitoring"
 	"safercloud/backend/pkg/s3storage"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -101,6 +102,8 @@ func DownloadFileHandler(c *gin.Context, db *bun.DB) {
 
 	// Log legitimate access
 	log.Printf("INFO: File download - UserID: %s, FileID: %d, FileName: %s", userID, fileID, file.Name)
+
+	monitoring.FileDownloadsTotal.Inc()
 
 	streamFileFromS3(c, file)
 }

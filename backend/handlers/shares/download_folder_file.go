@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"safercloud/backend/pkg"
+	"safercloud/backend/pkg/monitoring"
 	"safercloud/backend/pkg/s3storage"
 	"strconv"
 	"strings"
@@ -80,6 +81,8 @@ func DownloadFileFromSharedFolderHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 	defer output.Body.Close()
+
+	monitoring.FileDownloadsTotal.Inc()
 
 	// Headers
 	c.Header("Content-Description", "File Transfer")
