@@ -49,7 +49,7 @@
     </div>
 
     <!-- Selection Action Bar / Security Tip Bar -->
-    <div class="selection-gap" :class="{ 'has-content': selectedItems.length > 0 || !mfaSettings.mfa_enabled }">
+    <div class="selection-gap" :class="{ 'has-content': selectedItems.length > 0 || (!loadingSecuritySettings && !mfaSettings.mfa_enabled) }">
       <Transition name="selection-bar">
         <!-- Selection Actions -->
         <div v-if="selectedItems.length > 0" class="selection-action-bar">
@@ -71,7 +71,7 @@
         </div>
 
         <!-- Security Tip Bar (shown when no items selected) -->
-        <div v-else-if="!mfaSettings.mfa_enabled" class="security-tip-bar" @click="navigateToSecurity">
+        <div v-else-if="!loadingSecuritySettings && !mfaSettings.mfa_enabled" class="security-tip-bar" @click="navigateToSecurity">
           <div class="tip-content">
             <svg class="tip-icon" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor">
               <path d="M0 0h24v24H0V0z" fill="none"/>
@@ -85,7 +85,7 @@
           </svg>
         </div>
 
-        <div v-else-if="mfaSettings.mfa_enabled" class="security-tip-bar success">
+        <div v-else-if="!loadingSecuritySettings && mfaSettings.mfa_enabled" class="security-tip-bar success">
           <div class="tip-content">
             <svg class="tip-icon" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor">
               <path d="M0 0h24v24H0V0z" fill="none"/>
@@ -274,6 +274,7 @@ const mfaSettings = ref({
   mfa_enabled: false,
   mfa_verified: false
 })
+const loadingSecuritySettings = ref(true)
 
 const selectedItems = ref([])
 const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
@@ -608,12 +609,15 @@ onMounted(async () => {
 })
 
 const loadSecuritySettings = async () => {
+  loadingSecuritySettings.value = true
   try {
     const response = await api.get('/users/security-settings')
     mfaSettings.value = response.data
   } catch (error) {
     console.error('Failed to load security settings:', error)
     // Keep default values (MFA disabled)
+  } finally {
+    loadingSecuritySettings.value = false
   }
 }
 

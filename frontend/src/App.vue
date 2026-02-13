@@ -89,7 +89,8 @@ body {
   flex-grow: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .landing-content {
