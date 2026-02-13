@@ -97,6 +97,14 @@ var (
 		},
 	)
 
+	// Gauge: Nombre total d'utilisateurs actifs (identifiés par requêtes récentes)
+	ActiveUsers = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "safercloud_active_users",
+			Help: "Nombre d'utilisateurs uniques actifs dans les 5 dernières minutes",
+		},
+	)
+
 	// Counter: Requêtes vers S3
 	S3RequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
