@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"safercloud/backend/pkg"
+	"safercloud/backend/pkg/monitoring"
 	"safercloud/backend/pkg/workers"
 
 	"github.com/gin-gonic/gin"
@@ -118,6 +119,9 @@ func UploadHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Increment uploaded files counter
+	monitoring.FileUploadsTotal.Inc()
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Upload en cours de traitement", "file": fileRecord})
 }
