@@ -19,6 +19,7 @@ export function useMFA() {
   const verifying = ref(false)
   const unenrolling = ref(false)
   const loadingSettings = ref(false)
+  const settingsLoaded = ref(false)
   const challengeInProgress = ref(false)
 
   const qrCode = ref(null)
@@ -389,6 +390,7 @@ export function useMFA() {
       } catch (syncErr) {
         console.warn('[useMFA] Failed to sync MFA status from factors:', syncErr)
       }
+      settingsLoaded.value = true
       return securitySettings.value
     } catch (err) {
       console.error('[useMFA] Failed to fetch security settings:', err)
@@ -398,6 +400,7 @@ export function useMFA() {
       } catch (syncErr) {
         console.warn('[useMFA] Failed to sync MFA status from factors:', syncErr)
       }
+      settingsLoaded.value = true
       return securitySettings.value
     } finally {
       loadingSettings.value = false
@@ -457,6 +460,7 @@ export function useMFA() {
     verifying,
     unenrolling,
     loadingSettings,
+    settingsLoaded,
     challengeInProgress,
     qrCode,
     secret,

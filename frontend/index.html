@@ -8,12 +8,12 @@
   </head>
   <body>
     <div id="app"></div>
-    
+
     <!-- Load runtime configuration BEFORE main app -->
     <script src="/config.js"></script>
-    
+
     <script type="module" src="/src/main.js"></script>
-    
+
     <!-- Service Worker Integrity Check (SRI) -->
     <script nonce="inline-sri-check">
       /**
@@ -26,25 +26,25 @@
           const response = await fetch('/sw-crypto.js', {
             cache: 'no-cache'
           });
-          
+
           if (!response.ok) {
             console.error('[SRI] Failed to fetch Service Worker:', response.status);
             return false;
           }
 
           const swContent = await response.text();
-          
+
           // Calculer le hash SHA-256
           const encoder = new TextEncoder();
           const data = encoder.encode(swContent);
           const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-          
+
           // Convertir en hex
           const hashArray = Array.from(new Uint8Array(hashBuffer));
           const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-          
+
           console.log('[SRI] Service Worker SHA-256:', hashHex);
-          
+
           // Vous pouvez stocker le hash attendu et le comparer ici
           // Si vous avez un backend, vous pouvez vérifier le hash côté serveur
           return true;
@@ -53,7 +53,7 @@
           return false;
         }
       }
-      
+
       // Vérifier l'intégrité au chargement
       window.addEventListener('load', verifyServiceWorkerIntegrity);
     </script>
