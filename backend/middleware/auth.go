@@ -1,16 +1,19 @@
 package middleware
 
 import (
+	"context"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/MicahParks/keyfunc/v3"
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 // AuthMiddleware vérifie les tokens via JWKS (ES256) ou Secret (HS256)
-func AuthMiddleware(jwks keyfunc.Keyfunc, secret string) gin.HandlerFunc {
+func AuthMiddleware(jwks keyfunc.Keyfunc, secret string, redisClient *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if !strings.HasPrefix(authHeader, "Bearer ") {
@@ -42,7 +45,20 @@ func AuthMiddleware(jwks keyfunc.Keyfunc, secret string) gin.HandlerFunc {
 		}
 
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
-			c.Set("user_id", claims["sub"])
+			userID := claims["sub"].(string)
+			c.Set("user_id", userID)
+
+			// Mise à jour de la session active dans Redis (TTL 5 minutes)
+			// Cela permet de compter les "utilisateurs actifs" via le worker de monitoring
+			if redisClient != nil {
+				go func(uid string) {
+					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+					defer cancel()
+					// On utilise un prefix "active_user:" suivi de l'ID utilisateur
+					// On pourrait aussi utiliser un HyperLogLog si le trafic était énorme, mais SET est OK.
+					redisClient.Set(ctx, "active_user:"+uid, "1", 5*time.Minute)
+				}(userID)
+			}
 		} else {
 			c.AbortWithStatusJSON(401, gin.H{"error": "Claims invalides"})
 		}

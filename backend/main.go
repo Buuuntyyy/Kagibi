@@ -58,6 +58,7 @@ func main() {
 
 	// Démarrer le serveur de métriques Prometheus (port 9090)
 	metricsServer := monitoring.NewServer(9090)
+	monitoring.StartSessionMonitor(redisClient) // Démarrer le monitoring des sessions Redis
 	if err := metricsServer.Start(); err != nil {
 		log.Printf("Warning: Failed to start metrics server: %v", err)
 	}
@@ -207,7 +208,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, j
 
 	// Protected Routes
 	protected := api.Group("")
-	protected.Use(middleware.AuthMiddleware(jwks, jwtSecret))
+	protected.Use(middleware.AuthMiddleware(jwks, jwtSecret, redisClient))
 
 	registerUserRoutes(protected, db, redisClient)
 	registerFileRoutes(protected, db, redisClient)
@@ -216,7 +217,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, j
 	registerFriendRoutes(protected, friendHandler)
 	registerShareRoutes(protected, db)
 	registerSecurityRoutes(protected)
-	registerBillingRoutes(api, protected)
+	registerBillingRoutes(api, protected, redisClient)
 	registerP2PRoutes(protected, db)
 
 	// System
@@ -403,12 +404,12 @@ func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 
 // registerBillingRoutes enregistre les routes de facturation
 // Utilise le nouveau système de provider pluggable
-func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup) {
+func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup, redisClient *redis.Client) {
 	// Webhook receiver (pour le service de billing externe)
 	billinghandlers.RegisterWebhookRoute(api)
 
 	// Toutes les routes (publiques + protégées)
-	billinghandlers.RegisterRoutes(protected, middleware.AuthMiddleware(nil, os.Getenv("SUPABASE_JWT_SECRET")))
+	billinghandlers.RegisterRoutes(protected, middleware.AuthMiddleware(nil, os.Getenv("SUPABASE_JWT_SECRET"), redisClient))
 }
 
 func startServer(router *gin.Engine) {
