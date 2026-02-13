@@ -11,25 +11,25 @@ Ce dossier sert uniquement à construire les images Docker optimisées pour le b
 ```
 docker/
 └── deployment/
-    ├── backend/
-    │   └── Dockerfile       # Image multi-stage pour le backend Go
-    |   └── grafana
-    |       └── provisioning
-    |           └── dashboards
-    |           |   └── dashboard.yaml
-    |           └── datasources
-    |               └── prometheus.yaml
+    ├── grafana/
+    |   └── provisioning/
+    |       └── dashboards/
+    |       |   └── dashboard.yaml
+    |       └── datasources/
+    |           └── prometheus.yaml
     ├── frontend/
     │   └── Dockerfile       # Image multi-stage pour le frontend Vue.js + nginx
     └── docker-compose.prod.yml
 
+backend/
+└── Dockerfile               # Image multi-stage pour le backend Go
 ```
 
 ## Images disponibles
 
 ### Backend (API Go)
 
-**Dockerfile:** [deployment/backend/Dockerfile](deployment/backend/Dockerfile)
+**Dockerfile:** `../backend/Dockerfile`
 
 **Caractéristiques:**
 - Build multi-stage avec Go 1.25
@@ -43,21 +43,21 @@ docker/
 
 ```bash
 # Depuis la racine du projet
-docker build -f docker/deployment/backend/Dockerfile -t safercloud-backend:latest ./backend
+docker build -t safercloud-backend:latest ./backend
 
 # Ou depuis le dossier backend
 cd backend
-docker build -f ../docker/deployment/backend/Dockerfile -t safercloud-backend:latest .
+docker build -t safercloud-backend:latest .
 ```
 
 **Tags recommandés:**
 
 ```bash
 # Version spécifique
-docker build -f docker/deployment/backend/Dockerfile -t safercloud-backend:1.0.0 ./backend
+docker build -t safercloud-backend:1.0.0 ./backend
 
 # Latest
-docker build -f docker/deployment/backend/Dockerfile -t safercloud-backend:latest ./backend
+docker build -t safercloud-backend:latest ./backend
 ```
 
 ### Frontend (Vue.js + nginx)
@@ -103,7 +103,7 @@ Pour construire les deux images en une seule commande :
 
 ```bash
 # Backend
-docker build -f docker/deployment/backend/Dockerfile -t safercloud-backend:latest ./backend
+docker build -t safercloud-backend:latest ./backend
 
 # Frontend
 docker build -f docker/deployment/frontend/Dockerfile \

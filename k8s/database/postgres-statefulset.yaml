@@ -4,7 +4,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: supabase-db
-  namespace: safercloud
+  namespace: c-bunty-fqibrd-default
   labels:
     app: supabase-db
     tier: database
@@ -42,17 +42,17 @@ spec:
         - name: POSTGRES_DB
           valueFrom:
             configMapKeyRef:
-              name: safercloud-config
+              name: prod-config
               key: POSTGRES_DB
         - name: POSTGRES_USER
           valueFrom:
             secretKeyRef:
-              name: safercloud-secrets
+              name: prod-secrets
               key: POSTGRES_USER
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: safercloud-secrets
+              name: prod-secrets
               key: POSTGRES_PASSWORD
         - name: PGDATA
           value: /var/lib/postgresql/data/pgdata
@@ -92,7 +92,7 @@ spec:
       storageClassName: fast-ssd
       resources:
         requests:
-          storage: 50Gi
+          storage: 5Gi
 
 ---
 # PostgreSQL Service (internal)
@@ -100,7 +100,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres-service
-  namespace: safercloud
+  namespace: c-bunty-fqibrd-default
   labels:
     app: supabase-db
 spec:
@@ -119,7 +119,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: supabase-meta
-  namespace: safercloud
+  namespace: c-bunty-fqibrd-default
   labels:
     app: supabase-meta
     tier: database
@@ -146,27 +146,27 @@ spec:
         - name: PG_META_DB_HOST
           valueFrom:
             configMapKeyRef:
-              name: safercloud-config
+              name: prod-config
               key: POSTGRES_HOST
         - name: PG_META_DB_PORT
           valueFrom:
             configMapKeyRef:
-              name: safercloud-config
+              name: prod-config
               key: POSTGRES_PORT
         - name: PG_META_DB_NAME
           valueFrom:
             configMapKeyRef:
-              name: safercloud-config
+              name: prod-config
               key: POSTGRES_DB
         - name: PG_META_DB_USER
           valueFrom:
             secretKeyRef:
-              name: safercloud-secrets
+              name: prod-secrets
               key: POSTGRES_USER
         - name: PG_META_DB_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: safercloud-secrets
+              name: prod-secrets
               key: POSTGRES_PASSWORD
         livenessProbe:
           tcpSocket:
@@ -186,7 +186,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: supabase-meta
-  namespace: safercloud
+  namespace: c-bunty-fqibrd-default
   labels:
     app: supabase-meta
 spec:
@@ -205,7 +205,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: supabase-auth
-  namespace: safercloud
+  namespace: c-bunty-fqibrd-default
   labels:
     app: supabase-auth
     tier: database
@@ -242,8 +242,8 @@ spec:
         - name: GOTRUE_JWT_SECRET
           valueFrom:
             secretKeyRef:
-              name: safercloud-secrets
-              key: JWT_SECRET
+              name: prod-secrets
+              key: SUPABASE_JWT_SECRET
         - name: GOTRUE_JWT_EXP
           value: "3600"
         - name: GOTRUE_JWT_AUD
@@ -270,7 +270,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: supabase-auth
-  namespace: safercloud
+  namespace: c-bunty-fqibrd-default
   labels:
     app: supabase-auth
 spec:
@@ -289,7 +289,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: supabase-realtime
-  namespace: safercloud
+  namespace: c-bunty-fqibrd-default
   labels:
     app: supabase-realtime
     tier: database
@@ -316,39 +316,39 @@ spec:
         - name: DB_HOST
           valueFrom:
             configMapKeyRef:
-              name: safercloud-config
+              name: prod-config
               key: POSTGRES_HOST
         - name: DB_PORT
           valueFrom:
             configMapKeyRef:
-              name: safercloud-config
+              name: prod-config
               key: POSTGRES_PORT
         - name: DB_NAME
           valueFrom:
             configMapKeyRef:
-              name: safercloud-config
+              name: prod-config
               key: POSTGRES_DB
         - name: DB_USER
           valueFrom:
             secretKeyRef:
-              name: safercloud-secrets
+              name: prod-secrets
               key: POSTGRES_USER
         - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: safercloud-secrets
+              name: prod-secrets
               key: POSTGRES_PASSWORD
         - name: DB_SSL
           value: "disable"
-        - name: JWT_SECRET
+        - name: SUPABASE_JWT_SECRET
           valueFrom:
             secretKeyRef:
-              name: safercloud-secrets
-              key: JWT_SECRET
+              name: prod-secrets
+              key: SUPABASE_JWT_SECRET
         - name: SECRET_KEY_BASE
           valueFrom:
             secretKeyRef:
-              name: safercloud-secrets
+              name: prod-secrets
               key: REALTIME_SECRET_KEY_BASE
         livenessProbe:
           tcpSocket:
@@ -368,7 +368,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: supabase-realtime
-  namespace: safercloud
+  namespace: c-bunty-fqibrd-default
   labels:
     app: supabase-realtime
 spec:
@@ -387,7 +387,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: supabase-studio
-  namespace: safercloud
+  namespace: c-bunty-fqibrd-default
   labels:
     app: supabase-studio
     tier: database
@@ -414,17 +414,17 @@ spec:
         - name: SUPABASE_URL
           valueFrom:
             secretKeyRef:
-              name: safercloud-secrets
+              name: prod-secrets
               key: SUPABASE_URL
         - name: SUPABASE_ANON_KEY
           valueFrom:
             secretKeyRef:
-              name: safercloud-secrets
+              name: prod-secrets
               key: SUPABASE_ANON_KEY
         - name: SUPABASE_SERVICE_KEY
           valueFrom:
             secretKeyRef:
-              name: safercloud-secrets
+              name: prod-secrets
               key: SUPABASE_SERVICE_ROLE_KEY
         - name: STUDIO_DEFAULT_ORGANIZATION
           value: "SaferCloud"
@@ -448,7 +448,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: supabase-studio
-  namespace: safercloud
+  namespace: c-bunty-fqibrd-default
   labels:
     app: supabase-studio
 spec:

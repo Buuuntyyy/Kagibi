@@ -24,6 +24,8 @@ spec:
         app: frontend
         tier: presentation
     spec:
+      imagePullSecrets:
+        - name: ghcr-token  # Ensure this secret exists in the safercloud namespace
       affinity:
         # Ensure pods are distributed across different nodes
         podAntiAffinity:
@@ -39,7 +41,7 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
       - name: frontend
-        image: safercloud/frontend:latest  # Replace with your actual image
+        image: ghcr.io/buuuntyyy/splatch:frontend-v1.4.0  # Replace with your actual image
         imagePullPolicy: Always
         ports:
         - containerPort: 80
@@ -48,8 +50,18 @@ spec:
         - name: VITE_API_URL
           valueFrom:
             configMapKeyRef:
-              name: safercloud-config
+              name: prod-config
               key: VITE_API_URL
+        - name: VITE_SUPABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: prod-config
+              key: VITE_SUPABASE_URL
+        - name: SUPABASE_ANON_KEY
+          valueFrom:
+            secretKeyRef:
+              name: prod-secrets
+              key: SUPABASE_ANON_KEY
         resources:
           requests:
             memory: "256Mi"
