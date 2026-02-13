@@ -6,6 +6,9 @@ backend/uploads/*
 backend/.env
 frontend/.env
 
+# Kubernetes secrets with real values
+k8s/security/secrets.yaml
+
 frontend/utils/tests.security.js
 
 docker/dump.sql
