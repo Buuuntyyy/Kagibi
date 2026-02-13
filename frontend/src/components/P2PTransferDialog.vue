@@ -40,6 +40,20 @@
          </div>
          <p class='filename-display' :title='p2pStore.activeTransfer.fileName'>{{ p2pStore.activeTransfer.fileName }}</p>
          
+         <!-- Connection Info -->
+         <div v-if='p2pStore.activeTransfer.connectionInfo' class='connection-info'>
+             <div class='info-row'>
+                 <span class='info-label'>Etat:</span>
+                 <span class='info-value'>{{ p2pStore.activeTransfer.connectionInfo.stage }}</span>
+             </div>
+             <div v-if='p2pStore.activeTransfer.connectionInfo.connectionType' class='info-row'>
+                 <span class='info-label'>Type:</span>
+                 <span class='info-value' :class='{ "turn-relay": p2pStore.activeTransfer.connectionInfo.usingTurn }'>
+                     {{ p2pStore.activeTransfer.connectionInfo.connectionType }}
+                 </span>
+             </div>
+         </div>
+         
          <div class='actions-grid single' v-if='isDone'>
             <button @click='close' class='btn btn-primary'>Fermer</button>
          </div>
@@ -259,9 +273,38 @@ const close = () => {
 .filename-display {
     font-size: 0.85rem;
     color: var(--main-text-color, #333);
-    margin: 0 0 16px 0;
+    margin: 0 0 12px 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.connection-info {
+    background: var(--hover-background-color, #f4f6f8);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 12px;
+    font-size: 0.8rem;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+}
+
+.info-label {
+    color: var(--secondary-text-color, #888);
+    font-weight: 500;
+}
+
+.info-value {
+    color: var(--main-text-color, #333);
+    font-weight: 600;
+}
+
+.info-value.turn-relay {
+    color: var(--warning-color, #f39c12);
 }
 </style>
