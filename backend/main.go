@@ -223,6 +223,11 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, j
 	// System
 	router.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	router.GET("/api/v1/ping", func(c *gin.Context) { c.JSON(200, gin.H{"message": "pong", "version": "3.0"}) })
+
+	// Protected heartbeat endpoint to maintain session during P2P transfers
+	protected.GET("/heartbeat", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "alive", "timestamp": time.Now().Unix()})
+	})
 }
 
 func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Client) {
