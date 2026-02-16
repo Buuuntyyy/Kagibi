@@ -2,7 +2,7 @@
   <div v-if="isOpen" class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>Partager "{{ item?.Name || item?.name }}"</h3>
+        <h3>{{ t('share.title', { name: item?.Name || item?.name }) }}</h3>
         <button @click="close" class="btn-close">×</button>
       </div>
 
@@ -10,12 +10,12 @@
 
         <!-- === FRIENDS SECTION === -->
         <div class="friends-section">
-            <h4 class="section-title">Partage avec des amis (Sécurisé)</h4>
+            <h4 class="section-title">{{ t('share.withFriends') }}</h4>
             
             <div v-if="friends.length === 0" class="empty-friends">
-                Vous n'avez pas encore d'amis. 
+                {{ t('friends.noFriends') }}
                 <br>
-                <router-link to="/friends">Ajouter des amis</router-link>
+                <router-link to="/friends">{{ t('friends.addFriend') }}</router-link>
             </div>
 
             <div v-else class="friends-list">
@@ -30,8 +30,8 @@
                        </div>
                     </div>
 
-                    <div v-if="!friend.public_key" class="key-missing" title="Clé manquante">
-                       ⚠️ Pas de clé
+                    <div v-if="!friend.public_key" class="key-missing" :title="t('share.keyMissing')">
+                       ⚠️ {{ t('share.noKey') }}
                     </div>
 
                     <button v-else 
@@ -44,8 +44,8 @@
                             : 'btn-outline'
                         ]">
                         <span v-if="sharing[friend.id]">...</span>
-                        <span v-else-if="isFriendShared(friend.id)">Arrêter</span>
-                        <span v-else>Envoyer</span>
+                        <span v-else-if="isFriendShared(friend.id)">{{ t('share.stop') }}</span>
+                        <span v-else>{{ t('share.send') }}</span>
                     </button>
                  </div>
             </div>
@@ -112,6 +112,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useFileStore } from '../stores/files';
 import { useFriendStore } from '../stores/friends';
 import { useAuthStore } from '../stores/auth';
@@ -119,6 +120,8 @@ import { useUIStore } from '../stores/ui';
 import api from '../api';
 import { decryptKeyWithPrivateKey, importKeyFromPEM, encryptKeyWithPublicKey, generateMasterKey } from '../utils/crypto';
 import sodium from 'libsodium-wrappers-sumo';
+
+const { t } = useI18n();
 
 const props = defineProps({
   isOpen: Boolean,

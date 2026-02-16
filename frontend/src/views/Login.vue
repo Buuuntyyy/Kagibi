@@ -14,7 +14,7 @@
           <h1>SaferCloud</h1>
         </div>
 
-        <h2 class="auth-tagline"> Contrôlez vos données à n'importe quel moment, où que vous soyez. </h2>
+        <h2 class="auth-tagline"> {{ t('auth.tagline') }} </h2>
 
         <div class="features-grid">
           <div class="feature-item">
@@ -25,8 +25,8 @@
               </svg>
             </div>
             <div class="feature-text">
-              <h3>Chiffrement E2E</h3>
-              <p>Vos fichiers sont chiffrés avant même de quitter votre appareil.</p>
+              <h3>{{ t('auth.e2eEncryption') }}</h3>
+              <p>{{ t('auth.e2eDesc') }}</p>
             </div>
           </div>
           <div class="feature-item">
@@ -37,8 +37,8 @@
               </svg>
             </div>
             <div class="feature-text">
-              <h3>Zero-Knowledge</h3>
-              <p>Nous ne connaissons que votre adresse email, votre pseudo et votre avatar. <strong>Aucune pub, aucun cookie, aucun suivi.</strong></p>
+              <h3>{{ t('auth.zeroKnowledge') }}</h3>
+              <p>{{ t('auth.zeroKnowledgeDesc') }}</p>
             </div>
           </div>
           <div class="feature-item">
@@ -49,8 +49,8 @@
               </svg>
             </div>
             <div class="feature-text">
-              <h3>Partages Sécurisés, Directs et Confidentiels</h3>
-              <p>Échangez vos fichiers en P2P chiffré, sans serveur intermédiaire, avec contrôle d'accès et expiration.</p>
+              <h3>{{ t('auth.secureSharing') }}</h3>
+              <p>{{ t('auth.secureSharingDesc') }}</p>
             </div>
           </div>
         </div>
@@ -61,18 +61,18 @@
         <Transition name="fade-slide" mode="out-in">
           <div v-if="mode === 'login'" key="login" class="auth-form-container">
             <div class="form-header">
-              <h2>Connexion</h2>
-              <p>Heureux de vous revoir</p>
+              <h2>{{ t('auth.login') }}</h2>
+              <p>{{ t('auth.welcomeBack') }}</p>
             </div>
 
             <LoginComponent />
 
             <div class="auth-separator">
-              <span>Sécurité</span>
+              <span>{{ t('auth.securityTitle') }}</span>
             </div>
 
             <div class="security-note">
-              <p>Nous recommandons vivement l'usage d'un <strong>gestionnaire de mots de passe</strong> :</p>
+              <p>{{ t('auth.passwordManagerReco') }}</p>
               <ul class="pwd-manager-list">
                 <li><a href="https://keepass.info/help/base/first_steps.html" target="_blank" rel="noopener noreferrer">Tutoriel KeePass</a> (Gratuit & Local)</li>
                 <li><a href="https://bitwarden.com/help/" target="_blank" rel="noopener noreferrer">Tutoriel Bitwarden</a> (Cloud & Open Source)</li>
@@ -81,19 +81,19 @@
 
             <div class="auth-footer">
               <p>
-                Pas encore de compte ?
-                <a href="#" @click.prevent="mode = 'register'" class="action-link">Créer un compte gratuit</a>
+                {{ t('auth.noAccount') }}
+                <a href="#" @click.prevent="mode = 'register'" class="action-link">{{ t('auth.createAccount') }}</a>
               </p>
               <p>
-                <a href="#" @click.prevent="mode = 'recovery'" class="dimmed-link">Mot de passe oublié ?</a>
+                <a href="#" @click.prevent="mode = 'recovery'" class="dimmed-link">{{ t('auth.forgotPassword') }}</a>
               </p>
             </div>
           </div>
 
           <div v-else-if="mode === 'register'" key="register" class="auth-form-container">
             <div class="form-header">
-              <h2>Inscription</h2>
-              <p>Commencez à sécuriser vos fichiers aujourd'hui.</p>
+              <h2>{{ t('auth.register') }}</h2>
+              <p>{{ t('auth.startSecuring') }}</p>
             </div>
 
             <RegisterComponent />
@@ -106,21 +106,21 @@
                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
                 </svg>
               </div>
-              <p>Votre mot de passe est primordial. Il permet de déchiffrer toutes vos données. Veillez à le conserver en lieu sûr.</p>
+              <p>{{ t('auth.passwordWarning') }}</p>
             </div>
 
             <div class="auth-footer">
               <p>
-                Déjà un compte ?
-                <a href="#" @click.prevent="mode = 'login'" class="action-link">Se connecter</a>
+                {{ t('auth.hasAccount') }}
+                <a href="#" @click.prevent="mode = 'login'" class="action-link">{{ t('auth.signIn') }}</a>
               </p>
             </div>
           </div>
 
           <div v-else-if="mode === 'recovery'" key="recovery" class="auth-form-container">
             <div class="form-header">
-              <h2>Récupération</h2>
-              <p>Utilisez votre code de secours.</p>
+              <h2>{{ t('auth.recovery') }}</h2>
+              <p>{{ t('auth.useRecoveryCode') }}</p>
             </div>
             <RecoveryComponent @cancel="mode = 'login'" @success="mode = 'login'" />
           </div>
@@ -132,11 +132,14 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import LoginComponent from '../components/auth/loginComponent.vue'
 import RegisterComponent from '../components/auth/registerComponent.vue'
 import RecoveryComponent from '../components/auth/recoveryComponent.vue'
 import { useFileStore } from '../stores/files'
 import { useAuthStore } from '../stores/auth'
+
+const { t } = useI18n()
 
 const mode = ref('login') // 'login', 'register', 'recovery'
 const fileStore = useFileStore()

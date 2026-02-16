@@ -10,7 +10,8 @@
     "logout": "Logout",
     "myAccount": "My Account",
     "darkMode": "Dark mode",
-    "lightMode": "Light mode"
+    "lightMode": "Light mode",
+    "dashboard": "Dashboard"
   },
   "file": {
     "upload": "Upload file",
@@ -40,7 +41,24 @@
     "password": "Password",
     "confirmPassword": "Confirm password",
     "forgotPassword": "Forgot password?",
-    "rememberMe": "Remember me"
+    "rememberMe": "Remember me",
+    "tagline": "Control your data anytime, anywhere.",
+    "welcomeBack": "Welcome back",
+    "startSecuring": "Start securing your files today.",
+    "noAccount": "No account yet?",
+    "createAccount": "Create a free account",
+    "hasAccount": "Already have an account?",
+    "recovery": "Recovery",
+    "useRecoveryCode": "Use your backup code.",
+    "passwordWarning": "Your password is crucial. It allows you to decrypt all your data. Keep it safe.",
+    "securityTitle": "Security",
+    "passwordManagerReco": "We highly recommend using a password manager:",
+    "e2eEncryption": "E2E Encryption",
+    "e2eDesc": "Your files are encrypted before they even leave your device.",
+    "zeroKnowledge": "Zero-Knowledge",
+    "zeroKnowledgeDesc": "We only know your email address, username and avatar. No ads, no cookies, no tracking.",
+    "secureSharing": "Secure, Direct and Confidential Sharing",
+    "secureSharingDesc": "Exchange your files in encrypted P2P, without intermediate server, with access control and expiration."
   },
   "common": {
     "cancel": "Cancel",
@@ -93,7 +111,13 @@
     "secureShare": "Secure share",
     "friends": "Friends",
     "sendToFriend": "Send",
-    "stopSharingWith": "Stop sharing with"
+    "stopSharingWith": "Stop sharing with",
+    "title": "Share \"{name}\"",
+    "withFriends": "Share with friends (Secure)",
+    "keyMissing": "Key missing",
+    "noKey": "No key",
+    "send": "Send",
+    "stop": "Stop"
   },
   "mfa": {
     "enable": "Enable two-factor authentication",
@@ -171,6 +195,31 @@
     "recentSuggestions": "Suggestions",
     "sharedItems": "Files shared with me"
   },
+  "account": {
+    "title": "My Account",
+    "subtitle": "Manage your personal information and preferences.",
+    "currentPlan": "Your current plan",
+    "upgrade": "Upgrade",
+    "loading": "Loading profile...",
+    "memberSince": "Member since",
+    "profile": "Profile",
+    "username": "Username",
+    "updating": "Updating...",
+    "modify": "Modify",
+    "security": "Security",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmNewPassword": "Confirm new password",
+    "updatePassword": "Update password",
+    "showHide": "Show/Hide",
+    "preferences": "Preferences",
+    "language": "Language",
+    "theme": "Theme",
+    "notifications": "Notifications",
+    "dangerZone": "Danger zone",
+    "deleteAccount": "Delete my account",
+    "deleteAccountDesc": "This action is irreversible. All your data will be permanently deleted."
+  },
   "friends": {
     "addFriend": "Add friend",
     "friendCode": "Friend code",
@@ -178,6 +227,15 @@
     "pending": "Pending",
     "accepted": "Accepted",
     "removeFriend": "Remove friend",
-    "sendRequest": "Send request"
+    "sendRequest": "Send request",
+    "myCode": "My friend code",
+    "enterCode": "Enter friend code (ex: A1B2-C3D4)",
+    "noFriends": "You don't have any friends yet",
+    "addFirstFriend": "Add friends to share files more easily.",
+    "online": "Online",
+    "offline": "Offline",
+    "copyCode": "Copy",
+    "myFriends": "My Friends",
+    "add": "Add"
   }
 }

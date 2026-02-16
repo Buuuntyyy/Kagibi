@@ -10,7 +10,8 @@
     "logout": "Se déconnecter",
     "myAccount": "Mon Compte",
     "darkMode": "Mode sombre",
-    "lightMode": "Mode clair"
+    "lightMode": "Mode clair",
+    "dashboard": "Tableau de bord"
   },
   "file": {
     "upload": "Ajouter un fichier",
@@ -40,7 +41,24 @@
     "password": "Mot de passe",
     "confirmPassword": "Confirmer le mot de passe",
     "forgotPassword": "Mot de passe oublié ?",
-    "rememberMe": "Se souvenir de moi"
+    "rememberMe": "Se souvenir de moi",
+    "tagline": "Contrôlez vos données à n'importe quel moment, où que vous soyez.",
+    "welcomeBack": "Heureux de vous revoir",
+    "startSecuring": "Commencez à sécuriser vos fichiers aujourd'hui.",
+    "noAccount": "Pas encore de compte ?",
+    "createAccount": "Créer un compte gratuit",
+    "hasAccount": "Déjà un compte ?",
+    "recovery": "Récupération",
+    "useRecoveryCode": "Utilisez votre code de secours.",
+    "passwordWarning": "Votre mot de passe est primordial. Il permet de déchiffrer toutes vos données. Veillez à le conserver en lieu sûr.",
+    "securityTitle": "Sécurité",
+    "passwordManagerReco": "Nous recommandons vivement l'usage d'un gestionnaire de mots de passe :",
+    "e2eEncryption": "Chiffrement E2E",
+    "e2eDesc": "Vos fichiers sont chiffrés avant même de quitter votre appareil.",
+    "zeroKnowledge": "Zero-Knowledge",
+    "zeroKnowledgeDesc": "Nous ne connaissons que votre adresse email, votre pseudo et votre avatar. Aucune pub, aucun cookie, aucun suivi.",
+    "secureSharing": "Partages Sécurisés, Directs et Confidentiels",
+    "secureSharingDesc": "Échangez vos fichiers en P2P chiffré, sans serveur intermédiaire, avec contrôle d'accès et expiration."
   },
   "common": {
     "cancel": "Annuler",
@@ -93,7 +111,13 @@
     "secureShare": "Partage sécurisé",
     "friends": "Amis",
     "sendToFriend": "Envoyer",
-    "stopSharingWith": "Arrêter le partage avec"
+    "stopSharingWith": "Arrêter le partage avec",
+    "title": "Partager \"{name}\"",
+    "withFriends": "Partage avec des amis (Sécurisé)",
+    "keyMissing": "Clé manquante",
+    "noKey": "Pas de clé",
+    "send": "Envoyer",
+    "stop": "Arrêter"
   },
   "mfa": {
     "enable": "Activer l'authentification à deux facteurs",
@@ -171,6 +195,31 @@
     "recentSuggestions": "Suggestions",
     "sharedItems": "Fichiers partagés avec moi"
   },
+  "account": {
+    "title": "Mon Compte",
+    "subtitle": "Gérez vos informations personnelles et vos préférences.",
+    "currentPlan": "Votre plan actuel",
+    "upgrade": "Mettre à niveau",
+    "loading": "Chargement du profil...",
+    "memberSince": "Membre depuis le",
+    "profile": "Profil",
+    "username": "Nom d'utilisateur",
+    "updating": "Mise à jour...",
+    "modify": "Modifier",
+    "security": "Sécurité",
+    "currentPassword": "Mot de passe actuel",
+    "newPassword": "Nouveau mot de passe",
+    "confirmNewPassword": "Confirmer le nouveau mot de passe",
+    "updatePassword": "Mettre à jour le mot de passe",
+    "showHide": "Afficher/Masquer",
+    "preferences": "Préférences",
+    "language": "Langue",
+    "theme": "Thème",
+    "notifications": "Notifications",
+    "dangerZone": "Zone dangereuse",
+    "deleteAccount": "Supprimer mon compte",
+    "deleteAccountDesc": "Cette action est irréversible. Toutes vos données seront définitivement supprimées."
+  },
   "friends": {
     "addFriend": "Ajouter un ami",
     "friendCode": "Code ami",
@@ -178,6 +227,15 @@
     "pending": "En attente",
     "accepted": "Accepté",
     "removeFriend": "Supprimer l'ami",
-    "sendRequest": "Envoyer une demande"
+    "sendRequest": "Envoyer une demande",
+    "myCode": "Mon code ami",
+    "enterCode": "Entrez le code ami (ex: A1B2-C3D4)",
+    "noFriends": "Vous n'avez pas encore d'amis",
+    "addFirstFriend": "Ajoutez des amis pour partager des fichiers plus facilement.",
+    "online": " En ligne",
+    "offline": "Hors ligne",
+    "copyCode": "Copier",
+    "myFriends": "Mes Amis",
+    "add": "Ajouter"
   }
 }
