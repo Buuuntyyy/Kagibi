@@ -375,6 +375,19 @@ const shareWithFriend = async (friend) => {
 
              const friendPublicKey = await importKeyFromPEM(friend.public_key, 'spki');
              encryptedKeyForFriend = await encryptKeyWithPublicKey(fileKeyRawBuffer, friendPublicKey);
+             
+             // Send share request for file
+             console.log("Sending file share request...");
+             await api.post('/shares/direct', {
+                resource_id: props.item.ID || props.item.id,
+                resource_type: resourceType,
+                friend_id: friend.id,
+                encrypted_key: encryptedKeyForFriend,
+                permission: 'read',
+             });
+             console.log("File share request successful.");
+             sharedStatus.value[friend.id] = true;
+             
         } else if (resourceType === 'folder') {
             // --- FOLDER SHARING LOGIC ---
             if (!authStore.masterKey) {
@@ -573,17 +586,6 @@ const shareWithFriend = async (friend) => {
             });
             console.log("Share request successful.");
 
-            sharedStatus.value[friend.id] = true;
-
-        } else {
-             // File Share
-             await api.post('/shares/direct', {
-                resource_id: props.item.ID || props.item.id,
-                resource_type: resourceType,
-                friend_id: friend.id,
-                encrypted_key: encryptedKeyForFriend,
-                permission: 'read',
-            });
             sharedStatus.value[friend.id] = true;
         }
 
