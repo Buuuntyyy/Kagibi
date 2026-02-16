@@ -155,19 +155,29 @@ export function useMFA() {
 
       if (enrollError) throw enrollError
 
-      // Store enrollment data - use URI not qr_code
-      qrCode.value = data.totp.uri  // This is the otpauth:// URI
+      // Get user email for TOTP account name
+      const { data: { user } } = await supabase.auth.getUser()
+      const userEmail = user?.email || 'user@safercloud.app'
+
+      // Reconstruct TOTP URI with custom issuer "SaferCloud"
+      // Format: otpauth://totp/ISSUER:ACCOUNT?secret=SECRET&issuer=ISSUER
+      const issuer = 'SaferCloud'
+      const customUri = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(userEmail)}?secret=${data.totp.secret}&issuer=${encodeURIComponent(issuer)}`
+
+      // Store enrollment data - use custom URI with SaferCloud issuer
+      qrCode.value = customUri
       secret.value = data.totp.secret
       factorId.value = data.id
 
       console.log('[useMFA] MFA enrollment started')
       console.log('[useMFA] Factor ID:', data.id)
-      console.log('[useMFA] TOTP URI:', data.totp.uri)
+      console.log('[useMFA] Original TOTP URI:', data.totp.uri)
+      console.log('[useMFA] Custom TOTP URI:', customUri)
       console.log('[useMFA] Secret:', data.totp.secret)
       console.log('[useMFA] qrCode.value set to:', qrCode.value)
 
       return {
-        qrCode: data.totp.uri,  // Return the URI to encode as QR
+        qrCode: customUri,  // Return the custom URI with SaferCloud issuer
         secret: data.totp.secret,
         factorId: data.id
       }
