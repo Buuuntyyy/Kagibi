@@ -185,20 +185,35 @@ const openItem = (item, type) => {
     }
   } else {
     // Ouverture/Aperçu du fichier
-    fileStore.downloadFile(item.ID, item.Name, item.MimeType, true);
+    const fileId = item.ID || item.id;
+    const fileName = item.Name || item.name;
+    const mimeType = item.MimeType || item.mime_type || 'application/octet-stream';
+    const encryptedKey = item.EncryptedKey || item.encrypted_key;
+    
+    fileStore.downloadFile(fileId, fileName, mimeType, true, encryptedKey);
   }
   showDropdown.value = false;
   searchQuery.value = '';
 };
 
 const previewFile = (file) => {
-  fileStore.downloadFile(file.ID, file.Name, file.MimeType, true);
+  const fileId = file.ID || file.id;
+  const fileName = file.Name || file.name;
+  const mimeType = file.MimeType || file.mime_type || 'application/octet-stream';
+  const encryptedKey = file.EncryptedKey || file.encrypted_key;
+  
+  fileStore.downloadFile(fileId, fileName, mimeType, true, encryptedKey);
   showDropdown.value = false;
   searchQuery.value = '';
 };
 
 const downloadFile = (file) => {
-  fileStore.downloadFile(file.ID, file.Name, file.MimeType, false);
+  const fileId = file.ID || file.id;
+  const fileName = file.Name || file.name;
+  const mimeType = file.MimeType || file.mime_type || 'application/octet-stream';
+  const encryptedKey = file.EncryptedKey || file.encrypted_key;
+  
+  fileStore.downloadFile(fileId, fileName, mimeType, false, encryptedKey);
   showDropdown.value = false;
   searchQuery.value = '';
 };

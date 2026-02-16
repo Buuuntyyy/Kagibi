@@ -5,19 +5,44 @@
     </div>
     
     <div class="home-sections">
-      <RecentlyOpened />
+      <RecentlyOpened @open-share-dialog="handleOpenShareDialog" />
       <FileShared />
     </div>
+    
+    <!-- Share Dialog -->
+    <ManageShareDialog
+      :isOpen="shareDialog.isOpen"
+      :item="shareDialog.item"
+      @close="closeShareDialog"
+    />
   </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import RecentlyOpened from '../components/file/RecentlyOpened.vue'
 import FileShared from '../components/file/FileShared.vue'
+import ManageShareDialog from '../components/ManageShareDialog.vue'
 import { useAuthStore } from '../stores/auth'
 
 const authStore = useAuthStore()
+
+const shareDialog = ref({
+  isOpen: false,
+  item: null
+})
+
+const handleOpenShareDialog = (item) => {
+  shareDialog.value = {
+    isOpen: true,
+    item: item
+  }
+}
+
+const closeShareDialog = () => {
+  shareDialog.value.isOpen = false
+  shareDialog.value.item = null
+}
 
 onMounted(async () => {
   // Refresh user info (storage usage, etc.) and ensure RSA keys are loaded
