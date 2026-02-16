@@ -67,6 +67,26 @@
             <span class="item-name">{{ file.Name }}</span>
             <span class="item-path">{{ file.Path }}</span>
           </div>
+          <div class="item-actions">
+            <button 
+              class="action-btn preview-btn" 
+              @click.stop="previewFile(file)"
+              title="Visualiser"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+              </svg>
+            </button>
+            <button 
+              class="action-btn download-btn" 
+              @click.stop="downloadFile(file)"
+              title="Télécharger"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -167,6 +187,18 @@ const openItem = (item, type) => {
     // Ouverture/Aperçu du fichier
     fileStore.downloadFile(item.ID, item.Name, item.MimeType, true);
   }
+  showDropdown.value = false;
+  searchQuery.value = '';
+};
+
+const previewFile = (file) => {
+  fileStore.downloadFile(file.ID, file.Name, file.MimeType, true);
+  showDropdown.value = false;
+  searchQuery.value = '';
+};
+
+const downloadFile = (file) => {
+  fileStore.downloadFile(file.ID, file.Name, file.MimeType, false);
   showDropdown.value = false;
   searchQuery.value = '';
 };
@@ -286,10 +318,16 @@ onUnmounted(() => {
   padding: 8px 16px;
   cursor: pointer;
   transition: background-color 0.1s;
+  position: relative;
 }
 
 .result-item:hover, .result-item.active {
   background-color: var(--hover-background-color);
+}
+
+.result-item:hover .item-actions {
+  opacity: 1;
+  visibility: visible;
 }
 
 .item-icon {
@@ -302,6 +340,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex: 1;
 }
 
 .item-name {
@@ -318,5 +357,47 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Action Buttons */
+.item-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--secondary-text-color);
+  transition: background-color 0.2s, color 0.2s;
+  padding: 0;
+}
+
+.action-btn:hover {
+  background-color: var(--hover-background-color);
+  color: var(--main-text-color);
+}
+
+.preview-btn:hover {
+  color: #1a73e8;
+}
+
+.download-btn:hover {
+  color: #34a853;
+}
+
+.action-btn:active {
+  transform: scale(0.95);
 }
 </style>
