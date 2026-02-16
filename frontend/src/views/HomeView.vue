@@ -1,7 +1,7 @@
 <template>
   <div class="home-view-container">
     <div class="welcome-banner">
-      <h2>Bienvenue sur votre Cloud Sécurisé</h2>
+      <h2>{{ t('home.welcome') }}</h2>
     </div>
     
     <div class="home-sections">
@@ -20,10 +20,13 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import RecentlyOpened from '../components/file/RecentlyOpened.vue'
 import FileShared from '../components/file/FileShared.vue'
 import ManageShareDialog from '../components/ManageShareDialog.vue'
 import { useAuthStore } from '../stores/auth'
+
+const { t } = useI18n()
 
 const authStore = useAuthStore()
 
