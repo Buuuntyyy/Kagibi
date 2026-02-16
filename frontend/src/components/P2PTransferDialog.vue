@@ -4,7 +4,7 @@
       <div class='card-header'>
         <h3 class='header-title'>
           <svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'></circle><line x1='2' y1='12' x2='22' y2='12'></line><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'></path></svg>
-          Transfert P2P
+          {{ t('p2p.title') }}
         </h3>
         <button v-if='canClose' @click='close' class='close-icon'>&times;</button>
       </div>
@@ -12,7 +12,7 @@
       <!-- INCOMING REQUEST -->
       <div v-if='p2pStore.incomingOffer' class='notification-body'>
          <p class='request-text'>
-            <strong>{{ p2pStore.incomingOffer.senderId.substring(0,8) }}...</strong> souhaite vous envoyer un fichier.
+            {{ t('p2p.incomingRequest', { sender: p2pStore.incomingOffer.senderId.substring(0,8) }) }}
          </p>
          <div class='file-preview'>
             <div class='file-icon-box'>
@@ -24,8 +24,8 @@
             </div>
          </div>
          <div class='actions-grid'>
-            <button @click='reject' class='btn btn-secondary'>Refuser</button>
-            <button @click='accept' class='btn btn-primary'>Recevoir</button>
+            <button @click='reject' class='btn btn-secondary'>{{ t('common.refuse') }}</button>
+            <button @click='accept' class='btn btn-primary'>{{ t('common.accept') }}</button>
          </div>
       </div>
 
@@ -43,11 +43,11 @@
          <!-- Connection Info -->
          <div v-if='p2pStore.activeTransfer.connectionInfo' class='connection-info'>
              <div class='info-row'>
-                 <span class='info-label'>Etat:</span>
+                 <span class='info-label'>{{ t('common.state') }}:</span>
                  <span class='info-value'>{{ p2pStore.activeTransfer.connectionInfo.stage }}</span>
              </div>
              <div v-if='p2pStore.activeTransfer.connectionInfo.connectionType' class='info-row'>
-                 <span class='info-label'>Type:</span>
+                 <span class='info-label'>{{ t('common.type') }}:</span>
                  <span class='info-value' :class='{ "turn-relay": p2pStore.activeTransfer.connectionInfo.usingTurn }'>
                      {{ p2pStore.activeTransfer.connectionInfo.connectionType }}
                  </span>
@@ -55,10 +55,10 @@
          </div>
          
          <div class='actions-grid single' v-if='isDone'>
-            <button @click='close' class='btn btn-primary'>Fermer</button>
+            <button @click='close' class='btn btn-primary'>{{ t('common.close') }}</button>
          </div>
          <div class='actions-grid single' v-else>
-             <button @click='cancel' class='btn btn-danger-text'>Annuler</button>
+             <button @click='cancel' class='btn btn-danger-text'>{{ t('common.cancel') }}</button>
          </div>
       </div>
     </div>
@@ -67,7 +67,10 @@
 
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useP2PStore } from '../stores/p2p';
+
+const { t } = useI18n();
 
 const p2pStore = useP2PStore();
 

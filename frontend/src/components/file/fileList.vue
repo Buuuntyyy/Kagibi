@@ -9,25 +9,25 @@
     <div v-if="isDragging" class="drag-overlay">
       <div class="drag-content">
         <span class="drag-icon">☁️</span>
-        <span class="drag-text">Déposez vos fichiers ici</span>
-        <span class="drag-subtext">Plusieurs fichiers supportés</span>
+        <span class="drag-text">{{ t('file.dragDrop') }}</span>
+        <span class="drag-subtext">{{ t('file.multipleFiles') }}</span>
       </div>
     </div>
 
     <div class="toolbar" v-if="preferenceStore.showToolBar">
       <div class="toolbar-left">
-        <button @click="triggerFileInput" class="btn-add-file">Ajouter un fichier</button>
-        <button @click="createNewFolder" class="btn-add-file">Créer un dossier</button>
+        <button @click="triggerFileInput" class="btn-add-file">{{ t('file.addFile') }}</button>
+        <button @click="createNewFolder" class="btn-add-file">{{ t('file.createFolder') }}</button>
       </div>
       <div class="toolbar-right">
         <button @click="renameSelectedItem" :disabled="selectedItems.length !== 1" class="btn-rename">
-          Renommer
+          {{ t('file.rename') }}
         </button>
         <button @click="downloadSelectedFiles" :disabled="selectedItems.length === 0" class="btn-download">
-          Télécharger
+          {{ t('file.download') }}
         </button>
         <button @click="deleteSelectedItems" :disabled="selectedItems.length === 0" class="btn-delete">
-          Supprimer
+          {{ t('common.delete') }}
         </button>
       </div>
     </div>
@@ -54,20 +54,20 @@
         <!-- Selection Actions -->
         <div v-if="selectedItems.length > 0" class="selection-action-bar">
           <div class="selection-actions">
-            <button class="action-btn download-action" @click.stop="downloadSelectedFiles" title="Télécharger">
+            <button class="action-btn download-action" @click.stop="downloadSelectedFiles" :title="t('file.download')">
             <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
-            <span>Télécharger</span>
+            <span>{{ t('file.download') }}</span>
           </button>
-          <button class="action-btn share-action" @click.stop="openShareForSelected" title="Partager" :disabled="selectedItems.length !== 1">
+          <button class="action-btn share-action" @click.stop="openShareForSelected" :title="t('file.share')" :disabled="selectedItems.length !== 1">
             <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
-            <span>Partager</span>
+            <span>{{ t('file.share') }}</span>
           </button>
-          <button class="action-btn delete-action" @click.stop="deleteSelectedItems" title="Supprimer">
+          <button class="action-btn delete-action" @click.stop="deleteSelectedItems" :title="t('common.delete')">
             <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/></svg>
-            <span>Supprimer</span>
+            <span>{{ t('common.delete') }}</span>
           </button>
           </div>
-          <span class="selection-count">{{ selectedItems.length }} élément{{ selectedItems.length > 1 ? 's' : '' }} sélectionné{{ selectedItems.length > 1 ? 's' : '' }}</span>
+          <span class="selection-count">{{ t('file.selectedItems', { count: selectedItems.length }) }}</span>
         </div>
 
         <!-- Security Tip Bar (shown when no items selected) -->

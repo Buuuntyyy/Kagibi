@@ -21,7 +21,7 @@ const currentLanguage = ref(localStorage.getItem('language') || 'fr')
 
 const languages = [
   { code: 'fr', name: 'Français', flag: '🇫🇷' },
-  { code: 'en', name: 'English', flag: '🇺🇸' }
+  { code: 'en', name: 'English', flag: '�🇧' }
 ]
 
 const switchLanguage = (lang) => {

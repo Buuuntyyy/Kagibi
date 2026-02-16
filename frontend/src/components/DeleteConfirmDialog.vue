@@ -2,7 +2,7 @@
   <div v-if="uiStore.deleteDialog.visible" class="modal-overlay" @click.self="cancel">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>{{ uiStore.deleteDialog.title || (itemsCount > 1 ? 'Supprimer les éléments ?' : 'Supprimer l\'élément ?') }}</h3>
+        <h3>{{ uiStore.deleteDialog.title || (itemsCount > 1 ? t('common.deleteItems') : t('common.deleteItem')) }}</h3>
         <button @click="cancel" class="btn-close">×</button>
       </div>
       
@@ -10,18 +10,18 @@
         <p v-if="uiStore.deleteDialog.message">{{ uiStore.deleteDialog.message }}</p>
         <template v-else>
           <p v-if="itemsCount === 1">
-            Êtes-vous sûr de vouloir supprimer <strong>"{{ uiStore.deleteDialog.itemName }}"</strong> ?
+            {{ t('messages.confirmDelete', { name: uiStore.deleteDialog.itemName }) }}
           </p>
           <p v-else>
-            Êtes-vous sûr de vouloir supprimer ces <strong>{{ itemsCount }} éléments</strong> ?
+            {{ t('messages.confirmDeleteMultiple', { count: itemsCount }) }}
           </p>
         </template>
-        <p class="sub-text">Cette action est irréversible.</p>
+        <p class="sub-text">{{ t('messages.irreversible') }}</p>
       </div>
 
       <div class="modal-footer">
-        <button @click="cancel" class="btn-secondary">Annuler</button>
-        <button @click="confirm" class="btn-delete">Supprimer</button>
+        <button @click="cancel" class="btn-secondary">{{ t('common.cancel') }}</button>
+        <button @click="confirm" class="btn-delete">{{ t('common.delete') }}</button>
       </div>
     </div>
   </div>
@@ -29,7 +29,10 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useUIStore } from '../stores/ui'
+
+const { t } = useI18n()
 
 const uiStore = useUIStore()
 
