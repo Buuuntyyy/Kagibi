@@ -6,17 +6,17 @@
             <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M19 12H5M12 19l-7-7 7-7"/>
             </svg>
-            Retour
+            {{ t('billing.backToAccount') }}
         </button>
-        <h1>Facturation</h1>
+        <h1>{{ t('billing.title') }}</h1>
       </div>
-      <p class="subtitle">Gérez votre abonnement et consultez votre historique de facturation.</p>
+      <p class="subtitle">{{ t('billing.subtitle') }}</p>
     </div>
 
     <!-- Loading State -->
     <div v-if="billingStore.loading" class="loading-state">
       <div class="spinner"></div>
-      <p>Chargement des informations...</p>
+      <p>{{ t('billing.loading') }}</p>
     </div>
 
     <div v-else class="content-grid">
@@ -24,8 +24,8 @@
       <!-- Plan Section -->
       <section class="settings-section plan-section">
         <div class="section-header">
-          <h3>Votre Abonnement</h3>
-          <span :class="['plan-badge', planBadgeClass]">{{ currentPlan?.name || 'Gratuit' }}</span>
+          <h3>{{ t('billing.currentPlan') }}</h3>
+          <span :class="['plan-badge', planBadgeClass]">{{ currentPlan?.name || t('billing.free') }}</span>
         </div>
         <div class="section-body">
             <div class="plan-details-grid">
@@ -36,7 +36,7 @@
                     </div>
                 </div>
                 <div class="plan-actions" v-if="currentPlan?.code === 'free'">
-                     <button class="btn-primary" @click="showUpgradeOptions">Mettre à niveau</button>
+                     <button class="btn-primary" @click="showUpgradeOptions">{{ t('billing.upgradePlan') }}</button>
                 </div>
             </div>
 
@@ -45,19 +45,19 @@
                     <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
-                    <span>5 Go de stockage</span>
+                    <span>{{ t('billing.storage') }} 5 Go</span>
                  </div>
                  <div class="feature-item" v-if="currentPlan?.code === 'pro'">
                     <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
-                    <span>100 Go de stockage</span>
+                    <span>{{ t('billing.storage') }} 100 Go</span>
                  </div>
                  <div class="feature-item">
                     <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
-                    <span>Chiffrement de bout en bout</span>
+                    <span>{{ t('billing.e2eEncryption') }}</span>
                  </div>
             </div>
         </div>
@@ -66,7 +66,7 @@
       <!-- Usage Section -->
       <section class="settings-section">
           <div class="section-header">
-              <h3>Consommation</h3>
+              <h3>{{ t('billing.usage') }}</h3>
               <span class="period-label" v-if="billingStore.currentUsage">
                 {{ formatPeriod(billingStore.currentUsage.from_datetime, billingStore.currentUsage.to_datetime) }}
               </span>
@@ -80,7 +80,7 @@
                           </svg>
                       </div>
                       <div class="stat-info">
-                          <span class="stat-label">Stockage</span>
+                          <span class="stat-label">{{ t('billing.storageUsed') }}</span>
                           <span class="stat-value">{{ billingStore.storageUsageGB.toFixed(2) }} <small>Go</small></span>
                       </div>
                   </div>
@@ -94,7 +94,7 @@
                           </svg>
                       </div>
                       <div class="stat-info">
-                          <span class="stat-label">Transfert P2P</span>
+                          <span class="stat-label">{{ t('billing.p2pTransfers') }}</span>
                           <span class="stat-value">{{ billingStore.p2pUsageMB.toFixed(0) }} <small>Mo</small></span>
                       </div>
                   </div>
@@ -113,11 +113,11 @@
                   </svg>
               </div>
               <div class="alert-content">
-                  <h4>Paiement en attente</h4>
-                  <p>Facture {{ billingStore.pendingInvoice.number }} : {{ formatPrice(billingStore.pendingInvoice.total_amount_cents, billingStore.pendingInvoice.currency) }}</p>
+                  <h4>{{ t('billing.pending') }}</h4>
+                  <p>{{ t('billing.invoiceNumber') }} {{ billingStore.pendingInvoice.number }} : {{ formatPrice(billingStore.pendingInvoice.total_amount_cents, billingStore.pendingInvoice.currency) }}</p>
               </div>
               <button class="btn-primary" @click="payPendingInvoice" :disabled="paymentLoading">
-                  {{ paymentLoading ? '...' : 'Payer' }}
+                  {{ paymentLoading ? '...' : t('billing.pay') }}
               </button>
           </div>
       </section>
@@ -125,20 +125,20 @@
       <!-- Invoices Section -->
       <section class="settings-section">
         <div class="section-header">
-            <h3>Historique</h3>
+            <h3>{{ t('billing.invoices') }}</h3>
         </div>
         <div class="section-body no-padding">
             <div v-if="billingStore.invoices.length === 0" class="empty-state">
-                <p>Aucune facture disponible.</p>
+                <p>{{ t('billing.noInvoices') }}</p>
             </div>
             <table v-else class="data-table">
                 <thead>
                     <tr>
-                        <th>Date</th>
-                        <th>Numéro</th>
-                        <th>Montant</th>
-                        <th>Statut</th>
-                        <th>Action</th>
+                        <th>{{ t('billing.period') }}</th>
+                        <th>{{ t('billing.invoiceNumber') }}</th>
+                        <th>{{ t('billing.amount') }}</th>
+                        <th>{{ t('billing.status') }}</th>
+                        <th>{{ t('billing.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -157,9 +157,9 @@
                                 class="btn-sm btn-outline"
                                 @click="payInvoice(invoice.lago_invoice_id)"
                               >
-                                Payer
+                                {{ t('billing.pay') }}
                               </button>
-                              <a v-if="invoice.invoice_pdf_url" :href="invoice.invoice_pdf_url" target="_blank" class="download-link" title="Télécharger">
+                              <a v-if="invoice.invoice_pdf_url" :href="invoice.invoice_pdf_url" target="_blank" class="download-link" :title="t('billing.download')">
                                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                       <polyline points="7 10 12 15 17 10"></polyline>
@@ -178,9 +178,11 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useBillingStore } from '../../stores/billing'
 import { useRouter } from 'vue-router'
 
+const { t } = useI18n()
 const router = useRouter()
 const billingStore = useBillingStore()
 const paymentLoading = ref(false)

@@ -6,27 +6,27 @@
         <svg class="plus-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/>
         </svg>
-        <span>Nouveau</span>
+        <span>{{ t('sidebar.new') }}</span>
       </button>
       <div v-if="showNewMenu" class="new-menu-dropdown" @click.stop>
         <div class="dropdown-item" @click="triggerUpload">
           <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" fill="currentColor"/>
           </svg>
-          <span>Fichier</span>
+          <span>{{ t('nav.uploadFile') }}</span>
         </div>
         <div class="dropdown-item" @click="triggerCreateFolder">
           <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="currentColor"/>
           </svg>
-          <span>Dossier</span>
+          <span>{{ t('nav.createFolder') }}</span>
         </div>
         <div class="dropdown-item" @click="triggerP2P">
            <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="22" y1="2" x2="11" y2="13"></line>
               <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
            </svg>
-           <span>Transfert P2P</span>
+           <span>{{ t('sidebar.p2pTransfer') }}</span>
         </div>
       </div>
     </div>
@@ -36,26 +36,26 @@
         <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" fill="currentColor"/>
         </svg>
-        <span>Accueil</span>
+        <span>{{ t('nav.dashboard') }}</span>
       </div>
       <div class="menu-item" :class="{ active: isActive('/dashboard/files') }" @click="navigateTo('/dashboard/files')">
         <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z" fill="currentColor"/>
         </svg>
-        <span>Mes fichiers</span>
+        <span>{{ t('nav.files') }}</span>
       </div>
       <div class="menu-item" :class="{ active: isActive('/dashboard/shares') }" @click="navigateTo('/dashboard/shares')">
         <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M15 8c0-1.42-.5-2.73-1.33-3.76.42-.14.86-.24 1.33-.24 2.21 0 4 1.79 4 4s-1.79 4-4 4c-.43 0-.84-.09-1.23-.21-.03-.01-.06-.02-.1-.03A5.98 5.98 0 0 0 15 8zm1.66 5.13C18.03 14.06 19 15.32 19 17v3h4v-3c0-2.18-3.57-3.47-6.34-3.87zM9 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2m0 9c-2.7 0-5.8 1.29-6 4.02V21h12v-1.98c-.2-2.72-3.3-4.02-6-4.02z" fill="currentColor"/>
         </svg>
-        <span>Fichiers partagés</span>
+        <span>{{ t('nav.shared') }}</span>
       </div>
       <div class="menu-item" :class="{ active: isActive('/p2p') }" @click="navigateTo('/p2p')">
         <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
              <line x1="22" y1="2" x2="11" y2="13"></line>
              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
         </svg>
-        <span>Peer-to-peer</span>
+        <span>{{ t('nav.p2pTransfer') }}</span>
       </div>
 
       <!-- Friends Accordion -->
@@ -64,7 +64,7 @@
             <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" fill="currentColor"/>
             </svg>
-            <span>Amis</span>
+            <span>{{ t('sidebar.myFriends') }}</span>
             <svg class="arrow-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                 <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
             </svg>
@@ -72,19 +72,19 @@
         <div class="accordion-content" v-if="friendsOpen">
             <div class="friend-header" v-if="authStore.user && authStore.user.friend_code">
                 <div class="code-wrapper">
-                  <span class="my-code" @click="copyFriendCode" title="Copier mon code">{{ authStore.user.friend_code }}</span>
+                  <span class="my-code" @click="copyFriendCode" :title="t('friends.copyCode')">{{ authStore.user.friend_code }}</span>
                   <div class="info-container-left">
                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="info-icon" @click.stop="toggleLeftInfo">
                         <path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/>
                     </svg>
                     <div v-if="showLeftInfo" class="info-tooltip-mini">
-                        Identifiant unique à partager pour être ajouté en ami.
+                        {{ t('friends.myCode') }}
                     </div>
                   </div>
                 </div>
 
                 <div class="header-actions">
-                  <button class="add-friend-btn" @click.stop="toggleAddFriendMenu" title="Ajouter un ami">
+                  <button class="add-friend-btn" @click.stop="toggleAddFriendMenu" :title="t('sidebar.addFriend')">
                       <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                           <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                       </svg>
@@ -92,7 +92,7 @@
                 </div>
 
                 <div v-if="showAddFriendMenu" class="add-friend-popup" @click.stop>
-                    <input id="add-friend-input" v-model="newFriendId" placeholder="Code ami..." @keydown.enter="addFriend" />
+                    <input id="add-friend-input" v-model="newFriendId" :placeholder="t('friends.enterCode')" @keydown.enter="addFriend" />
                     <button @click="addFriend" class="confirm-add">OK</button>
                 </div>
             </div>
@@ -103,8 +103,8 @@
 
     <div class="storage-section" v-if="billingStore.showSubscriptionUI" @click="navigateTo('/billing')" style="cursor: pointer;">
       <div class="storage-info" v-if="!isCollapsed">
-        <span class="storage-label">Stockage</span>
-        <span class="storage-value">{{ formattedStorageUsed }} / {{ formattedStorageLimit }}</span>
+        <span class="storage-label">{{ t('sidebar.storage') }}</span>
+        <span class="storage-value">{{ formattedStorageUsed }} {{ t('sidebar.of') }} {{ formattedStorageLimit }}</span>
       </div>
       <div class="storage-info-collapsed" v-else :title="storagePercentageInt + '% utilisé sur ' + storageLimitGB">
              <svg class="progress-ring" viewBox="0 0 36 36">
@@ -149,6 +149,7 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../../stores/auth'
 import { useFileStore } from '../../stores/files'
 import { useFriendStore } from '../../stores/friends'
@@ -156,6 +157,8 @@ import { useBillingStore } from '../../stores/billing'
 import { uploadQueueManager } from '../../utils/uploadQueueManager'
 import InputDialog from '../InputDialog.vue'
 import FriendsSidebar from '../FriendsSidebar.vue'
+
+const { t } = useI18n()
 
 const props = defineProps({
   // No props needed now for layout control
