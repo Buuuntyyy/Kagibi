@@ -376,7 +376,7 @@ export const useFileStore = defineStore('files', {
         this.fetchItems(newPath)
     },
 
-    async downloadFile(fileId, fileName, mimeType='application/octet-stream', preview = false) {
+    async downloadFile(fileId, fileName, mimeType='application/octet-stream', preview = false, encryptedKey = null) {
       const authStore = useAuthStore();
       
       // Start heartbeat to prevent session timeout during long downloads
@@ -505,7 +505,8 @@ export const useFileStore = defineStore('files', {
       
       // Determine target file (Original or Preview)
       let targetFileId = fileId;
-      let targetEncryptedKey = file ? file.EncryptedKey : null;
+      // Use provided encryptedKey if available (from search results), otherwise get from store
+      let targetEncryptedKey = encryptedKey || (file ? file.EncryptedKey : null);
       let finalMimeType = mimeType;
 
       // Prefer server-side preview if available and requested
