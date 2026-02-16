@@ -19,7 +19,7 @@ func TestAuthMiddleware(t *testing.T) {
 	t.Run("No Cookie", func(t *testing.T) {
 		_, _ = redismock.NewClientMock()
 		r := gin.New()
-		r.Use(AuthMiddleware(nil, "test-secret")) // Use a dummy secret for JWT
+		r.Use(AuthMiddleware(nil, "test-secret", nil)) // Use a dummy secret for JWT and nil mock (will be ignored in test)
 		r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 		w := httptest.NewRecorder()
@@ -30,12 +30,12 @@ func TestAuthMiddleware(t *testing.T) {
 	})
 
 	t.Run("Invalid Session", func(t *testing.T) {
-		_, mock := redismock.NewClientMock()
+		client, mock := redismock.NewClientMock()
 
 		mock.ExpectGet("fake-session").SetErr(redis.Nil)
 
 		r := gin.New()
-		r.Use(AuthMiddleware(nil, "test-secret")) // Use a dummy secret for JWT
+		r.Use(AuthMiddleware(nil, "test-secret", client)) // Use a dummy secret for JWT and pass the mock
 		r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 		w := httptest.NewRecorder()
@@ -47,7 +47,7 @@ func TestAuthMiddleware(t *testing.T) {
 	})
 
 	t.Run("Valid Session", func(t *testing.T) {
-		_, mock := redismock.NewClientMock()
+		client, mock := redismock.NewClientMock()
 
 		mock.ExpectGet("valid-session").SetVal("user-123")
 
@@ -59,7 +59,7 @@ func TestAuthMiddleware(t *testing.T) {
 		tokenString, _ := token.SignedString([]byte("test-secret"))
 
 		r := gin.New()
-		r.Use(AuthMiddleware(nil, "test-secret"))
+		r.Use(AuthMiddleware(nil, "test-secret", client)) // Passer le mock Redis
 		r.GET("/", func(c *gin.Context) {
 			userID, _ := c.Get("user_id")
 			assert.Equal(t, "user-123", userID)

@@ -67,6 +67,7 @@ export const useFileStore = defineStore('files', {
     uploadingFileName: '',
     uploadState: 'idle', // idle, encrypting, uploading, completing, error
     currentUploadManager: null, // MultipartUploadManager instance
+    heartbeatInterval: null, // Interval for session keepalive during long operations
     
     // Preview State
     preview: {
@@ -143,6 +144,31 @@ export const useFileStore = defineStore('files', {
     notifyShareUpdate() {
         this.shareUpdateTrigger++;
     },
+    
+    startHeartbeat() {
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+      }
+      // Send heartbeat every 2.5 minutes (150 seconds)
+      // Session timeout is 5 minutes, so this keeps it alive
+      this.heartbeatInterval = setInterval(async () => {
+        try {
+          await api.get('/heartbeat');
+          console.log('[Upload/Download] Heartbeat sent to prevent session timeout');
+        } catch (err) {
+          console.error('[Upload/Download] Heartbeat failed:', err);
+        }
+      }, 150000);
+    },
+    
+    stopHeartbeat() {
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+        console.log('[Upload/Download] Heartbeat stopped');
+      }
+    },
+    
         setSearchQuery(query) {
         this.searchQuery = query;
         this.searchFiles(query);
@@ -353,6 +379,11 @@ export const useFileStore = defineStore('files', {
     async downloadFile(fileId, fileName, mimeType='application/octet-stream', preview = false) {
       const authStore = useAuthStore();
       
+      // Start heartbeat to prevent session timeout during long downloads
+      if (!preview) {
+        this.startHeartbeat();
+      }
+      
       // Attempt to correct MIME type based on extension if generic
       if ((!mimeType || mimeType.includes('application/octet-stream')) && fileName) {
           const ext = fileName.split('.').pop().toLowerCase();
@@ -453,6 +484,11 @@ export const useFileStore = defineStore('files', {
               console.error("Shared download error", e);
               alert("Erreur téléchargement partagé: " + e.message);
               if (preview) this.preview.show = false;
+          } finally {
+              // Stop heartbeat when download completes or fails
+              if (!preview) {
+                this.stopHeartbeat();
+              }
           }
           return;
       }
@@ -559,6 +595,11 @@ export const useFileStore = defineStore('files', {
         console.error("Erreur download:", error);
         alert("Erreur lors du téléchargement.");
         if (preview) this.preview.show = false;
+      } finally {
+        // Stop heartbeat when download completes or fails
+        if (!preview) {
+          this.stopHeartbeat();
+        }
       }
     },
     async uploadFile(file, isPreview = false, previewID = null, previewPath = null) {
@@ -618,6 +659,11 @@ export const useFileStore = defineStore('files', {
       this.uploadProgress = 0;
       this.uploadingFileName = file.name;
       this.uploadState = 'encrypting';
+      
+      // Start heartbeat to prevent session timeout during long uploads
+      if (!isPreview) {
+        this.startHeartbeat();
+      }
 
       // Create multipart upload manager
       const uploadManager = new MultipartUploadManager({
@@ -747,7 +793,18 @@ export const useFileStore = defineStore('files', {
         this.uploadProgress = 0;
         this.uploadState = 'idle';
         this.currentUploadManager = null;
+        
+        // Stop heartbeat on error
+        if (!isPreview) {
+          this.stopHeartbeat();
+        }
+        
         throw error;
+      } finally {
+        // Always stop heartbeat when upload completes
+        if (!isPreview) {
+          this.stopHeartbeat();
+        }
       }
     },
 

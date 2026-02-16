@@ -56,7 +56,7 @@ func AuthMiddleware(jwks keyfunc.Keyfunc, secret string, redisClient *redis.Clie
 					defer cancel()
 					// On utilise un prefix "active_user:" suivi de l'ID utilisateur
 					// On pourrait aussi utiliser un HyperLogLog si le trafic était énorme, mais SET est OK.
-					redisClient.Set(ctx, "active_user:"+uid, "1", 5*time.Minute)
+					redisClient.Set(ctx, "active_user:"+uid, "1", 15*time.Minute)
 				}(userID)
 			}
 		} else {

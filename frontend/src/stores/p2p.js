@@ -40,9 +40,40 @@ export const useP2PStore = defineStore('p2p', {
   state: () => ({
     incomingOffer: null, 
     activeTransfer: null, 
-    candidateQueue: [] // Store candidates that arrive before acceptance
+    candidateQueue: [], // Store candidates that arrive before acceptance
+    heartbeatInterval: null // Interval for session maintenance
   }),
   actions: {
+    startHeartbeat() {
+        if (this.heartbeatInterval) return; // Already running
+        
+        console.log('[P2P] Starting session heartbeat');
+        // Send heartbeat every 2.5 minutes (well before 5min Redis TTL)
+        this.heartbeatInterval = setInterval(async () => {
+            if (!this.activeTransfer) {
+                this.stopHeartbeat();
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('token');
+                await axios.get(`${API_BASE_URL}/heartbeat`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                console.log('[P2P] Session heartbeat sent');
+            } catch (e) {
+                console.error('[P2P] Heartbeat failed:', e);
+            }
+        }, 150000); // 2.5 minutes
+    },
+    
+    stopHeartbeat() {
+        if (this.heartbeatInterval) {
+            console.log('[P2P] Stopping session heartbeat');
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+    },
     async handleSignal(payload) {
         const { sender_id, type, data } = payload;
         
@@ -183,6 +214,9 @@ export const useP2PStore = defineStore('p2p', {
                  usingTurn: false
              }
          };
+         
+         // Start heartbeat to prevent session timeout
+         this.startHeartbeat();
 
          const offer = await pc.createOffer();
          await pc.setLocalDescription(offer);
@@ -306,6 +340,9 @@ export const useP2PStore = defineStore('p2p', {
                  usingTurn: false
              }
         };
+        
+        // Start heartbeat to prevent session timeout
+        this.startHeartbeat();
 
 
         pc.ondatachannel = (event) => {
@@ -347,6 +384,7 @@ export const useP2PStore = defineStore('p2p', {
             this.activeTransfer.pc.close();
             this.activeTransfer = null;
         }
+        this.stopHeartbeat();
     },
 
     async sendFileData(file, key, dc) {
@@ -415,6 +453,7 @@ export const useP2PStore = defineStore('p2p', {
          
          setTimeout(() => {
              this.activeTransfer = null;
+             this.stopHeartbeat();
          }, 2000);
     },
 
@@ -544,6 +583,7 @@ export const useP2PStore = defineStore('p2p', {
         
         setTimeout(() => {
             this.activeTransfer = null;
+            this.stopHeartbeat();
         }, 2000);
     }
   }
