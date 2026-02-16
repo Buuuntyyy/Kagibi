@@ -5,7 +5,12 @@
     "friends": "Friends",
     "settings": "Settings",
     "security": "Security",
-    "account": "Account"
+    "account": "Account",
+    "login": "Login / Sign in",
+    "logout": "Logout",
+    "myAccount": "My Account",
+    "darkMode": "Dark mode",
+    "lightMode": "Light mode"
   },
   "file": {
     "upload": "Upload file",
@@ -17,7 +22,13 @@
     "tags": "Tags",
     "move": "Move",
     "preview": "Preview",
-    "properties": "Properties"
+    "properties": "Properties",
+    "addFile": "Add a file",
+    "dragDrop": "Drop your files here",
+    "multipleFiles": "Multiple files supported",
+    "folders": "Folders",
+    "files": "Files",
+    "selectedItems": "{count} item{count > 1 ? 's' : ''} selected"
   },
   "auth": {
     "login": "Login",
@@ -59,7 +70,14 @@
     "areYouSure": "Are you sure?",
     "selectItem": "Select",
     "deselectAll": "Deselect all",
-    "selectAll": "Select all"
+    "selectAll": "Select all",
+    "ok": "OK",
+    "deleteItem": "Delete this item?",
+    "deleteItems": "Delete these items?",
+    "refuse": "Refuse",
+    "accept": "Accept",
+    "state": "State",
+    "type": "Type"
   },
   "share": {
     "shareWith": "Share with",
@@ -114,7 +132,10 @@
     "fileUploaded": "File uploaded successfully",
     "fileDeleted": "File deleted successfully",
     "folderCreated": "Folder created successfully",
-    "sharedSuccessfully": "Shared successfully"
+    "sharedSuccessfully": "Shared successfully",
+    "confirmDelete": "Are you sure you want to delete \"{name}\"?",
+    "confirmDeleteMultiple": "Are you sure you want to delete these {count} items?",
+    "irreversible": "This action is irreversible."
   },
   "storage": {
     "used": "Used",
@@ -127,7 +148,8 @@
     "recentlyOpened": "Recently opened items",
     "noSuggestions": "Recently opened items will appear here",
     "search": "Search my files",
-    "searching": "Searching..."
+    "searching": "Searching...",
+    "placeholder": "Search my files"
   },
   "p2p": {
     "initiateTransfer": "Initiate transfer",
@@ -140,7 +162,9 @@
     "peer": "Peer",
     "direct": "Direct connection",
     "relayed": "Relayed (TURN)",
-    "connectionType": "Connection type"
+    "connectionType": "Connection type",
+    "title": "P2P Transfer",
+    "incomingRequest": "{sender}... wants to send you a file."
   },
   "home": {
     "welcome": "Welcome to your Secure Cloud",

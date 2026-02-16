@@ -9,7 +9,7 @@
       <input 
         type="text" 
         v-model="searchQuery" 
-        placeholder="Rechercher dans mes fichiers" 
+        :placeholder="t('search.placeholder')" 
         @input="handleInput"
         @focus="handleFocus"
         @keydown.down.prevent="navigateResults(1)"
@@ -31,7 +31,7 @@
     <!-- Dropdown Results -->
     <div class="search-dropdown" v-if="showDropdown && hasResults">
       <div v-if="searchResults.folders.length > 0" class="result-group">
-        <div class="group-title">Dossiers</div>
+        <div class="group-title">{{ t('file.folders') }}</div>
         <div 
           v-for="(folder, index) in searchResults.folders" 
           :key="'folder-' + folder.ID"
@@ -51,7 +51,7 @@
       </div>
 
       <div v-if="searchResults.files.length > 0" class="result-group">
-        <div class="group-title">Fichiers</div>
+        <div class="group-title">{{ t('file.files') }}</div>
         <div 
           v-for="(file, index) in searchResults.files" 
           :key="'file-' + file.ID"
