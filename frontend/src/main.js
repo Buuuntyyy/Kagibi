@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
+import i18n from './i18n.js'
 import './style.css'
 import './styles/avatar-animations.css'
 import { useAuthStore } from './stores/auth'
@@ -17,6 +18,7 @@ const pinia = createPinia()
 const app = createApp(App)
 
 app.use(pinia)
+app.use(i18n)
 const authStore = useAuthStore(pinia);
 const realtimeStore = useRealtimeStore(pinia);
 

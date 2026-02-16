@@ -3,6 +3,7 @@
     <router-link to="/dashboard" class="brand">SaferCloud</router-link>
     <SearchBar v-if="authStore.isAuthenticated" />
     <div class="nav-links">
+      <LanguageSwitcher />
       <button @click="themeStore.toggleTheme" class="theme-toggle" :title="themeStore.theme === 'light' ? 'Mode sombre' : 'Mode clair'">
         <svg v-if="themeStore.theme === 'light'" class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.02-.9-.02-1.36-.02z" fill="currentColor"/>
@@ -38,6 +39,7 @@ import { useAuthStore } from '../../stores/auth'
 import { useThemeStore } from '../../stores/theme'
 import { useRouter } from 'vue-router'
 import SearchBar from '../bar/searchBar.vue'
+import LanguageSwitcher from '../LanguageSwitcher.vue'
 
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
