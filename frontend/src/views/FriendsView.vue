@@ -1,26 +1,26 @@
 <template>
   <div class="friends-container">
     <div class="header">
-      <h2>Amis</h2>
+      <h2>{{ t('nav.friends') }}</h2>
       <div class="tabs">
         <button 
           :class="{ active: activeTab === 'list' }" 
           @click="activeTab = 'list'"
         >
-          Mes Amis
+          {{ t('friends.myFriends') }}
           <span class="count" v-if="friendStore.acceptedFriends.length">{{ friendStore.acceptedFriends.length }}</span>
         </button>
         <button 
           :class="{ active: activeTab === 'add' }" 
           @click="activeTab = 'add'"
         >
-          Ajouter
+          {{ t('friends.add') }}
         </button>
         <button 
           :class="{ active: activeTab === 'pending' }" 
           @click="activeTab = 'pending'"
         >
-          En attente
+          {{ t('friends.pending') }}
           <span class="count badge" v-if="friendStore.pendingReceived.length > 0">{{ friendStore.pendingReceived.length }}</span>
         </button>
       </div>
@@ -28,24 +28,24 @@
 
     <!-- TAB: LIST FRIENDS -->
     <div v-if="activeTab === 'list'" class="tab-content">
-      <div v-if="friendStore.loading" class="loading">Chargement...</div>
+      <div v-if="friendStore.loading" class="loading">{{ t('common.loading') }}</div>
       <div v-else-if="friendStore.acceptedFriends.length === 0" class="empty-state">
         <div class="empty-icon">👥</div>
-        <h3>Vous n'avez pas encore d'amis</h3>
-        <p>Ajoutez des amis pour partager des fichiers plus facilement.</p>
-        <button @click="activeTab = 'add'" class="btn-primary">Ajouter un ami</button>
+        <h3>{{ t('friends.noFriends') }}</h3>
+        <p>{{ t('friends.addFirstFriend') }}</p>
+        <button @click="activeTab = 'add'" class="btn-primary">{{ t('friends.addFriend') }}</button>
       </div>
       <div v-else class="friends-grid">
         <div v-for="friend in friendStore.acceptedFriends" :key="friend.id" class="friend-card">
           <div class="friend-avatar-wrapper">
             <div class="friend-avatar">{{ getInitials(friend.name) }}</div>
-            <div class="online-indicator" :class="{ online: friend.online }" :title="friend.online ? 'En ligne' : 'Hors ligne'"></div>
+            <div class="online-indicator" :class="{ online: friend.online }" :title="friend.online ? t('friends.online') : t('friends.offline')"></div>
           </div>
           <div class="friend-info">
             <div class="friend-name">{{ friend.name }}</div>
             <div class="friend-email">{{ friend.email }}</div>
           </div>
-          <button @click="confirmRemove(friend)" class="btn-icon delete" title="Supprimer">
+          <button @click="confirmRemove(friend)" class="btn-icon delete" :title="t('friends.removeFriend')">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 6L6 18M6 6l12 12"></path>
             </svg>
@@ -57,9 +57,9 @@
     <!-- TAB: ADD FRIEND -->
     <div v-if="activeTab === 'add'" class="tab-content narrow">
       <div class="add-section">
-        <h3>Mon Code Ami</h3>
+        <h3>{{ t('friends.myCode') }}</h3>
         <div class="my-code-box">
-          <span class="code">{{ authStore.user?.friend_code || 'Génération...' }}</span>
+          <span class="code">{{ authStore.user?.friend_code || t('common.loading') }}</span>
           
           <div class="info-container">
              <button class="btn-info" @click.stop="showInfoTooltip = !showInfoTooltip">
@@ -73,7 +73,7 @@
           </div>
 
           <button @click="copyCode" class="btn-copy">
-            {{ copied ? 'Copié !' : 'Copier' }}
+            {{ copied ? t('common.copied') : t('friends.copyCode') }}
           </button>
         </div>
         <p class="description">Partagez ce code avec un ami pour qu'il puisse vous ajouter.</p>
@@ -82,17 +82,17 @@
       <div class="divider"></div>
 
       <div class="add-section">
-        <h3>Ajouter un ami</h3>
+        <h3>{{ t('friends.addFriend') }}</h3>
         <form @submit.prevent="submitAddFriend" class="add-form">
           <input 
             v-model="friendCodeInput" 
             type="text" 
-            placeholder="Entrez le code ami (ex: A1B2-C3D4)" 
+            :placeholder="t('friends.enterCode')" 
             required 
             class="code-input"
           />
           <button type="submit" class="btn-primary" :disabled="submitting">
-            {{ submitting ? 'Envoi...' : 'Envoyer la demande' }}
+            {{ submitting ? t('common.loading') : t('friends.sendRequest') }}
           </button>
         </form>
         <div v-if="addMessage" :class="['message', addMessageType]">{{ addMessage }}</div>
@@ -137,8 +137,11 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useFriendStore } from '../stores/friends'
 import { useAuthStore } from '../stores/auth'
+
+const { t } = useI18n()
 
 const friendStore = useFriendStore()
 const authStore = useAuthStore()

@@ -1,8 +1,8 @@
 <template>
   <div class="account-page">
     <div class="page-header">
-      <h1>Mon Compte</h1>
-      <p class="subtitle">Gérez vos informations personnelles et vos préférences.</p>
+      <h1>{{ t('account.title') }}</h1>
+      <p class="subtitle">{{ t('account.subtitle') }}</p>
     </div>
 
     <!-- Plan Banner -->
@@ -10,16 +10,16 @@
       <div class="plan-content">
         <span class="plan-icon">🌟</span>
         <div class="plan-details">
-          <span class="plan-title">Votre plan actuel</span>
+          <span class="plan-title">{{ t('account.currentPlan') }}</span>
           <span class="plan-value">{{ formatPlanName(authStore.user?.plan) }}</span>
         </div>
       </div>
-      <button class="btn-upgrade" @click="navigateToBilling">Mettre à niveau</button>
+      <button class="btn-upgrade" @click="navigateToBilling">{{ t('account.upgrade') }}</button>
     </div>
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
-      <p>Chargement du profil...</p>
+      <p>{{ t('account.loading') }}</p>
     </div>
 
     <div v-else class="content-grid">
@@ -29,11 +29,11 @@
           <AvatarSelector v-model="selectedAvatar" />
         </div>
         <div class="user-info">
-          <h2>{{ authStore.user?.name || 'Utilisateur' }}</h2>
+          <h2>{{ authStore.user?.name || t('account.username') }}</h2>
           <p class="email">{{ authStore.user?.email || 'email@exemple.com' }}</p>
           <div class="divider"></div>
           <p class="joined-date">
-             Membre depuis le {{ formatDate(authStore.user?.created_at) }}
+             {{ t('account.memberSince') }} {{ formatDate(authStore.user?.created_at) }}
           </p>
         </div>
       </div>
@@ -44,13 +44,13 @@
         <!-- Account Settings -->
         <section class="settings-section">
           <div class="section-header">
-            <h3>Profil</h3>
+            <h3>{{ t('account.profile') }}</h3>
           </div>
           <div class="section-body">
             <div class="form-row">
               <div class="input-group">
                 <label>
-                  Nom d'utilisateur
+                  {{ t('account.username') }}
                   <input
                     type="text"
                     v-model="usernameForm.newName"
@@ -59,7 +59,7 @@
                 </label>
               </div>
               <button class="btn-secondary" @click="handleUpdateUsername" :disabled="updatingUsername">
-                {{ updatingUsername ? 'Mise à jour...' : 'Modifier' }}
+                {{ updatingUsername ? t('account.updating') : t('account.modify') }}
               </button>
             </div>
           </div>
@@ -67,13 +67,13 @@
 
         <section class="settings-section">
           <div class="section-header">
-            <h3>Sécurité</h3>
+            <h3>{{ t('account.security') }}</h3>
           </div>
           <div class="section-body">
             <form @submit.prevent="handleUpdatePassword" class="password-form">
               <div class="input-group password-with-toggle">
                 <label>
-                  Mot de passe actuel
+                  {{ t('account.currentPassword') }}
                   <div class="password-input-wrapper">
                     <input
                       :type="showCurrentPassword ? 'text' : 'password'"
@@ -85,7 +85,7 @@
                       type="button"
                       class="toggle-password-btn"
                       @click="showCurrentPassword = !showCurrentPassword"
-                      title="Afficher/Masquer"
+                      :title="t('account.showHide')"
                     >
                       <svg v-if="!showCurrentPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -346,6 +346,7 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
 import { useBillingStore } from '../stores/billing'
 import { usePreferencesStore } from '../stores/preferences'
@@ -355,6 +356,8 @@ import AvatarSelector from '../components/AvatarSelector.vue'
 import DeleteAccountDialog from '../components/DeleteAccountDialog.vue'
 import MFASettings from '../components/MFASettings.vue'
 import MFAChallengeModal from '../components/MFAChallengeModal.vue'
+
+const { t } = useI18n()
 
 const router = useRouter()
 const authStore = useAuthStore()
