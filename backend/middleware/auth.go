@@ -6,14 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MicahParks/keyfunc/v3"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// AuthMiddleware vérifie les tokens via JWKS (ES256) ou Secret (HS256)
-func AuthMiddleware(jwks keyfunc.Keyfunc, secret string, redisClient *redis.Client) gin.HandlerFunc {
+// AuthMiddleware vérifie les tokens via secret partagé (HS256)
+func AuthMiddleware(secret string, redisClient *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if !strings.HasPrefix(authHeader, "Bearer ") {
@@ -24,18 +23,11 @@ func AuthMiddleware(jwks keyfunc.Keyfunc, secret string, redisClient *redis.Clie
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			// Si le token est signé avec HMAC (HS256), on utilise le secret
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
-				return []byte(secret), nil
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, jwt.ErrTokenUnverifiable
 			}
 
-			// Si le token est signé avec ECDSA (ES256) et qu'on a le JWKS, on utilise le JWKS
-			if _, ok := token.Method.(*jwt.SigningMethodECDSA); ok && jwks != nil {
-				return jwks.Keyfunc(token)
-			}
-
-			// Sinon, méthode Inconnue
-			return nil, jwt.ErrTokenUnverifiable
+			return []byte(secret), nil
 		})
 
 		if err != nil || !token.Valid {
