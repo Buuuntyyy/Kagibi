@@ -29,6 +29,7 @@
     "upload": "Ajouter un fichier",
     "createFolder": "Créer un dossier",
     "download": "Télécharger",
+    "downloadZip": "Télécharger (ZIP)",
     "delete": "Supprimer",
     "rename": "Renommer",
     "share": "Partager",
@@ -306,6 +307,9 @@
     "openLink": "Ouvrir le lien",
     "deleteShare": "Supprimer le partage",
     "copyLink": "Copier le lien",
+    "downloadDecrypt": "Télécharger (Déchiffrer)",
+    "removeShare": "Retirer ce partage",
+    "removeShareConfirm": "Voulez-vous retirer ce partage de votre liste ?",
     "noShares": "Aucun partage pour le moment",
     "loading": "Chargement des partages...",
     "error": "Erreur lors du chargement des partages"
@@ -348,6 +352,12 @@
     "loading": "Chargement..."
   },
   "dialogs": {
+    "rename": {
+      "title": "Entrez le nouveau nom :",
+      "placeholder": "Nouveau nom",
+      "newFolderTitle": "Entrez le nom du nouveau dossier :",
+      "newFolderPlaceholder": "Nom du dossier"
+    },
     "tag": {
       "title": "Gérer les tags",
       "selectTags": "Sélectionnez les tags pour cet élément",
