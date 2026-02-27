@@ -27,7 +27,6 @@ import (
 
 	"time"
 
-	"github.com/MicahParks/keyfunc/v3"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -54,7 +53,7 @@ func main() {
 
 	// Initialize Handlers (no more WebSocket Manager)
 	friendHandler := friends.NewFriendHandler(db)
-	jwks, jwtSecret := initAuth()
+	jwtSecret := initAuth()
 
 	// Démarrer le serveur de métriques Prometheus (port 9090)
 	metricsServer := monitoring.NewServer(9090)
@@ -66,7 +65,7 @@ func main() {
 	// Setup Server
 	router := setupRouter()
 
-	registerRoutes(router, db, redisClient, jwks, jwtSecret, friendHandler)
+	registerRoutes(router, db, redisClient, jwtSecret, friendHandler)
 
 	startServerWithGracefulShutdown(router, metricsServer)
 }
@@ -146,22 +145,8 @@ func initRedis() *redis.Client {
 	return client
 }
 
-func initAuth() (keyfunc.Keyfunc, string) {
-	jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
-	supabaseURL := os.Getenv("SUPABASE_URL")
-	var jwks keyfunc.Keyfunc
-
-	if supabaseURL != "" {
-		jwksURL := supabaseURL + "/auth/v1/.well-known/jwks.json"
-		var err error
-		jwks, err = keyfunc.NewDefault([]string{jwksURL})
-		if err != nil {
-			log.Printf("Attention: Impossible d'initialiser JWKS: %v. Les tokens ES256 échoueront.", err)
-		} else {
-			log.Println("JWKS initialisé avec succès pour validation ES256")
-		}
-	}
-	return jwks, jwtSecret
+func initAuth() string {
+	return os.Getenv("SUPABASE_JWT_SECRET")
 }
 
 func setupRouter() *gin.Engine {
@@ -191,7 +176,7 @@ func setupRouter() *gin.Engine {
 	return router
 }
 
-func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, jwks keyfunc.Keyfunc, jwtSecret string, friendHandler *friends.FriendHandler) {
+func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, jwtSecret string, friendHandler *friends.FriendHandler) {
 	api := router.Group("/api/v1")
 
 	// Authentication Routes (Public + Protected)
@@ -208,7 +193,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, j
 
 	// Protected Routes
 	protected := api.Group("")
-	protected.Use(middleware.AuthMiddleware(jwks, jwtSecret, redisClient))
+	protected.Use(middleware.AuthMiddleware(jwtSecret, redisClient))
 
 	registerUserRoutes(protected, db, redisClient)
 	registerFileRoutes(protected, db, redisClient)
@@ -414,7 +399,7 @@ func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup, red
 	billinghandlers.RegisterWebhookRoute(api)
 
 	// Toutes les routes (publiques + protégées)
-	billinghandlers.RegisterRoutes(protected, middleware.AuthMiddleware(nil, os.Getenv("SUPABASE_JWT_SECRET"), redisClient))
+	billinghandlers.RegisterRoutes(protected, middleware.AuthMiddleware(os.Getenv("SUPABASE_JWT_SECRET"), redisClient))
 }
 
 func startServer(router *gin.Engine) {
