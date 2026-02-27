@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 
@@ -28,8 +29,8 @@ func GetBillingStatusHandler(c *gin.Context) {
 			providerType = "disabled"
 		case *billingpkg.MockProvider:
 			providerType = "mock"
-		case *billingpkg.WebhookProvider:
-			providerType = "webhook"
+		case *billingpkg.StripeWebhookProvider:
+			providerType = "stripe"
 		default:
 			providerType = "unknown"
 		}
@@ -41,7 +42,9 @@ func GetBillingStatusHandler(c *gin.Context) {
 		"features": gin.H{
 			"subscriptions": enabled && providerType != "disabled",
 			"quotas":        enabled && providerType != "disabled",
-			"invoices":      enabled && providerType == "webhook",
+			"invoices":      enabled && providerType == "stripe",
+			"checkout":      enabled && providerType == "stripe",
+			"portal":        enabled && providerType == "stripe",
 		},
 	})
 }
@@ -228,6 +231,13 @@ func GetPaymentLinkHandler(c *gin.Context) {
 // UpgradePlanHandler initie un changement de plan
 // POST /api/billing/upgrade
 func UpgradePlanHandler(c *gin.Context) {
+	// Redirige vers CreateCheckoutHandler pour les plans payants
+	CreateCheckoutHandler(c)
+}
+
+// CreateCheckoutHandler crée une session Stripe Checkout pour upgrade
+// POST /api/billing/checkout
+func CreateCheckoutHandler(c *gin.Context) {
 	userID := c.GetString("user_id")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -235,11 +245,10 @@ func UpgradePlanHandler(c *gin.Context) {
 	}
 
 	var req struct {
-		PlanCode       string `json:"plan_code" binding:"required"`
-		IdempotencyKey string `json:"idempotency_key" binding:"required"`
+		PlanCode string `json:"plan_code" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Plan code and idempotency key required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "plan_code is required"})
 		return
 	}
 
@@ -249,13 +258,52 @@ func UpgradePlanHandler(c *gin.Context) {
 		return
 	}
 
-	subscription, err := provider.UpdateSubscription(c.Request.Context(), userID, req.PlanCode, req.IdempotencyKey)
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:5173"
+	}
+
+	successURL := fmt.Sprintf("%s/dashboard/billing?status=success&session_id={CHECKOUT_SESSION_ID}", frontendURL)
+	cancelURL := fmt.Sprintf("%s/dashboard/billing?status=cancelled", frontendURL)
+
+	checkoutURL, err := provider.CreateCheckoutSession(c.Request.Context(), userID, req.PlanCode, successURL, cancelURL)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upgrade plan"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, subscription)
+	c.JSON(http.StatusOK, gin.H{"checkout_url": checkoutURL})
+}
+
+// CreatePortalHandler crée une session Stripe Customer Portal
+// POST /api/billing/portal
+func CreatePortalHandler(c *gin.Context) {
+	userID := c.GetString("user_id")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	provider := billingpkg.GetProvider()
+	if provider == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Billing service unavailable"})
+		return
+	}
+
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:5173"
+	}
+
+	returnURL := fmt.Sprintf("%s/dashboard/billing", frontendURL)
+
+	portalURL, err := provider.CreatePortalSession(c.Request.Context(), userID, returnURL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"portal_url": portalURL})
 }
 
 // RegisterRoutes enregistre toutes les routes billing
@@ -277,6 +325,8 @@ func RegisterRoutes(router *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
 			authenticated.GET("/invoices", GetInvoicesHandler)
 			authenticated.GET("/invoices/:id/payment-link", GetPaymentLinkHandler)
 			authenticated.POST("/upgrade", UpgradePlanHandler)
+			authenticated.POST("/checkout", CreateCheckoutHandler)
+			authenticated.POST("/portal", CreatePortalHandler)
 		}
 	}
 }
