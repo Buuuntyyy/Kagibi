@@ -44,7 +44,7 @@ metadata:
 
     # Security headers and CSP
     nginx.ingress.kubernetes.io/configuration-snippet: |
-      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob: 'sha256-0h/91TJDKk/c0hssvnCIOoZP6YUUYMkGOYJyt0ScwSU='; style-src 'self' 'unsafe-inline'; connect-src 'self' https://msshzlznpgrvdnowefbb.supabase.co https://s3.gra.io.cloud.ovh.net wss://msshzlznpgrvdnowefbb.supabase.co blob:; img-src 'self' data: blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; worker-src 'self' blob:;";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob: 'sha256-0h/91TJDKk/c0hssvnCIOoZP6YUUYMkGOYJyt0ScwSU='; style-src 'self' 'unsafe-inline'; connect-src 'self' https: wss: blob:; img-src 'self' data: blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; worker-src 'self' blob:;";
       more_set_headers "X-Frame-Options: DENY";
       more_set_headers "X-Content-Type-Options: nosniff";
       more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";

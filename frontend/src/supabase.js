@@ -4,10 +4,14 @@ import { createClient } from '@supabase/supabase-js'
 // or fallback to import.meta.env (for local dev builds)
 const supabaseUrl = (
   typeof window !== 'undefined' && window.__APP_CONFIG__?.supabaseUrl
-) ? window.__APP_CONFIG__.supabaseUrl : (import.meta.env.VITE_SUPABASE_URL || 'https://msshzlznpgrvdnowefbb.supabase.co')
+) ? window.__APP_CONFIG__.supabaseUrl : import.meta.env.VITE_SUPABASE_URL
 
 const supabaseKey = (
   typeof window !== 'undefined' && window.__APP_CONFIG__?.supabaseAnonKey
-) ? window.__APP_CONFIG__.supabaseAnonKey : (import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_zz8DVqEf2Ewr5GL8cOzvnw_Il3LTMBc')
+) ? window.__APP_CONFIG__.supabaseAnonKey : import.meta.env.VITE_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Supabase configuration is missing. Set SUPABASE_URL/VITE_SUPABASE_URL and SUPABASE_ANON_KEY/VITE_SUPABASE_ANON_KEY.')
+}
 
 export const supabase = createClient(supabaseUrl, supabaseKey)

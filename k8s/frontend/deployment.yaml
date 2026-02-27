@@ -57,7 +57,7 @@ spec:
             configMapKeyRef:
               name: prod-config
               key: VITE_SUPABASE_URL
-        - name: SUPABASE_ANON_KEY
+        - name: VITE_SUPABASE_ANON_KEY
           valueFrom:
             secretKeyRef:
               name: prod-secrets

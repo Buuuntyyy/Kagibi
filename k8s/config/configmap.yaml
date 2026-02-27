@@ -18,7 +18,7 @@ data:
 
   # Frontend Configuration
   VITE_API_URL: "https://kagibi.stratus.ovh/api/v1/"
-  VITE_SUPABASE_URL: "https://msshzlznpgrvdnowefbb.supabase.co"
+  VITE_SUPABASE_URL: "https://api.stratus.ovh"
 
   # Supabase Database Configuration
   POSTGRES_HOST: "postgres-service"
