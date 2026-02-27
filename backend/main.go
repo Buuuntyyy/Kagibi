@@ -90,7 +90,7 @@ func initS3() {
 
 // initBillingProvider initialise le provider de facturation
 // BILLING_ENABLED=false : DisabledProvider (self-hosted, illimité)
-// BILLING_SERVICE_URL set : WebhookProvider (production avec service externe)
+// STRIPE_BILLING_SERVICE_URL set : StripeWebhookProvider (production avec service Stripe privé)
 // Par défaut : MockProvider (dev avec limite 5Go)
 func initBillingProvider() {
 	// Vérifier si le billing est complètement désactivé (mode self-hosted)
@@ -101,14 +101,14 @@ func initBillingProvider() {
 		return
 	}
 
-	billingURL := os.Getenv("BILLING_SERVICE_URL")
-	billingSecret := os.Getenv("BILLING_SERVICE_SECRET")
+	stripeBillingURL := os.Getenv("STRIPE_BILLING_SERVICE_URL")
+	stripeBillingKey := os.Getenv("STRIPE_BILLING_SERVICE_KEY")
 
-	if billingURL != "" && billingSecret != "" {
-		// Mode production: utiliser le service de billing externe
-		provider := billingpkg.NewWebhookProvider(billingURL, billingSecret)
+	if stripeBillingURL != "" && stripeBillingKey != "" {
+		// Mode production: Stripe via service privé
+		provider := billingpkg.NewStripeWebhookProvider(stripeBillingURL, stripeBillingKey)
 		billingpkg.SetProvider(provider)
-		log.Println("[Billing] WebhookProvider initialized - connected to external billing service")
+		log.Println("[Billing] StripeWebhookProvider initialized - connected to Stripe billing service")
 	} else {
 		// Mode dev/open-source: utiliser le mock provider
 		provider := billingpkg.NewMockProvider()
@@ -408,9 +408,9 @@ func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 }
 
 // registerBillingRoutes enregistre les routes de facturation
-// Utilise le nouveau système de provider pluggable
+// Utilise le système de provider Stripe pluggable
 func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup, redisClient *redis.Client) {
-	// Webhook receiver (pour le service de billing externe)
+	// Webhook receiver (pour le service billing Stripe privé)
 	billinghandlers.RegisterWebhookRoute(api)
 
 	// Toutes les routes (publiques + protégées)
