@@ -224,33 +224,63 @@ func (m *MockProvider) getAvailablePlans() []Plan {
 	return []Plan{
 		{
 			Code:             "free",
-			Name:             "Plan Gratuit",
-			Description:      "5 Go de stockage",
+			Name:             "Gratuit",
+			Description:      "5 Go de stockage chiffré",
 			StorageLimitGB:   5,
 			BandwidthLimitGB: 10,
 			PriceMonthly:     0,
 			Currency:         "EUR",
 			Interval:         "monthly",
+			Features: map[string]interface{}{
+				"max_file_size_mb": 100,
+				"p2p_enabled":      true,
+				"p2p_limit_gb":     2,
+			},
 		},
 		{
-			Code:             "starter",
-			Name:             "Starter",
-			Description:      "50 Go de stockage",
-			StorageLimitGB:   50,
-			BandwidthLimitGB: 100,
+			Code:             "personal",
+			Name:             "Personnel",
+			Description:      "100 Go de stockage",
+			StorageLimitGB:   100,
+			BandwidthLimitGB: 500,
 			PriceMonthly:     500, // 5€
 			Currency:         "EUR",
 			Interval:         "monthly",
+			Features: map[string]interface{}{
+				"max_file_size_mb": 500,
+				"p2p_enabled":      true,
+				"p2p_limit_gb":     50,
+			},
 		},
 		{
-			Code:             "pro",
-			Name:             "Pro",
-			Description:      "200 Go de stockage",
-			StorageLimitGB:   200,
-			BandwidthLimitGB: 500,
+			Code:             "expert",
+			Name:             "Expert",
+			Description:      "1 To de stockage",
+			StorageLimitGB:   1024,
+			BandwidthLimitGB: 2048,
 			PriceMonthly:     1500, // 15€
 			Currency:         "EUR",
 			Interval:         "monthly",
+			Features: map[string]interface{}{
+				"max_file_size_mb": 5000,
+				"p2p_enabled":      true,
+				"p2p_limit_gb":     -1,
+			},
+		},
+		{
+			Code:             "enterprise",
+			Name:             "Enterprise",
+			Description:      "3 To de stockage",
+			StorageLimitGB:   3072,
+			BandwidthLimitGB: 10240,
+			PriceMonthly:     4900, // 49€
+			Currency:         "EUR",
+			Interval:         "monthly",
+			Features: map[string]interface{}{
+				"max_file_size_mb": 10000,
+				"p2p_enabled":      true,
+				"p2p_limit_gb":     -1,
+			},
 		},
 	}
 }
@@ -349,4 +379,16 @@ func (m *MockProvider) GetInvoices(ctx context.Context, userID string, limit int
 
 func (m *MockProvider) GetPaymentLink(ctx context.Context, invoiceID string) (string, error) {
 	return "", fmt.Errorf("no payment required in free plan")
+}
+
+// === Stripe Checkout (Mock) ===
+
+func (m *MockProvider) CreateCheckoutSession(ctx context.Context, userID, planCode, successURL, cancelURL string) (string, error) {
+	log.Printf("[MockBilling] CreateCheckoutSession: user=%s plan=%s (mock - redirecting to success)", userID, planCode)
+	return successURL, nil
+}
+
+func (m *MockProvider) CreatePortalSession(ctx context.Context, userID, returnURL string) (string, error) {
+	log.Printf("[MockBilling] CreatePortalSession: user=%s (mock - redirecting to return)", userID)
+	return returnURL, nil
 }
