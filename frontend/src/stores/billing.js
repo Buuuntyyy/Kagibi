@@ -9,13 +9,18 @@ export const useBillingStore = defineStore('billing', {
     features: {
       subscriptions: true,
       quotas: true,
-      invoices: false
+      invoices: false,
+      checkout: false,
+      portal: false
     },
 
     // Current plan info
     currentPlan: null,
     subscriptions: [],
     currentUsage: null,
+
+    // Available plans
+    availablePlans: [],
 
     // Invoices
     invoices: [],
@@ -24,6 +29,7 @@ export const useBillingStore = defineStore('billing', {
     // Loading states
     loading: false,
     loadingInvoices: false,
+    loadingPlans: false,
 
     // Error states
     error: null,
@@ -53,6 +59,12 @@ export const useBillingStore = defineStore('billing', {
     // Has quota enforcement
     hasQuotas: (state) => state.enabled && state.features.quotas,
 
+    // Can use Stripe Checkout
+    canCheckout: (state) => state.enabled && state.features.checkout,
+
+    // Can use Stripe Customer Portal
+    canUsePortal: (state) => state.enabled && state.features.portal,
+
     // Get the current plan code
     planCode: (state) => state.currentPlan?.code || 'free',
 
@@ -81,21 +93,22 @@ export const useBillingStore = defineStore('billing', {
 
     // Check if there's a pending payment
     hasPendingPayment: (state) => {
-      return state.pendingInvoice && state.pendingInvoice.payment_link_url
+      return state.pendingInvoice && state.pendingInvoice.payment_url
     },
 
     // Get storage usage in GB
     storageUsageGB: (state) => {
-      if (!state.currentUsage?.charges) return 0
-      const storageCharge = state.currentUsage.charges.find(c => c.code === 'storage_gb')
-      return storageCharge ? parseFloat(storageCharge.units) : 0
+      return state.currentUsage?.storage_used_gb || 0
     },
 
-    // Get P2P usage in MB
-    p2pUsageMB: (state) => {
-      if (!state.currentUsage?.charges) return 0
-      const p2pCharge = state.currentUsage.charges.find(c => c.code === 'p2p_mb')
-      return p2pCharge ? parseFloat(p2pCharge.units) : 0
+    // Get bandwidth usage in GB
+    bandwidthUsageGB: (state) => {
+      return state.currentUsage?.bandwidth_used_gb || 0
+    },
+
+    // Get P2P usage in GB
+    p2pUsageGB: (state) => {
+      return state.currentUsage?.p2p_transfer_gb || 0
     }
   },
 
@@ -109,7 +122,6 @@ export const useBillingStore = defineStore('billing', {
         this.features = response.data.features
       } catch (error) {
         console.error('[BillingStore] Failed to fetch billing status:', error)
-        // Par défaut, considérer comme activé
         this.enabled = true
         this.providerType = 'mock'
       }
@@ -122,10 +134,7 @@ export const useBillingStore = defineStore('billing', {
 
       try {
         const response = await api.get('/billing/plan')
-        const data = response.data
-
-        this.currentPlan = data
-
+        this.currentPlan = response.data
       } catch (err) {
         console.error('[BillingStore] Failed to fetch plan:', err)
         this.error = err.response?.data?.error || 'Impossible de charger les informations de facturation'
@@ -133,13 +142,39 @@ export const useBillingStore = defineStore('billing', {
         // Set default free plan on error
         this.currentPlan = {
           code: 'free',
-          name: 'Plan Gratuit',
+          name: 'Gratuit',
           price_monthly_cents: 0,
           currency: 'EUR',
           interval: 'monthly'
         }
       } finally {
         this.loading = false
+      }
+    },
+
+    // Fetch available plans
+    async fetchPlans() {
+      this.loadingPlans = true
+      try {
+        const response = await api.get('/billing/plans')
+        this.availablePlans = response.data || []
+        return this.availablePlans
+      } catch (err) {
+        console.error('[BillingStore] Failed to fetch plans:', err)
+        this.availablePlans = []
+        return []
+      } finally {
+        this.loadingPlans = false
+      }
+    },
+
+    // Fetch current usage
+    async fetchUsage() {
+      try {
+        const response = await api.get('/billing/usage')
+        this.currentUsage = response.data
+      } catch (err) {
+        console.error('[BillingStore] Failed to fetch usage:', err)
       }
     },
 
@@ -155,6 +190,12 @@ export const useBillingStore = defineStore('billing', {
       try {
         const response = await api.get('/billing/invoices')
         this.invoices = response.data || []
+
+        // Find pending invoice
+        const pending = this.invoices.find(inv => inv.status === 'open' || inv.status === 'pending')
+        if (pending) {
+          this.pendingInvoice = pending
+        }
       } catch (err) {
         console.error('[BillingStore] Failed to fetch invoices:', err)
         this.invoices = []
@@ -163,21 +204,53 @@ export const useBillingStore = defineStore('billing', {
       }
     },
 
-    // Fetch pending invoices only
-    async fetchPendingInvoices() {
-      if (!this.showInvoices) {
-        return
-      }
+    // Initiate Stripe Checkout for plan upgrade
+    async initiateCheckout(planCode) {
+      this.loading = true
+      this.error = null
 
       try {
-        const response = await api.get('/billing/invoices')
-        const invoices = response.data || []
-        const pending = invoices.find(inv => inv.status === 'pending')
-        if (pending) {
-          this.pendingInvoice = pending
+        const response = await api.post('/billing/checkout', {
+          plan_code: planCode
+        })
+
+        const checkoutUrl = response.data.checkout_url
+        if (checkoutUrl) {
+          window.location.href = checkoutUrl
+          return true
         }
+
+        throw new Error('No checkout URL returned')
       } catch (err) {
-        console.error('[BillingStore] Failed to fetch pending invoices:', err)
+        console.error('[BillingStore] Checkout failed:', err)
+        this.error = err.response?.data?.error || 'Impossible de créer la session de paiement'
+        return false
+      } finally {
+        this.loading = false
+      }
+    },
+
+    // Open Stripe Customer Portal (manage subscription, payment methods, invoices)
+    async openPortal() {
+      this.loading = true
+      this.error = null
+
+      try {
+        const response = await api.post('/billing/portal')
+
+        const portalUrl = response.data.portal_url
+        if (portalUrl) {
+          window.location.href = portalUrl
+          return true
+        }
+
+        throw new Error('No portal URL returned')
+      } catch (err) {
+        console.error('[BillingStore] Portal failed:', err)
+        this.error = err.response?.data?.error || 'Impossible d\'ouvrir le portail de gestion'
+        return false
+      } finally {
+        this.loading = false
       }
     },
 
@@ -188,7 +261,6 @@ export const useBillingStore = defineStore('billing', {
         const paymentUrl = response.data.payment_url
 
         if (paymentUrl) {
-          // Open payment in new tab
           window.open(paymentUrl, '_blank')
           return true
         }
@@ -209,6 +281,19 @@ export const useBillingStore = defineStore('billing', {
       return this.payInvoice(this.pendingInvoice.id)
     },
 
+    // Check quota before upload (called from upload logic)
+    async checkQuota(requestedBytes) {
+      try {
+        const response = await api.post('/billing/quota/check', {
+          requested_bytes: requestedBytes
+        })
+        return response.data
+      } catch (err) {
+        // Fail-open
+        return { allowed: true }
+      }
+    },
+
     // Clear error
     clearError() {
       this.error = null
@@ -221,15 +306,19 @@ export const useBillingStore = defineStore('billing', {
       this.features = {
         subscriptions: true,
         quotas: true,
-        invoices: false
+        invoices: false,
+        checkout: false,
+        portal: false
       }
       this.currentPlan = null
       this.subscriptions = []
       this.currentUsage = null
+      this.availablePlans = []
       this.invoices = []
       this.pendingInvoice = null
       this.loading = false
       this.loadingInvoices = false
+      this.loadingPlans = false
       this.error = null
       this.customer = {
         id: null,

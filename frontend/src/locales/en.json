@@ -29,6 +29,7 @@
     "upload": "Upload file",
     "createFolder": "Create folder",
     "download": "Download",
+    "downloadZip": "Download (ZIP)",
     "delete": "Delete",
     "rename": "Rename",
     "share": "Share",
@@ -306,6 +307,9 @@
     "openLink": "Open link",
     "deleteShare": "Delete share",
     "copyLink": "Copy link",
+    "downloadDecrypt": "Download (Decrypt)",
+    "removeShare": "Remove this share",
+    "removeShareConfirm": "Do you want to remove this share from your list?",
     "noShares": "No shares yet",
     "loading": "Loading shares...",
     "error": "Error loading shares"
@@ -348,6 +352,12 @@
     "loading": "Loading..."
   },
   "dialogs": {
+    "rename": {
+      "title": "Enter the new name:",
+      "placeholder": "New name",
+      "newFolderTitle": "Enter the name of the new folder:",
+      "newFolderPlaceholder": "Folder name"
+    },
     "tag": {
       "title": "Manage tags",
       "selectTags": "Select tags for this item",

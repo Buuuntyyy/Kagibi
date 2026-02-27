@@ -57,11 +57,11 @@
     >
         <template #custom-actions>
             <div class="menu-item" @click="handleContextAction('download')" v-if="contextMenu.item.type === 'file'">
-              <span class="menu-icon">⬇️</span> Télécharger (Déchiffrer)
+              <span class="menu-icon">⬇️</span> {{ t('shared.downloadDecrypt') }}
             </div>
              <div class="menu-divider"></div>
             <div class="menu-item delete" @click="handleContextAction('delete')">
-              <span class="menu-icon">🗑️</span> Retirer ce partage
+              <span class="menu-icon">🗑️</span> {{ t('shared.removeShare') }}
             </div>
         </template>
     </ContextMenu>
@@ -71,6 +71,7 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import FileTable from './file/FileTable.vue';
 import { formatSize, formatDate } from '../utils/format';
 import api from '../api';
@@ -82,6 +83,7 @@ import sodium from 'libsodium-wrappers-sumo';
 
 const fileStore = useFileStore();
 const authStore = useAuthStore();
+const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const items = ref([]);
@@ -323,8 +325,8 @@ const handleContextAction = async (action) => {
                 await downloadSharedFile(item);
         }
     }
-    else if (action === 'delete') {
-         if (confirm("Voulez-vous retirer ce partage de votre liste ?")) {
+        else if (action === 'delete') {
+          if (confirm(t('shared.removeShareConfirm'))) {
              try {
                 let url = `/shares/with-me/${item.id}`;
                 // Determine type query param
