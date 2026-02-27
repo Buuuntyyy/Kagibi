@@ -70,6 +70,14 @@ type BillingProvider interface {
 
 	// GetPaymentLink génère un lien de paiement pour une facture
 	GetPaymentLink(ctx context.Context, invoiceID string) (string, error)
+
+	// === Stripe Checkout (upgrade de plan) ===
+
+	// CreateCheckoutSession crée une session Stripe Checkout pour upgrade
+	CreateCheckoutSession(ctx context.Context, userID, planCode, successURL, cancelURL string) (string, error)
+
+	// CreatePortalSession crée une session Stripe Customer Portal
+	CreatePortalSession(ctx context.Context, userID, returnURL string) (string, error)
 }
 
 // =============================================================================
@@ -106,11 +114,12 @@ type Subscription struct {
 	ID                 string     `json:"id"`
 	UserID             string     `json:"user_id"`
 	PlanCode           string     `json:"plan_code"`
-	Status             string     `json:"status"` // "active", "canceled", "past_due", "trialing"
+	Status             string     `json:"status"` // "active", "canceled", "past_due", "trialing", "incomplete"
 	CurrentPeriodStart time.Time  `json:"current_period_start"`
 	CurrentPeriodEnd   time.Time  `json:"current_period_end"`
 	CanceledAt         *time.Time `json:"canceled_at,omitempty"`
 	TrialEndsAt        *time.Time `json:"trial_ends_at,omitempty"`
+	StripeSubID        string     `json:"stripe_subscription_id,omitempty"`
 }
 
 // Plan représente un plan tarifaire avec quotas
@@ -150,7 +159,7 @@ type QuotaCheckResult struct {
 type Invoice struct {
 	ID          string     `json:"id"`
 	Number      string     `json:"number"`
-	Status      string     `json:"status"` // "draft", "pending", "paid", "failed"
+	Status      string     `json:"status"` // "draft", "open", "paid", "void", "uncollectible"
 	AmountCents int64      `json:"amount_cents"`
 	Currency    string     `json:"currency"`
 	IssuedAt    time.Time  `json:"issued_at"`

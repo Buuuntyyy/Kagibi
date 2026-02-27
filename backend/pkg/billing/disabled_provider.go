@@ -2,6 +2,7 @@ package billing
 
 import (
 	"context"
+	"fmt"
 	"log"
 )
 
@@ -116,4 +117,14 @@ func (d *DisabledProvider) GetInvoices(ctx context.Context, userID string, limit
 
 func (d *DisabledProvider) GetPaymentLink(ctx context.Context, invoiceID string) (string, error) {
 	return "", nil
+}
+
+// === Stripe Checkout (disabled) ===
+
+func (d *DisabledProvider) CreateCheckoutSession(ctx context.Context, userID, planCode, successURL, cancelURL string) (string, error) {
+	return "", fmt.Errorf("billing disabled in self-hosted mode")
+}
+
+func (d *DisabledProvider) CreatePortalSession(ctx context.Context, userID, returnURL string) (string, error) {
+	return "", fmt.Errorf("billing disabled in self-hosted mode")
 }
