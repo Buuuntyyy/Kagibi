@@ -1,14 +1,15 @@
 <template>
   <div class="language-switcher">
-    <button 
-      v-for="lang in languages" 
-      :key="lang.code"
-      @click="switchLanguage(lang.code)"
-      :class="['lang-btn', { active: currentLanguage === lang.code }]"
-      :title="`${lang.name}`"
+    <select
+      v-model="currentLanguage"
+      class="lang-select"
+      @change="switchLanguage(currentLanguage)"
+      aria-label="Language selector"
     >
-      {{ lang.flag }}
-    </button>
+      <option v-for="lang in languages" :key="lang.code" :value="lang.code">
+        {{ lang.flag }} {{ lang.name }}
+      </option>
+    </select>
   </div>
 </template>
 
@@ -42,28 +43,25 @@ onMounted(() => {
 <style scoped>
 .language-switcher {
   display: flex;
-  gap: 0.5rem;
   align-items: center;
 }
 
-.lang-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
+.lang-select {
+  background-color: var(--background-color);
+  color: var(--main-text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.9rem;
   cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-  opacity: 0.6;
+  padding: 0.35rem 0.5rem;
+  outline: none;
 }
 
-.lang-btn:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-  opacity: 1;
+.lang-select:hover {
+  background-color: var(--card-color);
 }
 
-.lang-btn.active {
-  opacity: 1;
-  background-color: rgba(0, 0, 0, 0.1);
+.lang-select:focus {
+  border-color: var(--primary-color);
 }
 </style>

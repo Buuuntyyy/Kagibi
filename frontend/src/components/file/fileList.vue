@@ -46,6 +46,17 @@
           <span v-if="index < pathSegments.length - 1" class="separator">/</span>
         </span>
       </div>
+
+      <div v-if="buyMeACoffeeUrl" class="path-banner-actions">
+        <a
+          :href="buyMeACoffeeUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="buy-me-coffee-link"
+        >
+          Supporter le projet !
+        </a>
+      </div>
     </div>
 
     <!-- Selection Action Bar / Security Tip Bar -->
@@ -385,6 +396,11 @@ const allItems = computed(() => {
     ...filteredFolders.value.map(item => ({ ...item, type: 'folder' })),
     ...filteredFiles.value.map(item => ({ ...item, type: 'file' }))
   ]
+})
+
+const buyMeACoffeeUrl = computed(() => {
+  const runtimeUrl = typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : ''
+  return runtimeUrl || import.meta.env.VITE_BUY_ME_A_COFFEE_URL || ''
 })
 
 const inputDialog = ref({
@@ -1251,9 +1267,34 @@ const onMFACancelled = () => {
   padding: 0.5rem 1rem;
   background-color: var(--card-color);
   display: flex;
-  justify-content: flex-start;
+  justify-content: space-between;
   align-items: center;
   gap: 1rem;
+}
+
+.path-banner-actions {
+  margin-left: auto;
+}
+
+.buy-me-coffee-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background-color: var(--hover-background-color);
+  color: var(--main-text-color);
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+
+.buy-me-coffee-link:hover {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
 }
 
 .back-arrow {
