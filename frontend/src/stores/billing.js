@@ -22,6 +22,9 @@ export const useBillingStore = defineStore('billing', {
     // Available plans
     availablePlans: [],
 
+    // Billing interval preference
+    billingInterval: 'monthly', // 'monthly' | 'yearly'
+
     // Invoices
     invoices: [],
     pendingInvoice: null,
@@ -106,9 +109,22 @@ export const useBillingStore = defineStore('billing', {
       return state.currentUsage?.bandwidth_used_gb || 0
     },
 
-    // Get P2P usage in GB
-    p2pUsageGB: (state) => {
-      return state.currentUsage?.p2p_transfer_gb || 0
+    // Get active P2P shares count
+    p2pActiveShares: (state) => {
+      return state.currentUsage?.p2p_shares_active || 0
+    },
+
+    // Get P2P shares limit from current plan
+    p2pSharesLimit: (state) => {
+      return state.currentPlan?.p2p_shares_limit || 5
+    },
+
+    // Yearly savings percentage vs monthly
+    yearlySavingsPct: (state) => (plan) => {
+      if (!plan || !plan.price_monthly_cents || !plan.price_yearly_cents) return 0
+      const monthlyTotal = plan.price_monthly_cents * 12
+      const yearly = plan.price_yearly_cents
+      return Math.round((1 - yearly / monthlyTotal) * 100)
     }
   },
 
@@ -204,14 +220,33 @@ export const useBillingStore = defineStore('billing', {
       }
     },
 
+    // Set billing interval preference
+    setBillingInterval(interval) {
+      this.billingInterval = interval
+    },
+
+    // Check P2P quota before creating a share
+    async checkP2PQuota() {
+      try {
+        const response = await api.get('/billing/quota/p2p')
+        return response.data
+      } catch (err) {
+        // Fail-open
+        return { allowed: true }
+      }
+    },
+
     // Initiate Stripe Checkout for plan upgrade
-    async initiateCheckout(planCode) {
+    async initiateCheckout(planCode, interval = null) {
       this.loading = true
       this.error = null
 
+      const selectedInterval = interval || this.billingInterval || 'monthly'
+
       try {
         const response = await api.post('/billing/checkout', {
-          plan_code: planCode
+          plan_code: planCode,
+          interval: selectedInterval
         })
 
         const checkoutUrl = response.data.checkout_url

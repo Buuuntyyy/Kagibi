@@ -30,8 +30,8 @@ RUN echo '#!/bin/sh' > /usr/local/bin/generate-config.sh && \
     echo 'cat > /usr/share/nginx/html/config.js << EOF' >> /usr/local/bin/generate-config.sh && \
     echo 'window.__APP_CONFIG__ = {' >> /usr/local/bin/generate-config.sh && \
     echo '  apiUrl: "${VITE_API_URL}" || "http://localhost:8080/api/v1",' >> /usr/local/bin/generate-config.sh && \
-  echo '  supabaseUrl: "${VITE_SUPABASE_URL}" || "",' >> /usr/local/bin/generate-config.sh && \
-  echo '  supabaseAnonKey: "${VITE_SUPABASE_ANON_KEY}" || "",' >> /usr/local/bin/generate-config.sh && \
+  echo '  supabaseUrl: "${VITE_SUPABASE_URL:-$SUPABASE_URL}" || "",' >> /usr/local/bin/generate-config.sh && \
+  echo '  supabaseAnonKey: "${VITE_SUPABASE_ANON_KEY:-$SUPABASE_ANON_KEY}" || "",' >> /usr/local/bin/generate-config.sh && \
     echo '}' >> /usr/local/bin/generate-config.sh && \
     echo 'EOF' >> /usr/local/bin/generate-config.sh && \
     chmod +x /usr/local/bin/generate-config.sh

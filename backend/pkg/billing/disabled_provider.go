@@ -15,6 +15,9 @@ func NewDisabledProvider() *DisabledProvider {
 	return &DisabledProvider{}
 }
 
+// ProviderName implements the optional providerNamer interface.
+func (d *DisabledProvider) ProviderName() string { return "disabled" }
+
 // === Lifecycle Events ===
 
 func (d *DisabledProvider) OnUserCreated(ctx context.Context, event UserCreatedEvent) error {
@@ -67,14 +70,13 @@ func (d *DisabledProvider) ListPlans(ctx context.Context) ([]Plan, error) {
 
 func (d *DisabledProvider) getUnlimitedPlan() *Plan {
 	return &Plan{
-		Code:             "unlimited",
-		Name:             "Self-Hosted",
-		Description:      "Stockage et bande passante illimités",
-		StorageLimitGB:   999999999, // ~1 exabyte (virtuellement illimité)
-		BandwidthLimitGB: 999999999,
-		PriceMonthly:     0,
-		Currency:         "EUR",
-		Interval:         "monthly",
+		Code:           "unlimited",
+		Name:           "Self-Hosted",
+		Description:    "Stockage illimité (mode auto-hébergé)",
+		StorageLimitGB: 999999999,
+		P2PSharesLimit: 999999999,
+		PriceMonthly:   0,
+		Currency:       "EUR",
 		Features: map[string]interface{}{
 			"self_hosted": true,
 			"unlimited":   true,
@@ -91,21 +93,28 @@ func (d *DisabledProvider) TrackUsage(ctx context.Context, event UsageEvent) err
 
 func (d *DisabledProvider) GetCurrentUsage(ctx context.Context, userID string) (*Usage, error) {
 	return &Usage{
-		UserID:          userID,
-		StorageUsedGB:   0,
-		BandwidthUsedGB: 0,
+		UserID:        userID,
+		StorageUsedGB: 0,
 	}, nil
 }
 
 // === Quota Enforcement ===
 
 func (d *DisabledProvider) CheckQuota(ctx context.Context, userID string, requestedBytes int64) (*QuotaCheckResult, error) {
-	// Toujours autoriser
 	return &QuotaCheckResult{
 		Allowed:        true,
 		CurrentUsage:   0,
 		Limit:          999999999 * 1024 * 1024 * 1024,
 		RemainingBytes: 999999999 * 1024 * 1024 * 1024,
+	}, nil
+}
+
+func (d *DisabledProvider) CheckP2PQuota(ctx context.Context, userID string, currentActiveShares int) (*P2PQuotaCheckResult, error) {
+	return &P2PQuotaCheckResult{
+		Allowed:         true,
+		ActiveShares:    currentActiveShares,
+		Limit:           999999999,
+		RemainingShares: 999999999,
 	}, nil
 }
 
@@ -121,7 +130,7 @@ func (d *DisabledProvider) GetPaymentLink(ctx context.Context, invoiceID string)
 
 // === Stripe Checkout (disabled) ===
 
-func (d *DisabledProvider) CreateCheckoutSession(ctx context.Context, userID, planCode, successURL, cancelURL string) (string, error) {
+func (d *DisabledProvider) CreateCheckoutSession(ctx context.Context, userID, planCode, interval, successURL, cancelURL string) (string, error) {
 	return "", fmt.Errorf("billing disabled in self-hosted mode")
 }
 

@@ -22,8 +22,9 @@ type User struct {
 	RecoveryHash               string     `bun:"recovery_hash,notnull" json:"recovery_hash"`
 	RecoverySalt               string     `bun:"recovery_salt,notnull" json:"recovery_salt"`
 	StorageUsed                int64      `bun:"storage_used,notnull,default:0" json:"storage_used"`
-	StorageLimit               int64      `bun:"storage_limit,notnull,default:16106127360" json:"storage_limit"` // Default 15GB
+	StorageLimit               int64      `bun:"storage_limit,notnull,default:5368709120" json:"storage_limit"` // Default 5GB (Free plan)
 	Plan                       string     `bun:"plan,notnull,default:'free'" json:"plan"`
+	StripeCustomerID           string     `bun:"stripe_customer_id" json:"stripe_customer_id,omitempty"`
 	FriendCode                 string     `bun:"friend_code,unique,notnull" json:"friend_code"`      // Short unique code for friends
 	PublicKey                  string     `bun:"public_key" json:"public_key"`                       // RSA Public Key (Standard PEM format)
 	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"` // RSA Private Key (Encrypted with MasterKey)

@@ -200,19 +200,9 @@ func GetUserStorageUsed(ctx context.Context, userID string) int64 {
 }
 
 // GetUserBandwidthLimit retourne la limite de bande passante mensuelle en bytes
+// La bande passante n'est plus limitée par plan — retourne une valeur illimitée.
 func GetUserBandwidthLimit(ctx context.Context, userID string) int64 {
-	provider := GetProvider()
-	if provider == nil {
-		return 10 * 1024 * 1024 * 1024 // 10 Go par défaut
-	}
-
-	plan, err := provider.GetUserPlan(ctx, userID)
-	if err != nil {
-		log.Printf("[Billing] Error getting user plan: %v", err)
-		return 10 * 1024 * 1024 * 1024
-	}
-
-	return plan.BandwidthLimitGB * 1024 * 1024 * 1024
+	return -1 // illimité
 }
 
 // === Helpers pour souscriptions ===

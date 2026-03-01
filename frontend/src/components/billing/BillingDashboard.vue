@@ -111,7 +111,7 @@
                       </div>
                       <div class="stat-info">
                           <span class="stat-label">{{ t('billing.bandwidthUsed') || 'Bande passante' }}</span>
-                          <span class="stat-value">{{ billingStore.bandwidthUsageGB.toFixed(2) }} <small>Go</small></span>
+                          <span class="stat-value">{{ billingStore.storageUsageGB.toFixed(2) }} <small>Go</small></span>
                       </div>
                   </div>
                   <div class="stat-card" v-if="currentPlan?.features?.p2p_enabled">
@@ -124,8 +124,8 @@
                           </svg>
                       </div>
                       <div class="stat-info">
-                          <span class="stat-label">{{ t('billing.p2pTransfers') }}</span>
-                          <span class="stat-value">{{ billingStore.p2pUsageGB.toFixed(2) }} <small>Go</small></span>
+                          <span class="stat-label">{{ t('billing.p2pTransfers') || 'Partages P2P actifs' }}</span>
+                          <span class="stat-value">{{ billingStore.p2pActiveShares }} <small>/ {{ billingStore.p2pSharesLimit }}</small></span>
                       </div>
                   </div>
               </div>
@@ -212,6 +212,19 @@
             <h2>{{ t('billing.choosePlan') || 'Choisir un plan' }}</h2>
             <button class="btn-close" @click="showUpgradeModal = false">&times;</button>
           </div>
+          <!-- Interval Toggle -->
+          <div class="interval-toggle-wrapper">
+            <div class="interval-toggle">
+              <button
+                :class="['toggle-btn', { active: billingStore.billingInterval === 'monthly' }]"
+                @click="billingStore.setBillingInterval('monthly')"
+              >Mensuel</button>
+              <button
+                :class="['toggle-btn', { active: billingStore.billingInterval === 'yearly' }]"
+                @click="billingStore.setBillingInterval('yearly')"
+              >Annuel <span class="savings-badge" v-if="yearlySavings > 0">-{{ yearlySavings }}%</span></button>
+            </div>
+          </div>
           <div class="modal-body">
             <div v-if="billingStore.loadingPlans" class="loading-state" style="height: 200px;">
               <div class="spinner"></div>
@@ -225,11 +238,12 @@
                 <div class="plan-card-badge" v-if="plan.code === 'expert'">Populaire</div>
                 <h3 class="plan-card-name">{{ plan.name }}</h3>
                 <div class="plan-card-price">
-                  <span class="plan-card-amount">{{ formatPrice(plan.price_monthly_cents) }}</span>
-                  <span class="plan-card-interval" v-if="plan.price_monthly_cents > 0">/mois</span>
+                  <span class="plan-card-amount">{{ billingStore.billingInterval === 'yearly' ? formatPrice(plan.price_yearly_cents) : formatPrice(plan.price_monthly_cents) }}</span>
+                  <span class="plan-card-interval" v-if="plan.price_monthly_cents > 0">{{ billingStore.billingInterval === 'yearly' ? '/an' : '/mois' }}</span>
                 </div>
                 <ul class="plan-card-features">
                   <li>{{ plan.storage_limit_gb >= 1000 ? (plan.storage_limit_gb / 1000) + ' To' : plan.storage_limit_gb + ' Go' }} de stockage</li>
+                  <li v-if="plan.p2p_shares_limit">{{ plan.p2p_shares_limit }} partages P2P</li>
                   <li v-if="plan.features?.max_file_size_mb">Fichiers jusqu'à {{ plan.features.max_file_size_mb >= 1024 ? (plan.features.max_file_size_mb / 1024) + ' Go' : plan.features.max_file_size_mb + ' Mo' }}</li>
                   <li v-if="plan.features?.p2p_enabled">P2P activé{{ plan.features.p2p_limit_gb ? ' (' + plan.features.p2p_limit_gb + ' Go/mois)' : '' }}</li>
                   <li v-else>P2P non disponible</li>
@@ -239,7 +253,7 @@
                   v-if="plan.code !== billingStore.planCode && plan.price_monthly_cents > 0"
                   class="btn-primary plan-card-btn"
                   :disabled="checkoutLoading"
-                  @click="handleUpgrade(plan.code)"
+                  @click="handleUpgrade(plan.code, billingStore.billingInterval)"
                 >
                   {{ checkoutLoading ? '...' : (t('billing.subscribe') || 'S\'abonner') }}
                 </button>
@@ -285,9 +299,8 @@ const intervalLabel = computed(() => {
 const planBadgeClass = computed(() => {
   const code = currentPlan.value?.code
   if (code === 'free') return 'badge-free'
-  if (code === 'personal') return 'badge-personal'
-  if (code === 'expert') return 'badge-expert'
-  if (code === 'enterprise') return 'badge-enterprise'
+  if (code === 'pro') return 'badge-pro'
+  if (code === 'business') return 'badge-business'
   return 'badge-free'
 })
 
@@ -295,6 +308,14 @@ const storagePercent = computed(() => {
   const limit = currentPlan.value?.storage_limit_gb || 5
   const used = billingStore.storageUsageGB
   return Math.min((used / limit) * 100, 100)
+})
+
+// Compute yearly savings % (e.g. Pro: 12*5=60€ vs 50€/yr = 17% off)
+const yearlySavings = computed(() => {
+  // Use first paid plan to compute the badge percentage
+  const paid = billingStore.availablePlans?.find(p => p.price_monthly_cents > 0)
+  if (!paid) return 0
+  return billingStore.yearlySavingsPct(paid)
 })
 
 // Formatting helpers
@@ -324,11 +345,11 @@ function getPaymentStatusLabel(status) {
 }
 
 // Actions
-async function handleUpgrade(planCode) {
+async function handleUpgrade(planCode, interval = null) {
   checkoutLoading.value = true
   billingStore.clearError()
   try {
-    await billingStore.initiateCheckout(planCode)
+    await billingStore.initiateCheckout(planCode, interval)
     // If successful, user is redirected to Stripe Checkout
   } finally {
     checkoutLoading.value = false
@@ -445,9 +466,8 @@ onMounted(async () => {
 /* Plan Badge */
 .plan-badge { padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
 .badge-free { background: var(--hover-background-color); color: var(--secondary-text-color); }
-.badge-personal { background: var(--primary-color); color: white; }
-.badge-expert { background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: white; }
-.badge-enterprise { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+.badge-pro { background: var(--primary-color); color: white; }
+.badge-business { background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: white; }
 
 /* Plan Section Details */
 .plan-details-grid { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
@@ -567,4 +587,18 @@ onMounted(async () => {
 .plan-card-features li:last-child { border-bottom: none; }
 .plan-card-btn { width: 100%; }
 .plan-card-current { color: var(--secondary-text-color); font-weight: 600; font-size: 0.9rem; }
+
+/* Interval Toggle */
+.interval-toggle-wrapper { display: flex; justify-content: center; padding: 20px 28px 0; }
+.interval-toggle { display: inline-flex; background: var(--hover-background-color); border-radius: 10px; padding: 4px; gap: 4px; }
+.toggle-btn {
+  padding: 8px 24px; border: none; background: transparent; border-radius: 8px;
+  cursor: pointer; font-weight: 600; font-size: 0.9rem; color: var(--secondary-text-color);
+  transition: all 0.2s; display: flex; align-items: center; gap: 8px;
+}
+.toggle-btn.active { background: var(--card-color); color: var(--primary-color); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.savings-badge {
+  background: rgba(34, 197, 94, 0.15); color: var(--success-color);
+  padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 700;
+}
 </style>
