@@ -18,7 +18,6 @@ import (
 	"safercloud/backend/handlers/users"
 	"safercloud/backend/middleware"
 	"safercloud/backend/pkg"
-	billingpkg "safercloud/backend/pkg/billing"
 	"safercloud/backend/pkg/monitoring"
 	"safercloud/backend/pkg/s3storage"
 	"safercloud/backend/pkg/workers"
@@ -39,7 +38,7 @@ func main() {
 
 	loadEnv()
 	initS3()
-	initBillingProvider()
+	setupBillingProvider()
 
 	db := pkg.NewDB()
 	migrateDB(db)
@@ -87,34 +86,8 @@ func initS3() {
 	}
 }
 
-// initBillingProvider initialise le provider de facturation
-// BILLING_ENABLED=false : DisabledProvider (self-hosted, illimité)
-// STRIPE_BILLING_SERVICE_URL set : StripeWebhookProvider (production avec service Stripe privé)
-// Par défaut : MockProvider (dev avec limite 5Go)
-func initBillingProvider() {
-	// Vérifier si le billing est complètement désactivé (mode self-hosted)
-	if os.Getenv("BILLING_ENABLED") == "false" {
-		provider := billingpkg.NewDisabledProvider()
-		billingpkg.SetProvider(provider)
-		log.Println("[Billing] DISABLED - Self-hosted mode (unlimited storage)")
-		return
-	}
-
-	stripeBillingURL := os.Getenv("STRIPE_BILLING_SERVICE_URL")
-	stripeBillingKey := os.Getenv("STRIPE_BILLING_SERVICE_KEY")
-
-	if stripeBillingURL != "" && stripeBillingKey != "" {
-		// Mode production: Stripe via service privé
-		provider := billingpkg.NewStripeWebhookProvider(stripeBillingURL, stripeBillingKey)
-		billingpkg.SetProvider(provider)
-		log.Println("[Billing] StripeWebhookProvider initialized - connected to Stripe billing service")
-	} else {
-		// Mode dev/open-source: utiliser le mock provider
-		provider := billingpkg.NewMockProvider()
-		billingpkg.SetProvider(provider)
-		log.Println("[Billing] MockProvider initialized - free plan mode (5GB storage)")
-	}
-}
+// initBillingProvider has been moved to billing_setup.go (build-tag separated).
+// Use setupBillingProvider() instead.
 
 func migrateDB(db *bun.DB) {
 	err := pkg.Migrate(db)
@@ -202,7 +175,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, j
 	registerFriendRoutes(protected, friendHandler)
 	registerShareRoutes(protected, db)
 	registerSecurityRoutes(protected)
-	registerBillingRoutes(api, protected, redisClient)
+	registerBillingRoutes(api, protected, redisClient, db)
 	registerP2PRoutes(protected, db)
 
 	// System
@@ -392,14 +365,13 @@ func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 	})
 }
 
-// registerBillingRoutes enregistre les routes de facturation
-// Utilise le système de provider Stripe pluggable
-func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup, redisClient *redis.Client) {
-	// Webhook receiver (pour le service billing Stripe privé)
-	billinghandlers.RegisterWebhookRoute(api)
+// registerBillingRoutes enregistre les routes de facturation Stripe
+func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup, redisClient *redis.Client, db *bun.DB) {
+	// Webhook Stripe direct (sans auth JWT — vérifié par signature Stripe)
+	billinghandlers.RegisterWebhookRoute(api, db)
 
-	// Toutes les routes (publiques + protégées)
-	billinghandlers.RegisterRoutes(protected, middleware.AuthMiddleware(os.Getenv("SUPABASE_JWT_SECRET"), redisClient))
+	// Toutes les routes billing (publiques + protégées)
+	billinghandlers.RegisterRoutes(protected, middleware.AuthMiddleware(os.Getenv("SUPABASE_JWT_SECRET"), redisClient), db)
 }
 
 func startServer(router *gin.Engine) {

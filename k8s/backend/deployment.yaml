@@ -125,63 +125,47 @@ spec:
             secretKeyRef:
               name: safercloud-secrets
               key: S3_SECRET_KEY
-        # Billing - Lago
+        # Billing - Stripe
         - name: BILLING_ENABLED
           valueFrom:
             configMapKeyRef:
               name: safercloud-config
               key: BILLING_ENABLED
-        - name: LAGO_API_URL
+        - name: FRONTEND_URL
           valueFrom:
             configMapKeyRef:
               name: safercloud-config
-              key: LAGO_API_URL
-        - name: LAGO_API_KEY
+              key: FRONTEND_URL
+        - name: STRIPE_SECRET_KEY
           valueFrom:
             secretKeyRef:
               name: safercloud-secrets
-              key: LAGO_API_KEY
-        - name: LAGO_WEBHOOK_SECRET
+              key: STRIPE_SECRET_KEY
+        - name: STRIPE_WEBHOOK_SECRET
           valueFrom:
             secretKeyRef:
               name: safercloud-secrets
-              key: LAGO_WEBHOOK_SECRET
-        - name: LAGO_BUFFER_SIZE
-          valueFrom:
-            configMapKeyRef:
-              name: safercloud-config
-              key: LAGO_BUFFER_SIZE
-        - name: LAGO_FLUSH_INTERVAL_SECONDS
-          valueFrom:
-            configMapKeyRef:
-              name: safercloud-config
-              key: LAGO_FLUSH_INTERVAL_SECONDS
-        # Billing - Mollie
-        - name: MOLLIE_API_KEY
+              key: STRIPE_WEBHOOK_SECRET
+        - name: STRIPE_PRICE_PRO_MONTHLY
           valueFrom:
             secretKeyRef:
               name: safercloud-secrets
-              key: MOLLIE_API_KEY
-        - name: MOLLIE_WEBHOOK_SECRET
+              key: STRIPE_PRICE_PRO_MONTHLY
+        - name: STRIPE_PRICE_PRO_YEARLY
           valueFrom:
             secretKeyRef:
               name: safercloud-secrets
-              key: MOLLIE_WEBHOOK_SECRET
-        - name: MOLLIE_TEST_MODE
+              key: STRIPE_PRICE_PRO_YEARLY
+        - name: STRIPE_PRICE_BUSINESS_MONTHLY
           valueFrom:
-            configMapKeyRef:
-              name: safercloud-config
-              key: MOLLIE_TEST_MODE
-        - name: MOLLIE_REDIRECT_URL
+            secretKeyRef:
+              name: safercloud-secrets
+              key: STRIPE_PRICE_BUSINESS_MONTHLY
+        - name: STRIPE_PRICE_BUSINESS_YEARLY
           valueFrom:
-            configMapKeyRef:
-              name: safercloud-config
-              key: MOLLIE_REDIRECT_URL
-        - name: MOLLIE_WEBHOOK_URL
-          valueFrom:
-            configMapKeyRef:
-              name: safercloud-config
-              key: MOLLIE_WEBHOOK_URL
+            secretKeyRef:
+              name: safercloud-secrets
+              key: STRIPE_PRICE_BUSINESS_YEARLY
         resources:
           requests:
             memory: "512Mi"

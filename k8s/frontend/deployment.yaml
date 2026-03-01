@@ -41,7 +41,7 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
       - name: frontend
-        image: ghcr.io/buuuntyyy/splatch:frontend-v1.4.0  # Replace with your actual image
+        image: ghcr.io/buuuntyyy/splatch:frontend-v1.9.9  # Replace with your actual image
         imagePullPolicy: Always
         ports:
         - containerPort: 80

@@ -45,9 +45,4 @@ data:
 
   # Billing Configuration
   BILLING_ENABLED: "true"
-  LAGO_API_URL: "https://api.getlago.com"
-  LAGO_BUFFER_SIZE: "100"
-  LAGO_FLUSH_INTERVAL_SECONDS: "30"
-  MOLLIE_TEST_MODE: "false"
-  MOLLIE_REDIRECT_URL: "https://kagibi.stratus.ovh/dashboard/billing"
-  MOLLIE_WEBHOOK_URL: "https://kagibi.stratus.ovh/api/v1/webhooks/mollie"
+  FRONTEND_URL: "https://kagibi.stratus.ovh"

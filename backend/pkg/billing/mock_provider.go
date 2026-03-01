@@ -13,13 +13,13 @@ import (
 type MockProvider struct {
 	mu          sync.RWMutex
 	users       map[string]*mockUser
-	idempotency map[string]interface{} // Cache pour idempotence
-	defaultPlan *Plan
+	idempotency map[string]interface{}
 }
 
 type mockUser struct {
-	subscription *Subscription
-	usage        *Usage
+	subscription    *Subscription
+	storageUsedGB   float64
+	p2pSharesActive int
 }
 
 // NewMockProvider crée un nouveau mock billing provider
@@ -27,31 +27,18 @@ func NewMockProvider() *MockProvider {
 	return &MockProvider{
 		users:       make(map[string]*mockUser),
 		idempotency: make(map[string]interface{}),
-		defaultPlan: &Plan{
-			Code:             "free",
-			Name:             "Plan Gratuit",
-			Description:      "5 Go de stockage gratuit",
-			StorageLimitGB:   5,
-			BandwidthLimitGB: 10,
-			PriceMonthly:     0,
-			Currency:         "EUR",
-			Interval:         "monthly",
-			Features: map[string]interface{}{
-				"max_file_size_mb": 100,
-				"p2p_enabled":      true,
-			},
-		},
 	}
 }
+
+// ProviderName implements the optional providerNamer interface.
+func (m *MockProvider) ProviderName() string { return "mock" }
 
 // === Lifecycle Events ===
 
 func (m *MockProvider) OnUserCreated(ctx context.Context, event UserCreatedEvent) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
 	log.Printf("[MockBilling] User created: %s (%s)", event.UserID, event.Email)
-
 	now := time.Now()
 	m.users[event.UserID] = &mockUser{
 		subscription: &Subscription{
@@ -62,39 +49,26 @@ func (m *MockProvider) OnUserCreated(ctx context.Context, event UserCreatedEvent
 			CurrentPeriodStart: now,
 			CurrentPeriodEnd:   now.AddDate(0, 1, 0),
 		},
-		usage: &Usage{
-			UserID:      event.UserID,
-			PeriodStart: now,
-			PeriodEnd:   now.AddDate(0, 1, 0),
-		},
 	}
-
 	return nil
 }
 
 func (m *MockProvider) OnUserDeleted(ctx context.Context, userID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
 	log.Printf("[MockBilling] User deleted: %s", userID)
 	delete(m.users, userID)
 	return nil
 }
 
-// === Subscription Management (avec idempotence) ===
+// === Subscription Management ===
 
 func (m *MockProvider) CreateSubscription(ctx context.Context, userID, planCode, idempotencyKey string) (*Subscription, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	// Vérifier idempotence
 	if cached, ok := m.idempotency[idempotencyKey]; ok {
-		log.Printf("[MockBilling] Idempotent hit for CreateSubscription: %s", idempotencyKey)
 		return cached.(*Subscription), nil
 	}
-
-	log.Printf("[MockBilling] Creating subscription: user=%s plan=%s", userID, planCode)
-
 	now := time.Now()
 	sub := &Subscription{
 		ID:                 fmt.Sprintf("mock_sub_%s_%d", userID, now.Unix()),
@@ -104,185 +78,105 @@ func (m *MockProvider) CreateSubscription(ctx context.Context, userID, planCode,
 		CurrentPeriodStart: now,
 		CurrentPeriodEnd:   now.AddDate(0, 1, 0),
 	}
-
-	// Mettre en cache pour idempotence
 	m.idempotency[idempotencyKey] = sub
-
-	// Mettre à jour l'utilisateur
 	if user, ok := m.users[userID]; ok {
 		user.subscription = sub
 	} else {
-		m.users[userID] = &mockUser{
-			subscription: sub,
-			usage: &Usage{
-				UserID:      userID,
-				PeriodStart: now,
-				PeriodEnd:   now.AddDate(0, 1, 0),
-			},
-		}
+		m.users[userID] = &mockUser{subscription: sub}
 	}
-
 	return sub, nil
 }
 
 func (m *MockProvider) GetSubscription(ctx context.Context, userID string) (*Subscription, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
 	user, exists := m.users[userID]
 	if !exists {
-		// Auto-créer pour simplicité en dev
 		now := time.Now()
 		return &Subscription{
-			ID:                 fmt.Sprintf("mock_sub_%s", userID),
-			UserID:             userID,
-			PlanCode:           "free",
-			Status:             "active",
-			CurrentPeriodStart: now,
-			CurrentPeriodEnd:   now.AddDate(0, 1, 0),
+			ID: fmt.Sprintf("mock_sub_%s", userID), UserID: userID, PlanCode: "free",
+			Status: "active", CurrentPeriodStart: now, CurrentPeriodEnd: now.AddDate(0, 1, 0),
 		}, nil
 	}
-
 	return user.subscription, nil
 }
 
 func (m *MockProvider) UpdateSubscription(ctx context.Context, userID, newPlanCode, idempotencyKey string) (*Subscription, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	// Vérifier idempotence
 	if cached, ok := m.idempotency[idempotencyKey]; ok {
-		log.Printf("[MockBilling] Idempotent hit for UpdateSubscription: %s", idempotencyKey)
 		return cached.(*Subscription), nil
 	}
-
-	log.Printf("[MockBilling] Updating subscription: user=%s newPlan=%s", userID, newPlanCode)
-
 	user, exists := m.users[userID]
 	if !exists {
 		return nil, fmt.Errorf("user not found: %s", userID)
 	}
-
 	user.subscription.PlanCode = newPlanCode
-
-	// Mettre en cache pour idempotence
 	m.idempotency[idempotencyKey] = user.subscription
-
 	return user.subscription, nil
 }
 
 func (m *MockProvider) CancelSubscription(ctx context.Context, userID, idempotencyKey string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	// Vérifier idempotence
 	if _, ok := m.idempotency[idempotencyKey]; ok {
-		log.Printf("[MockBilling] Idempotent hit for CancelSubscription: %s", idempotencyKey)
 		return nil
 	}
-
-	log.Printf("[MockBilling] Canceling subscription: user=%s", userID)
-
 	user, exists := m.users[userID]
 	if exists && user.subscription != nil {
 		now := time.Now()
 		user.subscription.Status = "canceled"
 		user.subscription.CanceledAt = &now
 	}
-
-	// Marquer comme traité
 	m.idempotency[idempotencyKey] = true
-
 	return nil
 }
 
 // === Plan Information ===
 
+func (m *MockProvider) getPlans() []Plan {
+	return []Plan{
+		{
+			Code: "free", Name: "Gratuit",
+			Description:    "5 Go de stockage, 5 partages P2P actifs",
+			StorageLimitGB: 5, P2PSharesLimit: 5,
+			PriceMonthly: 0, PriceYearly: 0, Currency: "EUR",
+			Features: map[string]interface{}{"p2p_enabled": true},
+		},
+		{
+			Code: "pro", Name: "Pro",
+			Description:    "50 Go de stockage, 50 partages P2P actifs",
+			StorageLimitGB: 50, P2PSharesLimit: 50,
+			PriceMonthly: 500, PriceYearly: 5000, Currency: "EUR",
+			Features: map[string]interface{}{"p2p_enabled": true},
+		},
+		{
+			Code: "business", Name: "Business",
+			Description:    "200 Go de stockage, 200 partages P2P actifs",
+			StorageLimitGB: 200, P2PSharesLimit: 200,
+			PriceMonthly: 1500, PriceYearly: 15000, Currency: "EUR",
+			Features: map[string]interface{}{"p2p_enabled": true, "priority_support": true},
+		},
+	}
+}
+
 func (m *MockProvider) GetPlan(ctx context.Context, planCode string) (*Plan, error) {
-	plans := m.getAvailablePlans()
-	for _, plan := range plans {
-		if plan.Code == planCode {
-			return &plan, nil
+	for _, p := range m.getPlans() {
+		if p.Code == planCode {
+			return &p, nil
 		}
 	}
-	return nil, fmt.Errorf("plan not found: %s", planCode)
+	free := m.getPlans()[0]
+	return &free, nil
 }
 
 func (m *MockProvider) GetUserPlan(ctx context.Context, userID string) (*Plan, error) {
-	sub, err := m.GetSubscription(ctx, userID)
-	if err != nil {
-		return m.defaultPlan, nil
-	}
+	sub, _ := m.GetSubscription(ctx, userID)
 	return m.GetPlan(ctx, sub.PlanCode)
 }
 
 func (m *MockProvider) ListPlans(ctx context.Context) ([]Plan, error) {
-	return m.getAvailablePlans(), nil
-}
-
-func (m *MockProvider) getAvailablePlans() []Plan {
-	return []Plan{
-		{
-			Code:             "free",
-			Name:             "Gratuit",
-			Description:      "5 Go de stockage chiffré",
-			StorageLimitGB:   5,
-			BandwidthLimitGB: 10,
-			PriceMonthly:     0,
-			Currency:         "EUR",
-			Interval:         "monthly",
-			Features: map[string]interface{}{
-				"max_file_size_mb": 100,
-				"p2p_enabled":      true,
-				"p2p_limit_gb":     2,
-			},
-		},
-		{
-			Code:             "personal",
-			Name:             "Personnel",
-			Description:      "100 Go de stockage",
-			StorageLimitGB:   100,
-			BandwidthLimitGB: 500,
-			PriceMonthly:     500, // 5€
-			Currency:         "EUR",
-			Interval:         "monthly",
-			Features: map[string]interface{}{
-				"max_file_size_mb": 500,
-				"p2p_enabled":      true,
-				"p2p_limit_gb":     50,
-			},
-		},
-		{
-			Code:             "expert",
-			Name:             "Expert",
-			Description:      "1 To de stockage",
-			StorageLimitGB:   1024,
-			BandwidthLimitGB: 2048,
-			PriceMonthly:     1500, // 15€
-			Currency:         "EUR",
-			Interval:         "monthly",
-			Features: map[string]interface{}{
-				"max_file_size_mb": 5000,
-				"p2p_enabled":      true,
-				"p2p_limit_gb":     -1,
-			},
-		},
-		{
-			Code:             "enterprise",
-			Name:             "Enterprise",
-			Description:      "3 To de stockage",
-			StorageLimitGB:   3072,
-			BandwidthLimitGB: 10240,
-			PriceMonthly:     4900, // 49€
-			Currency:         "EUR",
-			Interval:         "monthly",
-			Features: map[string]interface{}{
-				"max_file_size_mb": 10000,
-				"p2p_enabled":      true,
-				"p2p_limit_gb":     -1,
-			},
-		},
-	}
+	return m.getPlans(), nil
 }
 
 // === Usage Tracking ===
@@ -290,58 +184,39 @@ func (m *MockProvider) getAvailablePlans() []Plan {
 func (m *MockProvider) TrackUsage(ctx context.Context, event UsageEvent) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	// Vérifier idempotence si clé fournie
 	if event.IdempotencyKey != "" {
 		if _, ok := m.idempotency[event.IdempotencyKey]; ok {
-			log.Printf("[MockBilling] Idempotent hit for TrackUsage: %s", event.IdempotencyKey)
 			return nil
 		}
 		m.idempotency[event.IdempotencyKey] = true
 	}
-
-	log.Printf("[MockBilling] Usage tracked: user=%s type=%s bytes=%d",
-		event.UserID, event.EventType, event.Bytes)
-
-	user, exists := m.users[event.UserID]
-	if !exists {
-		return nil // Ignorer silencieusement
+	user, ok := m.users[event.UserID]
+	if !ok {
+		return nil
 	}
-
 	gb := float64(event.Bytes) / (1024 * 1024 * 1024)
-
 	switch event.EventType {
 	case "storage_add":
-		user.usage.StorageUsedGB += gb
+		user.storageUsedGB += gb
 	case "storage_remove":
-		user.usage.StorageUsedGB -= gb
-		if user.usage.StorageUsedGB < 0 {
-			user.usage.StorageUsedGB = 0
+		user.storageUsedGB -= gb
+		if user.storageUsedGB < 0 {
+			user.storageUsedGB = 0
 		}
-	case "bandwidth":
-		user.usage.BandwidthUsedGB += gb
-	case "p2p_transfer":
-		user.usage.P2PTransferGB += gb
 	}
-
 	return nil
 }
 
 func (m *MockProvider) GetCurrentUsage(ctx context.Context, userID string) (*Usage, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
-	user, exists := m.users[userID]
-	if !exists {
-		now := time.Now()
-		return &Usage{
-			UserID:      userID,
-			PeriodStart: now,
-			PeriodEnd:   now.AddDate(0, 1, 0),
-		}, nil
+	now := time.Now()
+	u := &Usage{UserID: userID, PeriodStart: now.AddDate(0, -1, 0), PeriodEnd: now}
+	if user, ok := m.users[userID]; ok {
+		u.StorageUsedGB = user.storageUsedGB
+		u.P2PSharesActive = user.p2pSharesActive
 	}
-
-	return user.usage, nil
+	return u, nil
 }
 
 // === Quota Enforcement ===
@@ -349,31 +224,39 @@ func (m *MockProvider) GetCurrentUsage(ctx context.Context, userID string) (*Usa
 func (m *MockProvider) CheckQuota(ctx context.Context, userID string, requestedBytes int64) (*QuotaCheckResult, error) {
 	plan, _ := m.GetUserPlan(ctx, userID)
 	usage, _ := m.GetCurrentUsage(ctx, userID)
-
 	limitBytes := plan.StorageLimitGB * 1024 * 1024 * 1024
 	currentBytes := int64(usage.StorageUsedGB * 1024 * 1024 * 1024)
 	remaining := limitBytes - currentBytes
-
-	result := &QuotaCheckResult{
-		CurrentUsage:   currentBytes,
-		Limit:          limitBytes,
-		RemainingBytes: remaining,
-	}
-
+	result := &QuotaCheckResult{CurrentUsage: currentBytes, Limit: limitBytes, RemainingBytes: remaining}
 	if requestedBytes > remaining {
 		result.Allowed = false
 		result.Reason = fmt.Sprintf("Quota dépassé. Restant: %.2f Go", float64(remaining)/(1024*1024*1024))
 	} else {
 		result.Allowed = true
 	}
+	return result, nil
+}
 
+func (m *MockProvider) CheckP2PQuota(ctx context.Context, userID string, currentActiveShares int) (*P2PQuotaCheckResult, error) {
+	plan, _ := m.GetUserPlan(ctx, userID)
+	remaining := plan.P2PSharesLimit - currentActiveShares
+	result := &P2PQuotaCheckResult{
+		ActiveShares:    currentActiveShares,
+		Limit:           plan.P2PSharesLimit,
+		RemainingShares: remaining,
+	}
+	if remaining <= 0 {
+		result.Allowed = false
+		result.Reason = fmt.Sprintf("Limite de %d partages P2P actifs atteinte pour le plan %s", plan.P2PSharesLimit, plan.Name)
+	} else {
+		result.Allowed = true
+	}
 	return result, nil
 }
 
 // === Invoices ===
 
 func (m *MockProvider) GetInvoices(ctx context.Context, userID string, limit int) ([]Invoice, error) {
-	// Mock: retourne liste vide (plan gratuit = pas de factures)
 	return []Invoice{}, nil
 }
 
@@ -381,14 +264,14 @@ func (m *MockProvider) GetPaymentLink(ctx context.Context, invoiceID string) (st
 	return "", fmt.Errorf("no payment required in free plan")
 }
 
-// === Stripe Checkout (Mock) ===
+// === Stripe Checkout (Mock — redirect directly to success/return) ===
 
-func (m *MockProvider) CreateCheckoutSession(ctx context.Context, userID, planCode, successURL, cancelURL string) (string, error) {
-	log.Printf("[MockBilling] CreateCheckoutSession: user=%s plan=%s (mock - redirecting to success)", userID, planCode)
+func (m *MockProvider) CreateCheckoutSession(ctx context.Context, userID, planCode, interval, successURL, cancelURL string) (string, error) {
+	log.Printf("[MockBilling] CreateCheckoutSession: user=%s plan=%s interval=%s (mock)", userID, planCode, interval)
 	return successURL, nil
 }
 
-func (m *MockProvider) CreatePortalSession(ctx context.Context, userID, returnURL string) (string, error) {
-	log.Printf("[MockBilling] CreatePortalSession: user=%s (mock - redirecting to return)", userID)
+func (m *MockProvider) CreatePortalSession(ctx context.Context, stripeCustomerID, returnURL string) (string, error) {
+	log.Printf("[MockBilling] CreatePortalSession: customer=%s (mock)", stripeCustomerID)
 	return returnURL, nil
 }
