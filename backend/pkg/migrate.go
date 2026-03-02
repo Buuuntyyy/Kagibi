@@ -15,6 +15,7 @@ func Migrate(db *bun.DB) error {
 	// Crée les tables si elles n'existent pas
 	models := []interface{}{
 		(*User)(nil),
+		(*UserPlan)(nil),
 		(*File)(nil),
 		(*Folder)(nil),
 		(*Tag)(nil),
@@ -160,6 +161,50 @@ func Migrate(db *bun.DB) error {
 	_, err = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_profiles_deleted_at ON profiles (deleted_at) WHERE deleted_at IS NULL;`)
 	if err != nil {
 		log.Printf("Warning: failed to create idx_profiles_deleted_at: %v", err)
+	}
+
+	// --- USER PLANS ---
+	_, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "user_plans" (
+		"user_id" VARCHAR PRIMARY KEY REFERENCES "profiles"("id") ON DELETE CASCADE,
+		"plan" VARCHAR NOT NULL DEFAULT 'free',
+		"storage_limit" BIGINT NOT NULL DEFAULT 21474836480,
+		"storage_used" BIGINT NOT NULL DEFAULT 0,
+		"p2p_max_exchanges" INTEGER NOT NULL DEFAULT 5,
+		"p2p_exchanges_used" INTEGER NOT NULL DEFAULT 0,
+		"created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		"updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		log.Printf("Warning: failed to create user_plans table: %v", err)
+	}
+
+	_, err = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_user_plans_plan ON user_plans (plan);`)
+	if err != nil {
+		log.Printf("Warning: failed to create idx_user_plans_plan: %v", err)
+	}
+
+	// Ensure free defaults are now 20GB
+	_, err = db.ExecContext(ctx, `ALTER TABLE "profiles" ALTER COLUMN "storage_limit" SET DEFAULT 21474836480;`)
+	if err != nil {
+		log.Printf("Warning: failed to alter default storage_limit on profiles: %v", err)
+	}
+
+	// Backfill missing user_plans rows from profiles
+	_, err = db.ExecContext(ctx, `INSERT INTO user_plans (user_id, plan, storage_limit, storage_used, p2p_max_exchanges, p2p_exchanges_used)
+		SELECT p.id,
+		       COALESCE(NULLIF(p.plan, ''), 'free'),
+		       COALESCE(p.storage_limit, 21474836480),
+		       COALESCE(p.storage_used, 0),
+		       CASE COALESCE(NULLIF(p.plan, ''), 'free')
+		         WHEN 'pro' THEN 50
+		         WHEN 'business' THEN 200
+		         ELSE 5
+		       END,
+		       0
+		FROM profiles p
+		ON CONFLICT (user_id) DO NOTHING;`)
+	if err != nil {
+		log.Printf("Warning: failed to backfill user_plans: %v", err)
 	}
 
 	return nil
