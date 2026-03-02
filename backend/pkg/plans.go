@@ -9,7 +9,7 @@ const (
 
 // Storage limits in bytes
 const (
-	StorageFree     int64 = 5 * 1024 * 1024 * 1024   // 5 GB
+	StorageFree     int64 = 20 * 1024 * 1024 * 1024  // 20 GB
 	StoragePro      int64 = 50 * 1024 * 1024 * 1024  // 50 GB
 	StorageBusiness int64 = 200 * 1024 * 1024 * 1024 // 200 GB
 )
@@ -23,9 +23,9 @@ const (
 
 // Pricing in euro cents
 const (
-	PriceProMonthly      = 500  // 5,00 €/month
-	PriceProYearly       = 5000 // 50,00 €/year  (~17% discount)
-	PriceBusinessMonthly = 1500 // 15,00 €/month
+	PriceProMonthly      = 500   // 5,00 €/month
+	PriceProYearly       = 5000  // 50,00 €/year  (~17% discount)
+	PriceBusinessMonthly = 1500  // 15,00 €/month
 	PriceBusinessYearly  = 15000 // 150,00 €/year (~17% discount)
 )
 

@@ -341,24 +341,32 @@ const formatSize = (bytes) => {
   return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+const storageUsedBytes = computed(() => {
+  return authStore.user?.storage_used ?? authStore.user?.plan_storage_used ?? 0
+})
+
+const storageLimitBytes = computed(() => {
+  return authStore.user?.storage_limit ?? authStore.user?.plan_storage_limit ?? (20 * 1024 * 1024 * 1024)
+})
+
 const formattedStorageUsed = computed(() => {
-  return formatSize(authStore.user?.storage_used || 0)
+  return formatSize(storageUsedBytes.value)
 })
 
 const formattedStorageLimit = computed(() => {
-  return formatSize(authStore.user?.storage_limit || 10737418240) // Default 10GB
+  return formatSize(storageLimitBytes.value)
 })
 
 const storagePercentage = computed(() => {
-  const used = authStore.user?.storage_used || 0
-  const limit = authStore.user?.storage_limit || 10737418240
+  const used = storageUsedBytes.value
+  const limit = storageLimitBytes.value
   return Math.min((used / limit) * 100, 100)
 })
 
 const storagePercentageInt = computed(() => Math.round(storagePercentage.value))
 
 const storageLimitGB = computed(() => {
-    const limit = authStore.user?.storage_limit || 10737418240
+  const limit = storageLimitBytes.value
     return Math.round(limit / (1024 * 1024 * 1024)) + ' Go'
 })
 </script>

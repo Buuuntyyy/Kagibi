@@ -14,7 +14,7 @@
           <span class="plan-value">{{ formatPlanName(authStore.user?.plan) }}</span>
         </div>
       </div>
-      <button class="btn-upgrade" @click="navigateToBilling">{{ t('account.upgrade') }}</button>
+      <button class="btn-upgrade" @click="openUpgradeInfoPopup">{{ t('account.upgrade') }}</button>
     </div>
 
     <div v-if="loading" class="loading-state">
@@ -337,11 +337,41 @@
       @verified="onMFAVerified"
       @cancelled="onMFACancelled"
     />
+
+    <div v-if="upgradeInfoModal.show" class="success-modal-overlay" @click="closeUpgradeInfoPopup">
+      <div class="success-modal" @click.stop>
+        <div class="success-modal-header">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" class="success-icon">
+            <circle cx="12" cy="12" r="10"/>
+            <text x="12" y="16" text-anchor="middle" fill="white" font-size="12" font-weight="bold">i</text>
+          </svg>
+          <h3>Abonnements bientôt disponibles</h3>
+          <button class="btn-close-modal" @click="closeUpgradeInfoPopup">×</button>
+        </div>
+        <div class="success-modal-body">
+          <p>
+            Les abonnements ne sont pas encore disponibles. En attendant, vous pouvez soutenir le projet via Buy me a coffee.
+          </p>
+        </div>
+        <div class="success-modal-footer">
+          <a
+            v-if="buyMeACoffeeUrl"
+            :href="buyMeACoffeeUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-primary"
+          >
+            ☕ Buy me a coffee
+          </a>
+          <button class="btn-secondary" @click="closeUpgradeInfoPopup">{{ t('account.close') }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
@@ -400,6 +430,10 @@ const successModal = ref({
   message: ''
 })
 
+const upgradeInfoModal = ref({
+  show: false,
+})
+
 const showDeleteModal = ref(false)
 const deleteConfirmationText = ref('')
 const isDeletingAccount = ref(false)
@@ -426,6 +460,19 @@ const showError = (title, message) => {
 
 const showSuccess = (title, message) => {
   successModal.value = { show: true, title, message }
+}
+
+const buyMeACoffeeUrl = computed(() => {
+  const runtimeUrl = typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : ''
+  return runtimeUrl || import.meta.env.VITE_BUY_ME_A_COFFEE_URL || ''
+})
+
+const openUpgradeInfoPopup = () => {
+  upgradeInfoModal.value.show = true
+}
+
+const closeUpgradeInfoPopup = () => {
+  upgradeInfoModal.value.show = false
 }
 
 const onMFAVerified = async () => {
