@@ -58,18 +58,14 @@ func MeHandler(c *gin.Context, db *bun.DB) {
 	if err != nil || planState == nil {
 		planState = &pkg.UserPlan{
 			UserID:           user.ID,
-			Plan:             user.Plan,
-			StorageLimit:     user.StorageLimit,
-			StorageUsed:      user.StorageUsed,
-			P2PMaxExchanges:  pkg.GetP2PLimit(user.Plan),
+			Plan:             pkg.PlanFree,
+			StorageLimit:     pkg.StorageFree,
+			StorageUsed:      0,
+			P2PMaxExchanges:  pkg.P2PLimitFree,
 			P2PExchangesUsed: activeP2P,
 		}
 		_ = pkg.UpsertUserPlan(db, planState)
 	} else {
-		planState.Plan = user.Plan
-		planState.StorageLimit = user.StorageLimit
-		planState.StorageUsed = user.StorageUsed
-		planState.P2PMaxExchanges = pkg.GetP2PLimit(user.Plan)
 		planState.P2PExchangesUsed = activeP2P
 		_ = pkg.UpsertUserPlan(db, planState)
 	}

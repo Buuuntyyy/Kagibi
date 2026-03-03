@@ -12,6 +12,27 @@ import (
 	"github.com/uptrace/bun"
 )
 
+func getUserPlanState(db *bun.DB, userID string) (*pkg.UserPlan, error) {
+	planState, err := pkg.FindUserPlanByUserID(db, userID)
+	if err == nil && planState != nil {
+		return planState, nil
+	}
+
+	// Fallback self-heal: create a free default row if missing
+	planState = &pkg.UserPlan{
+		UserID:           userID,
+		Plan:             pkg.PlanFree,
+		StorageLimit:     pkg.StorageFree,
+		StorageUsed:      0,
+		P2PMaxExchanges:  pkg.P2PLimitFree,
+		P2PExchangesUsed: 0,
+	}
+	if upsertErr := pkg.UpsertUserPlan(db, planState); upsertErr != nil {
+		return nil, upsertErr
+	}
+	return planState, nil
+}
+
 // GetBillingStatusHandler retourne le statut du billing
 // GET /api/billing/status
 func GetBillingStatusHandler(c *gin.Context) {
@@ -58,11 +79,12 @@ func GetCurrentPlanHandler(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Billing service unavailable"})
 			return
 		}
-		var user pkg.User
-		if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c.Request.Context()); err != nil {
-			user.Plan = "free"
+		planState, err := getUserPlanState(db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user plan"})
+			return
 		}
-		plan, err := provider.GetPlan(c.Request.Context(), user.Plan)
+		plan, err := provider.GetPlan(c.Request.Context(), planState.Plan)
 		if err != nil {
 			plan, _ = provider.GetPlan(c.Request.Context(), "free")
 		}
@@ -116,23 +138,25 @@ func GetUsageHandler(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			return
 		}
-		var user pkg.User
-		if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user"})
+		planState, err := getUserPlanState(db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user plan"})
 			return
 		}
 		activeShares, _ := db.NewSelect().TableExpr("file_shares fs").
 			Join("JOIN files f ON f.id = fs.file_id").
 			Where("f.user_id = ?", userID).
 			Count(c.Request.Context())
-
-		plan, _ := billingpkg.GetProvider().GetPlan(c.Request.Context(), user.Plan)
+		_, _ = db.NewUpdate().Model((*pkg.UserPlan)(nil)).
+			Set("p2p_exchanges_used = ?", activeShares).
+			Where("user_id = ?", userID).
+			Exec(c.Request.Context())
 		c.JSON(http.StatusOK, gin.H{
-			"storage_used_bytes": user.StorageUsed,
-			"storage_used_gb":    float64(user.StorageUsed) / (1024 * 1024 * 1024),
-			"storage_limit_gb":   plan.StorageLimitGB,
+			"storage_used_bytes": planState.StorageUsed,
+			"storage_used_gb":    float64(planState.StorageUsed) / (1024 * 1024 * 1024),
+			"storage_limit_gb":   float64(planState.StorageLimit) / (1024 * 1024 * 1024),
 			"p2p_shares_active":  activeShares,
-			"p2p_shares_limit":   plan.P2PSharesLimit,
+			"p2p_shares_limit":   planState.P2PMaxExchanges,
 		})
 	}
 }
@@ -153,15 +177,15 @@ func CheckQuotaHandler(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 			return
 		}
-		var user pkg.User
-		if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user"})
+		planState, err := getUserPlanState(db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user plan"})
 			return
 		}
-		remaining := user.StorageLimit - user.StorageUsed
+		remaining := planState.StorageLimit - planState.StorageUsed
 		result := billingpkg.QuotaCheckResult{
-			CurrentUsage:   user.StorageUsed,
-			Limit:          user.StorageLimit,
+			CurrentUsage:   planState.StorageUsed,
+			Limit:          planState.StorageLimit,
 			RemainingBytes: remaining,
 		}
 		if req.RequestedBytes > remaining {
@@ -183,17 +207,21 @@ func CheckP2PQuotaHandler(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			return
 		}
-		var user pkg.User
-		if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user"})
+		planState, err := getUserPlanState(db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user plan"})
 			return
 		}
 		activeShares, _ := db.NewSelect().TableExpr("file_shares fs").
 			Join("JOIN files f ON f.id = fs.file_id").
 			Where("f.user_id = ?", userID).
 			Count(c.Request.Context())
+		_, _ = db.NewUpdate().Model((*pkg.UserPlan)(nil)).
+			Set("p2p_exchanges_used = ?", activeShares).
+			Where("user_id = ?", userID).
+			Exec(c.Request.Context())
 
-		p2pLimit := pkg.GetP2PLimit(user.Plan)
+		p2pLimit := planState.P2PMaxExchanges
 		remaining := p2pLimit - activeShares
 		result := billingpkg.P2PQuotaCheckResult{
 			ActiveShares:    activeShares,
