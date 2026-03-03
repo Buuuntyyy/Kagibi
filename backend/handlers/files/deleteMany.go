@@ -90,9 +90,9 @@ func BulkDeleteHandler(c *gin.Context, db *bun.DB) {
 		totalSize += file.Size
 	}
 
-	_, err = tx.NewUpdate().Model((*pkg.User)(nil)).
+	_, err = tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
 		Set("storage_used = storage_used - ?", totalSize).
-		Where("id = ?", userID).
+		Where("user_id = ?", userID).
 		Exec(c)
 
 	if err != nil {

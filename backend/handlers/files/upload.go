@@ -176,11 +176,11 @@ func parseUploadRequest(c *gin.Context, userID string) (UploadRequest, error) {
 }
 
 func checkStorageQuota(ctx context.Context, db *bun.DB, userID string, size int64) error {
-	var user pkg.User
-	if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(ctx); err != nil {
+	planState, err := pkg.FindUserPlanByUserID(db, userID)
+	if err != nil {
 		return nil // Skip check if user load fails (handled later)
 	}
-	if user.StorageUsed+size > user.StorageLimit {
+	if planState.StorageUsed+size > planState.StorageLimit {
 		return fmt.Errorf("Storage limit exceeded")
 	}
 	return nil
@@ -310,9 +310,9 @@ func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) 
 		var oldFile pkg.File
 		if err := tx.NewSelect().Model(&oldFile).Where("user_id = ? AND path = ?", file.UserID, file.Path).Scan(ctx); err == nil {
 			// Update user storage: remove old, add new
-			_, _ = tx.NewUpdate().Model((*pkg.User)(nil)).
+			_, _ = tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
 				Set("storage_used = storage_used - ? + ?", oldFile.Size, size).
-				Where("id = ?", file.UserID).Exec(ctx)
+				Where("user_id = ?", file.UserID).Exec(ctx)
 			file.ID = oldFile.ID
 			// Return delta for folder sizes
 			delta := size - oldFile.Size
@@ -341,9 +341,9 @@ func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) 
 	}
 	log.Printf("[UpsertFile] Successfully inserted file with ID: %d", file.ID)
 
-	_, err = tx.NewUpdate().Model((*pkg.User)(nil)).
+	_, err = tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
 		Set("storage_used = storage_used + ?", size).
-		Where("id = ?", file.UserID).Exec(ctx)
+		Where("user_id = ?", file.UserID).Exec(ctx)
 	if err != nil {
 		log.Printf("[UpsertFile] ERROR updating storage_used: %v", err)
 	}
@@ -382,10 +382,10 @@ func processShareKeys(ctx context.Context, tx bun.Tx, shareKeysJSON string, file
 }
 
 func notifyStorageUpdate(ctx context.Context, db *bun.DB, userID string) {
-	var updatedUser pkg.User
-	if err := db.NewSelect().Model(&updatedUser).Where("id = ?", userID).Scan(ctx); err == nil {
+	planState, err := pkg.FindUserPlanByUserID(db, userID)
+	if err == nil {
 		payload := map[string]interface{}{
-			"storage_used": updatedUser.StorageUsed,
+			"storage_used": planState.StorageUsed,
 		}
 		if err := pkg.EmitRealtimeEvent(ctx, db, userID, "storage_update", payload); err != nil {
 			log.Printf("Failed to emit storage_update event: %v", err)

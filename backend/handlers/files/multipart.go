@@ -96,16 +96,16 @@ func InitiateMultipartHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// Validate user exists and check quota
-	var user pkg.User
-	if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(ctx); err != nil {
-		log.Printf("SECURITY: Multipart init for unknown user: %s", userID)
-		c.JSON(http.StatusForbidden, gin.H{"error": "User not found"})
+	// Validate user plan exists and check quota
+	planState, err := pkg.FindUserPlanByUserID(db, userID)
+	if err != nil {
+		log.Printf("SECURITY: Multipart init for unknown user plan: %s", userID)
+		c.JSON(http.StatusForbidden, gin.H{"error": "User plan not found"})
 		return
 	}
 
 	// Strict quota check
-	if user.StorageUsed+req.TotalSize > user.StorageLimit {
+	if planState.StorageUsed+req.TotalSize > planState.StorageLimit {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Storage quota exceeded"})
 		return
 	}
