@@ -1,8 +1,20 @@
 <template>
   <nav>
-    <router-link to="/dashboard" class="brand">SaferCloud</router-link>
+    <router-link to="/dashboard" class="brand">
+      <img src="/Logo.png" alt="SkyDrive Logo" class="brand-logo"/>
+      <span>FoxEarth</span>
+    </router-link>
     <SearchBar v-if="authStore.isAuthenticated" />
     <div class="nav-links">
+      <a
+        v-if="buyMeACoffeeUrl"
+        :href="buyMeACoffeeUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="support-link"
+      >
+        {{ t('file.supportProject') }}
+      </a>
       <LanguageSwitcher />
       <button @click="themeStore.toggleTheme" class="theme-toggle" :title="themeStore.theme === 'light' ? t('nav.darkMode') : t('nav.lightMode')">
         <svg v-if="themeStore.theme === 'light'" class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -35,6 +47,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useThemeStore } from '../../stores/theme'
 import { useRouter } from 'vue-router'
@@ -47,6 +60,11 @@ const { t } = useI18n()
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
 const router = useRouter()
+
+const buyMeACoffeeUrl = computed(() => {
+  const runtimeUrl = typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : ''
+  return runtimeUrl || import.meta.env.VITE_BUY_ME_A_COFFEE_URL || ''
+})
 
 const logout = async () => {
   await authStore.logout()
@@ -89,6 +107,21 @@ nav {
   font-size: 1.5rem;
   color: var(--main-text-color);
   text-decoration: none;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 256px;
+  padding: 16px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  margin-left: -1rem;
+}
+
+.brand-logo {
+  height: 36px;
+  width: auto;
 }
 
 .nav-links {
@@ -102,8 +135,26 @@ nav {
   text-decoration: none;
 }
 
+.support-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--card-color);
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .nav-links a:hover {
   text-decoration: underline;
+}
+
+.support-link:hover {
+  text-decoration: none !important;
+  background: var(--hover-background-color);
 }
 
 .theme-toggle {
