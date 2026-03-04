@@ -22,9 +22,6 @@
     "storage": "Storage",
     "billing": "Billing"
   },
-  "home": {
-    "welcome": "Welcome to your Secure Cloud"
-  },
   "file": {
     "upload": "Upload file",
     "createFolder": "Create folder",
@@ -42,6 +39,19 @@
     "multipleFiles": "Multiple files supported",
     "folders": "Folders",
     "files": "Files",
+    "myDrive": "My Drive",
+    "supportProject": "Support the project!",
+    "columnName": "Name",
+    "columnPath": "Path",
+    "columnCreated": "Created",
+    "columnUpdated": "Updated",
+    "columnSize": "Size",
+    "folderType": "Folder",
+    "fileType": "File",
+    "securityTipWarningTitle": "Tip:",
+    "securityTipWarningBody": "Enable two-factor authentication (MFA) to secure your account",
+    "securityTipSuccessTitle": "Secured:",
+    "securityTipSuccessBody": "Use a password manager to protect your credentials",
     "selectedItems": "{count} item{count > 1 ? 's' : ''} selected"
   },
   "auth": {
@@ -218,7 +228,7 @@
     "selectFriendAndFile": "Select a friend and a file"
   },
   "home": {
-    "welcome": "Welcome to your Secure Cloud",
+    "welcome": "Welcome to your Secured Storage",
     "recentSuggestions": "Suggestions",
     "sharedItems": "Files shared with me"
   },
@@ -310,6 +320,25 @@
     "downloadDecrypt": "Download (Decrypt)",
     "removeShare": "Remove this share",
     "removeShareConfirm": "Do you want to remove this share from your list?",
+    "loadingShort": "Loading...",
+    "back": "Back",
+    "folderPrefix": "Folder:",
+    "emptyFolder": "Empty folder.",
+    "emptySharedWithMe": "No files shared with you.",
+    "owner": "Owner",
+    "unknownOwner": "Unknown",
+    "decryptKeysLoadError": "Unable to load decryption keys.",
+    "loadSharedWithMeError": "Unable to load files shared with you.",
+    "openFolderError": "Unable to open folder.",
+    "missingFolderKey": "Missing folder key",
+    "privateKeyUnavailable": "RSA private key unavailable",
+    "openFolderDecryptError": "Error while opening folder (Decryption)",
+    "deleteError": "Error while deleting",
+    "missingFileKey": "Missing file key",
+    "decryptFileKeyError": "Failed to decrypt file key (AES-GCM)",
+    "missingEncryptionKey": "Missing encryption key.",
+    "openFileMissingKey": "Unable to open file: missing key.",
+    "downloadDecryptError": "Error while downloading/decrypting",
     "noShares": "No shares yet",
     "loading": "Loading shares...",
     "error": "Error loading shares"

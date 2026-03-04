@@ -1,43 +1,37 @@
 <template>
   <div class="language-switcher">
     <select
-      v-model="currentLanguage"
+      :value="currentLanguage"
       class="lang-select"
-      @change="switchLanguage(currentLanguage)"
+      @change="switchLanguage($event.target.value)"
       aria-label="Language selector"
     >
       <option v-for="lang in languages" :key="lang.code" :value="lang.code">
-        {{ lang.flag }} {{ lang.name }}
+        {{ lang.flag }}
       </option>
     </select>
   </div>
 </template>
 
 <script setup>
+import { ref, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { onMounted, ref } from 'vue'
 
-const { locale } = useI18n()
-const currentLanguage = ref(localStorage.getItem('language') || 'fr')
+const { locale } = useI18n({ useScope: 'global' })
 
-const languages = [
-  { code: 'fr', name: 'Français', flag: '🇫🇷' },
-  { code: 'en', name: 'English', flag: '🇬🇧' }
-]
+const currentLanguage = ref(locale.value)
 
-const switchLanguage = (lang) => {
-  locale.value = lang
+const switchLanguage = async (lang) => {
   currentLanguage.value = lang
+  await nextTick()
+  locale.value = lang
   localStorage.setItem('language', lang)
 }
 
-onMounted(() => {
-  const saved = localStorage.getItem('language')
-  if (saved) {
-    locale.value = saved
-    currentLanguage.value = saved
-  }
-})
+const languages = [
+  { code: 'fr', flag: '🇫🇷' },
+  { code: 'en', flag: '🇬🇧' }
+]
 </script>
 
 <style scoped>
@@ -51,9 +45,9 @@ onMounted(() => {
   color: var(--main-text-color);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  font-size: 0.9rem;
+  font-size: 1.25rem;
   cursor: pointer;
-  padding: 0.35rem 0.5rem;
+  padding: 0.1rem 0.3rem;
   outline: none;
 }
 

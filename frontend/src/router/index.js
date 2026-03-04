@@ -18,6 +18,9 @@ import LandingPricing from '../views/landing/PricingView.vue'
 import LandingTransfer from '../views/landing/TransferView.vue'
 import { useAuthStore } from '../stores/auth'
 
+const isLocalAuthBypassEnabled =
+  import.meta.env.DEV && String(import.meta.env.VITE_LOCAL_BYPASS_AUTH).toLowerCase() === 'true'
+
 const routes = [
   {
     path: '/',
@@ -125,6 +128,15 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to, from, next) => {
+  if (isLocalAuthBypassEnabled) {
+    if (to.name === 'Login') {
+      next('/dashboard/home')
+      return
+    }
+    next()
+    return
+  }
+
   const authStore = useAuthStore()
 
   // Skip auth check for public routes to avoid 401 errors for non-authenticated users

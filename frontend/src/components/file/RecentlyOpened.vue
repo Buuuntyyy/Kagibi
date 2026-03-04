@@ -4,7 +4,7 @@
       <span class="chevron" :class="{ 'open': isOpen }">
         <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
       </span>
-      <h4 class="section-title">Suggestions</h4>
+      <h4 class="section-title">{{ t('search.suggestions') }}</h4>
     </div>
     
     <div v-show="isOpen" class="accordion-content">
@@ -30,14 +30,14 @@
           
           <div class="card-details">
             <span class="item-name" :title="item.displayName">{{ item.displayName }}</span>
-            <span class="item-type-text">{{ item.type === 'folder' ? 'Dossier' : 'Fichier' }}</span>
+            <span class="item-type-text">{{ item.type === 'folder' ? t('file.folderType') : t('file.fileType') }}</span>
           </div>
         </div>
       </div>
       
       <div v-else class="empty-state">
         <span class="empty-icon">🕒</span>
-        <span>Les éléments récemment ouverts apparaîtront ici</span>
+        <span>{{ t('search.noSuggestions') }}</span>
       </div>
     </div>
     

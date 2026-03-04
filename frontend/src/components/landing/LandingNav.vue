@@ -2,10 +2,8 @@
   <nav class="landing-nav">
     <div class="nav-container">
       <router-link to="/" class="nav-logo">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-        </svg>
-        <span>SaferCloud</span>
+        <img src="/Logo.png" alt="SkyDrive Logo" width="40rem"/>
+        <span>SkyDrive</span>
       </router-link>
       
       <div class="nav-links">
