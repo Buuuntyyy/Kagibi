@@ -10,6 +10,21 @@ import {
 import sodium from 'libsodium-wrappers-sumo'
 import { useMFA } from '../utils/useMFA'
 
+const isLocalAuthBypassEnabled =
+  import.meta.env.DEV && String(import.meta.env.VITE_LOCAL_BYPASS_AUTH).toLowerCase() === 'true'
+
+const localDevBypassUser = {
+  id: 'local-dev-user',
+  name: 'Local Dev',
+  email: 'local@dev.local',
+  avatar_url: '/avatars/default.png',
+  storage_used: 0,
+  storage_limit: 20 * 1024 * 1024 * 1024,
+  plan: 'free',
+  p2p_max_exchanges: 5,
+  p2p_exchanges_used: 0,
+}
+
 export const useAuthStore = defineStore('auth', {
   state: () => {
     // Restore user data from localStorage for instant display
@@ -391,6 +406,15 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     async checkAuth() {
+      if (isLocalAuthBypassEnabled) {
+        this.isAuthenticated = true
+        if (!this.user) {
+          this.user = { ...localDevBypassUser }
+          this.persistUserToStorage()
+        }
+        return true
+      }
+
       // Cette fonction devrait être appelée au chargement de l'app (App.vue)
       const { data: { session } } = await supabase.auth.getSession();
 

@@ -47,16 +47,6 @@
         </span>
       </div>
 
-      <div v-if="buyMeACoffeeUrl" class="path-banner-actions">
-        <a
-          :href="buyMeACoffeeUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="buy-me-coffee-link"
-        >
-          Supporter le projet !
-        </a>
-      </div>
     </div>
 
     <!-- Selection Action Bar / Security Tip Bar -->
@@ -88,7 +78,7 @@
               <path d="M0 0h24v24H0V0z" fill="none"/>
               <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
             </svg>
-            <span class="tip-text">💡 <strong>Conseil :</strong> Activez l'authentification à deux facteurs (MFA) pour sécuriser votre compte</span>
+            <span class="tip-text">💡 <strong>{{ t('file.securityTipWarningTitle') }}</strong> {{ t('file.securityTipWarningBody') }}</span>
           </div>
           <svg class="security-lock" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor">
             <path d="M0 0h24v24H0V0z" fill="none"/>
@@ -102,7 +92,7 @@
               <path d="M0 0h24v24H0V0z" fill="none"/>
               <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
             </svg>
-            <span class="tip-text">✅ <strong>Sécurisé :</strong> Utilisez un gestionnaire de mots de passe pour protéger vos identifiants</span>
+            <span class="tip-text">✅ <strong>{{ t('file.securityTipSuccessTitle') }}</strong> {{ t('file.securityTipSuccessBody') }}</span>
           </div>
           <svg class="security-lock" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor">
             <path d="M0 0h24v24H0V0z" fill="none"/>
@@ -357,18 +347,18 @@ const columns = computed(() => {
 
   cols.push(
     { key: 'icon', label: '', headerClass: 'icon-col', cellClass: 'icon-col' },
-    { key: 'name', label: 'Nom', cellClass: 'name-cell' },
+    { key: 'name', label: t('file.columnName'), cellClass: 'name-cell' },
   );
 
   if (fileStore.searchQuery && fileStore.searchQuery.trim() !== '') {
-    cols.push({ key: 'path', label: 'Chemin' });
+    cols.push({ key: 'path', label: t('file.columnPath') });
   }
 
   cols.push(
-    { key: 'tags', label: 'Tags' },
-    { key: 'created', label: 'Créé le' },
-    { key: 'updated', label: 'Modifié le' },
-    { key: 'size', label: 'Taille' }
+    { key: 'tags', label: t('file.tags') },
+    { key: 'created', label: t('file.columnCreated') },
+    { key: 'updated', label: t('file.columnUpdated') },
+    { key: 'size', label: t('file.columnSize') }
   );
   return cols;
 })
@@ -396,11 +386,6 @@ const allItems = computed(() => {
     ...filteredFolders.value.map(item => ({ ...item, type: 'folder' })),
     ...filteredFiles.value.map(item => ({ ...item, type: 'file' }))
   ]
-})
-
-const buyMeACoffeeUrl = computed(() => {
-  const runtimeUrl = typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : ''
-  return runtimeUrl || import.meta.env.VITE_BUY_ME_A_COFFEE_URL || ''
 })
 
 const inputDialog = ref({
@@ -543,8 +528,8 @@ const closeContextMenu = () => {
 const pathSegments = computed(() => {
   if (fileStore.viewMode === 'shared') {
       const segments = [
-          { name: 'Mon Drive', path: 'DRIVE_ROOT' },
-          { name: 'Partagés avec moi', path: 'SHARE_ROOT' }
+      { name: t('file.myDrive'), path: 'DRIVE_ROOT' },
+        { name: t('shared.sharedWithMe'), path: 'SHARE_ROOT' }
       ];
       fileStore.sharedBreadcrumbs.forEach((crumb, index) => {
           segments.push({
@@ -557,7 +542,7 @@ const pathSegments = computed(() => {
   }
 
   const path = fileStore.currentPath
-  const segments = [{ name: 'Mon Drive', path: '/' }]
+  const segments = [{ name: t('file.myDrive'), path: '/' }]
 
   if (path === '/') return segments
 

@@ -179,11 +179,6 @@ const newFriendId = ref('')
 const showLeftInfo = ref(false)
 const isCollapsed = ref(false)
 
-// Auto-collapse menu on P2P page
-watch(() => route.name, (newRouteName) => {
-  isCollapsed.value = newRouteName === 'P2P'
-}, { immediate: true })
-
 const closeAddFriendMenu = () => {
     if (showAddFriendMenu.value) {
         showAddFriendMenu.value = false
@@ -242,12 +237,8 @@ const toggleNewMenu = () => {
 }
 
 const toggleFriendsAccordion = () => {
-    if (isCollapsed.value) {
-        isCollapsed.value = false
-        friendsOpen.value = true
-    } else {
-        friendsOpen.value = !friendsOpen.value
-    }
+  if (isCollapsed.value) return
+  friendsOpen.value = !friendsOpen.value
 }
 
 const toggleCollapse = () => {

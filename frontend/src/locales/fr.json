@@ -22,9 +22,6 @@
     "storage": "Stockage",
     "billing": "Facturation"
   },
-  "home": {
-    "welcome": "Bienvenue sur votre Cloud Sécurisé"
-  },
   "file": {
     "upload": "Ajouter un fichier",
     "createFolder": "Créer un dossier",
@@ -42,6 +39,19 @@
     "multipleFiles": "Plusieurs fichiers supportés",
     "folders": "Dossiers",
     "files": "Fichiers",
+    "myDrive": "Mon Drive",
+    "supportProject": "Supporter le projet !",
+    "columnName": "Nom",
+    "columnPath": "Chemin",
+    "columnCreated": "Créé le",
+    "columnUpdated": "Modifié le",
+    "columnSize": "Taille",
+    "folderType": "Dossier",
+    "fileType": "Fichier",
+    "securityTipWarningTitle": "Conseil :",
+    "securityTipWarningBody": "Activez l'authentification à deux facteurs (MFA) pour sécuriser votre compte",
+    "securityTipSuccessTitle": "Sécurisé :",
+    "securityTipSuccessBody": "Utilisez un gestionnaire de mots de passe pour protéger vos identifiants",
     "selectedItems": "{count} élément{count > 1 ? 's' : ''} sélectionné{count > 1 ? 's' : ''}"
   },
   "auth": {
@@ -218,7 +228,7 @@
     "selectFriendAndFile": "Sélectionnez un ami et un fichier"
   },
   "home": {
-    "welcome": "Bienvenue sur votre Cloud Sécurisé",
+    "welcome": "Bienvenue sur votre Stockage Sécurisé",
     "recentSuggestions": "Suggestions",
     "sharedItems": "Fichiers partagés avec moi"
   },
@@ -310,6 +320,25 @@
     "downloadDecrypt": "Télécharger (Déchiffrer)",
     "removeShare": "Retirer ce partage",
     "removeShareConfirm": "Voulez-vous retirer ce partage de votre liste ?",
+    "loadingShort": "Chargement...",
+    "back": "Retour",
+    "folderPrefix": "Dossier :",
+    "emptyFolder": "Dossier vide.",
+    "emptySharedWithMe": "Aucun fichier partagé avec vous.",
+    "owner": "Propriétaire",
+    "unknownOwner": "Inconnu",
+    "decryptKeysLoadError": "Impossible de charger les clés de déchiffrement.",
+    "loadSharedWithMeError": "Impossible de charger les fichiers partagés avec vous.",
+    "openFolderError": "Impossible d'ouvrir le dossier.",
+    "missingFolderKey": "Clé de dossier manquante",
+    "privateKeyUnavailable": "Clé privée RSA non disponible",
+    "openFolderDecryptError": "Erreur lors de l'ouverture du dossier (Déchiffrement)",
+    "deleteError": "Erreur lors de la suppression",
+    "missingFileKey": "Clé manquante pour le fichier",
+    "decryptFileKeyError": "Échec du déchiffrement de la clé du fichier (AES-GCM)",
+    "missingEncryptionKey": "Clé de chiffrement manquante.",
+    "openFileMissingKey": "Impossible d'ouvrir le fichier : clé manquante.",
+    "downloadDecryptError": "Erreur lors du téléchargement/déchiffrement",
     "noShares": "Aucun partage pour le moment",
     "loading": "Chargement des partages...",
     "error": "Erreur lors du chargement des partages"
