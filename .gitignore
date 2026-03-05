@@ -8,6 +8,7 @@ frontend/.env
 
 # Kubernetes secrets with real values
 k8s/security/secrets.yaml
+k8s/*
 
 frontend/utils/tests.security.js
 
