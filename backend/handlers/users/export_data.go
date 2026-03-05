@@ -151,14 +151,24 @@ func ExportUserDataHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	planState, err := pkg.FindUserPlanByUserID(db, userID)
+	if err != nil || planState == nil {
+		planState = &pkg.UserPlan{
+			UserID:       userID,
+			Plan:         pkg.PlanFree,
+			StorageLimit: pkg.StorageFree,
+			StorageUsed:  0,
+		}
+	}
+
 	profile := ExportProfile{
 		ID:                  user.ID,
 		Name:                user.Name,
 		Email:               user.Email,
 		AvatarURL:           user.AvatarURL,
-		Plan:                user.Plan,
-		StorageUsed:         user.StorageUsed,
-		StorageLimit:        user.StorageLimit,
+		Plan:                planState.Plan,
+		StorageUsed:         planState.StorageUsed,
+		StorageLimit:        planState.StorageLimit,
 		FriendCode:          user.FriendCode,
 		PublicKey:           user.PublicKey,
 		EncryptedPrivateKey: user.EncryptedPrivateKey,
