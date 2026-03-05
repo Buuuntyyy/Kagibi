@@ -31,7 +31,7 @@ func StartSessionMonitor(redisClient *redis.Client) {
 
 		for range ticker.C {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			
+
 			// Compter les clés commençant par "active_user:"
 			// Note: KEYS est bloquant sur de très grosses DB, mais ici on suppose une charge raisonnable.
 			// Pour la prod à très haute échelle, SCAN est préférable, mais plus complexe à implémenter.
@@ -51,7 +51,7 @@ func StartSessionMonitor(redisClient *redis.Client) {
 					count++
 				}
 			}
-			
+
 			ActiveUsers.Set(float64(count))
 		}
 	}()
