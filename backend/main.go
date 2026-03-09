@@ -344,18 +344,24 @@ func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 	})
 
 	// ICE Configuration (TURN/STUN servers)
-	p2pG.GET("/ice-config", func(c *gin.Context) {
+	p2pG.GET("ice-config", func(c *gin.Context) {
 		turnURL := os.Getenv("TURN_SERVER_URL")
 		turnUser := os.Getenv("TURN_USERNAME")
 		turnCred := os.Getenv("TURN_CREDENTIAL")
 
 		iceServers := []map[string]interface{}{
-			{"urls": []string{"stun:stun.l.google.com:19302"}},
+			{"urls": []string{"stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"}},
 		}
 
 		if turnURL != "" {
+			// Inclure UDP et TCP pour traverser les NAT/firewalls stricts
+			turnURLs := []string{turnURL}
+			// Si l'URL ne contient pas de transport explicite, ajouter aussi TCP
+			if turnURL != "" && !strings.Contains(turnURL, "?transport=") {
+				turnURLs = append(turnURLs, turnURL+"?transport=tcp")
+			}
 			iceServers = append(iceServers, map[string]interface{}{
-				"urls":       []string{turnURL},
+				"urls":       turnURLs,
 				"username":   turnUser,
 				"credential": turnCred,
 			})

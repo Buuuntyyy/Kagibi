@@ -74,21 +74,24 @@ func GetCurrentPlanHandler(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			return
 		}
-		provider := billingpkg.GetProvider()
-		if provider == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Billing service unavailable"})
-			return
-		}
 		planState, err := getUserPlanState(db, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user plan"})
 			return
 		}
-		plan, err := provider.GetPlan(c.Request.Context(), planState.Plan)
-		if err != nil {
-			plan, _ = provider.GetPlan(c.Request.Context(), "free")
+		// Return plan info directly from DB — no billing provider required
+		provider := billingpkg.GetProvider()
+		if provider != nil {
+			if plan, err := provider.GetPlan(c.Request.Context(), planState.Plan); err == nil {
+				c.JSON(http.StatusOK, plan)
+				return
+			}
 		}
-		c.JSON(http.StatusOK, plan)
+		c.JSON(http.StatusOK, gin.H{
+			"code":             planState.Plan,
+			"name":             planState.Plan,
+			"storage_limit_gb": float64(planState.StorageLimit) / (1024 * 1024 * 1024),
+		})
 	}
 }
 
@@ -102,12 +105,13 @@ func GetSubscriptionHandler(c *gin.Context) {
 	}
 	provider := billingpkg.GetProvider()
 	if provider == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Billing service unavailable"})
+		// Billing not configured — return no active subscription
+		c.JSON(http.StatusOK, nil)
 		return
 	}
 	subscription, err := provider.GetSubscription(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get subscription"})
+		c.JSON(http.StatusOK, nil)
 		return
 	}
 	c.JSON(http.StatusOK, subscription)
@@ -118,12 +122,13 @@ func GetSubscriptionHandler(c *gin.Context) {
 func GetPlansHandler(c *gin.Context) {
 	provider := billingpkg.GetProvider()
 	if provider == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Billing service unavailable"})
+		// Billing not configured — return empty list
+		c.JSON(http.StatusOK, []interface{}{})
 		return
 	}
 	plans, err := provider.ListPlans(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list plans"})
+		c.JSON(http.StatusOK, []interface{}{})
 		return
 	}
 	c.JSON(http.StatusOK, plans)
@@ -207,32 +212,17 @@ func CheckP2PQuotaHandler(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			return
 		}
-		planState, err := getUserPlanState(db, userID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user plan"})
-			return
-		}
 		activeShares, _ := db.NewSelect().TableExpr("file_shares fs").
 			Join("JOIN files f ON f.id = fs.file_id").
 			Where("f.user_id = ?", userID).
 			Count(c.Request.Context())
-		_, _ = db.NewUpdate().Model((*pkg.UserPlan)(nil)).
-			Set("p2p_exchanges_used = ?", activeShares).
-			Where("user_id = ?", userID).
-			Exec(c.Request.Context())
 
-		p2pLimit := planState.P2PMaxExchanges
-		remaining := p2pLimit - activeShares
+		// Billing disabled: P2P quota is not enforced
 		result := billingpkg.P2PQuotaCheckResult{
 			ActiveShares:    activeShares,
-			Limit:           p2pLimit,
-			RemainingShares: remaining,
-		}
-		if remaining <= 0 {
-			result.Allowed = false
-			result.Reason = fmt.Sprintf("Limite de %d partages P2P actifs atteinte. Passez au plan supérieur.", p2pLimit)
-		} else {
-			result.Allowed = true
+			Limit:           -1, // unlimited
+			RemainingShares: -1,
+			Allowed:         true,
 		}
 		c.JSON(http.StatusOK, result)
 	}
@@ -241,38 +231,21 @@ func CheckP2PQuotaHandler(db *bun.DB) gin.HandlerFunc {
 // GetInvoicesHandler retourne les factures depuis Stripe
 // GET /api/billing/invoices
 func GetInvoicesHandler(db *bun.DB) gin.HandlerFunc {
+	_ = db
 	return func(c *gin.Context) {
-		userID := c.GetString("user_id")
-		if userID == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-			return
-		}
-		provider := billingpkg.GetProvider()
-		if provider == nil {
-			c.JSON(http.StatusOK, []interface{}{})
-			return
-		}
-		var user pkg.User
-		if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusOK, []interface{}{})
-			return
-		}
-		if user.StripeCustomerID == "" {
-			c.JSON(http.StatusOK, []interface{}{})
-			return
-		}
-		invoices, err := provider.GetInvoices(c.Request.Context(), user.StripeCustomerID, 20)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get invoices"})
-			return
-		}
-		c.JSON(http.StatusOK, invoices)
+		// TODO: implement when Stripe is enabled
+		c.JSON(http.StatusOK, []interface{}{})
 	}
 }
 
 // GetPaymentLinkHandler génère un lien de paiement pour une facture
 // GET /api/billing/invoices/:id/payment-link
 func GetPaymentLinkHandler(c *gin.Context) {
+	provider := billingpkg.GetProvider()
+	if provider == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "Billing non configuré"})
+		return
+	}
 	userID := c.GetString("user_id")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -281,11 +254,6 @@ func GetPaymentLinkHandler(c *gin.Context) {
 	invoiceID := c.Param("id")
 	if invoiceID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invoice ID required"})
-		return
-	}
-	provider := billingpkg.GetProvider()
-	if provider == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Billing service unavailable"})
 		return
 	}
 	link, err := provider.GetPaymentLink(c.Request.Context(), invoiceID)
@@ -300,6 +268,11 @@ func GetPaymentLinkHandler(c *gin.Context) {
 // POST /api/billing/checkout
 // Body: { "plan_code": "pro"|"business", "interval": "monthly"|"yearly" }
 func CreateCheckoutHandler(c *gin.Context) {
+	provider := billingpkg.GetProvider()
+	if provider == nil {
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "Billing non configuré"})
+		return
+	}
 	userID := c.GetString("user_id")
 	if userID == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -315,11 +288,6 @@ func CreateCheckoutHandler(c *gin.Context) {
 	}
 	if req.Interval != "yearly" {
 		req.Interval = "monthly"
-	}
-	provider := billingpkg.GetProvider()
-	if provider == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Billing service unavailable"})
-		return
 	}
 	frontendURL := os.Getenv("FRONTEND_URL")
 	if frontendURL == "" {
@@ -339,37 +307,10 @@ func CreateCheckoutHandler(c *gin.Context) {
 // CreatePortalHandler crée une session Stripe Customer Portal
 // POST /api/billing/portal
 func CreatePortalHandler(db *bun.DB) gin.HandlerFunc {
+	_ = db
 	return func(c *gin.Context) {
-		userID := c.GetString("user_id")
-		if userID == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-			return
-		}
-		provider := billingpkg.GetProvider()
-		if provider == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Billing service unavailable"})
-			return
-		}
-		var user pkg.User
-		if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user"})
-			return
-		}
-		if user.StripeCustomerID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Aucun abonnement actif. Souscrivez à un plan d'abord."})
-			return
-		}
-		frontendURL := os.Getenv("FRONTEND_URL")
-		if frontendURL == "" {
-			frontendURL = "https://kagibi.stratus.ovh"
-		}
-		returnURL := fmt.Sprintf("%s/dashboard/billing", frontendURL)
-		portalURL, err := provider.CreatePortalSession(c.Request.Context(), user.StripeCustomerID, returnURL)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"portal_url": portalURL})
+		// TODO: implement when Stripe is enabled
+		c.JSON(http.StatusNotImplemented, gin.H{"error": "Billing non activé"})
 	}
 }
 

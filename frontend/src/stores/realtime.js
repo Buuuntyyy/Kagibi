@@ -13,6 +13,10 @@ export const useRealtimeStore = defineStore('realtime', () => {
   const eventsChannel = ref(null)
   const presenceChannel = ref(null)
 
+  // Polling fallback pour les signaux P2P (au cas où Supabase Realtime échoue)
+  let _pollTimer = null
+  const _seenSignalIds = new Set()
+
   // Event handlers - these will be set by components/stores that need to react
   const eventHandlers = {
     storage_update: [],
@@ -95,10 +99,12 @@ export const useRealtimeStore = defineStore('realtime', () => {
         (payload) => {
           console.log('[Realtime] P2P signal received:', payload.new)
           const signal = payload.new
+          if (_seenSignalIds.has(signal.id)) return
+          _seenSignalIds.add(signal.id)
           dispatchEvent('p2p_signal', {
             from: signal.sender_id,
             type: signal.signal_type,
-            payload: signal.payload
+            payload: typeof signal.payload === 'string' ? JSON.parse(signal.payload) : signal.payload
           })
         }
       )
@@ -142,6 +148,12 @@ export const useRealtimeStore = defineStore('realtime', () => {
           })
         }
       })
+
+    // Polling fallback — s'assure que les signaux P2P sont reçus même si
+    // Supabase Realtime ne fonctionne pas (table absente de la publication).
+    if (!_pollTimer) {
+      _pollTimer = setInterval(() => pollP2PSignals(), 2500)
+    }
   }
 
   // Update presence state from sync event
@@ -163,7 +175,10 @@ export const useRealtimeStore = defineStore('realtime', () => {
   // Disconnect all channels
   async function disconnect() {
     console.log('[Realtime] Disconnecting...')
-    
+
+    if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null }
+    _seenSignalIds.clear()
+
     if (eventsChannel.value) {
       await supabase.removeChannel(eventsChannel.value)
       eventsChannel.value = null
@@ -225,12 +240,14 @@ export const useRealtimeStore = defineStore('realtime', () => {
       const data = await response.json()
       const signals = data.signals || []
       
-      // Process each signal
+      // Process each signal (dedup avec le canal Realtime)
       signals.forEach(signal => {
+        if (_seenSignalIds.has(signal.id)) return
+        _seenSignalIds.add(signal.id)
         dispatchEvent('p2p_signal', {
           from: signal.sender_id,
           type: signal.signal_type,
-          payload: signal.payload
+          payload: typeof signal.payload === 'string' ? JSON.parse(signal.payload) : signal.payload
         })
       })
       

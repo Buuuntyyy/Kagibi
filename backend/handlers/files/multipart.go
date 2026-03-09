@@ -96,15 +96,21 @@ func InitiateMultipartHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// Validate user plan exists and check quota
+	// Validate user plan exists and check quota (auto-create free plan if missing)
 	planState, err := pkg.FindUserPlanByUserID(db, userID)
-	if err != nil {
-		log.Printf("SECURITY: Multipart init for unknown user plan: %s", userID)
-		c.JSON(http.StatusForbidden, gin.H{"error": "User plan not found"})
-		return
+	if err != nil || planState == nil {
+		log.Printf("[Multipart] user_plans row missing for %s, creating free plan", userID)
+		planState = &pkg.UserPlan{
+			UserID:          userID,
+			Plan:            pkg.PlanFree,
+			StorageLimit:    pkg.StorageFree,
+			StorageUsed:     0,
+			P2PMaxExchanges: pkg.P2PLimitFree,
+		}
+		_ = pkg.UpsertUserPlan(db, planState)
 	}
 
-	// Strict quota check
+	// Quota check
 	if planState.StorageUsed+req.TotalSize > planState.StorageLimit {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Storage quota exceeded"})
 		return
