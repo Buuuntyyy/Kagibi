@@ -27,6 +27,8 @@ func Migrate(db *bun.DB) error {
 		(*FolderFileKey)(nil),
 		(*FolderFolderKey)(nil),
 		(*RecentActivity)(nil),
+		(*P2PSignal)(nil),
+		(*RealtimeEvent)(nil),
 	}
 
 	for _, model := range models {
