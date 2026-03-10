@@ -34,6 +34,7 @@
             </svg>
           </button>
         </div>
+        <PasswordCriteria :password="password" />
       </div>
 
       <button type="submit" class="btn-submit" :disabled="loading">
@@ -101,6 +102,8 @@ import { ref } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
 import AvatarSelector from '../AvatarSelector.vue'
+import PasswordCriteria from './PasswordCriteria.vue'
+import { checkPasswordCriteria, getPasswordErrors } from '../../utils/passwordStrength'
 
 const username = ref('')
 const email = ref('')
@@ -118,6 +121,15 @@ const router = useRouter()
 
 const submit = async () => {
   error.value = ''
+
+  // Validate password strength before sending to backend
+  const { valid } = checkPasswordCriteria(password.value)
+  if (!valid) {
+    const errors = getPasswordErrors(password.value)
+    error.value = errors[0]
+    return
+  }
+
   loading.value = true
   try {
     const code = await authStore.register(username.value, email.value, password.value, selectedAvatar.value)
