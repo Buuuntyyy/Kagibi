@@ -99,8 +99,8 @@
                   </div>
                 </label>
               </div>
-              <div class="password-row">
-                 <div class="input-group password-with-toggle">
+              <div class="password-stack">
+                <div class="input-group password-with-toggle">
                   <label>
                     {{ t('account.newPassword') }}
                     <div class="password-input-wrapper">
@@ -128,6 +128,7 @@
                     </div>
                   </label>
                 </div>
+                <PasswordCriteria :password="passwordForm.new" />
                 <div class="input-group password-with-toggle">
                   <label>
                     {{ t('account.confirmPassword') }}
@@ -383,6 +384,8 @@ import AvatarSelector from '../components/AvatarSelector.vue'
 import DeleteAccountDialog from '../components/DeleteAccountDialog.vue'
 import MFASettings from '../components/MFASettings.vue'
 import MFAChallengeModal from '../components/MFAChallengeModal.vue'
+import PasswordCriteria from '../components/auth/PasswordCriteria.vue'
+import { checkPasswordCriteria, getPasswordErrors } from '../utils/passwordStrength'
 
 const { t } = useI18n()
 
@@ -593,8 +596,10 @@ const handleUpdatePassword = async () => {
     return
   }
 
-  if (passwordForm.value.new.length < 20) {
-    showError('Erreur', 'Le nouveau mot de passe doit contenir au moins 20 caractères.')
+  const { valid } = checkPasswordCriteria(passwordForm.value.new)
+  if (!valid) {
+    const errors = getPasswordErrors(passwordForm.value.new)
+    showError('Erreur', errors[0])
     return
   }
 
@@ -1003,6 +1008,12 @@ const executeDeleteAccount = async () => {
 
 .password-row .input-group {
   flex: 1;
+}
+
+.password-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .input-group {
