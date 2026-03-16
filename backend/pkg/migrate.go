@@ -119,6 +119,12 @@ func Migrate(db *bun.DB) error {
 
 	// --- BILLING TABLES ---
 
+	// Add synced column to files (desktop sync indicator)
+	_, err = db.ExecContext(ctx, `ALTER TABLE "files" ADD COLUMN IF NOT EXISTS "synced" BOOLEAN NOT NULL DEFAULT false;`)
+	if err != nil {
+		log.Printf("Warning: failed to add synced column to files: %v", err)
+	}
+
 	// Billing invoices table
 	_, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "billing_invoices" (
 		"id" VARCHAR PRIMARY KEY,

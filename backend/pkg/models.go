@@ -61,6 +61,7 @@ type File struct {
 	PreviewID    *int64    `bun:"preview_id" json:"preview_id"`                     // ID du fichier de prévisualisation (miniature/compressé)
 	Preview      *File     `bun:"rel:belongs-to,join:preview_id=id" json:"preview"` // Metadata du fichier preview
 	IsPreview    bool      `bun:"is_preview,default:false" json:"is_preview"`       // Indique si c'est un fichier de prévisualisation (masqué par défaut)
+	Synced       bool      `bun:"synced,default:false" json:"synced"`               // true si uploadé via la sync desktop
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt    time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 }
