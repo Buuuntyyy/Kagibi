@@ -65,6 +65,7 @@ type CompleteMultipartRequest struct {
 	ShareKeys    string         `json:"share_keys"`
 	PreviewID    *int64         `json:"preview_id"`
 	IsPreview    bool           `json:"is_preview"`
+	Synced       bool           `json:"synced"`
 }
 
 // CompletePart represents a completed part with ETag
@@ -326,6 +327,7 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		EncryptedKey: req.EncryptedKey,
 		PreviewID:    req.PreviewID,
 		IsPreview:    req.IsPreview,
+		Synced:       req.Synced,
 	}
 
 	delta, err := upsertFileInDB(ctx, tx, fileRecord, req.TotalSize)
