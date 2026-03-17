@@ -63,10 +63,13 @@ export const useFileStore = defineStore('files', {
     sharedBreadcrumbs: [], // Array of { id, name }
     
     uploadProgress: 0,
+    uploadSpeed: 0,
     isUploading: false,
     uploadingFileName: '',
     uploadState: 'idle', // idle, encrypting, uploading, completing, error
     currentUploadManager: null, // MultipartUploadManager instance
+    lastUploadedBytes: 0,
+    lastUploadTimestamp: 0,
     heartbeatInterval: null, // Interval for session keepalive during long operations
     
     // Preview State
@@ -658,8 +661,11 @@ export const useFileStore = defineStore('files', {
       // Setup upload state
       this.isUploading = true;
       this.uploadProgress = 0;
+      this.uploadSpeed = 0;
       this.uploadingFileName = file.name;
       this.uploadState = 'encrypting';
+      this.lastUploadedBytes = 0;
+      this.lastUploadTimestamp = 0;
       
       // Start heartbeat to prevent session timeout during long uploads
       if (!isPreview) {
@@ -670,6 +676,24 @@ export const useFileStore = defineStore('files', {
       const uploadManager = new MultipartUploadManager({
         onProgress: (percent, uploaded, total) => {
           this.uploadProgress = percent;
+
+          const now = Date.now();
+          if (this.lastUploadTimestamp === 0) {
+            this.lastUploadTimestamp = now;
+            this.lastUploadedBytes = uploaded;
+            return;
+          }
+
+          const elapsedMs = now - this.lastUploadTimestamp;
+          const uploadedDelta = uploaded - this.lastUploadedBytes;
+          if (elapsedMs >= 250 && uploadedDelta >= 0) {
+            const instantSpeed = uploadedDelta / (elapsedMs / 1000);
+            this.uploadSpeed = this.uploadSpeed > 0
+              ? (this.uploadSpeed * 0.7) + (instantSpeed * 0.3)
+              : instantSpeed;
+            this.lastUploadTimestamp = now;
+            this.lastUploadedBytes = uploaded;
+          }
         },
         onStateChange: (state) => {
           if (state === UploadState.UPLOADING) {
@@ -770,8 +794,11 @@ export const useFileStore = defineStore('files', {
             if (!isPreview) {
                 this.isUploading = false;
                 this.uploadProgress = 0;
+                this.uploadSpeed = 0;
                 this.uploadState = 'idle';
                 this.currentUploadManager = null;
+                this.lastUploadedBytes = 0;
+                this.lastUploadTimestamp = 0;
             }
         }, 1000);
 
@@ -792,8 +819,11 @@ export const useFileStore = defineStore('files', {
         alert("Erreur lors de l'envoi du fichier: " + error.message);
         this.isUploading = false;
         this.uploadProgress = 0;
+        this.uploadSpeed = 0;
         this.uploadState = 'idle';
         this.currentUploadManager = null;
+        this.lastUploadedBytes = 0;
+        this.lastUploadTimestamp = 0;
         
         // Stop heartbeat on error
         if (!isPreview) {
@@ -817,8 +847,11 @@ export const useFileStore = defineStore('files', {
         await this.currentUploadManager.abort();
         this.isUploading = false;
         this.uploadProgress = 0;
+        this.uploadSpeed = 0;
         this.uploadState = 'idle';
         this.currentUploadManager = null;
+        this.lastUploadedBytes = 0;
+        this.lastUploadTimestamp = 0;
       }
     },
     async createFolder(folderName) {

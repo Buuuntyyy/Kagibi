@@ -114,7 +114,10 @@
           <div class="progress-bar">
             <div class="progress-fill" :style="{ width: fileStore.uploadProgress + '%' }"></div>
           </div>
+        </div>
+        <div class="upload-meta">
           <span class="progress-text">{{ fileStore.uploadProgress }}%</span>
+          <span class="upload-speed">{{ uploadSpeedText }}</span>
         </div>
       </div>
     </div>
@@ -255,6 +258,7 @@ import ManageShareDialog from '../ManageShareDialog.vue';
 import FilePreview from './FilePreview.vue';
 import FileTable from './FileTable.vue';
 import MFAChallengeModal from '../MFAChallengeModal.vue';
+import { formatSpeed } from '../../utils/format'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -283,6 +287,11 @@ const selectedItems = ref([])
 const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
 const fileInput = ref(null)
 const isDragging = ref(false)
+
+const uploadSpeedText = computed(() => {
+  if (fileStore.uploadState === 'encrypting') return 'Chiffrement...'
+  return formatSpeed(fileStore.uploadSpeed)
+})
 
 watch(
   () => preferenceStore.showFolderSizes,
@@ -982,11 +991,32 @@ const executeDownloadSelectedFiles = async (files, folders) => {
   await downloadStore.downloadSelection(fileIDs, folderIDs, zipName);
 }
 
+const isSyncedFolder = (item) => {
+  return item?.type === 'folder' && Boolean(item?.synced || item?.Synced)
+}
+
+const getDeleteWarningMessage = (items) => {
+  const syncedFolders = items.filter(isSyncedFolder)
+  if (syncedFolders.length === 0) return ''
+
+  if (syncedFolders.length === 1 && items.length === 1) {
+    return t('messages.syncedFolderDeleteWarningSingle', { name: syncedFolders[0].Name })
+  }
+
+  return t('messages.syncedFolderDeleteWarningMultiple', {
+    count: syncedFolders.length,
+    total: items.length
+  })
+}
+
 const deleteSelectedItems = () => {
   if (selectedItems.value.length === 0) return;
 
+  const warningMessage = getDeleteWarningMessage(selectedItems.value)
+
   uiStore.requestDeleteConfirmation({
     title: "Supprimer les éléments",
+    message: warningMessage,
     itemName: selectedItems.value.length === 1 ? selectedItems.value[0].Name : null,
     itemsCount: selectedItems.value.length,
     onConfirm: async () => {
@@ -1575,6 +1605,18 @@ button {
   display: flex;
   align-items: center;
   gap: 0.8rem;
+}
+
+.upload-meta {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.upload-speed {
+  font-size: 0.85rem;
+  color: var(--secondary-text-color);
 }
 
 .drag-overlay {

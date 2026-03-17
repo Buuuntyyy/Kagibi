@@ -182,7 +182,9 @@
     "sharedSuccessfully": "Partagé avec succès",
     "confirmDelete": "Êtes-vous sûr de vouloir supprimer \"{name}\" ?",
     "confirmDeleteMultiple": "Êtes-vous sûr de vouloir supprimer ces {count} éléments ?",
-    "irreversible": "Cette action est irréversible."
+    "irreversible": "Cette action est irréversible.",
+    "syncedFolderDeleteWarningSingle": "Le dossier synchronisé \"{name}\" semble lié à l'application desktop sur une machine locale. Le supprimer maintenant peut provoquer des incohérences dans la synchronisation. Il est recommandé de désactiver d'abord la synchronisation de ce répertoire avant de le supprimer. Voulez-vous quand même continuer ?",
+    "syncedFolderDeleteWarningMultiple": "Votre sélection contient {count} dossier(s) synchronisé(s) sur {total} élément(s). Supprimer un répertoire encore lié à l'application desktop sur une machine locale peut provoquer des incohérences dans la synchronisation. Il est recommandé de désactiver d'abord la synchronisation de ces répertoires avant de les supprimer. Voulez-vous quand même continuer ?"
   },
   "storage": {
     "used": "Utilisé",
