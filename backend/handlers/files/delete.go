@@ -60,9 +60,29 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 		}
 	}
 
-	// 4. Supprimer de la BDD
-	if err := pkg.DeleteFile(db, fileID, userID); err != nil {
+	// 4. Supprimer de la BDD et décrémenter le quota dans une transaction
+	tx, err := db.BeginTx(c.Request.Context(), nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur de transaction"})
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
+		Set("storage_used = GREATEST(storage_used - ?, 0)", file.Size).
+		Where("user_id = ?", userID).
+		Exec(c.Request.Context()); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la mise à jour du quota de stockage"})
+		return
+	}
+
+	if err := pkg.DeleteFile(tx, fileID, userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la suppression en base"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la validation de la suppression"})
 		return
 	}
 
@@ -148,6 +168,11 @@ func deleteFolderRecursive(c *gin.Context, db *bun.DB, userID, folderPath string
 	}
 	defer tx.Rollback()
 
+	var totalSize int64
+	for _, file := range files {
+		totalSize += file.Size
+	}
+
 	if len(files) > 0 {
 		fileIDs := make([]int64, 0, len(files))
 		for _, f := range files {
@@ -210,6 +235,16 @@ func deleteFolderRecursive(c *gin.Context, db *bun.DB, userID, folderPath string
 			Exec(ctx)
 		if err != nil {
 			return fmt.Errorf("Erreur lors de la suppression des dossiers")
+		}
+	}
+
+	if totalSize > 0 {
+		_, err = tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
+			Set("storage_used = GREATEST(storage_used - ?, 0)", totalSize).
+			Where("user_id = ?", userID).
+			Exec(ctx)
+		if err != nil {
+			return fmt.Errorf("Erreur lors de la mise à jour du quota de stockage")
 		}
 	}
 
