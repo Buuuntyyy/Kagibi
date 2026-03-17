@@ -503,6 +503,18 @@ export const useAuthStore = defineStore('auth', {
         }
       }
     },
+    updateUserStorage(storageUsed, storageLimit = undefined) {
+      if (!this.user || storageUsed === undefined) {
+        return
+      }
+
+      this.user = {
+        ...this.user,
+        storage_used: storageUsed,
+        ...(storageLimit !== undefined ? { storage_limit: storageLimit } : {})
+      }
+      this.persistUserToStorage()
+    },
     restoreUserFromStorage() {
       try {
         const storedUser = localStorage.getItem("safercloud_user");

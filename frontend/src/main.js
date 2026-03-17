@@ -26,7 +26,7 @@ const realtimeStore = useRealtimeStore(pinia);
 realtimeStore.onEvent('storage_update', (payload) => {
   console.log('[Main] Storage update received:', payload);
   if (authStore.user && payload.storage_used !== undefined) {
-    authStore.user.storage_used = payload.storage_used;
+    authStore.updateUserStorage(payload.storage_used, payload.storage_limit);
   }
   // If action indicates share update, refetch files
   const shareActions = ['share_created', 'share_revoked', 'share_received', 'share_revoked_by_recipient', 'share_removed_from_imported'];

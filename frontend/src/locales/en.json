@@ -182,7 +182,9 @@
     "sharedSuccessfully": "Shared successfully",
     "confirmDelete": "Are you sure you want to delete \"{name}\"?",
     "confirmDeleteMultiple": "Are you sure you want to delete these {count} items?",
-    "irreversible": "This action is irreversible."
+    "irreversible": "This action is irreversible.",
+    "syncedFolderDeleteWarningSingle": "The synced folder \"{name}\" appears to be linked to the desktop app on a local machine. Deleting it now may cause synchronization inconsistencies. It is recommended to disable synchronization for this directory before deleting it. Do you still want to continue?",
+    "syncedFolderDeleteWarningMultiple": "Your selection contains {count} synced folder(s) out of {total} item(s). Deleting directories still linked to the desktop app on a local machine may cause synchronization inconsistencies. It is recommended to disable synchronization for those directories before deleting them. Do you still want to continue?"
   },
   "storage": {
     "used": "Used",

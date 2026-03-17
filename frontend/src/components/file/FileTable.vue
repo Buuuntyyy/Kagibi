@@ -53,6 +53,9 @@
             <template v-else-if="col.key === 'name'">
               <div class="name-wrapper">
                 <span class="name">{{ folder.Name }}</span>
+                <span v-if="folder.synced || folder.Synced" class="synced-icon" title="Synchronisé depuis le bureau">
+                  <svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 0 24 24" width="16px" fill="#34c759"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+                </span>
                 <span v-if="folder.shared" class="shared-icon" title="Dossier partagé" @click.stop="$emit('manage-share', folder, 'folder')">
                   <svg xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 0 24 24" width="18px" fill="#5f6368"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
                 </span>
@@ -161,7 +164,7 @@
             <template v-else-if="col.key === 'name'">
               <div class="name-wrapper">
                 <span class="name">{{ file.Name }}</span>
-                <span v-if="file.synced" class="synced-icon" title="Synchronisé depuis le bureau">
+                <span v-if="file.synced || file.Synced" class="synced-icon" title="Synchronisé depuis le bureau">
                   <svg xmlns="http://www.w3.org/2000/svg" height="16px" viewBox="0 0 24 24" width="16px" fill="#34c759"><path d="M0 0h24v24H0z" fill="none"/><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
                 </span>
                 <span v-if="file.shared" class="shared-icon" title="Fichier partagé" @click.stop="$emit('manage-share', file, 'file')" @mouseover="onShareIconHover(true, $event)" @mouseleave="onShareIconHover(false, $event)">
