@@ -459,7 +459,7 @@ func GetFolderContentRecursive(db *bun.DB, userID string, rootPath string) ([]Fi
 }
 
 // supprimer un fichier
-func DeleteFile(db *bun.DB, fileID int64, userID string) error {
+func DeleteFile(db bun.IDB, fileID int64, userID string) error {
 	ctx := context.Background()
 
 	// Delete associated share links
@@ -474,7 +474,7 @@ func DeleteFile(db *bun.DB, fileID int64, userID string) error {
 	return err
 }
 
-func DeleteFolder(db *bun.DB, folderID int64, userID string) error {
+func DeleteFolder(db bun.IDB, folderID int64, userID string) error {
 	ctx := context.Background()
 
 	// Delete associated share links
