@@ -7,7 +7,7 @@ backend/uploads/*
 .github/skills
 _bmad/
 _bmad-output/
-
+schema_dump_*.sql
 backend/.env
 frontend/.env
 
