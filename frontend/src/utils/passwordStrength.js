@@ -3,8 +3,9 @@
  *
  * Rules:
  *  - At least 20 characters
- *  - At least 2 digits (0-9)
- *  - At least 2 non-ambiguous special characters
+ *  - At least 1 uppercase letter (A-Z)
+ *  - At least 1 digit (0-9)
+ *  - At least 1 non-ambiguous special character
  *
  * Non-ambiguous special characters exclude visually confusable symbols:
  *   Excluded: | \ ` ' "  (look like l, 1, or quotes can be confused)
@@ -33,13 +34,14 @@ export function checkPasswordCriteria(password) {
   const specials = countSpecials(password)
 
   const criteria = {
-    length: password.length >= 20,
-    digits: digits >= 2,
-    specials: specials >= 2,
+    length:    password.length >= 20,
+    uppercase: /[A-Z]/.test(password),
+    digits:    digits >= 1,
+    specials:  specials >= 1,
   }
 
   return {
-    valid: criteria.length && criteria.digits && criteria.specials,
+    valid: criteria.length && criteria.uppercase && criteria.digits && criteria.specials,
     criteria,
     // Counts for live feedback
     currentLength: password.length,
@@ -56,9 +58,11 @@ export function getPasswordErrors(password) {
   const errors = []
   if (!criteria.length)
     errors.push(`Minimum 20 caractères (actuellement : ${currentLength})`)
+  if (!criteria.uppercase)
+    errors.push('Au moins 1 lettre majuscule (A-Z)')
   if (!criteria.digits)
-    errors.push(`Au moins 2 chiffres (actuellement : ${currentDigits})`)
+    errors.push(`Au moins 1 chiffre (actuellement : ${currentDigits})`)
   if (!criteria.specials)
-    errors.push(`Au moins 2 caractères spéciaux non ambigus (actuellement : ${currentSpecials})`)
+    errors.push(`Au moins 1 caractère spécial non ambigu (actuellement : ${currentSpecials})`)
   return errors
 }

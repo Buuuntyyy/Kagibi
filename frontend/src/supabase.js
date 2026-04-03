@@ -10,8 +10,8 @@ const supabaseKey = (
   typeof window !== 'undefined' && window.__APP_CONFIG__?.supabaseAnonKey
 ) ? window.__APP_CONFIG__.supabaseAnonKey : import.meta.env.VITE_SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Supabase configuration is missing. Set SUPABASE_URL/VITE_SUPABASE_URL and SUPABASE_ANON_KEY/VITE_SUPABASE_ANON_KEY.')
-}
-
-export const supabase = createClient(supabaseUrl, supabaseKey)
+// Return null instead of throwing when Supabase is not configured (e.g. PocketBase mode).
+// Consumers should use authClient from auth-client.js instead of importing supabase directly.
+export const supabase = (supabaseUrl && supabaseKey)
+  ? createClient(supabaseUrl, supabaseKey)
+  : null

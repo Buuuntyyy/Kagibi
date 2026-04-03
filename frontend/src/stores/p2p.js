@@ -11,14 +11,13 @@ import {
 } from '../utils/crypto'
 import axios from 'axios'
 import { API_BASE_URL } from '../api'
-import { supabase } from '../supabase'
+import { authClient } from '../auth-client'
 
-// Fonction utilitaire pour récupérer la config ICE depuis le backend
+// Fetch ICE config from the backend (works with both Supabase and PocketBase)
 async function fetchICEConfig() {
-    console.log("[P2P] Fetching ICE Config (v3 - Supabase Realtime)...");
+    console.log("[P2P] Fetching ICE Config...");
     try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
+        const token = await authClient.getToken();
         const response = await axios.get(`${API_BASE_URL}p2p/ice-config`, {
             headers: { Authorization: `Bearer ${token}` }
         });

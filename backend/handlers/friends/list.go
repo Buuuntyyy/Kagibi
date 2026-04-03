@@ -22,11 +22,12 @@ type FriendResponse struct {
 }
 
 type FriendHandler struct {
-	DB *bun.DB
+	DB       *bun.DB
+	IsOnline func(userID string) bool // injected from WebSocket hub; nil-safe
 }
 
-func NewFriendHandler(db *bun.DB) *FriendHandler {
-	return &FriendHandler{DB: db}
+func NewFriendHandler(db *bun.DB, isOnline func(string) bool) *FriendHandler {
+	return &FriendHandler{DB: db, IsOnline: isOnline}
 }
 
 func (h *FriendHandler) ListFriends(c *gin.Context) {
@@ -71,8 +72,7 @@ func (h *FriendHandler) processSingleFriendship(ctx context.Context, currentUser
 		return nil
 	}
 
-	// Online status is now managed by Supabase Presence on the frontend
-	// The backend no longer tracks real-time presence
+	online := h.IsOnline != nil && h.IsOnline(otherUser.ID)
 
 	return &FriendResponse{
 		ID:        otherUser.ID,
@@ -81,7 +81,7 @@ func (h *FriendHandler) processSingleFriendship(ctx context.Context, currentUser
 		Status:    status,
 		RequestID: f.ID,
 		PublicKey: otherUser.PublicKey,
-		Online:    false, // Presence now managed by Supabase Presence API on frontend
+		Online:    online,
 	}
 }
 
