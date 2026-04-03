@@ -8,6 +8,19 @@ import (
 	"github.com/uptrace/bun"
 )
 
+// WSHub is the subset of the WebSocket hub used by pkg to push events.
+// It is set at startup by main.go to avoid an import cycle.
+type WSHub interface {
+	SendEventToUser(userID, eventType string, id int64, payload map[string]any)
+	SendP2PSignalToUser(targetUserID, senderID, signalType string, payload map[string]any)
+}
+
+// wsHub is the global hub instance injected at startup.
+var wsHub WSHub
+
+// SetWSHub registers the WebSocket hub so that EmitRealtimeEvent can push live events.
+func SetWSHub(h WSHub) { wsHub = h }
+
 type User struct {
 	bun.BaseModel `bun:"table:profiles,alias:p"`
 
@@ -195,7 +208,7 @@ type RealtimeEvent struct {
 	ID        int64                  `bun:"id,pk,autoincrement"`
 	UserID    string                 `bun:"user_id,notnull"`
 	EventType string                 `bun:"event_type,notnull"`
-	Payload   map[string]interface{} `bun:"payload,type:jsonb"`
+	Payload   map[string]any `bun:"payload,type:jsonb"`
 	CreatedAt time.Time              `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 }
 
@@ -207,19 +220,25 @@ type P2PSignal struct {
 	SenderID   string                 `bun:"sender_id,notnull" json:"sender_id"`
 	TargetID   string                 `bun:"target_id,notnull" json:"target_id"`
 	SignalType string                 `bun:"signal_type,notnull" json:"signal_type"`
-	Payload    map[string]interface{} `bun:"payload,type:jsonb" json:"payload"`
+	Payload    map[string]any `bun:"payload,type:jsonb" json:"payload"`
 	CreatedAt  time.Time              `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	Consumed   bool                   `bun:"consumed,notnull,default:false" json:"consumed"`
 }
 
-// EmitRealtimeEvent inserts an event into the realtime_events table
-// Supabase Realtime will broadcast it to subscribed clients
-func EmitRealtimeEvent(ctx context.Context, db *bun.DB, userID, eventType string, payload map[string]interface{}) error {
+// EmitRealtimeEvent inserts an event into the realtime_events table and
+// pushes it immediately over WebSocket if the user is connected.
+func EmitRealtimeEvent(ctx context.Context, db *bun.DB, userID, eventType string, payload map[string]any) error {
 	event := &RealtimeEvent{
 		UserID:    userID,
 		EventType: eventType,
 		Payload:   payload,
 	}
-	_, err := db.NewInsert().Model(event).Exec(ctx)
-	return err
+	if _, err := db.NewInsert().Model(event).Exec(ctx); err != nil {
+		return err
+	}
+	// Push over WebSocket (no-op if hub not set or user has no active connection)
+	if wsHub != nil {
+		wsHub.SendEventToUser(userID, eventType, event.ID, payload)
+	}
+	return nil
 }

@@ -1,5 +1,5 @@
 <template>
-  <div class="password-criteria" :class="{ 'criteria-visible': show }">
+  <div class="password-criteria" v-show="show">
     <!-- Security tip: recommend a password manager -->
     <div class="criteria-tip">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -29,6 +29,18 @@
         </span>
         <span>20 caractères minimum <span class="criteria-count">({{ currentLength }}/20)</span></span>
       </li>
+      <li :class="{ met: criteria.uppercase, unmet: !criteria.uppercase }">
+        <span class="criteria-icon">
+          <svg v-if="criteria.uppercase" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </span>
+        <span>Au moins 1 lettre majuscule (A-Z)</span>
+      </li>
       <li :class="{ met: criteria.digits, unmet: !criteria.digits }">
         <span class="criteria-icon">
           <svg v-if="criteria.digits" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -39,7 +51,7 @@
             <line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
         </span>
-        <span>Au moins 2 chiffres (0–9) <span class="criteria-count">({{ currentDigits }}/2)</span></span>
+        <span>Au moins 1 chiffre (0–9) <span class="criteria-count">({{ currentDigits }})</span></span>
       </li>
       <li :class="{ met: criteria.specials, unmet: !criteria.specials }">
         <span class="criteria-icon">
@@ -52,19 +64,21 @@
           </svg>
         </span>
         <span>
-          Au moins 2 caractères spéciaux non ambigus
-          <span class="criteria-count">({{ currentSpecials }}/2)</span>
+          Au moins 1 caractère spécial non ambigu
+          <span class="criteria-count">({{ currentSpecials }})</span>
           <span class="specials-hint">! @ # $ % ^ &amp; * ( ) - _ = + [ ] { } : ; &lt; &gt; , . ? / ~</span>
         </span>
       </li>
     </ul>
 
-    <!-- Strength bar -->
-    <div class="strength-bar-wrapper" v-if="password.length > 0">
-      <div class="strength-bar">
-        <div class="strength-fill" :class="strengthClass" :style="{ width: strengthPercent + '%' }"></div>
-      </div>
-      <span class="strength-label" :class="strengthClass">{{ strengthLabel }}</span>
+    <!-- 4-segment strength bar -->
+    <div class="strength-segments" v-if="show && password.length > 0">
+      <div
+        v-for="i in 4"
+        :key="i"
+        class="strength-segment"
+        :class="segmentClass(i)"
+      ></div>
     </div>
   </div>
 </template>
@@ -84,20 +98,19 @@ const currentLength = computed(() => result.value.currentLength)
 const currentDigits = computed(() => result.value.currentDigits)
 const currentSpecials = computed(() => result.value.currentSpecials)
 
-// Strength meter: 0-3 criteria met
+// Count how many of the 4 criteria are met
 const metCount = computed(() => Object.values(criteria.value).filter(Boolean).length)
-const strengthPercent = computed(() => (metCount.value / 3) * 100)
-const strengthClass = computed(() => {
-  if (metCount.value === 0) return 'strength-weak'
-  if (metCount.value === 1) return 'strength-weak'
-  if (metCount.value === 2) return 'strength-medium'
-  return 'strength-strong'
-})
-const strengthLabel = computed(() => {
-  if (metCount.value === 3) return 'Fort ✓'
-  if (metCount.value === 2) return 'Moyen'
-  return 'Faible'
-})
+
+// Returns CSS class for segment i (1-indexed)
+// n segments lit with color based on total met; rest are inactive (gray)
+function segmentClass(i) {
+  const n = metCount.value
+  if (i > n) return 'segment-inactive'
+  if (n === 1) return 'segment-red'
+  if (n === 2) return 'segment-orange'
+  if (n === 3) return 'segment-yellow'
+  return 'segment-green' // n === 4
+}
 </script>
 
 <style scoped>
@@ -185,35 +198,23 @@ const strengthLabel = computed(() => {
   color: var(--secondary-text-color, #64748b);
 }
 
-/* Strength bar */
-.strength-bar-wrapper {
+/* 4-segment strength bar */
+.strength-segments {
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
+  gap: 4px;
   margin-top: 0.1rem;
 }
 
-.strength-bar {
+.strength-segment {
   flex: 1;
   height: 5px;
-  background: var(--border-color, #e2e8f0);
   border-radius: 99px;
-  overflow: hidden;
+  transition: background-color 0.3s ease;
 }
 
-.strength-fill {
-  height: 100%;
-  border-radius: 99px;
-  transition: width 0.3s ease, background-color 0.3s ease;
-}
-
-.strength-weak  { background-color: var(--error-color, #e74c3c); color: var(--error-color, #e74c3c); }
-.strength-medium { background-color: #f39c12; color: #f39c12; }
-.strength-strong { background-color: #27ae60; color: #27ae60; }
-
-.strength-label {
-  font-size: 0.78rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
+.segment-inactive { background-color: var(--border-color, #e2e8f0); }
+.segment-red      { background-color: var(--error-color, #e74c3c); }
+.segment-orange   { background-color: #f39c12; }
+.segment-yellow   { background-color: #f1c40f; }
+.segment-green    { background-color: #27ae60; }
 </style>

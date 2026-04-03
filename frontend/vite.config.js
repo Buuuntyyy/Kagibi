@@ -12,6 +12,13 @@ export default defineConfig({
   build: {
     target: 'esnext',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'libsodium': ['libsodium-wrappers-sumo'],
+        },
+      },
+    },
   },
   server: {
     sourcemap: false,

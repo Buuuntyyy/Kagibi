@@ -2,6 +2,11 @@ db_data/*
 redis-data/*
 backend/.tmp/*
 backend/uploads/*
+.gemini/
+.claude/
+.github/skills
+_bmad/
+_bmad-output/
 
 backend/.env
 frontend/.env

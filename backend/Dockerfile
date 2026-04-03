@@ -43,9 +43,6 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/bin/safercloud /app/safercloud
 
-# Copy migrations if needed
-COPY --from=builder /app/migrations /app/migrations
-
 # Change ownership
 RUN chown -R appuser:appuser /app
 

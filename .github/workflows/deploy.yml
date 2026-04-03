@@ -1,0 +1,92 @@
+name: Deploy
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BACKEND: ghcr.io/${{ github.repository_owner }}/safercloud-backend
+  IMAGE_FRONTEND: ghcr.io/${{ github.repository_owner }}/safercloud-frontend
+
+jobs:
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract tag
+        id: meta
+        run: echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.IMAGE_BACKEND }}:${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE_BACKEND }}:latest
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          build-args: |
+            VITE_API_URL=${{ secrets.VITE_API_URL }}
+          tags: |
+            ${{ env.IMAGE_FRONTEND }}:${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE_FRONTEND }}:latest
+
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Extract tag
+        id: meta
+        run: echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Update backend image
+        run: |
+          kubectl set image deployment/safercloud-backend \
+            backend=${{ env.IMAGE_BACKEND }}:${{ steps.meta.outputs.tag }} \
+            -n safercloud
+
+      - name: Update frontend image
+        run: |
+          kubectl set image deployment/safercloud-frontend \
+            frontend=${{ env.IMAGE_FRONTEND }}:${{ steps.meta.outputs.tag }} \
+            -n safercloud
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/safercloud-backend -n safercloud --timeout=120s
+          kubectl rollout status deployment/safercloud-frontend -n safercloud --timeout=120s

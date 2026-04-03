@@ -22,7 +22,15 @@
       <div class="form-group">
         <label>Mot de passe</label>
         <div class="password-input-wrapper">
-          <input v-model="password" :type="showPassword ? 'text' : 'password'" required class="form-control" placeholder="••••••••" />
+          <input
+            v-model="password"
+            :type="showPassword ? 'text' : 'password'"
+            required
+            class="form-control"
+            placeholder="••••••••"
+            @focus="passwordFocused = true"
+            @blur="handlePasswordBlur"
+          />
           <button type="button" class="toggle-password-btn" @click="showPassword = !showPassword" tabindex="-1">
             <svg v-if="!showPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -34,7 +42,15 @@
             </svg>
           </button>
         </div>
-        <PasswordCriteria :password="password" />
+        <PasswordCriteria :password="password" :show="passwordFocused" />
+      </div>
+
+      <!-- Trust copy — zero-knowledge guarantee (UX-DR12) -->
+      <div class="zk-trust-note">
+        <svg class="zk-shield-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        <p>Vos fichiers sont chiffrés avant de quitter votre appareil. Nous ne pouvons pas les lire.</p>
       </div>
 
       <button type="submit" class="btn-submit" :disabled="loading">
@@ -44,8 +60,18 @@
       <p v-if="error" class="error-message">{{ error }}</p>
     </form>
   </div>
-  <div v-else class="recovery-display">
-    <h3>Compte créé avec succès !</h3>
+
+  <!-- Recovery code display — UX-DR13: alertdialog with focus lock -->
+  <div
+    v-else
+    class="recovery-display"
+    role="alertdialog"
+    aria-modal="true"
+    aria-labelledby="recovery-title"
+    @keydown="trapFocus"
+    ref="recoveryDisplayRef"
+  >
+    <h3 id="recovery-title">Compte créé avec succès !</h3>
     <div class="alert-box">
       <strong>IMPORTANT :</strong> Voici votre code de récupération. Conservez-le en lieu sûr. C'est le SEUL moyen de récupérer votre compte si vous perdez votre mot de passe.
     </div>
@@ -54,7 +80,20 @@
     </div>
     <div class="actions">
       <button @click="copyCode" class="btn-secondary">Copier le code</button>
-      <button class="btn-submit" @click="showConfirmModal = true" :disabled="!codeCopied">Continuer vers le Dashboard</button>
+
+      <div class="copy-confirm">
+        <input
+          type="checkbox"
+          id="copied-checkbox"
+          v-model="codeCheckboxChecked"
+          autofocus
+        />
+        <label for="copied-checkbox">J'ai copié ce code en lieu sûr</label>
+      </div>
+
+      <button class="btn-submit" @click="showConfirmModal = true" :disabled="!codeCheckboxChecked">
+        Continuer vers le Dashboard
+      </button>
     </div>
 
     <!-- Toast Notification -->
@@ -98,7 +137,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
 import AvatarSelector from '../AvatarSelector.vue'
@@ -114,10 +153,18 @@ const recoveryCode = ref('')
 const loading = ref(false)
 const showPassword = ref(false)
 const showConfirmModal = ref(false)
-const codeCopied = ref(false)
+const codeCheckboxChecked = ref(false)
 const showNotification = ref(false)
+const passwordFocused = ref(false)
+const recoveryDisplayRef = ref(null)
 const authStore = useAuthStore()
 const router = useRouter()
+
+const handlePasswordBlur = () => {
+  const { valid } = checkPasswordCriteria(password.value)
+  if (valid) passwordFocused.value = false
+  // Keep showing criteria if password is still invalid so user sees what's missing
+}
 
 const submit = async () => {
   error.value = ''
@@ -143,16 +190,58 @@ const submit = async () => {
   }
 }
 
-const copyCode = () => {
-  navigator.clipboard.writeText(recoveryCode.value)
-  codeCopied.value = true
-  showNotification.value = true
-
-  // Hide notification after 3 seconds
-  setTimeout(() => {
-    showNotification.value = false
-  }, 3000)
+const copyCode = async () => {
+  try {
+    await navigator.clipboard.writeText(recoveryCode.value)
+    showNotification.value = true
+    setTimeout(() => { showNotification.value = false }, 3000)
+  } catch {
+    error.value = 'Impossible de copier le code. Copiez-le manuellement.'
+  }
 }
+
+// Focus trap for recovery display section (UX-DR13)
+const trapFocus = (event) => {
+  if (!recoveryDisplayRef.value) return
+
+  // Escape: keep user in dialog (alertdialog cannot be dismissed until checkbox is checked)
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    return
+  }
+
+  if (event.key !== 'Tab') return
+
+  const focusableSelectors = 'button, input, [tabindex]:not([tabindex="-1"])'
+  const focusable = Array.from(recoveryDisplayRef.value.querySelectorAll(focusableSelectors))
+  if (focusable.length === 0) return
+
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+
+  if (event.shiftKey) {
+    if (document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    }
+  } else {
+    if (document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+}
+
+// When recovery display becomes visible, programmatically focus the checkbox (P-10)
+watch(recoveryCode, (newCode) => {
+  if (newCode) {
+    // Use nextTick equivalent — wait one frame for v-else to render
+    setTimeout(() => {
+      const checkbox = recoveryDisplayRef.value?.querySelector('#copied-checkbox')
+      checkbox?.focus()
+    }, 50)
+  }
+})
 
 const finishRegistration = async () => {
     showConfirmModal.value = false
@@ -161,7 +250,7 @@ const finishRegistration = async () => {
     // Just ensure RSA keys are loaded
     try {
       await authStore.ensureRSAKeys(authStore.masterKey);
-      router.push({ name: 'Home' })
+      router.push({ name: 'MyFiles' })
     } catch (err) {
       console.error('Error ensuring RSA keys after registration:', err);
       error.value = 'Erreur lors de la finalisation de l\'inscription: ' + err.message;
@@ -226,6 +315,33 @@ label,
   border-color: var(--primary-color);
   box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.1);
   background-color: var(--card-color);
+}
+
+/* Zero-knowledge trust note (UX-DR12) */
+.zk-trust-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  background: rgba(52, 152, 219, 0.06);
+  border: 1px solid rgba(52, 152, 219, 0.25);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--main-text-color);
+}
+
+.zk-shield-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--primary-color, #3498db);
+}
+
+.zk-trust-note p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--secondary-text-color, #64748b);
 }
 
 .btn-submit {
@@ -320,7 +436,7 @@ label,
   background-color: var(--background-color);
   border: 2px dashed var(--border-color);
   padding: 1rem;
-  font-family: monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 1.2rem;
   font-weight: bold;
   letter-spacing: 1px;
@@ -334,6 +450,30 @@ label,
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
+}
+
+/* Checkbox gate for recovery code acknowledgment */
+.copy-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: left;
+  font-size: 0.92rem;
+  color: var(--main-text-color);
+}
+
+.copy-confirm input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--primary-color, #3498db);
+}
+
+.copy-confirm label {
+  cursor: pointer;
+  font-size: 0.92rem;
+  color: var(--main-text-color);
 }
 
 @keyframes spin {
