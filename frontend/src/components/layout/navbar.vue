@@ -15,6 +15,13 @@
       >
         {{ t('file.supportProject') }}
       </a>
+      <button @click="showHelpDialog = true" class="theme-toggle" title="Aide & Support">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </button>
       <LanguageSwitcher />
       <button @click="themeStore.toggleTheme" class="theme-toggle" :title="themeStore.theme === 'light' ? t('nav.darkMode') : t('nav.lightMode')">
         <svg v-if="themeStore.theme === 'light'" class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -43,23 +50,27 @@
         <a @click.prevent="logout" href="#">{{ t('nav.logout') }}</a>
       </template>
     </div>
+    <HelpDialog v-model:isOpen="showHelpDialog" />
   </nav>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useThemeStore } from '../../stores/theme'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import SearchBar from '../bar/searchBar.vue'
 import LanguageSwitcher from '../LanguageSwitcher.vue'
+import HelpDialog from '../HelpDialog.vue'
 
 const { t } = useI18n()
 
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
 const router = useRouter()
+
+const showHelpDialog = ref(false)
 
 const buyMeACoffeeUrl = computed(() => {
   const runtimeUrl = typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : ''
