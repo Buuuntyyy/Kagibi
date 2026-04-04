@@ -1,20 +1,27 @@
 <template>
-  <div v-if="visible" class="file-preview-modal" @click.self="close">
-    <div class="modal-content">
+  <Teleport to="body">
+    <div v-if="visible" class="file-preview-modal" @mousedown="close" @click="close" @touchstart="close">
+      <div class="modal-backdrop" @click="close"></div>
+      
+      <!-- Floating absolute close button outside content to ensure it is always clickable -->
+      <button class="global-close-btn" @mousedown.stop="close" @click.stop="close" @touchstart.stop="close" title="Fermer">
+        &times;
+      </button>
+
+      <div class="modal-content" @mousedown.stop @click.stop @touchstart.stop>
       <div class="modal-header">
-        <span class="file-name">{{ fileName }}</span>
+        <span class="file-name" :title="fileName">{{ fileName }}</span>
         <div class="tools" v-if="isPdf || isImage">
             <template v-if="isPdf">
                 <button class="tool-btn" @click="prevPage" :disabled="page <= 1">Prev</button>
-                <span class="page-info">{{ page }} / {{ pageCount }}</span>
+                <span class="page-info">{{ page }} / {{ pageCount }}</span>     
                 <button class="tool-btn" @click="nextPage" :disabled="page >= pageCount">Next</button>
                 <div class="separator"></div>
             </template>
             <button class="tool-btn" @click="zoomOut">-</button>
-            <span class="page-info">{{ Math.round(scale * 100) }}%</span>
+            <span class="page-info">{{ Math.round(scale * 100) }}%</span>       
             <button class="tool-btn" @click="zoomIn">+</button>
         </div>
-        <button class="close-btn" @click="close">&times;</button>
       </div>
       <div class="modal-body">
          <!-- Phase 1: Downloading/Preparing (Server/Decrypt) -->
@@ -57,19 +64,18 @@
       </div>
     </div>
   </div>
+  </Teleport>
 </template>
 
 <script setup>
 import { computed, ref, watch, onMounted } from 'vue';
-import VuePdfEmbed from 'vue-pdf-embed'
+import VuePdfEmbed, { GlobalWorkerOptions } from 'vue-pdf-embed/dist/index.essential.mjs'; // Essential to pass explicit worker
 
-// Essential for PDF.js in Vite
-import * as pdfjsLib from 'pdfjs-dist';
 // V5/V4 worker import
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 if (typeof window !== 'undefined' && 'Worker' in window) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+    GlobalWorkerOptions.workerSrc = pdfWorker;
 }
 
 const props = defineProps({
@@ -155,20 +161,11 @@ const loadPdf = async (url) => {
     
     try {
         // Option A: Pass URL directly (let VuePdfEmbed handle it)
-        // pdfSource.value = url;
-        
-        // Option B: Load manually
-        const loadingTask = pdfjsLib.getDocument({
+        pdfSource.value = {
              url: url,
-             cMapUrl: 'https://unpkg.com/pdfjs-dist@4.10.0/cmaps/', // Use CDN for cmaps to avoid local 404s
+             cMapUrl: 'https://unpkg.com/pdfjs-dist@4.10.38/cmaps/',
              cMapPacked: true,
-        });
-        
-        const doc = await loadingTask.promise;
-        console.log("PDF Document loaded manually:", doc.numPages, "pages");
-        pdfSource.value = doc;
-        // isRendering will be set to false by handleLoaded when component renders it
-        
+        };
     } catch (e) {
         console.error("Manual PDF Load Failed:", e);
         handleError(e);
@@ -218,19 +215,56 @@ watch(() => props.fileUrl, () => {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 9999;
+  right: 0;
+  bottom: 0;
+  z-index: 2147483647;
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: rgba(0, 0, 0, 0.85); /* Overlay here */
+  /* Removed pointer-events overrides to avoid Safari/Mobile touch bugs */
 }
 
-/* Removed separate overlay div to use click.self on container */
+.modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.85); /* Overlay here */
+  z-index: 1; /* Explicit layering */
+}
+
+.global-close-btn {
+  position: absolute;
+  top: 20px;
+  right: 25px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background-color: rgba(30, 30, 30, 0.7);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 1.8rem;
+  font-weight: 300;
+  line-height: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  z-index: 2147483647; /* Way above backdrop and content */
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.global-close-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: scale(1.08);
+}
 
 .modal-content {
   position: relative;
+  z-index: 10; /* Above backdrop */
   width: 55vw; /* Portrait style width */
   max-width: 900px;
   min-width: 350px;
@@ -248,10 +282,17 @@ watch(() => props.fileUrl, () => {
         width: 95vw;
         height: 90vh;
     }
+    .global-close-btn {
+        top: 10px;
+        right: 10px;
+        width: 40px;
+        height: 40px;
+        font-size: 1.5rem;
+    }
 }
 
 .modal-header {
-  padding: 5px 15px;
+  padding: 10px 15px; /* Cleaned up padding since close btn is outside */
   background-color: #f5f5f5;
   border-bottom: 1px solid #ddd;
   display: flex;
@@ -259,6 +300,15 @@ watch(() => props.fileUrl, () => {
   align-items: center;
   color: #333;
   font-size: 0.9rem;
+  gap: 15px;
+}
+
+.file-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .tools {
@@ -285,19 +335,6 @@ watch(() => props.fileUrl, () => {
     height: 20px;
     background-color: #ccc;
     margin: 0 10px;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-  color: #666;
-}
-
-.close-btn:hover {
-    color: #000;
 }
 
 .modal-body {

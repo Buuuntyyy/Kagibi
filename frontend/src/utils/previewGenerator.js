@@ -1,5 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 // Configure Worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -57,9 +57,9 @@ function generateImagePreview(file) {
 async function generatePdfPreview(file) {
     const arrayBuffer = await file.arrayBuffer();
     // Use standard font map to avoid warnings/missing text
-    const loadingTask = pdfjsLib.getDocument({ 
+    const loadingTask = pdfjsLib.getDocument({
         data: arrayBuffer,
-        cMapUrl: 'https://unpkg.com/pdfjs-dist@4.10.0/cmaps/',
+        cMapUrl: 'https://unpkg.com/pdfjs-dist@5.4.530/cmaps/',
         cMapPacked: true,
     });
     const pdf = await loadingTask.promise;
