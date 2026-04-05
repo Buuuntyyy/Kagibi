@@ -101,7 +101,7 @@
       </div>
     </div>
 
-    <div class="storage-section" v-if="billingStore.showSubscriptionUI" @click="navigateTo('/billing')" style="cursor: pointer;">
+    <div class="storage-section" @click="navigateTo('/usage')" style="cursor: pointer;">
       <div class="storage-info" v-if="!isCollapsed">
         <span class="storage-label">{{ t('sidebar.storage') }}</span>
         <span class="storage-value">{{ formattedStorageUsed }} {{ t('sidebar.of') }} {{ formattedStorageLimit }}</span>
