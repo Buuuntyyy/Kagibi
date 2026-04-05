@@ -6,15 +6,11 @@
         <button class="close-btn" @click="close">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="description">Vous avez trouvé un bug ou vous avez une idée géniale ? Sélectionnez une option ci-dessous pour nous en faire part sur GitHub.</p>
+        <p class="description">Vous avez trouvÃ© un bug ou vous avez une idÃ©e gÃ©niale ? SÃ©lectionnez une option ci-dessous pour nous en faire part sur GitHub.</p>
         
         <div class="action-buttons">
           <a :href="bugReportUrl" target="_blank" rel="noopener noreferrer" class="action-btn bug-btn" @click="close">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"></path>
-              <line x1="12" y1="8" x2="12" y2="12"></line>
-              <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
+            <Bug class="btn-icon" :size="32" :stroke-width="2" />
             <div class="btn-text">
                 <span class="btn-title">Signaler un bug</span>
                 <span class="btn-desc">Quelque chose ne fonctionne pas ? Dites-le nous !</span>
@@ -22,13 +18,10 @@
           </a>
 
           <a :href="featureRequestUrl" target="_blank" rel="noopener noreferrer" class="action-btn feature-btn" @click="close">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2v20"></path>
-              <path d="M2 12h20"></path>
-            </svg>
+            <Lightbulb class="btn-icon" :size="32" :stroke-width="2" />
             <div class="btn-text">
-                <span class="btn-title">Proposer une fonctionnalité</span>
-                <span class="btn-desc">Vous avez une idée d'amélioration ?</span>
+                <span class="btn-title">Proposer une fonctionnalitÃ©</span>
+                <span class="btn-desc">Vous avez une idÃ©e d'amÃ©lioration ?</span>
             </div>
           </a>
         </div>
@@ -38,6 +31,8 @@
 </template>
 
 <script setup>
+import { Bug, Lightbulb } from 'lucide-vue-next'
+
 const props = defineProps({
   isOpen: Boolean
 })
