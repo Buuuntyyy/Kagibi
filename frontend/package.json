@@ -14,6 +14,7 @@
     "fflate": "^0.8.2",
     "libsodium-wrappers-sumo": "^0.7.15",
     "lodash": "^4.17.21",
+    "lucide-vue-next": "^1.0.0",
     "pdfjs-dist": "^5.4.530",
     "pinia": "^3.0.4",
     "primeicons": "^7.0.0",

@@ -593,8 +593,13 @@ export const useFileStore = defineStore('files', {
         }
 
         // Add to history
-        this.addToHistory({ id: fileId, type: 'file', displayName: fileName });
-
+          this.addToHistory({ 
+              id: fileId, 
+              type: 'file', 
+              displayName: fileName,
+              MimeType: mimeType,
+              EncryptedKey: encryptedKey
+          });
       } catch (error) {
         console.error("Erreur download:", error);
         alert("Erreur lors du téléchargement.");
