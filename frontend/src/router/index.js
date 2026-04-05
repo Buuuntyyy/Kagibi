@@ -12,7 +12,7 @@ import Credits from '../views/Credits.vue'
 import FriendsView from '../views/FriendsView.vue'
 import P2PView from '../views/P2PView.vue'
 import HomeView from '../views/HomeView.vue'
-import BillingDashboard from '../components/billing/BillingDashboard.vue'
+import UsageDashboard from '../components/usage/UsageDashboard.vue'
 import LandingHome from '../views/landing/HomeView.vue'
 import LandingPricing from '../views/landing/PricingView.vue'
 import LandingTransfer from '../views/landing/TransferView.vue'
@@ -89,9 +89,9 @@ const routes = [
     ]
   },
   {
-    path: '/billing',
-    name: 'Billing',
-    component: BillingDashboard,
+    path: '/usage',
+    name: 'Usage',
+    component: UsageDashboard,
     meta: { requiresAuth: true }
   },
   {

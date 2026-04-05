@@ -8,7 +8,6 @@
       
       <div class="nav-links">
         <router-link to="/" class="nav-link">Accueil</router-link>
-        <router-link to="/pricing" class="nav-link">Tarifs</router-link>
         <router-link to="/transfer" class="nav-link">Transfert P2P</router-link>
         <router-link to="/login" class="nav-btn">Connexion</router-link>
       </div>
@@ -30,7 +29,6 @@
     <!-- Mobile Menu -->
     <div class="mobile-menu" :class="{ open: isMenuOpen }">
       <router-link to="/" class="mobile-link" @click="closeMenu">Accueil</router-link>
-      <router-link to="/pricing" class="mobile-link" @click="closeMenu">Tarifs</router-link>
       <router-link to="/transfer" class="mobile-link" @click="closeMenu">Transfert P2P</router-link>
       <router-link to="/login" class="mobile-btn" @click="closeMenu">Connexion</router-link>
     </div>

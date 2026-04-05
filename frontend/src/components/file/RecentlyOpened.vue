@@ -128,16 +128,20 @@ const router = useRouter()
 const openItem = async (item) => {
   if (item.type === 'folder') {
     // Set a pending navigation path so FileList.vue will use it after mount
-    fileStore.pendingNavigatePath = item.path;
+    fileStore.pendingNavigatePath = item.path || item.Path;
     if (router.currentRoute.value.path !== '/dashboard/files') {
       await router.push('/dashboard/files')
     } else {
       // If already on files, trigger navigation immediately
-      fileStore.fetchItems(item.path)
+      fileStore.fetchItems(item.path || item.Path)
     }
     fileStore.addToHistory(item)
   } else {
-    fileStore.downloadFile(item.ID, item.Name)
+    const fileId = item.ID || item.id;
+    const fileName = item.displayName || item.Name || item.name;
+    const mimeType = item.MimeType || item.mime_type;
+    const encryptedKey = item.EncryptedKey || item.encrypted_key;
+    fileStore.downloadFile(fileId, fileName, mimeType, false, encryptedKey)
     fileStore.addToHistory(item)
   }
 }
@@ -157,16 +161,20 @@ const closeContextMenu = () => {
 
 const handleContextAction = (action) => {
   const item = contextMenu.value.item
-  
+  const fileId = item.ID || item.id;
+  const fileName = item.displayName || item.Name || item.name;
+  const mimeType = item.MimeType || item.mime_type;
+  const encryptedKey = item.EncryptedKey || item.encrypted_key;
+
   switch(action) {
     case 'preview':
       if (item.type === 'file') {
-        fileStore.downloadFile(item.ID, item.Name, item.MimeType, true)
+        fileStore.downloadFile(fileId, fileName, mimeType, true, encryptedKey)
       }
       break
     case 'download':
       if (item.type === 'file') {
-        fileStore.downloadFile(item.ID, item.Name, item.MimeType, false)
+        fileStore.downloadFile(fileId, fileName, mimeType, false, encryptedKey)
       }
       break
     case 'share':
