@@ -1,8 +1,8 @@
-# 🔐 SaferCloud - Zero-Knowledge Cloud Storage
+# 🔐 Kagibi - Zero-Knowledge Cloud Storage
 
 **Architecture Zero-Knowledge End-to-End** | **AGPLv3 License** | **Production-Ready**
 
-SaferCloud est une plateforme de stockage cloud sécurisée où toutes les données sont chiffrées côté client avant d'atteindre le serveur. Le backend ne possède **aucune clé de déchiffrement** et ne peut accéder au contenu des fichiers.
+Kagibi est une plateforme de stockage cloud sécurisée où toutes les données sont chiffrées côté client avant d'atteindre le serveur. Le backend ne possède **aucune clé de déchiffrement** et ne peut accéder au contenu des fichiers.
 
 ---
 
@@ -251,8 +251,8 @@ MinIO ou AWS S3
 
 1. **Cloner le repository**
 ```bash
-git clone https://github.com/votre-org/safercloud.git
-cd safercloud
+git clone https://github.com/votre-org/kagibi.git
+cd kagibi
 ```
 
 2. **Démarrer l'infrastructure (Docker)**
@@ -289,7 +289,7 @@ Créez `backend/.env`:
 
 ```bash
 # Base de données
-DATABASE_URL=postgresql://user:password@localhost:5432/safercloud
+DATABASE_URL=postgresql://user:password@localhost:5432/kagibi
 
 # Redis
 REDIS_URL=redis://localhost:6379
@@ -303,7 +303,7 @@ S3_ENDPOINT=http://localhost:9000  # MinIO local
 S3_REGION=us-east-1
 S3_ACCESS_KEY=minioadmin
 S3_SECRET_KEY=minioadmin
-S3_BUCKET=safercloud-files
+S3_BUCKET=kagibi-files
 
 # CORS
 ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
@@ -336,13 +336,13 @@ Appliquez les configurations CORS et Lifecycle depuis `scripts/`:
 ```bash
 # CORS (expose ETags pour validation client)
 aws s3api put-bucket-cors \
-  --bucket safercloud-files \
+  --bucket kagibi-files \
   --cors-configuration file://scripts/s3-cors-config.json \
   --endpoint-url http://localhost:9000  # MinIO local
 
 # Lifecycle (cleanup uploads incomplets après 24h)
 aws s3api put-bucket-lifecycle-configuration \
-  --bucket safercloud-files \
+  --bucket kagibi-files \
   --lifecycle-configuration file://scripts/s3-lifecycle-policy.json \
   --endpoint-url http://localhost:9000
 ```
@@ -435,7 +435,7 @@ Tous les événements de sécurité sont enregistrés dans `backend/logs/securit
 ## 📁 Structure du Projet
 
 ```
-safercloud/
+kagibi/
 ├── backend/                    # API Go
 │   ├── handlers/               # Contrôleurs HTTP
 │   │   ├── auth/               # Authentification, récupération
@@ -557,13 +557,13 @@ GitHub Actions exécute automatiquement:
 ## ❓ Pourquoi pas de connexion OAuth ?
 
 ### TL;DR
-**L'authentification via Google, Facebook, Apple, etc. est incompatible avec l'architecture Zero-Knowledge de SaferCloud.**
+**L'authentification via Google, Facebook, Apple, etc. est incompatible avec l'architecture Zero-Knowledge de Kagibi.**
 
 ### Explication détaillée
 
 #### Le problème fondamental
 
-SaferCloud utilise un **chiffrement Zero-Knowledge** où :
+Kagibi utilise un **chiffrement Zero-Knowledge** où :
 1. Votre **mot de passe** est la **seule source** pour dériver votre clé de chiffrement (via Argon2id)
 2. Cette clé **n'existe que dans votre navigateur** et n'est **jamais envoyée** au serveur
 3. Le serveur ne peut **jamais déchiffrer** vos fichiers
@@ -572,7 +572,7 @@ SaferCloud utilise un **chiffrement Zero-Knowledge** où :
 
 Avec OAuth (Google/Facebook/Apple) :
 - ✅ Vous vous connectez facilement
-- ❌ **Mais vous n'avez pas de mot de passe SaferCloud**
+- ❌ **Mais vous n'avez pas de mot de passe Kagibi**
 - ❌ Sans mot de passe → **Impossible de dériver la clé de chiffrement**
 - ❌ Sans clé → **Vos fichiers restent inaccessibles**
 
@@ -621,7 +621,7 @@ Avec OAuth (Google/Facebook/Apple) :
 | **OneDrive** | ✅ | ❌ | Microsoft peut lire vos fichiers |
 | **ProtonDrive** | ❌ | ✅ | Mot de passe obligatoire (comme nous) |
 | **Tresorit** | ❌ | ✅ | Mot de passe obligatoire |
-| **SaferCloud** | ❌ | ✅ | **Vie privée > Commodité** |
+| **Kagibi** | ❌ | ✅ | **Vie privée > Commodité** |
 
 #### Recommandation : Utilisez un gestionnaire de mots de passe
 
@@ -640,7 +640,7 @@ Pour concilier sécurité et commodité :
 
 > **"Si c'est gratuit, c'est vous le produit."**
 
-SaferCloud est conçu pour que :
+Kagibi est conçu pour que :
 - Nous ne puissions **jamais** lire vos fichiers
 - Une fuite de notre base de données soit **inutile** aux attaquants
 - Une ordonnance judiciaire ne puisse **pas** nous forcer à révéler vos données
@@ -649,7 +649,7 @@ SaferCloud est conçu pour que :
 
 #### Cas d'usage : Récupération de compte
 
-Même sans OAuth, SaferCloud offre une solution de secours :
+Même sans OAuth, Kagibi offre une solution de secours :
 - **Code de récupération** généré à l'inscription (256 bits)
 - Stockez-le dans votre gestionnaire de mots de passe
 - Permet de régénérer votre clé en cas d'oubli du mot de passe
@@ -689,7 +689,7 @@ Voir [LICENSE](LICENSE) pour le texte complet.
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/votre-org/safercloud/issues)
+- **Issues**: [GitHub Issues](https://github.com/votre-org/kagibi/issues)
 - **Documentation**: Ce README + sous-dossiers
 - **Security**: Voir [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md)
 

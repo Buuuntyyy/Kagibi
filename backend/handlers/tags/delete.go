@@ -2,7 +2,7 @@ package tags
 
 import (
 	"net/http"
-	"safercloud/backend/pkg"
+	"kagibi/backend/pkg"
 	"strconv"
 
 	"github.com/gin-gonic/gin"

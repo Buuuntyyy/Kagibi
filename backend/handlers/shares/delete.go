@@ -4,7 +4,7 @@ package shares
 import (
 	"fmt"
 	"net/http"
-	"safercloud/backend/pkg"
+	"kagibi/backend/pkg"
 	"strings"
 
 	"github.com/gin-gonic/gin"

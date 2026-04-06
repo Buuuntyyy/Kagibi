@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	billingpkg "safercloud/backend/pkg/billing"
+	billingpkg "kagibi/backend/pkg/billing"
 )
 
 // setupBillingProvider initialise le provider de facturation pour le build OSS.

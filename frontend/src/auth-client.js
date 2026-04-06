@@ -1,7 +1,7 @@
 /**
  * auth-client.js — Local authentication client
  *
- * Handles all authentication against the SaferCloud backend local auth stack.
+ * Handles all authentication against the Kagibi backend local auth stack.
  * The multi-provider abstraction (Supabase/PocketBase) has been removed following
  * the completion of the Supabase → local auth migration.
  *
@@ -25,7 +25,7 @@ const _apiBase = (() => {
 
 // ── Token storage ─────────────────────────────────────────────────────────────
 
-const LOCAL_TOKEN_KEY = 'safercloud_local_token'
+const LOCAL_TOKEN_KEY = 'kagibi_local_token'
 
 function _localSaveToken(token) {
   if (token) localStorage.setItem(LOCAL_TOKEN_KEY, token)

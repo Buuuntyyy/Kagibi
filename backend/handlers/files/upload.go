@@ -15,9 +15,9 @@ import (
 	"strconv"
 	"strings"
 
-	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/monitoring"
-	"safercloud/backend/pkg/workers"
+	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/monitoring"
+	"kagibi/backend/pkg/workers"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -187,7 +187,7 @@ func checkStorageQuota(ctx context.Context, db *bun.DB, userID string, size int6
 }
 
 func handleChunkAssembly(fileHeader *multipart.FileHeader, userID string, req UploadRequest) (string, error) {
-	tempDir := filepath.Join(os.TempDir(), "safercloud_uploads", userID)
+	tempDir := filepath.Join(os.TempDir(), "kagibi_uploads", userID)
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		return "", fmt.Errorf("Failed to create temp directory")
 	}

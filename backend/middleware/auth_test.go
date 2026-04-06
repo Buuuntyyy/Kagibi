@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"safercloud/backend/pkg/authprovider"
+	"kagibi/backend/pkg/authprovider"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"

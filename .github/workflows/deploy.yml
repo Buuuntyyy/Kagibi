@@ -7,8 +7,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_BACKEND: ghcr.io/${{ github.repository_owner }}/safercloud-backend
-  IMAGE_FRONTEND: ghcr.io/${{ github.repository_owner }}/safercloud-frontend
+  IMAGE_BACKEND: ghcr.io/${{ github.repository_owner }}/kagibi-backend
+  IMAGE_FRONTEND: ghcr.io/${{ github.repository_owner }}/kagibi-frontend
 
 jobs:
   build-and-push:
@@ -76,17 +76,17 @@ jobs:
 
       - name: Update backend image
         run: |
-          kubectl set image deployment/safercloud-backend \
+          kubectl set image deployment/kagibi-backend \
             backend=${{ env.IMAGE_BACKEND }}:${{ steps.meta.outputs.tag }} \
-            -n safercloud
+            -n kagibi
 
       - name: Update frontend image
         run: |
-          kubectl set image deployment/safercloud-frontend \
+          kubectl set image deployment/kagibi-frontend \
             frontend=${{ env.IMAGE_FRONTEND }}:${{ steps.meta.outputs.tag }} \
-            -n safercloud
+            -n kagibi
 
       - name: Wait for rollout
         run: |
-          kubectl rollout status deployment/safercloud-backend -n safercloud --timeout=120s
-          kubectl rollout status deployment/safercloud-frontend -n safercloud --timeout=120s
+          kubectl rollout status deployment/kagibi-backend -n kagibi --timeout=120s
+          kubectl rollout status deployment/kagibi-frontend -n kagibi --timeout=120s

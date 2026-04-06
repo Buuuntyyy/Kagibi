@@ -5,8 +5,8 @@ import (
 	"log"
 	"math/big"
 	"net/http"
-	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/authprovider"
+	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/authprovider"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -40,7 +40,7 @@ func generateFriendCode() string {
 	return "#" + string(code)
 }
 
-// RegisterHandler creates the SaferCloud profile for a user already authenticated with the auth provider.
+// RegisterHandler creates the Kagibi profile for a user already authenticated with the auth provider.
 // The user ID comes from the JWT (set by AuthMiddleware) and matches the ID in the auth provider.
 func RegisterHandler(c *gin.Context, db *bun.DB, provider authprovider.AuthProvider) {
 	var req RegisterRequest

@@ -74,7 +74,7 @@ class SecurityMonitor {
       
       // Fallback à localStorage
       if (!token) {
-        token = localStorage.getItem('safercloud_token');
+        token = localStorage.getItem('kagibi_token');
       }
       
       const headers = {

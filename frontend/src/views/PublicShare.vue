@@ -12,7 +12,7 @@
              </linearGradient>
            </defs>
         </svg>
-        <span class="brand-name">SaferCloud</span>
+        <span class="brand-name">Kagibi</span>
       </div>
     </header>
 
@@ -80,7 +80,7 @@
     </div>
     
     <footer class="public-footer">
-      <p>Hébergé et sécurisé par <strong>SaferCloud</strong></p>
+      <p>Hébergé et sécurisé par <strong>Kagibi</strong></p>
     </footer>
   </div>
 </template>

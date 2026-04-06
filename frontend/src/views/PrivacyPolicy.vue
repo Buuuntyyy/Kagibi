@@ -6,7 +6,7 @@
 
       <section>
         <h2>1. Introduction</h2>
-        <p>Dans le cadre de son activité, SaferCloud est amené à traiter des informations vous concernant. La présente Politique de Confidentialité vous informe de la manière dont nous recueillons et traitons vos données personnelles. Nous vous invitons à la lire attentivement.</p>
+        <p>Dans le cadre de son activité, Kagibi est amené à traiter des informations vous concernant. La présente Politique de Confidentialité vous informe de la manière dont nous recueillons et traitons vos données personnelles. Nous vous invitons à la lire attentivement.</p>
         <p>Nous attachons la plus grande importance au respect de la vie privée et des données individuelles de nos utilisateurs. Nous nous engageons à respecter les dispositions de la loi n°78-17 du 6 janvier 1978 relative à l'informatique, aux fichiers et aux libertés modifiée et au Règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 dit « <em>RGPD</em> ».</p>
       </section>
 
@@ -29,7 +29,7 @@
         <h2>4. Finalités du traitement</h2>
         <p>Vos données sont collectées pour les finalités suivantes :</p>
         <ul>
-          <li>Fourniture et gestion du service SaferCloud (création de compte, stockage, partage).</li>
+          <li>Fourniture et gestion du service Kagibi (création de compte, stockage, partage).</li>
           <li>Sécurité du service et prévention de la fraude.</li>
           <li>Communication avec les utilisateurs (support technique, notifications importantes).</li>
           <li>Respect des obligations légales et réglementaires.</li>
@@ -38,8 +38,8 @@
 
       <section>
         <h2>5. Destinataires des données</h2>
-        <p>Les données collectées sont destinées aux équipes techniques de SaferCloud. Elles peuvent être transmises aux sous-traitants auxquels SaferCloud fait appel dans le cadre de l'exécution de ses services (ex: hébergeur).</p>
-        <p>SaferCloud ne vend ni ne loue vos données personnelles à des tiers à des fins de marketing.</p>
+        <p>Les données collectées sont destinées aux équipes techniques de Kagibi. Elles peuvent être transmises aux sous-traitants auxquels Kagibi fait appel dans le cadre de l'exécution de ses services (ex: hébergeur).</p>
+        <p>Kagibi ne vend ni ne loue vos données personnelles à des tiers à des fins de marketing.</p>
       </section>
 
       <section>
@@ -66,7 +66,7 @@
 
       <section>
         <h2>8. Sécurité des données</h2>
-        <p>SaferCloud met en œuvre des mesures techniques et organisationnelles appropriées pour protéger vos données contre l'accès non autorisé, la modification, la divulgation ou la destruction.</p>
+        <p>Kagibi met en œuvre des mesures techniques et organisationnelles appropriées pour protéger vos données contre l'accès non autorisé, la modification, la divulgation ou la destruction.</p>
       </section>
 
       <section>

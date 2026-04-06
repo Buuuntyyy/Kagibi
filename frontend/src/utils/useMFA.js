@@ -101,15 +101,15 @@ export function useMFA() {
       const timestamp = Date.now()
       const { data, error: enrollError } = await authClient.mfa.enroll({
         factorType: 'totp',
-        friendlyName: `SaferCloud Authenticator ${timestamp}`
+        friendlyName: `Kagibi Authenticator ${timestamp}`
       })
       if (enrollError) throw enrollError
 
       // Get user email for TOTP account name
       const session = await authClient.getSession()
-      const userEmail = session?.data?.session?.user?.email || 'user@safercloud.app'
+      const userEmail = session?.data?.session?.user?.email || 'user@kagibi.app'
 
-      const issuer = 'SaferCloud'
+      const issuer = 'Kagibi'
       const customUri = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(userEmail)}?secret=${data.totp.secret}&issuer=${encodeURIComponent(issuer)}`
 
       qrCode.value = customUri

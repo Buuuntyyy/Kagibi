@@ -72,7 +72,7 @@ func (s *StripeWebhookProvider) doRequest(ctx context.Context, method, path stri
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.apiKey))
-	req.Header.Set("X-Service", "safercloud-core")
+	req.Header.Set("X-Service", "kagibi-core")
 
 	return s.httpClient.Do(req)
 }

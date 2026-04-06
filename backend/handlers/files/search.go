@@ -2,7 +2,7 @@ package files
 
 import (
 	"net/http"
-	"safercloud/backend/pkg"
+	"kagibi/backend/pkg"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"

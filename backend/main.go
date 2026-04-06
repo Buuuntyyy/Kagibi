@@ -7,23 +7,23 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"safercloud/backend/handlers/auth"
-	billinghandlers "safercloud/backend/handlers/billing"
-	"safercloud/backend/handlers/files"
-	"safercloud/backend/handlers/folders"
-	"safercloud/backend/handlers/friends"
-	"safercloud/backend/handlers/keys"
-	"safercloud/backend/handlers/security"
-	"safercloud/backend/handlers/shares"
-	"safercloud/backend/handlers/tags"
-	"safercloud/backend/handlers/users"
-	wshandler "safercloud/backend/handlers/ws"
-	"safercloud/backend/middleware"
-	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/authprovider"
-	"safercloud/backend/pkg/monitoring"
-	"safercloud/backend/pkg/s3storage"
-	"safercloud/backend/pkg/workers"
+	"kagibi/backend/handlers/auth"
+	billinghandlers "kagibi/backend/handlers/billing"
+	"kagibi/backend/handlers/files"
+	"kagibi/backend/handlers/folders"
+	"kagibi/backend/handlers/friends"
+	"kagibi/backend/handlers/keys"
+	"kagibi/backend/handlers/security"
+	"kagibi/backend/handlers/shares"
+	"kagibi/backend/handlers/tags"
+	"kagibi/backend/handlers/users"
+	wshandler "kagibi/backend/handlers/ws"
+	"kagibi/backend/middleware"
+	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/authprovider"
+	"kagibi/backend/pkg/monitoring"
+	"kagibi/backend/pkg/s3storage"
+	"kagibi/backend/pkg/workers"
 	"strings"
 	"syscall"
 
@@ -47,7 +47,7 @@ func main() {
 	pkg.SetWSHub(wshandler.GlobalHub)
 
 	provider := initAuth(db)
-	log.Printf("Starting SaferCloud Backend v3.0 (auth provider: %s)...", provider.Name())
+	log.Printf("Starting Kagibi Backend v3.0 (auth provider: %s)...", provider.Name())
 
 	initS3()
 	setupBillingProvider()

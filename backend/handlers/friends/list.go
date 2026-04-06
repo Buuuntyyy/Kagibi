@@ -4,7 +4,7 @@ package friends
 import (
 	"context"
 	"net/http"
-	"safercloud/backend/pkg"
+	"kagibi/backend/pkg"
 
 	"github.com/uptrace/bun"
 

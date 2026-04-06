@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/s3storage"
-	"safercloud/backend/utils"
+	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/s3storage"
+	"kagibi/backend/utils"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"

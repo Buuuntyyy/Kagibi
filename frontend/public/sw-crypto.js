@@ -1,7 +1,7 @@
 // Service Worker pour gestion sécurisée de la MasterKey
 // Survit aux F5 mais avec timeout de sécurité
 
-const CACHE_NAME = 'safercloud-crypto-v1';
+const CACHE_NAME = 'kagibi-crypto-v1';
 const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
 // État du Service Worker

@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"safercloud/backend/pkg/authprovider"
+	"kagibi/backend/pkg/authprovider"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -68,7 +68,7 @@ func MFAEnrollHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 		}
 		_ = c.ShouldBindJSON(&req)
 		if req.FriendlyName == "" {
-			req.FriendlyName = "SaferCloud Authenticator"
+			req.FriendlyName = "Kagibi Authenticator"
 		}
 
 		// Get user email for the OTP URI issuer label

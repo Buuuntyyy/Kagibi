@@ -217,15 +217,6 @@
       @close="closeMoveDialog"
       @move-to="onMoveTo"
     />
-    <FilePreview
-      :visible="fileStore.preview.show"
-      :fileUrl="fileStore.preview.url"
-      :fileName="fileStore.preview.name"
-      :mimeType="fileStore.preview.type"
-      :loading="fileStore.preview.loading"
-      :status="fileStore.preview.status"
-      @close="fileStore.preview.show = false"
-    />
     <MFAChallengeModal
       v-model="showMFAChallenge"
       :context="mfaChallengeContext"
@@ -255,7 +246,6 @@ import ShareDialog from '../ShareDialog.vue'
 import api from '../../api'
 import MoveDialog from '../MoveDialog.vue';
 import ManageShareDialog from '../ManageShareDialog.vue';
-import FilePreview from './FilePreview.vue';
 import FileTable from './FileTable.vue';
 import MFAChallengeModal from '../MFAChallengeModal.vue';
 import { formatSpeed } from '../../utils/format'

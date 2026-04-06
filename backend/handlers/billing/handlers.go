@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"os"
 
-	"safercloud/backend/pkg"
-	billingpkg "safercloud/backend/pkg/billing"
+	"kagibi/backend/pkg"
+	billingpkg "kagibi/backend/pkg/billing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"

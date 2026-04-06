@@ -1,5 +1,5 @@
 # =================================
-# SaferCloud Backend - Multi-Stage Dockerfile
+# Kagibi Backend - Multi-Stage Dockerfile
 # Go API with Prometheus metrics
 # =================================
 
@@ -24,7 +24,7 @@ COPY . .
 # Build the binary with optimizations
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s" \
-    -o /app/bin/safercloud \
+    -o /app/bin/kagibi \
     .
 
 # Stage 2: Runtime
@@ -41,7 +41,7 @@ RUN addgroup -g 1000 appuser && \
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /app/bin/safercloud /app/safercloud
+COPY --from=builder /app/bin/kagibi /app/kagibi
 
 # Change ownership
 RUN chown -R appuser:appuser /app
@@ -59,4 +59,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Run the application
-CMD ["/app/safercloud"]
+CMD ["/app/kagibi"]
