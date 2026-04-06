@@ -167,7 +167,7 @@ func (p *LocalProvider) GetAuthUserByID(userID string) (*authUser, error) {
 // factor ID, OTP URI (for QR code), and raw base32 secret.
 func (p *LocalProvider) StartTOTPEnrollment(userID, email, friendlyName string) (factorID, otpURI, secret string, err error) {
 	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "SaferCloud",
+		Issuer:      "Kagibi",
 		AccountName: email,
 		Period:      30,
 		Digits:      otp.DigitsSix,

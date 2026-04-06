@@ -1,6 +1,6 @@
-# Docker - SaferCloud
+# Docker - Kagibi
 
-Ce répertoire contient les fichiers Docker pour construire les images du backend et du frontend de SaferCloud.
+Ce répertoire contient les fichiers Docker pour construire les images du backend et du frontend de Kagibi.
 
 ## Objectif
 
@@ -43,21 +43,21 @@ backend/
 
 ```bash
 # Depuis la racine du projet
-docker build -t safercloud-backend:latest ./backend
+docker build -t kagibi-backend:latest ./backend
 
 # Ou depuis le dossier backend
 cd backend
-docker build -t safercloud-backend:latest .
+docker build -t kagibi-backend:latest .
 ```
 
 **Tags recommandés:**
 
 ```bash
 # Version spécifique
-docker build -t safercloud-backend:1.0.0 ./backend
+docker build -t kagibi-backend:1.0.0 ./backend
 
 # Latest
-docker build -t safercloud-backend:latest ./backend
+docker build -t kagibi-backend:latest ./backend
 ```
 
 ### Frontend (Vue.js + nginx)
@@ -79,7 +79,7 @@ docker build -f docker/deployment/frontend/Dockerfile \
   --build-arg VITE_API_URL=https://api.example.com \
   --build-arg VITE_SUPABASE_URL=https://project.supabase.co \
   --build-arg VITE_SUPABASE_KEY=your-anon-key \
-  -t safercloud-frontend:latest \
+  -t kagibi-frontend:latest \
   ./frontend
 
 # Ou depuis le dossier frontend
@@ -88,7 +88,7 @@ docker build -f ../docker/deployment/frontend/Dockerfile \
   --build-arg VITE_API_URL=https://api.example.com \
   --build-arg VITE_SUPABASE_URL=https://project.supabase.co \
   --build-arg VITE_SUPABASE_KEY=your-anon-key \
-  -t safercloud-frontend:latest \
+  -t kagibi-frontend:latest \
   .
 ```
 
@@ -103,14 +103,14 @@ Pour construire les deux images en une seule commande :
 
 ```bash
 # Backend
-docker build -t safercloud-backend:latest ./backend
+docker build -t kagibi-backend:latest ./backend
 
 # Frontend
 docker build -f docker/deployment/frontend/Dockerfile \
   --build-arg VITE_API_URL=${VITE_API_URL} \
   --build-arg VITE_SUPABASE_URL=${VITE_SUPABASE_URL} \
   --build-arg VITE_SUPABASE_KEY=${VITE_SUPABASE_KEY} \
-  -t safercloud-frontend:latest \
+  -t kagibi-frontend:latest \
   ./frontend
 ```
 
@@ -123,13 +123,13 @@ docker run --rm -p 8080:8080 -p 9090:9090 \
   -e DATABASE_URL="postgres://user:pass@host:5432/db" \
   -e SUPABASE_URL="https://project.supabase.co" \
   -e SUPABASE_JWT_SECRET="your-jwt-secret" \
-  safercloud-backend:latest
+  kagibi-backend:latest
 ```
 
 ### Tester le frontend :
 
 ```bash
-docker run --rm -p 80:80 safercloud-frontend:latest
+docker run --rm -p 80:80 kagibi-frontend:latest
 ```
 
 Accéder à http://localhost
@@ -140,12 +140,12 @@ Accéder à http://localhost
 
 ```bash
 # Tag
-docker tag safercloud-backend:latest username/safercloud-backend:latest
-docker tag safercloud-frontend:latest username/safercloud-frontend:latest
+docker tag kagibi-backend:latest username/kagibi-backend:latest
+docker tag kagibi-frontend:latest username/kagibi-frontend:latest
 
 # Push
-docker push username/safercloud-backend:latest
-docker push username/safercloud-frontend:latest
+docker push username/kagibi-backend:latest
+docker push username/kagibi-frontend:latest
 ```
 
 ### GitHub Container Registry
@@ -155,24 +155,24 @@ docker push username/safercloud-frontend:latest
 echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 
 # Tag
-docker tag safercloud-backend:latest ghcr.io/username/safercloud-backend:latest
-docker tag safercloud-frontend:latest ghcr.io/username/safercloud-frontend:latest
+docker tag kagibi-backend:latest ghcr.io/username/kagibi-backend:latest
+docker tag kagibi-frontend:latest ghcr.io/username/kagibi-frontend:latest
 
 # Push
-docker push ghcr.io/username/safercloud-backend:latest
-docker push ghcr.io/username/safercloud-frontend:latest
+docker push ghcr.io/username/kagibi-backend:latest
+docker push ghcr.io/username/kagibi-frontend:latest
 ```
 
 ### Registry privé
 
 ```bash
 # Tag
-docker tag safercloud-backend:latest registry.example.com/safercloud-backend:latest
-docker tag safercloud-frontend:latest registry.example.com/safercloud-frontend:latest
+docker tag kagibi-backend:latest registry.example.com/kagibi-backend:latest
+docker tag kagibi-frontend:latest registry.example.com/kagibi-frontend:latest
 
 # Push
-docker push registry.example.com/safercloud-backend:latest
-docker push registry.example.com/safercloud-frontend:latest
+docker push registry.example.com/kagibi-backend:latest
+docker push registry.example.com/kagibi-frontend:latest
 ```
 
 ## Optimisations
@@ -229,20 +229,20 @@ Variables passées via `--build-arg` :
 
 ```bash
 # Lister les images
-docker images | grep safercloud
+docker images | grep kagibi
 
 # Voir la taille d'une image
-docker image inspect safercloud-backend:latest -f '{{.Size}}' | numfmt --to=iec
+docker image inspect kagibi-backend:latest -f '{{.Size}}' | numfmt --to=iec
 
 # Supprimer les images
-docker rmi safercloud-backend:latest
-docker rmi safercloud-frontend:latest
+docker rmi kagibi-backend:latest
+docker rmi kagibi-frontend:latest
 
 # Nettoyer les images intermédiaires
 docker image prune -f
 
 # Inspecter les layers d'une image
-docker history safercloud-backend:latest
+docker history kagibi-backend:latest
 ```
 
 ## Ressources

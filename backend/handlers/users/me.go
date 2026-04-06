@@ -2,7 +2,7 @@ package users
 
 import (
 	"net/http"
-	"safercloud/backend/pkg"
+	"kagibi/backend/pkg"
 	"time"
 
 	"github.com/gin-gonic/gin"

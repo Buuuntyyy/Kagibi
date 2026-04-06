@@ -44,7 +44,7 @@ const close = () => {
 }
 
 // GitHub issue template URLs
-const repoUrl = "https://github.com/buuuntyyy/SaferCloud"
+const repoUrl = "https://github.com/buuuntyyy/Kagibi"
 const bugReportUrl = repoUrl + "/issues/new?assignees=&labels=bug&template=bug_report.md&title=%5BBUG%5D+"
 const featureRequestUrl = repoUrl + "/issues/new?assignees=&labels=enhancement&template=feature_request.md&title=%5BFEATURE%5D+"
 </script>

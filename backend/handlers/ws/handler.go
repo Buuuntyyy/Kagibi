@@ -11,7 +11,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
-	"safercloud/backend/pkg/authprovider"
+	"kagibi/backend/pkg/authprovider"
 )
 
 const wsTokenPrefix = "ws_token:"

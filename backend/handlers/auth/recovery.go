@@ -5,8 +5,8 @@ import (
 	"crypto/hmac"
 	"log"
 	"net/http"
-	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/authprovider"
+	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/authprovider"
 	"strconv"
 	"time"
 

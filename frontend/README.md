@@ -1,4 +1,4 @@
-# 🎨 Frontend SaferCloud - Vue.js 3 + Zero-Knowledge Crypto
+# 🎨 Frontend Kagibi - Vue.js 3 + Zero-Knowledge Crypto
 
 **Single Page Application** avec chiffrement client-side complet via Web Crypto API.
 
@@ -6,7 +6,7 @@
 
 ## 📋 Vue d'ensemble
 
-Le frontend SaferCloud est une SPA Vue.js 3 qui implémente une architecture **Zero-Knowledge** complète :
+Le frontend Kagibi est une SPA Vue.js 3 qui implémente une architecture **Zero-Knowledge** complète :
 - ✅ Chiffrement AES-GCM 256 bits dans le navigateur
 - ✅ Dérivation de clés avec Argon2id (64MB RAM, 4 passes)
 - ✅ Web Workers pour chiffrement async
@@ -444,10 +444,10 @@ npm run build
 ### Variables d'environnement production
 
 ```bash
-VITE_API_URL=https://api.safercloud.com/api/v1
+VITE_API_URL=https://api.kagibi.com/api/v1
 VITE_SUPABASE_URL=https://xxx.supabase.co
 VITE_SUPABASE_ANON_KEY=prod-anon-key
-VITE_WS_URL=wss://api.safercloud.com/ws
+VITE_WS_URL=wss://api.kagibi.com/ws
 ```
 
 ### Serveur statique
@@ -457,7 +457,7 @@ VITE_WS_URL=wss://api.safercloud.com/ws
 npx serve -s dist -p 3000
 
 # Avec nginx
-# Copier dist/ vers /var/www/safercloud
+# Copier dist/ vers /var/www/kagibi
 # Configurer reverse proxy vers backend
 ```
 

@@ -184,7 +184,7 @@ func Migrate(db *bun.DB) error {
 	_, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "stripe_customers" (
 		"id"                    UUID DEFAULT gen_random_uuid() PRIMARY KEY,
 		"stripe_customer_id"    TEXT UNIQUE NOT NULL,
-		"safercloud_user_id"    TEXT UNIQUE NOT NULL,
+		"kagibi_user_id"    TEXT UNIQUE NOT NULL,
 		"email"                 TEXT NOT NULL,
 		"name"                  TEXT,
 		"metadata"              JSONB DEFAULT '{}',
@@ -253,7 +253,7 @@ func Migrate(db *bun.DB) error {
 		"id"                  UUID DEFAULT gen_random_uuid() PRIMARY KEY,
 		"event_type"          TEXT NOT NULL,
 		"stripe_customer_id"  TEXT,
-		"safercloud_user_id"  TEXT,
+		"kagibi_user_id"  TEXT,
 		"payload"             JSONB NOT NULL,
 		"relayed_at"          TIMESTAMPTZ,
 		"relay_status"        TEXT,
@@ -269,7 +269,7 @@ func Migrate(db *bun.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_billing_invoices_user           ON billing_invoices (user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_billing_invoices_payment_status ON billing_invoices (payment_status)`,
 		`CREATE INDEX IF NOT EXISTS idx_stripe_customers_stripe_id      ON stripe_customers (stripe_customer_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_stripe_customers_user_id        ON stripe_customers (safercloud_user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_stripe_customers_user_id        ON stripe_customers (kagibi_user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_stripe_invoices_customer        ON stripe_invoices (stripe_customer_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_stripe_invoices_status          ON stripe_invoices (status)`,
 		`CREATE INDEX IF NOT EXISTS idx_stripe_subscriptions_customer   ON stripe_subscriptions (stripe_customer_id)`,
@@ -277,7 +277,7 @@ func Migrate(db *bun.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_usage_customer_time             ON usage_events (stripe_customer_id, "timestamp")`,
 		`CREATE INDEX IF NOT EXISTS idx_usage_idempotency               ON usage_events (idempotency_key)`,
 		`CREATE INDEX IF NOT EXISTS idx_webhook_events_type             ON webhook_events (event_type)`,
-		`CREATE INDEX IF NOT EXISTS idx_webhook_events_user             ON webhook_events (safercloud_user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_webhook_events_user             ON webhook_events (kagibi_user_id)`,
 	} {
 		if _, err := db.ExecContext(ctx, idx); err != nil {
 			log.Printf("Warning: failed to create index: %v", err)

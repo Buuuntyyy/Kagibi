@@ -1,7 +1,7 @@
 version: '3.8'
 
 # =================================
-# SaferCloud - Production Stack
+# Kagibi - Production Stack
 # Backend + Frontend + Monitoring + Database
 # =================================
 
@@ -9,7 +9,7 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
-    container_name: safercloud-postgres
+    container_name: kagibi-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -28,7 +28,7 @@ services:
   # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: safercloud-redis
+    container_name: kagibi-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
@@ -46,7 +46,7 @@ services:
     build:
       context: ../../backend
       dockerfile: Dockerfile
-    container_name: safercloud-backend
+    container_name: kagibi-backend
     restart: unless-stopped
     env_file:
       - .env
@@ -95,7 +95,7 @@ services:
         VITE_API_URL: ${VITE_API_URL}
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
         VITE_SUPABASE_KEY: ${VITE_SUPABASE_KEY}
-    container_name: safercloud-frontend
+    container_name: kagibi-frontend
     restart: unless-stopped
     environment:
       # Runtime environment variables for env.js
@@ -117,7 +117,7 @@ services:
   # Prometheus - Metrics Collection
   prometheus:
     image: prom/prometheus:latest
-    container_name: safercloud-prometheus
+    container_name: kagibi-prometheus
     restart: unless-stopped
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -145,7 +145,7 @@ services:
   # Grafana - Visualization
   grafana:
     image: grafana/grafana:latest
-    container_name: safercloud-grafana
+    container_name: kagibi-grafana
     restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}

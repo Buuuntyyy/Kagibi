@@ -1,5 +1,5 @@
 # =================================
-# SaferCloud Frontend - Multi-Stage Dockerfile
+# Kagibi Frontend - Multi-Stage Dockerfile
 # Vue.js 3 + Vite built with nginx
 # =================================
 

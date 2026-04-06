@@ -692,7 +692,7 @@ const handleExportData = async () => {
     const link = document.createElement('a')
     const date = new Date().toISOString().split('T')[0]
     link.href = url
-    link.download = `safercloud-export-${date}.json`
+    link.download = `kagibi-export-${date}.json`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)

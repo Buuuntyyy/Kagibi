@@ -30,7 +30,7 @@ export const useAuthStore = defineStore('auth', {
   state: () => {
     let cachedUser = null
     try {
-      const stored = localStorage.getItem('safercloud_user')
+      const stored = localStorage.getItem('kagibi_user')
       if (stored) cachedUser = JSON.parse(stored)
     } catch (e) {
       console.error('Failed to restore user from localStorage:', e)
@@ -255,7 +255,7 @@ export const useAuthStore = defineStore('auth', {
         this.isAuthenticated = false
         this.user = null
         this.masterKey = null
-        localStorage.removeItem('safercloud_user')
+        localStorage.removeItem('kagibi_user')
         router.push({ name: 'Login' })
       }
     },
@@ -271,7 +271,7 @@ export const useAuthStore = defineStore('auth', {
         this.publicKey = null
         this.user = null
         this.isAuthenticated = false
-        localStorage.removeItem('safercloud_user')
+        localStorage.removeItem('kagibi_user')
         console.log('[RGPD] ✅ Account deleted successfully')
         return response.data
       } catch (error) {
@@ -411,7 +411,7 @@ export const useAuthStore = defineStore('auth', {
     persistUserToStorage() {
       if (this.user) {
         try {
-          localStorage.setItem('safercloud_user', JSON.stringify(this.user))
+          localStorage.setItem('kagibi_user', JSON.stringify(this.user))
         } catch (e) {
           console.error('Failed to persist user data to localStorage', e)
         }
@@ -430,7 +430,7 @@ export const useAuthStore = defineStore('auth', {
 
     restoreUserFromStorage() {
       try {
-        const storedUser = localStorage.getItem('safercloud_user')
+        const storedUser = localStorage.getItem('kagibi_user')
         if (storedUser) {
           this.user = JSON.parse(storedUser)
           return true

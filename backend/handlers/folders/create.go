@@ -5,11 +5,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"safercloud/backend/pkg"
+	"kagibi/backend/pkg"
 
 	"log"
 	"regexp"
-	"safercloud/backend/utils"
+	"kagibi/backend/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"

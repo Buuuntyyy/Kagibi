@@ -1,5 +1,5 @@
 /**
- * Password strength validation — SaferCloud security policy
+ * Password strength validation — Kagibi security policy
  *
  * Rules:
  *  - At least 20 characters

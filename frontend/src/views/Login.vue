@@ -11,7 +11,7 @@
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
           </div>
-          <h1>SaferCloud</h1>
+          <h1>Kagibi</h1>
         </div>
 
         <h2 class="auth-tagline"> {{ t('auth.tagline') }} </h2>

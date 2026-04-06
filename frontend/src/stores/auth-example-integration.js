@@ -58,7 +58,7 @@ export const useAuthStore = defineStore('auth', {
           console.log('[Auth] Session restored from Service Worker');
           
           // Vérifier si le token est encore valide
-          const tokenValid = localStorage.getItem('safercloud_token');
+          const tokenValid = localStorage.getItem('kagibi_token');
           if (tokenValid) {
             this.token = tokenValid;
             await this.checkAuth();
@@ -104,9 +104,9 @@ export const useAuthStore = defineStore('auth', {
         this.token = data.token;
         this.user = data.user;
         this.isAuthenticated = true;
-        localStorage.setItem('safercloud_token', data.token);
+        localStorage.setItem('kagibi_token', data.token);
 
-        // NE PLUS FAIRE: sessionStorage.setItem("safercloud_mk", ...)
+        // NE PLUS FAIRE: sessionStorage.setItem("kagibi_mk", ...)
         
         console.log('[Auth] Login successful with non-extractable MasterKey');
         return true;
@@ -131,7 +131,7 @@ export const useAuthStore = defineStore('auth', {
         this.isAuthenticated = false;
 
         // 3. Nettoyer localStorage
-        localStorage.removeItem('safercloud_token');
+        localStorage.removeItem('kagibi_token');
         
         console.log('[Auth] Logout successful');
         return true;

@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/authprovider"
-	"safercloud/backend/pkg/s3storage"
+	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/authprovider"
+	"kagibi/backend/pkg/s3storage"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"

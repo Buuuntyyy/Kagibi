@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: 'SaferCloud Dashboards'
+  - name: 'Kagibi Dashboards'
     orgId: 1
-    folder: 'SaferCloud'
+    folder: 'Kagibi'
     type: file
     disableDeletion: false
     updateIntervalSeconds: 30

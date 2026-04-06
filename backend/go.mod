@@ -1,4 +1,4 @@
-module safercloud/backend
+module kagibi/backend
 
 go 1.25.4
 

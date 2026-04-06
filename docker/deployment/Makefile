@@ -1,7 +1,7 @@
 .PHONY: help build up down logs clean restart
 
 help:
-    @echo "SaferCloud Docker Commands:"
+    @echo "Kagibi Docker Commands:"
     @echo "  make build       - Build all Docker images"
     @echo "  make up          - Start all services"
     @echo "  make down        - Stop all services"

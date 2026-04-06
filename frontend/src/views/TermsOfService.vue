@@ -6,12 +6,12 @@
 
       <section>
         <h2>1. Objet</h2>
-        <p>Les présentes Conditions Générales d'Utilisation (ci-après "CGU") ont pour objet de définir les modalités de mise à disposition des services du site et de l'application <strong>SaferCloud</strong>, ci-après nommé "le Service", et les conditions d'utilisation du Service par l'Utilisateur.</p>
+        <p>Les présentes Conditions Générales d'Utilisation (ci-après "CGU") ont pour objet de définir les modalités de mise à disposition des services du site et de l'application <strong>Kagibi</strong>, ci-après nommé "le Service", et les conditions d'utilisation du Service par l'Utilisateur.</p>
       </section>
 
       <section>
         <h2>2. Mentions Légales</h2>
-        <p>L'édition du site SaferCloud est assurée par [NOM DE L'ENTREPRISE OU DE L'INDIVIDU], dont le siège social est situé à [ADRESSE COMPLETE].</p>
+        <p>L'édition du site Kagibi est assurée par [NOM DE L'ENTREPRISE OU DE L'INDIVIDU], dont le siège social est situé à [ADRESSE COMPLETE].</p>
         <p>Adresse e-mail de contact : [EMAIL DE CONTACT]</p>
         <p>L'hébergeur du Service est : [NOM DE L'HEBERGEUR, ex: AWS, OVH, Google Cloud], situé à [ADRESSE DE L'HEBERGEUR].</p>
       </section>
@@ -30,7 +30,7 @@
       <section>
         <h2>4. Responsabilité de l'Utilisateur</h2>
         <p>L'Utilisateur est responsable des risques liés à l'utilisation de son identifiant de connexion et de son mot de passe. Le mot de passe de l'Utilisateur doit rester secret. En cas de divulgation de mot de passe, l'Éditeur décline toute responsabilité.</p>
-        <p>L'Utilisateur assume l'entière responsabilité de l'utilisation qu'il fait des informations et contenus présents sur le site SaferCloud.</p>
+        <p>L'Utilisateur assume l'entière responsabilité de l'utilisation qu'il fait des informations et contenus présents sur le site Kagibi.</p>
         <p>Tout usage du service par l'Utilisateur ayant directement ou indirectement pour conséquence des dommages doit faire l'objet d'une indemnisation au profit du site.</p>
         <p>Le membre s'engage à ne pas mettre en ligne de contenus pouvant porter atteinte aux intérêts de tierces personnes. L'Utilisateur s'interdit de stocker ou partager des fichiers illégaux, contrefaits, ou contraires aux bonnes mœurs.</p>
       </section>
@@ -39,7 +39,7 @@
         <h2>5. Responsabilité de l'Éditeur</h2>
         <p>Tout dysfonctionnement du serveur ou du réseau ne peut engager la responsabilité de l'Éditeur.</p>
         <p>De même, la responsabilité du site ne peut être engagée en cas de force majeure ou du fait imprévisible et insurmontable d'un tiers.</p>
-        <p>Le site SaferCloud s'engage à mettre en œuvre tous les moyens nécessaires pour garantir la sécurité et la confidentialité des données. Toutefois, il ne peut garantir une sécurité absolue.</p>
+        <p>Le site Kagibi s'engage à mettre en œuvre tous les moyens nécessaires pour garantir la sécurité et la confidentialité des données. Toutefois, il ne peut garantir une sécurité absolue.</p>
       </section>
 
       <section>
@@ -55,7 +55,7 @@
 
       <section>
         <h2>8. Évolution des CGU</h2>
-        <p>Le site SaferCloud se réserve le droit de modifier les clauses de ces conditions générales d'utilisation à tout moment et sans justification.</p>
+        <p>Le site Kagibi se réserve le droit de modifier les clauses de ces conditions générales d'utilisation à tout moment et sans justification.</p>
       </section>
 
       <section>

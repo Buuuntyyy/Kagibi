@@ -3,7 +3,7 @@ package shares
 import (
 	"net/http"
 	"path"
-	"safercloud/backend/pkg"
+	"kagibi/backend/pkg"
 	"strings"
 
 	"github.com/gin-gonic/gin"

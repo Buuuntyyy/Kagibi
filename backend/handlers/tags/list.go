@@ -3,7 +3,7 @@ package tags
 import (
 	"log"
 	"net/http"
-	"safercloud/backend/pkg"
+	"kagibi/backend/pkg"
 	"time"
 
 	"github.com/gin-gonic/gin"

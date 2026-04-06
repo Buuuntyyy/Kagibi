@@ -2,7 +2,7 @@
   <nav>
     <router-link to="/dashboard" class="brand">
       <img src="/Logo.png" alt="SkyDrive Logo" class="brand-logo"/>
-      <span>FoxEarth</span>
+      <span>Kagibi</span>
     </router-link>
     <SearchBar v-if="authStore.isAuthenticated" />
     <div class="nav-links">
