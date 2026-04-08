@@ -1,15 +1,31 @@
 <template>
   <div class="search-bar" ref="searchBarRef">
-    <div class="search-wrapper" :class="{ focused: isFocused || showDropdown }">
+    <!-- Disabled state when filename encryption is active -->
+    <div v-if="filenamesAreEncrypted" class="search-wrapper search-wrapper--disabled" :title="t('search.encryptedDisabledTooltip', 'La recherche est désactivée car les noms de fichiers sont chiffrés')">
       <div class="icon-wrapper search-icon">
         <svg focusable="false" viewBox="0 0 24 24" height="24px" width="24px" fill="#5f6368">
           <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
         </svg>
       </div>
-      <input 
-        type="text" 
-        v-model="searchQuery" 
-        :placeholder="t('search.placeholder')" 
+      <span class="search-disabled-label">{{ t('search.encryptedDisabled', 'Recherche désactivée (noms chiffrés)') }}</span>
+      <div class="icon-wrapper filter-icon">
+        <svg focusable="false" viewBox="0 0 24 24" height="24px" width="24px" fill="#5f6368">
+          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Normal search -->
+    <div v-else class="search-wrapper" :class="{ focused: isFocused || showDropdown }">
+      <div class="icon-wrapper search-icon">
+        <svg focusable="false" viewBox="0 0 24 24" height="24px" width="24px" fill="#5f6368">
+          <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+        </svg>
+      </div>
+      <input
+        type="text"
+        v-model="searchQuery"
+        :placeholder="t('search.placeholder')"
         @input="handleInput"
         @focus="handleFocus"
         @keydown.down.prevent="navigateResults(1)"
@@ -97,13 +113,18 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFileStore } from '../../stores/files'
+import { useAuthStore } from '../../stores/auth'
 import api from '../../api'
 import { debounce } from 'lodash';
 
 const router = useRouter();
 const fileStore = useFileStore();
+const authStore = useAuthStore();
 const searchQuery = ref('');
 const isFocused = ref(false);
+
+// Search is disabled when the user opted into client-side filename encryption.
+const filenamesAreEncrypted = computed(() => authStore.user?.encrypt_filenames === true);
 const searchResults = ref({ folders: [], files: [] });
 const showDropdown = ref(false);
 const activeIndex = ref(-1);
@@ -254,6 +275,22 @@ onUnmounted(() => {
   max-width: 700px;
   transition: background-color 0.1s, box-shadow 0.1s;
   height: 40px;
+}
+
+.search-wrapper--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.search-disabled-label {
+  flex-grow: 1;
+  padding: 0 8px;
+  font-size: 14px;
+  color: var(--secondary-text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .search-wrapper.focused,

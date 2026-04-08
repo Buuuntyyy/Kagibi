@@ -28,6 +28,7 @@ type RegisterRequest struct {
 	RecoverySalt               string `json:"recovery_salt" validate:"required"`
 	PublicKey                  string `json:"public_key"`
 	EncryptedPrivateKey        string `json:"encrypted_private_key"`
+	EncryptFilenames           bool   `json:"encrypt_filenames"`
 }
 
 func generateFriendCode() string {
@@ -84,6 +85,7 @@ func RegisterHandler(c *gin.Context, db *bun.DB, provider authprovider.AuthProvi
 		FriendCode:                 generateFriendCode(),
 		PublicKey:                  req.PublicKey,
 		EncryptedPrivateKey:        req.EncryptedPrivateKey,
+		EncryptFilenames:           req.EncryptFilenames,
 	}
 
 	log.Printf("[Register/%s] Creating profile for email: %s", provider.Name(), req.Email)

@@ -45,6 +45,20 @@
         <PasswordCriteria :password="password" :show="passwordFocused" />
       </div>
 
+      <!-- Filename encryption opt-in -->
+      <div class="option-group">
+        <label class="option-toggle" :class="{ active: encryptFilenames }">
+          <input type="checkbox" v-model="encryptFilenames" />
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="option-label">
+            Chiffrer les noms de fichiers et dossiers
+            <span class="option-hint">
+              Les noms sont stockés chiffrés sur le serveur — la barre de recherche sera désactivée.
+            </span>
+          </span>
+        </label>
+      </div>
+
       <!-- Trust copy — zero-knowledge guarantee (UX-DR12) -->
       <div class="zk-trust-note">
         <svg class="zk-shield-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -148,6 +162,7 @@ const username = ref('')
 const email = ref('')
 const password = ref('')
 const selectedAvatar = ref('/avatars/default.png')
+const encryptFilenames = ref(false)
 const error = ref('')
 const recoveryCode = ref('')
 const loading = ref(false)
@@ -179,7 +194,7 @@ const submit = async () => {
 
   loading.value = true
   try {
-    const code = await authStore.register(username.value, email.value, password.value, selectedAvatar.value)
+    const code = await authStore.register(username.value, email.value, password.value, selectedAvatar.value, encryptFilenames.value)
     recoveryCode.value = code
   } catch (err) {
     console.error(err)
@@ -315,6 +330,71 @@ label,
   border-color: var(--primary-color);
   box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.1);
   background-color: var(--card-color);
+}
+
+/* Filename encryption toggle */
+.option-group {
+  margin-bottom: 0.5rem;
+}
+
+.option-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.option-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-track {
+  flex-shrink: 0;
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background-color: var(--border-color, #ccc);
+  border-radius: 10px;
+  transition: background-color 0.2s;
+  margin-top: 2px;
+}
+
+.option-toggle.active .toggle-track {
+  background-color: #1a73e8;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.option-toggle.active .toggle-thumb {
+  transform: translateX(16px);
+}
+
+.option-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.9rem;
+  color: var(--main-text-color);
+}
+
+.option-hint {
+  font-size: 0.75rem;
+  color: var(--secondary-text-color);
+  line-height: 1.4;
 }
 
 /* Zero-knowledge trust note (UX-DR12) */

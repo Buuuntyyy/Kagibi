@@ -36,18 +36,18 @@ function clearMasterKey() {
   masterKey = null;
   sessionExpiry = null;
   lastActivity = null;
-  console.log('[SW-Crypto] MasterKey cleared from memory');
+  //console.log('[SW-Crypto] MasterKey cleared from memory');
 }
 
 // Installation du Service Worker
 self.addEventListener('install', (event) => {
-  console.log('[SW-Crypto] Installing...');
+  //console.log('[SW-Crypto] Installing...');
   self.skipWaiting();
 });
 
 // Activation
 self.addEventListener('activate', (event) => {
-  console.log('[SW-Crypto] Activating...');
+  //console.log('[SW-Crypto] Activating...');
   event.waitUntil(self.clients.claim());
 });
 
@@ -86,7 +86,7 @@ self.addEventListener('message', (event) => {
       // Stocker la MasterKey (déjà non-extractable)
       masterKey = data.masterKey;
       resetSessionTimeout();
-      console.log('[SW-Crypto] MasterKey stored in SW memory');
+      //console.log('[SW-Crypto] MasterKey stored in SW memory');
       
       event.ports[0].postMessage({
         success: true,

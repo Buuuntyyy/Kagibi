@@ -24,7 +24,7 @@ const realtimeStore = useRealtimeStore(pinia);
 
 // Register Supabase Realtime event handlers
 realtimeStore.onEvent('storage_update', (payload) => {
-  console.log('[Main] Storage update received:', payload);
+  //console.log('[Main] Storage update received:', payload);
   if (authStore.user && payload.storage_used !== undefined) {
     authStore.updateUserStorage(payload.storage_used, payload.storage_limit);
   }
@@ -38,13 +38,13 @@ realtimeStore.onEvent('storage_update', (payload) => {
 });
 
 realtimeStore.onEvent('friend_update', (payload) => {
-  console.log('[Main] Friend update received:', payload);
+  //console.log('[Main] Friend update received:', payload);
   const friendStore = useFriendStore(pinia);
   friendStore.fetchFriends();
 });
 
 realtimeStore.onEvent('p2p_signal', (payload) => {
-  console.log('[Main] P2P signal received:', payload);
+  //console.log('[Main] P2P signal received:', payload);
   const p2pStore = useP2PStore(pinia);
   // Transform to expected format
   p2pStore.handleSignal({

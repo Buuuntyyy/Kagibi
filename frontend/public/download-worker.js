@@ -18,12 +18,12 @@ const downloadSessions = new Map()
 
 // Install and activate immediately
 self.addEventListener('install', (event) => {
-  console.log('[DownloadWorker] Installing...')
+  //console.log('[DownloadWorker] Installing...')
   self.skipWaiting()
 })
 
 self.addEventListener('activate', (event) => {
-  console.log('[DownloadWorker] Activating...')
+  //console.log('[DownloadWorker] Activating...')
   event.waitUntil(self.clients.claim())
 })
 
@@ -122,7 +122,7 @@ function handleInitDownload(sessionId, data, port) {
     downloadUrl: `${self.registration.scope}download-stream/${sessionId}`
   })
   
-  console.log(`[DownloadWorker] Session ${sessionId} initialized for ${fileName}`)
+  //console.log(`[DownloadWorker] Session ${sessionId} initialized for ${fileName}`)
 }
 
 /**
@@ -243,7 +243,7 @@ function handleFinalize(sessionId, port) {
       totalBytes: session.bytesWritten
     })
     
-    console.log(`[DownloadWorker] Session ${sessionId} finalized, ${session.bytesWritten} bytes written`)
+    //console.log(`[DownloadWorker] Session ${sessionId} finalized, ${session.bytesWritten} bytes written`)
     
   } catch (error) {
     console.error(`[DownloadWorker] Finalize error:`, error)
@@ -260,7 +260,7 @@ function handleAbort(sessionId, port) {
     session.aborted = true
     session.controller?.error(new Error('Download aborted'))
     downloadSessions.delete(sessionId)
-    console.log(`[DownloadWorker] Session ${sessionId} aborted`)
+    //console.log(`[DownloadWorker] Session ${sessionId} aborted`)
   }
   port?.postMessage({ type: 'ABORT_SUCCESS' })
 }
@@ -288,4 +288,4 @@ function createStreamResponse(session) {
   })
 }
 
-console.log('[DownloadWorker] Service Worker loaded')
+//console.log('[DownloadWorker] Service Worker loaded')

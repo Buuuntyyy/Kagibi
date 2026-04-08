@@ -283,9 +283,9 @@ onMounted(async () => {
 
 // Function to render QR code to canvas
 async function renderQRCode() {
-  console.log('[MFASettings] renderQRCode called')
-  console.log('[MFASettings] qrCode.value:', qrCode.value)
-  console.log('[MFASettings] qrCanvas.value:', qrCanvas.value)
+  //console.log('[MFASettings] renderQRCode called')
+  //console.log('[MFASettings] qrCode.value:', qrCode.value)
+  //console.log('[MFASettings] qrCanvas.value:', qrCanvas.value)
 
   if (!qrCode.value) {
     console.error('[MFASettings] Cannot render: qrCode.value is null/undefined')
@@ -300,7 +300,7 @@ async function renderQRCode() {
   await nextTick()
 
   try {
-    console.log('[MFASettings] Calling QRCode.toCanvas...')
+    //console.log('[MFASettings] Calling QRCode.toCanvas...')
     await QRCode.toCanvas(qrCanvas.value, qrCode.value, {
       width: 200,
       margin: 1,
@@ -309,7 +309,7 @@ async function renderQRCode() {
         light: '#FFFFFF'
       }
     })
-    console.log('[MFASettings] ✓ QR Code rendered successfully!')
+    //console.log('[MFASettings] ✓ QR Code rendered successfully!')
   } catch (err) {
     console.error('[MFASettings] ✗ Failed to generate QR code:', err)
   }
@@ -317,7 +317,7 @@ async function renderQRCode() {
 
 // Watch for QR code and try to render it
 watch(qrCode, async (newQrCode, oldQrCode) => {
-  console.log('[MFASettings] qrCode watcher triggered:', { old: oldQrCode, new: newQrCode })
+  //console.log('[MFASettings] qrCode watcher triggered:', { old: oldQrCode, new: newQrCode })
   if (newQrCode) {
     await renderQRCode()
   }
@@ -325,32 +325,32 @@ watch(qrCode, async (newQrCode, oldQrCode) => {
 
 // Watch for canvas becoming available and render if we have a QR code
 watch(qrCanvas, async (newCanvas, oldCanvas) => {
-  console.log('[MFASettings] qrCanvas watcher triggered:', { old: oldCanvas, new: newCanvas })
+  //console.log('[MFASettings] qrCanvas watcher triggered:', { old: oldCanvas, new: newCanvas })
   if (newCanvas && qrCode.value) {
-    console.log('[MFASettings] Both canvas and qrCode available, rendering...')
+    //console.log('[MFASettings] Both canvas and qrCode available, rendering...')
     await renderQRCode()
   }
 })
 
 async function startEnrollment() {
-  console.log('[MFASettings] startEnrollment called')
+  //console.log('[MFASettings] startEnrollment called')
   try {
-    console.log('[MFASettings] Calling enrollMFA()...')
+    //console.log('[MFASettings] Calling enrollMFA()...')
     const enrollResult = await enrollMFA()
-    console.log('[MFASettings] enrollMFA() returned:', enrollResult)
+    //console.log('[MFASettings] enrollMFA() returned:', enrollResult)
 
     showEnrollmentFlow.value = true
     enrollmentVerified.value = false
 
-    console.log('[MFASettings] Modal opened, waiting for DOM...')
+    //console.log('[MFASettings] Modal opened, waiting for DOM...')
     // Wait for modal and canvas to be mounted
     await nextTick()
     await nextTick()
 
-    console.log('[MFASettings] DOM ready, checking values...')
-    console.log('[MFASettings] qrCode.value:', qrCode.value)
-    console.log('[MFASettings] qrCanvas.value:', qrCanvas.value)
-    console.log('[MFASettings] secret.value:', secret.value)
+    //console.log('[MFASettings] DOM ready, checking values...')
+    //console.log('[MFASettings] qrCode.value:', qrCode.value)
+    //console.log('[MFASettings] qrCanvas.value:', qrCanvas.value)
+    //console.log('[MFASettings] secret.value:', secret.value)
 
     // Force render after DOM is ready
     await renderQRCode()

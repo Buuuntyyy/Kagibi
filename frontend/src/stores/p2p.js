@@ -15,14 +15,14 @@ import { authClient } from '../auth-client'
 
 // Fetch ICE config from the backend (works with both Supabase and PocketBase)
 async function fetchICEConfig() {
-    console.log("[P2P] Fetching ICE Config...");
+    //console.log("[P2P] Fetching ICE Config...");
     try {
         const token = await authClient.getToken();
         const response = await axios.get(`${API_BASE_URL}p2p/ice-config`, {
             headers: { Authorization: `Bearer ${token}` }
         });
         if (response.data && response.data.iceServers) {
-            console.log("[P2P] Retrieved ICE Servers:", response.data.iceServers);
+            //console.log("[P2P] Retrieved ICE Servers:", response.data.iceServers);
             return { iceServers: response.data.iceServers };
         }
     } catch (e) {
@@ -48,7 +48,7 @@ export const useP2PStore = defineStore('p2p', {
     startHeartbeat() {
         if (this.heartbeatInterval) return; // Already running
         
-        console.log('[P2P] Starting session heartbeat');
+        //console.log('[P2P] Starting session heartbeat');
         // Send heartbeat every 2.5 minutes (well before 5min Redis TTL)
         this.heartbeatInterval = setInterval(async () => {
             if (!this.activeTransfer) {
@@ -61,7 +61,7 @@ export const useP2PStore = defineStore('p2p', {
                 await axios.get(`${API_BASE_URL}/heartbeat`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
-                console.log('[P2P] Session heartbeat sent');
+                //console.log('[P2P] Session heartbeat sent');
             } catch (e) {
                 console.error('[P2P] Heartbeat failed:', e);
             }
@@ -70,7 +70,7 @@ export const useP2PStore = defineStore('p2p', {
     
     stopHeartbeat() {
         if (this.heartbeatInterval) {
-            console.log('[P2P] Stopping session heartbeat');
+            //console.log('[P2P] Stopping session heartbeat');
             clearInterval(this.heartbeatInterval);
             this.heartbeatInterval = null;
         }
@@ -124,7 +124,7 @@ export const useP2PStore = defineStore('p2p', {
                  }
 
                  // Pending offer, queue candidate
-                 console.log("Queuing candidate for pending offer");
+                 //console.log("Queuing candidate for pending offer");
                  this.candidateQueue.push(candidatePayload);
             }
         }
@@ -146,14 +146,14 @@ export const useP2PStore = defineStore('p2p', {
 
          // Fetch ICE Config from backend
          const rtcConfig = await fetchICEConfig();
-         console.log("Using RTC Config:", rtcConfig);
+         //console.log("Using RTC Config:", rtcConfig);
 
          const pc = new RTCPeerConnection(rtcConfig);
          const realtimeStore = useRealtimeStore();
          const uiStore = useUIStore();
 
          pc.oniceconnectionstatechange = () => {
-             console.log("ICE Connection state:", pc.iceConnectionState);
+             //console.log("ICE Connection state:", pc.iceConnectionState);
              if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
                  this.activeTransfer.connectionInfo.iceState = pc.iceConnectionState;
                  
@@ -178,7 +178,7 @@ export const useP2PStore = defineStore('p2p', {
                          this.activeTransfer.status = 'Error';
                          this.activeTransfer.connectionInfo.stage = 'Échec de connexion';
                      } else {
-                         console.log("ICE disconnected after successful transfer completion - ignoring");
+                         //console.log("ICE disconnected after successful transfer completion - ignoring");
                      }
                  }
              }
@@ -281,7 +281,7 @@ export const useP2PStore = defineStore('p2p', {
         const transferId = offerData.transferId;
 
         pc.oniceconnectionstatechange = () => {
-             console.log("ICE Connection state:", pc.iceConnectionState);
+             //console.log("ICE Connection state:", pc.iceConnectionState);
              if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
                  this.activeTransfer.connectionInfo.iceState = pc.iceConnectionState;
                  
@@ -306,7 +306,7 @@ export const useP2PStore = defineStore('p2p', {
                          this.activeTransfer.status = 'Error';
                          this.activeTransfer.connectionInfo.stage = 'Échec de connexion';
                      } else {
-                         console.log("ICE disconnected after successful transfer completion - ignoring");
+                         //console.log("ICE disconnected after successful transfer completion - ignoring");
                      }
                  }
              }
@@ -356,7 +356,7 @@ export const useP2PStore = defineStore('p2p', {
         await pc.setRemoteDescription(new RTCSessionDescription(offerData.sdp));
         
         // Flush queued candidates
-        console.log(`Flushing ${this.candidateQueue.length} queued candidates`);
+        //console.log(`Flushing ${this.candidateQueue.length} queued candidates`);
         for (const candidateData of this.candidateQueue) {
             try {
                 await pc.addIceCandidate(new RTCIceCandidate(candidateData));
@@ -545,7 +545,7 @@ export const useP2PStore = defineStore('p2p', {
                 }
             }
             
-            console.log('[P2P] Connection type detected:', connectionType, 'Using TURN:', usingTurn);
+            //console.log('[P2P] Connection type detected:', connectionType, 'Using TURN:', usingTurn);
         } catch (e) {
             console.error('[P2P] Failed to detect connection type:', e);
         }
@@ -554,7 +554,7 @@ export const useP2PStore = defineStore('p2p', {
     finishReceive() {
         if (!this.activeTransfer || this.activeTransfer.status === 'Complete') return;
 
-        console.log("Finishing transfer. Expected:", this.activeTransfer.fileSize, "Received:", this.activeTransfer.receivedSize);
+        //console.log("Finishing transfer. Expected:", this.activeTransfer.fileSize, "Received:", this.activeTransfer.receivedSize);
         // buffer is now a sparse array (map-like), we need to flatten it in order
         // Object.keys(buffer) handles sparse arrays but not guaranteed numeric sort.
         // But since we used numeric index assignment, we can iterate up to length.

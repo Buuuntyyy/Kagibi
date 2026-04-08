@@ -47,7 +47,7 @@
           const hashArray = Array.from(new Uint8Array(hashBuffer));
           const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
-          console.log('[SRI] Service Worker SHA-256:', hashHex);
+          ////console.log('[SRI] Service Worker SHA-256:', hashHex);
 
           // Vous pouvez stocker le hash attendu et le comparer ici
           // Si vous avez un backend, vous pouvez vérifier le hash côté serveur

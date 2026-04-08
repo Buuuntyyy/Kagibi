@@ -579,3 +579,50 @@ export async function decryptPrivateKey(encryptedPrivateKeyBase64, masterKey) {
         ["decrypt"]
     );
 }
+
+// ============================================================================
+// FILENAME ENCRYPTION (client-side opt-in, AES-256-GCM)
+// ============================================================================
+
+/**
+ * Encrypts a file or folder name using AES-256-GCM with the user's master key.
+ * The output is base64url-encoded (no padding) — safe for use as path segments
+ * and S3 object key components.
+ *
+ * Format: base64url( [12B IV] + [ciphertext + 16B GCM tag] )
+ *
+ * @param {string} plainName - The plaintext filename or folder name
+ * @param {CryptoKey} masterKey - The user's AES-256-GCM master key
+ * @returns {Promise<string>} Base64url-encoded encrypted name
+ */
+export async function encryptFileName(plainName, masterKey) {
+    await sodium.ready;
+    const iv = crypto.getRandomValues(new Uint8Array(NONCE_LENGTH));
+    const encoded = new TextEncoder().encode(plainName);
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, masterKey, encoded);
+    const combined = new Uint8Array(NONCE_LENGTH + ciphertext.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(ciphertext), NONCE_LENGTH);
+    return sodium.to_base64(combined, sodium.base64_variants.URLSAFE_NO_PADDING);
+}
+
+/**
+ * Decrypts a filename or folder name that was encrypted with encryptFileName.
+ * Falls back to returning the input as-is if decryption fails (e.g., unencrypted user).
+ *
+ * @param {string} encryptedName - Base64url-encoded encrypted name
+ * @param {CryptoKey} masterKey - The user's AES-256-GCM master key
+ * @returns {Promise<string>} The decrypted plaintext name, or the input unchanged on error
+ */
+export async function decryptFileName(encryptedName, masterKey) {
+    await sodium.ready;
+    try {
+        const combined = sodium.from_base64(encryptedName, sodium.base64_variants.URLSAFE_NO_PADDING);
+        const iv = combined.slice(0, NONCE_LENGTH);
+        const ciphertext = combined.slice(NONCE_LENGTH);
+        const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, masterKey, ciphertext);
+        return new TextDecoder().decode(plaintext);
+    } catch {
+        return encryptedName;
+    }
+}

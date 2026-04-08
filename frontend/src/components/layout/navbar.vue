@@ -4,7 +4,7 @@
       <img src="/Logo.png" alt="SkyDrive Logo" class="brand-logo"/>
       <span>Kagibi</span>
     </router-link>
-    <SearchBar v-if="authStore.isAuthenticated" />
+    <SearchBar v-if="authStore.isAuthenticated || !!authStore.user" />
     <div class="nav-links">
       <a
         v-if="buyMeACoffeeUrl"
