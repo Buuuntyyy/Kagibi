@@ -291,7 +291,7 @@ func CreateCheckoutHandler(c *gin.Context) {
 	}
 	frontendURL := os.Getenv("FRONTEND_URL")
 	if frontendURL == "" {
-		frontendURL = "https://kagibi.stratus.ovh"
+		frontendURL = "https://kagibi.cloud"
 	}
 	successURL := fmt.Sprintf("%s/dashboard/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}", frontendURL)
 	cancelURL := fmt.Sprintf("%s/dashboard/billing?checkout=cancelled", frontendURL)
