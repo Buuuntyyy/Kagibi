@@ -550,7 +550,11 @@ const pathSegments = computed(() => {
 
   parts.forEach(part => {
     currentBuild += '/' + part
-    segments.push({ name: part, path: currentBuild })
+    // When filename encryption is enabled, look up the decrypted folder name from the
+    // cache populated by fetchItems. Falls back to the raw (encrypted) segment so
+    // breadcrumbs never break — the cache is filled on first navigation to each folder.
+    const displayName = fileStore.folderNameCache[currentBuild] || part
+    segments.push({ name: displayName, path: currentBuild })
   })
 
   return segments

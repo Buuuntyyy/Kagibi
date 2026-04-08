@@ -138,7 +138,7 @@ const scale = ref(1.0);
 const pdfSource = ref(null); // Document Proxy or URL
 
 const handleLoaded = (pdfDoc) => {
-    console.log("PDF Loaded successfully", pdfDoc);
+    //console.log("PDF Loaded successfully", pdfDoc);
     isRendering.value = false;
     if (pdfDoc && pdfDoc.numPages) {
         pageCount.value = pdfDoc.numPages;
@@ -156,7 +156,7 @@ const loadPdf = async (url) => {
         pdfSource.value = null;
         return;
     }
-    console.log("Loading PDF from URL:", url);
+    //console.log("Loading PDF from URL:", url);
     isRendering.value = true;
     
     try {

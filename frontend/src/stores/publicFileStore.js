@@ -61,7 +61,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
         }
 
         let fileKey = null;
-        console.log("Attempting to download file:", file);
+        //console.log("Attempting to download file:", file);
         if (file.EncryptedKey) {
             try {
                 const shareKey = await deriveKeyFromToken(this.shareToken);

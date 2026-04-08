@@ -38,7 +38,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
   }
 
   function dispatchEvent(eventType, payload) {
-    console.log(`[Realtime] Dispatching ${eventType}:`, payload)
+    //console.log(`[Realtime] Dispatching ${eventType}:`, payload)
     eventHandlers[eventType]?.forEach(handler => {
       try { handler(payload) } catch (e) {
         console.error(`[Realtime] Error in ${eventType} handler:`, e)
@@ -113,7 +113,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
   function _attachWsHandlers(ws) {
     ws.onopen = () => {
-      console.log('[Realtime] WebSocket connected')
+      //console.log('[Realtime] WebSocket connected')
       isConnected.value = true
       _wsReconnectDelay = 1000
       if (_wsReconnectTimer) { clearTimeout(_wsReconnectTimer); _wsReconnectTimer = null }
@@ -220,7 +220,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
       return
     }
 
-    console.log(`[Realtime] Connecting for user ${userId}`)
+    //console.log(`[Realtime] Connecting for user ${userId}`)
 
     _connectWS()
 
@@ -231,7 +231,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
   }
 
   async function disconnect() {
-    console.log('[Realtime] Disconnecting...')
+    //console.log('[Realtime] Disconnecting...')
 
     if (_pollP2PTimer) { clearInterval(_pollP2PTimer); _pollP2PTimer = null }
     _seenSignalIds.clear()

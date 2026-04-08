@@ -51,7 +51,7 @@ export const useAuthStore = defineStore('auth', {
       await sodium.ready
 
       if (!this.user.public_key || !this.user.encrypted_private_key) {
-        console.log('Generating RSA keys for user...')
+        //console.log('Generating RSA keys for user...')
         const keyPair = await generateRSAKeyPair()
         const publicKeyPEM = await exportKeyToPEM(keyPair.publicKey, 'spki')
         const encryptedPrivateKey = await encryptPrivateKey(keyPair.privateKey, masterKey)
@@ -115,7 +115,7 @@ export const useAuthStore = defineStore('auth', {
           try {
             const mfaRequired = await mfa.isMFARequired('login')
             if (mfaRequired) {
-              console.log('[Auth] MFA required for login, setting pending state')
+              //console.log('[Auth] MFA required for login, setting pending state')
               this.pendingMFAVerification = true
               return 'mfa_required'
             }
@@ -134,7 +134,7 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    async register(username, email, password, avatarUrl = '/avatars/default.png') {
+    async register(username, email, password, avatarUrl = '/avatars/default.png', encryptFilenames = false) {
       // Offload all key generation to a Web Worker to keep UI responsive during Argon2id (~1s)
       const WORKER_TIMEOUT_MS = 30000
       const keyMaterial = await new Promise((resolve, reject) => {
@@ -218,7 +218,8 @@ export const useAuthStore = defineStore('auth', {
             recovery_hash: recoveryHash,
             recovery_salt: saltHex,
             public_key: publicKeyPEM,
-            encrypted_private_key: encryptedPrivateKey
+            encrypted_private_key: encryptedPrivateKey,
+            encrypt_filenames: encryptFilenames,
           }, config)
         } catch (backendErr) {
           // Auth provider account was created but backend profile failed.
@@ -272,7 +273,7 @@ export const useAuthStore = defineStore('auth', {
         this.user = null
         this.isAuthenticated = false
         localStorage.removeItem('kagibi_user')
-        console.log('[RGPD] ✅ Account deleted successfully')
+        //console.log('[RGPD] ✅ Account deleted successfully')
         return response.data
       } catch (error) {
         console.error('[RGPD] Account deletion failed:', error)
@@ -448,7 +449,7 @@ export const useAuthStore = defineStore('auth', {
         console.warn('[Security] Session timeout - logging out')
         this.logout()
       }, THIRTY_MINUTES)
-      console.log('[Security] Session timeout set to 30 minutes')
+      //console.log('[Security] Session timeout set to 30 minutes')
     },
 
     async updateAvatar(avatarUrl) {

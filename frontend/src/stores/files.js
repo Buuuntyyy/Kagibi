@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import api from '../api'
 import { useAuthStore } from './auth'
 import { usePreferencesStore } from './preferences'
-import { encryptFile, decryptFile, generateMasterKey, wrapMasterKey, unwrapMasterKey, deriveKeyFromToken } from '../utils/crypto'
+import { encryptFile, decryptFile, generateMasterKey, wrapMasterKey, unwrapMasterKey, deriveKeyFromToken, encryptFileName, decryptFileName } from '../utils/crypto'
 import { encryptChunkWorker, decryptChunkedFileWorker, CHUNK_SIZE } from '../utils/crypto'
 import { generatePreview } from '../utils/previewGenerator'
 import { MultipartUploadManager, PART_SIZE, UploadState } from '../utils/multipartUpload'
@@ -88,6 +88,8 @@ export const useFileStore = defineStore('files', {
     recentFiles: [],
     // Used to coordinate navigation from Suggestions
     pendingNavigatePath: null,
+    // Maps encrypted folder path → decrypted display name (populated when encrypt_filenames=true)
+    folderNameCache: {},
   }),
   actions: {
     async fetchRecents() {
@@ -157,7 +159,7 @@ export const useFileStore = defineStore('files', {
       this.heartbeatInterval = setInterval(async () => {
         try {
           await api.get('/heartbeat');
-          console.log('[Upload/Download] Heartbeat sent to prevent session timeout');
+          //console.log('[Upload/Download] Heartbeat sent to prevent session timeout');
         } catch (err) {
           console.error('[Upload/Download] Heartbeat failed:', err);
         }
@@ -168,7 +170,7 @@ export const useFileStore = defineStore('files', {
       if (this.heartbeatInterval) {
         clearInterval(this.heartbeatInterval);
         this.heartbeatInterval = null;
-        console.log('[Upload/Download] Heartbeat stopped');
+        //console.log('[Upload/Download] Heartbeat stopped');
       }
     },
     
@@ -212,6 +214,22 @@ export const useFileStore = defineStore('files', {
         this.files = response.data.files || []
         this.folders = response.data.folders || []
         this.currentPath = safePath
+
+        // Decrypt names client-side when the user opted into filename encryption.
+        // Names are stored as opaque base64url AES-GCM blobs; we decrypt them in
+        // place so all existing UI code reading item.Name continues to work unchanged.
+        const authStore = useAuthStore()
+        if (authStore.user?.encrypt_filenames && authStore.masterKey) {
+          for (const file of this.files) {
+            file.Name = await decryptFileName(file.Name, authStore.masterKey)
+          }
+          for (const folder of this.folders) {
+            const decrypted = await decryptFileName(folder.Name, authStore.masterKey)
+            // Cache encrypted path → decrypted name so breadcrumbs can display correctly.
+            this.folderNameCache[folder.Path] = decrypted
+            folder.Name = decrypted
+          }
+        }
 
         // Record History
         const fid = response.data.current_folder_id;
@@ -750,9 +768,17 @@ export const useFileStore = defineStore('files', {
 
         this.uploadState = 'uploading';
 
+        // Encrypt filename if the user opted into client-side filename encryption.
+        // The encrypted name is a base64url string that passes backend validation
+        // and is stored opaquely in both PostgreSQL and S3.
+        let uploadFileName = file.name;
+        if (authStore.user?.encrypt_filenames && authStore.masterKey) {
+          uploadFileName = await encryptFileName(file.name, authStore.masterKey);
+        }
+
         // Initiate multipart upload with backend
         await uploadManager.initiate(
-          file.name,
+          uploadFileName,
           uploadPath,
           'application/octet-stream',
           totalEncryptedSize,
@@ -769,7 +795,7 @@ export const useFileStore = defineStore('files', {
 
         // Complete the multipart upload
         const result = await uploadManager.complete(completedParts, {
-          fileName: file.name,
+          fileName: uploadFileName,
           filePath: uploadPath,
           totalSize: totalEncryptedSize,
           contentType: 'application/octet-stream',
@@ -861,8 +887,13 @@ export const useFileStore = defineStore('files', {
     },
     async createFolder(folderName) {
       try {
+        const authStore = useAuthStore()
+        let nameToSend = folderName;
+        if (authStore.user?.encrypt_filenames && authStore.masterKey) {
+          nameToSend = await encryptFileName(folderName, authStore.masterKey);
+        }
         await api.post('/folders/create', {
-          name: folderName,
+          name: nameToSend,
           path: this.currentPath,
         })
         this.fetchItems(this.currentPath)
@@ -901,10 +932,17 @@ export const useFileStore = defineStore('files', {
     },
     async renameItem(id, type, newName) {
       try {
+        const authStore = useAuthStore()
+        let nameToSend = newName;
+        if (authStore.user?.encrypt_filenames && authStore.masterKey) {
+          // Encrypt the complete new name (including extension) before sending.
+          // Backend extension auto-append is bypassed for encrypted names (no visible ext).
+          nameToSend = await encryptFileName(newName, authStore.masterKey);
+        }
         await api.post('/files/rename', {
           id: id,
           type: type,
-          new_name: newName
+          new_name: nameToSend
         })
         this.fetchItems(this.currentPath)
       } catch (error) {
@@ -958,16 +996,16 @@ export const useFileStore = defineStore('files', {
           if (folder) {
               try {
                   // Fetch ALL files in the folder recursively to get their keys
-                  console.log(`Fetching recursive files for path: ${folder.Path}`);
+                  //console.log(`Fetching recursive files for path: ${folder.Path}`);
                   const res = await api.get(`/files/list-recursive`, { params: { path: folder.Path } });
                   const filesInFolder = res.data.files || [];
-                  console.log(`Found ${filesInFolder.length} files in folder.`);
+                  //console.log(`Found ${filesInFolder.length} files in folder.`);
                   
                   const shareKey = await deriveKeyFromToken(token);
                   
                   let missingKeysCount = 0;
                   for (const f of filesInFolder) {
-                      console.log(`Processing file ${f.ID} (${f.Name}). Has Key: ${!!f.EncryptedKey}`);
+                      //console.log(`Processing file ${f.ID} (${f.Name}). Has Key: ${!!f.EncryptedKey}`);
                       if (f.EncryptedKey) {
                           const k = await unwrapMasterKey(f.EncryptedKey, authStore.masterKey);
                           const sk = await wrapMasterKey(k, shareKey);
@@ -976,7 +1014,7 @@ export const useFileStore = defineStore('files', {
                           missingKeysCount++;
                       }
                   }
-                  console.log(`Prepared keys for ${Object.keys(fileKeys).length} files.`);
+                  //console.log(`Prepared keys for ${Object.keys(fileKeys).length} files.`);
 
                   if (missingKeysCount > 0) {
                       console.warn(`${missingKeysCount} files in this folder are missing encryption keys.`);

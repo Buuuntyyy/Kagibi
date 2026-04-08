@@ -37,6 +37,7 @@ type User struct {
 	FriendCode                 string     `bun:"friend_code,unique,notnull" json:"friend_code"`      // Short unique code for friends
 	PublicKey                  string     `bun:"public_key" json:"public_key"`                       // RSA Public Key (Standard PEM format)
 	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"` // RSA Private Key (Encrypted with MasterKey)
+	EncryptFilenames           bool       `bun:"encrypt_filenames,notnull,default:false" json:"encrypt_filenames"` // Client-side filename encryption opt-in
 	CreatedAt                  time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt                  time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 	DeletedAt                  *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"` // RGPD Article 17 - Soft delete
