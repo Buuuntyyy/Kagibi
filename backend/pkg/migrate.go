@@ -299,7 +299,7 @@ func Migrate(db *bun.DB) error {
 
 	// --- USER PLANS ---
 	_, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "user_plans" (
-		"user_id"             VARCHAR PRIMARY KEY REFERENCES "profiles"("id") ON DELETE CASCADE,
+		"user_id"             VARCHAR PRIMARY KEY,
 		"plan"                VARCHAR NOT NULL DEFAULT 'free',
 		"storage_limit"       BIGINT NOT NULL DEFAULT 21474836480,
 		"storage_used"        BIGINT NOT NULL DEFAULT 0,
@@ -331,7 +331,7 @@ func Migrate(db *bun.DB) error {
 	// mfa_enabled / mfa_verified are kept in sync by the MFA handlers (local mode)
 	// or by the frontend (Supabase mode). The require_mfa_* columns are user-controlled.
 	_, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "user_security_settings" (
-		"user_id"                            VARCHAR PRIMARY KEY REFERENCES "profiles"("id") ON DELETE CASCADE,
+		"user_id"                            VARCHAR PRIMARY KEY,
 		"mfa_enabled"                        BOOLEAN NOT NULL DEFAULT false,
 		"mfa_verified"                       BOOLEAN NOT NULL DEFAULT false,
 		"require_mfa_on_login"               BOOLEAN NOT NULL DEFAULT false,
@@ -346,6 +346,8 @@ func Migrate(db *bun.DB) error {
 
 	// Add created_at / updated_at to existing user_security_settings installs that predate this column
 	for _, col := range []string{
+		`ALTER TABLE "user_security_settings" DROP CONSTRAINT IF EXISTS "user_security_settings_user_id_fkey"`,
+		`ALTER TABLE "user_plans" DROP CONSTRAINT IF EXISTS "user_plans_user_id_fkey"`,
 		`ALTER TABLE "user_security_settings" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMPTZ NOT NULL DEFAULT now()`,
 		`ALTER TABLE "user_security_settings" ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now()`,
 	} {
