@@ -62,9 +62,16 @@ export const useBillingStore = defineStore('billing', {
         this.providerType = response.data.provider_type
         this.features = response.data.features || { quotas: true }
       } catch (error) {
-        console.error('[BillingStore] Failed to fetch billing status:', error)  
-        this.enabled = true
-        this.providerType = 'mock'
+        const status = error?.response?.status
+        if (status === 401 || status === 404) {
+          // Endpoint absent ou non authentifié : billing désactivé silencieusement.
+          this.enabled = false
+          this.providerType = 'disabled'
+        } else {
+          console.error('[BillingStore] Failed to fetch billing status:', error)
+          this.enabled = false
+          this.providerType = 'disabled'
+        }
       }
     },
 
