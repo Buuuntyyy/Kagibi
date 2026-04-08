@@ -3,10 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
-	"net/http"
-	"os"
-	"os/signal"
 	"kagibi/backend/handlers/auth"
 	billinghandlers "kagibi/backend/handlers/billing"
 	"kagibi/backend/handlers/files"
@@ -24,6 +20,10 @@ import (
 	"kagibi/backend/pkg/monitoring"
 	"kagibi/backend/pkg/s3storage"
 	"kagibi/backend/pkg/workers"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
 	"strings"
 	"syscall"
 
