@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+const subscriptionPath = "/api/subscriptions/%s"
+
 // WebhookProvider communique avec un service de facturation externe via API REST
 // Utilisé en production pour se connecter au service privé de billing
 type WebhookProvider struct {
@@ -147,7 +149,7 @@ func (w *WebhookProvider) CreateSubscription(ctx context.Context, userID, planCo
 
 func (w *WebhookProvider) GetSubscription(ctx context.Context, userID string) (*Subscription, error) {
 	var result Subscription
-	err := w.doRequest(ctx, "GET", fmt.Sprintf("/api/subscriptions/%s", userID), nil, &result)
+	err := w.doRequest(ctx, "GET", fmt.Sprintf(subscriptionPath, userID), nil, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +163,7 @@ type updateSubscriptionRequest struct {
 
 func (w *WebhookProvider) UpdateSubscription(ctx context.Context, userID, newPlanCode, idempotencyKey string) (*Subscription, error) {
 	var result Subscription
-	err := w.doRequest(ctx, "PUT", fmt.Sprintf("/api/subscriptions/%s", userID), updateSubscriptionRequest{
+	err := w.doRequest(ctx, "PUT", fmt.Sprintf(subscriptionPath, userID), updateSubscriptionRequest{
 		PlanCode:       newPlanCode,
 		IdempotencyKey: idempotencyKey,
 	}, &result)
@@ -176,7 +178,7 @@ type cancelSubscriptionRequest struct {
 }
 
 func (w *WebhookProvider) CancelSubscription(ctx context.Context, userID, idempotencyKey string) error {
-	return w.doRequest(ctx, "DELETE", fmt.Sprintf("/api/subscriptions/%s", userID), cancelSubscriptionRequest{
+	return w.doRequest(ctx, "DELETE", fmt.Sprintf(subscriptionPath, userID), cancelSubscriptionRequest{
 		IdempotencyKey: idempotencyKey,
 	}, nil)
 }

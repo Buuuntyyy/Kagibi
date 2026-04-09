@@ -27,6 +27,8 @@ const (
 	DownloadPresignTTL = 5 * time.Minute   // 5 minutes for downloads
 	MaxPartSize        = 100 * 1024 * 1024 // 100MB max per part
 	MinPartSize        = 5 * 1024 * 1024   // 5MB min (S3 requirement except last part)
+	errInvalidReq      = "Invalid request: "
+	userPrefixFormat   = "users/%s/"
 )
 
 // InitiateMultipartRequest represents the request body for initiating multipart upload
@@ -93,7 +95,7 @@ func InitiateMultipartHandler(c *gin.Context, db *bun.DB) {
 
 	var req InitiateMultipartRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidReq + err.Error()})
 		return
 	}
 
@@ -229,12 +231,12 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 
 	var req CompleteMultipartRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidReq + err.Error()})
 		return
 	}
 
 	// Security: Verify the key belongs to this user
-	expectedPrefix := fmt.Sprintf("users/%s/", userID)
+	expectedPrefix := fmt.Sprintf(userPrefixFormat, userID)
 	if !strings.HasPrefix(req.Key, expectedPrefix) {
 		log.Printf("SECURITY: User %s attempted to complete upload for key: %s", userID, req.Key)
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
@@ -378,12 +380,12 @@ func AbortMultipartHandler(c *gin.Context, db *bun.DB) {
 
 	var req AbortMultipartRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidReq + err.Error()})
 		return
 	}
 
 	// Security: Verify the key belongs to this user
-	expectedPrefix := fmt.Sprintf("users/%s/", userID)
+	expectedPrefix := fmt.Sprintf(userPrefixFormat, userID)
 	if !strings.HasPrefix(req.Key, expectedPrefix) {
 		log.Printf("SECURITY: User %s attempted to abort upload for key: %s", userID, req.Key)
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
@@ -503,12 +505,12 @@ func RefreshPresignedURLsHandler(c *gin.Context, db *bun.DB) {
 
 	var req RefreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidReq + err.Error()})
 		return
 	}
 
 	// Security: Verify the key belongs to this user
-	expectedPrefix := fmt.Sprintf("users/%s/", userID)
+	expectedPrefix := fmt.Sprintf(userPrefixFormat, userID)
 	if !strings.HasPrefix(req.Key, expectedPrefix) {
 		log.Printf("SECURITY: User %s attempted to refresh URL for key: %s", userID, req.Key)
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})

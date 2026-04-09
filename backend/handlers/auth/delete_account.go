@@ -17,6 +17,8 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const whereUserID = "user_id = ?"
+
 type DeleteAccountRequest struct {
 	Confirmation string `json:"confirmation" binding:"required"` // Must be "SUPPRIMER"
 }
@@ -89,11 +91,11 @@ func deleteUserData(ctx context.Context, db *bun.DB, userID string, user *pkg.Us
 	}
 
 	// 1. Realtime / P2P
-	exec("RealtimeEvent", db.NewDelete().Model((*pkg.RealtimeEvent)(nil)).Where("user_id = ?", userID))
+	exec("RealtimeEvent", db.NewDelete().Model((*pkg.RealtimeEvent)(nil)).Where(whereUserID, userID))
 	exec("P2PSignal", db.NewDelete().Model((*pkg.P2PSignal)(nil)).Where("sender_id = ? OR target_id = ?", userID, userID))
 
 	// 2. Recent activity (references files/folders — must precede their deletion)
-	exec("RecentActivity", db.NewDelete().Model((*pkg.RecentActivity)(nil)).Where("user_id = ?", userID))
+	exec("RecentActivity", db.NewDelete().Model((*pkg.RecentActivity)(nil)).Where(whereUserID, userID))
 
 	// 3. Keys referencing user's folders/files (must precede File/Folder deletion)
 	exec("FolderFolderKey", db.NewDelete().Model((*pkg.FolderFolderKey)(nil)).
@@ -117,13 +119,13 @@ func deleteUserData(ctx context.Context, db *bun.DB, userID string, user *pkg.Us
 	exec("ShareLink", db.NewDelete().Model((*pkg.ShareLink)(nil)).Where("owner_id = ?", userID))
 
 	// 7. Files, folders, and folder size cache
-	exec("File", db.NewDelete().Model((*pkg.File)(nil)).Where("user_id = ?", userID))
-	exec("Folder", db.NewDelete().Model((*pkg.Folder)(nil)).Where("user_id = ?", userID))
-	exec("FolderSize", db.NewDelete().Model((*pkg.FolderSize)(nil)).Where("user_id = ?", userID))
+	exec("File", db.NewDelete().Model((*pkg.File)(nil)).Where(whereUserID, userID))
+	exec("Folder", db.NewDelete().Model((*pkg.Folder)(nil)).Where(whereUserID, userID))
+	exec("FolderSize", db.NewDelete().Model((*pkg.FolderSize)(nil)).Where(whereUserID, userID))
 
 	// 8. Remaining user data
-	exec("Tag", db.NewDelete().Model((*pkg.Tag)(nil)).Where("user_id = ?", userID))
-	exec("UserPlan", db.NewDelete().Model((*pkg.UserPlan)(nil)).Where("user_id = ?", userID))
+	exec("Tag", db.NewDelete().Model((*pkg.Tag)(nil)).Where(whereUserID, userID))
+	exec("UserPlan", db.NewDelete().Model((*pkg.UserPlan)(nil)).Where(whereUserID, userID))
 	exec("Friendship", db.NewDelete().Model((*pkg.Friendship)(nil)).Where("user_id_1 = ? OR user_id_2 = ?", userID, userID))
 
 	// 9. Hard delete the profile (IRRÉVERSIBLE)
@@ -139,7 +141,7 @@ func deleteUserFilesFromS3(ctx context.Context, db *bun.DB, userID string) {
 	}
 
 	var files []pkg.File
-	err := db.NewSelect().Model(&files).Where("user_id = ?", userID).Scan(ctx)
+	err := db.NewSelect().Model(&files).Where(whereUserID, userID).Scan(ctx)
 	if err != nil {
 		log.Printf("[RGPD] Failed to fetch files for S3 cleanup (user %s): %v", userID, err)
 		return

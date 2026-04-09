@@ -15,6 +15,8 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const logStorageUpdateFailed = "Failed to emit storage_update event: %v"
+
 type CreateDirectShareRequest struct {
 	ResourceID       int64            `json:"resource_id"`   // File or Folder ID
 	ResourceType     string           `json:"resource_type"` // "file" or "folder"
@@ -142,13 +144,13 @@ func sendShareNotifications(c *gin.Context, db *bun.DB, friendID string) {
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, friendID, "storage_update", map[string]interface{}{
 		"action": "share_received",
 	}); err != nil {
-		log.Printf("Failed to emit storage_update event: %v", err)
+		log.Printf(logStorageUpdateFailed, err)
 	}
 	userID := c.GetString("user_id")
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, userID, "storage_update", map[string]interface{}{
 		"action": "share_created",
 	}); err != nil {
-		log.Printf("Failed to emit storage_update event: %v", err)
+		log.Printf(logStorageUpdateFailed, err)
 	}
 }
 
@@ -181,7 +183,7 @@ func RemoveDirectShareHandler(c *gin.Context, db *bun.DB) {
 		if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, friendID, "storage_update", map[string]interface{}{
 			"action": "share_revoked_by_owner",
 		}); err != nil {
-			log.Printf("Failed to emit storage_update event: %v", err)
+			log.Printf(logStorageUpdateFailed, err)
 		}
 	}
 
@@ -189,7 +191,7 @@ func RemoveDirectShareHandler(c *gin.Context, db *bun.DB) {
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, currentUserID, "storage_update", map[string]interface{}{
 		"action": "share_revoked",
 	}); err != nil {
-		log.Printf("Failed to emit storage_update event: %v", err)
+		log.Printf(logStorageUpdateFailed, err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Share revoked"})

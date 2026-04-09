@@ -7,21 +7,26 @@ import (
 	"testing"
 )
 
+const (
+	fmtUnexpectedError = "unexpected error: %v"
+	fmtWrongByteLen    = "expected %d bytes, got %d"
+)
+
 func TestGenerateNonce(t *testing.T) {
 	t.Run("generates 12 bytes", func(t *testing.T) {
 		nonce, err := GenerateNonce()
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf(fmtUnexpectedError, err)
 		}
 		if len(nonce) != NonceLength {
-			t.Errorf("expected %d bytes, got %d", NonceLength, len(nonce))
+			t.Errorf(fmtWrongByteLen, NonceLength, len(nonce))
 		}
 	})
 
 	t.Run("generates non-zero nonces", func(t *testing.T) {
 		nonce, err := GenerateNonce()
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf(fmtUnexpectedError, err)
 		}
 
 		allZero := true
@@ -63,10 +68,10 @@ func TestGenerateBaseNonce(t *testing.T) {
 	t.Run("generates 8 bytes", func(t *testing.T) {
 		base, err := GenerateBaseNonceSimple()
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf(fmtUnexpectedError, err)
 		}
 		if len(base) != BaseNonceLength {
-			t.Errorf("expected %d bytes, got %d", BaseNonceLength, len(base))
+			t.Errorf(fmtWrongByteLen, BaseNonceLength, len(base))
 		}
 	})
 
@@ -94,10 +99,10 @@ func TestGenerateChunkNonce(t *testing.T) {
 		base := make([]byte, BaseNonceLength)
 		nonce, err := GenerateChunkNonce(base, 0)
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf(fmtUnexpectedError, err)
 		}
 		if len(nonce) != NonceLength {
-			t.Errorf("expected %d bytes, got %d", NonceLength, len(nonce))
+			t.Errorf(fmtWrongByteLen, NonceLength, len(nonce))
 		}
 	})
 
@@ -105,7 +110,7 @@ func TestGenerateChunkNonce(t *testing.T) {
 		base := []byte{1, 2, 3, 4, 5, 6, 7, 8}
 		nonce, err := GenerateChunkNonce(base, 42)
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf(fmtUnexpectedError, err)
 		}
 
 		if !bytes.Equal(nonce[:8], base) {
