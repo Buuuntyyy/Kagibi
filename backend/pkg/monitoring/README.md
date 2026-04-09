@@ -1,4 +1,4 @@
-# Système de Monitoring Prometheus - SaferCloud
+# Système de Monitoring Prometheus - Kagibi
 
 ## Vue d'ensemble
 
@@ -43,13 +43,13 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: 'safercloud'
+  - job_name: 'kagibi'
     static_configs:
       - targets: ['localhost:9090']
     scrape_interval: 10s
     scrape_timeout: 5s
 
-  - job_name: 'safercloud-api'
+  - job_name: 'kagibi-api'
     static_configs:
       - targets: ['localhost:8080']
     metrics_path: '/metrics'
@@ -78,9 +78,9 @@ Le serveur de métriques écoute sur le **port 9090** (par défaut):
 
 | Métrique | Type | Description |
 |----------|------|-------------|
-| `safercloud_http_requests_total` | Counter | Nombre total de requêtes HTTP |
-| `safercloud_http_request_duration_seconds` | Histogram | Latence des requêtes HTTP |
-| `safercloud_active_connections` | Gauge | Connexions HTTP actives |
+| `kagibi_http_requests_total` | Counter | Nombre total de requêtes HTTP |
+| `kagibi_http_request_duration_seconds` | Histogram | Latence des requêtes HTTP |
+| `kagibi_active_connections` | Gauge | Connexions HTTP actives |
 
 Labels: `method`, `endpoint`, `status`
 
@@ -88,16 +88,16 @@ Labels: `method`, `endpoint`, `status`
 
 | Métrique | Type | Description |
 |----------|------|-------------|
-| `safercloud_file_uploads_total` | Counter | Nombre d'uploads |
-| `safercloud_file_downloads_total` | Counter | Nombre de téléchargements |
-| `safercloud_file_upload_size_bytes` | Histogram | Taille des fichiers uploadés |
+| `kagibi_file_uploads_total` | Counter | Nombre d'uploads |
+| `kagibi_file_downloads_total` | Counter | Nombre de téléchargements |
+| `kagibi_file_upload_size_bytes` | Histogram | Taille des fichiers uploadés |
 
 ### Métriques Authentification
 
 | Métrique | Type | Description |
 |----------|------|-------------|
-| `safercloud_auth_errors_total` | Counter | Erreurs d'authentification |
-| `safercloud_mfa_verifications_total` | Counter | Vérifications MFA |
+| `kagibi_auth_errors_total` | Counter | Erreurs d'authentification |
+| `kagibi_mfa_verifications_total` | Counter | Vérifications MFA |
 
 Labels: `type` (auth), `status` (MFA)
 
@@ -105,14 +105,14 @@ Labels: `type` (auth), `status` (MFA)
 
 | Métrique | Type | Description |
 |----------|------|-------------|
-| `safercloud_encryption_duration_seconds` | Histogram | Durée du chiffrement |
-| `safercloud_decryption_duration_seconds` | Histogram | Durée du déchiffrement |
+| `kagibi_encryption_duration_seconds` | Histogram | Durée du chiffrement |
+| `kagibi_decryption_duration_seconds` | Histogram | Durée du déchiffrement |
 
 ### Métriques S3
 
 | Métrique | Type | Description |
 |----------|------|-------------|
-| `safercloud_s3_requests_total` | Counter | Requêtes vers S3 |
+| `kagibi_s3_requests_total` | Counter | Requêtes vers S3 |
 
 Labels: `operation` (put/get/delete), `status` (success/error)
 
@@ -138,7 +138,7 @@ router.Use(middleware.MetricsMiddleware())
 ### Instrumentation manuelle
 
 ```go
-import "safercloud/backend/pkg/monitoring"
+import "kagibi/backend/pkg/monitoring"
 
 // Upload de fichier
 func HandleFileUpload(c *gin.Context) {
@@ -187,39 +187,39 @@ func UploadToS3(key string, data []byte) error {
 
 ```promql
 # Taux de requêtes par seconde
-rate(safercloud_http_requests_total[5m])
+rate(kagibi_http_requests_total[5m])
 
 # Latence P95
-histogram_quantile(0.95, rate(safercloud_http_request_duration_seconds_bucket[5m]))
+histogram_quantile(0.95, rate(kagibi_http_request_duration_seconds_bucket[5m]))
 
 # Taux d'erreurs HTTP 5xx
-sum(rate(safercloud_http_requests_total{status=~"5.."}[5m]))
+sum(rate(kagibi_http_requests_total{status=~"5.."}[5m]))
 ```
 
 ### Fichiers
 
 ```promql
 # Uploads par minute
-rate(safercloud_file_uploads_total[1m]) * 60
+rate(kagibi_file_uploads_total[1m]) * 60
 
 # Taille moyenne des uploads
-rate(safercloud_file_upload_size_bytes_sum[5m]) / rate(safercloud_file_upload_size_bytes_count[5m])
+rate(kagibi_file_upload_size_bytes_sum[5m]) / rate(kagibi_file_upload_size_bytes_count[5m])
 
 # Ratio upload/download
-rate(safercloud_file_uploads_total[5m]) / rate(safercloud_file_downloads_total[5m])
+rate(kagibi_file_uploads_total[5m]) / rate(kagibi_file_downloads_total[5m])
 ```
 
 ### Authentification & Sécurité
 
 ```promql
 # Taux d'erreurs d'auth
-rate(safercloud_auth_errors_total[5m])
+rate(kagibi_auth_errors_total[5m])
 
 # Taux de succès MFA
-rate(safercloud_mfa_verifications_total{status="success"}[5m]) / rate(safercloud_mfa_verifications_total[5m])
+rate(kagibi_mfa_verifications_total{status="success"}[5m]) / rate(kagibi_mfa_verifications_total[5m])
 
 # Top erreurs d'auth
-topk(5, sum by (type) (rate(safercloud_auth_errors_total[5m])))
+topk(5, sum by (type) (rate(kagibi_auth_errors_total[5m])))
 ```
 
 ### Performance système
@@ -232,7 +232,7 @@ go_memstats_alloc_bytes / 1024 / 1024
 go_goroutines
 
 # Connexions actives
-safercloud_active_connections
+kagibi_active_connections
 ```
 
 ## Configuration Grafana
@@ -246,7 +246,7 @@ safercloud_active_connections
 
 ### Dashboards recommandés
 
-**Dashboard: SaferCloud Overview**
+**Dashboard: Kagibi Overview**
 
 - Taux de requêtes (par endpoint)
 - Latence P50, P95, P99
@@ -273,10 +273,10 @@ Exemple de règles d'alerte (`alerts.yml`):
 
 ```yaml
 groups:
-  - name: safercloud_critical
+  - name: kagibi_critical
     rules:
       - alert: HighErrorRate
-        expr: sum(rate(safercloud_http_requests_total{status=~"5.."}[5m])) > 0.05
+        expr: sum(rate(kagibi_http_requests_total{status=~"5.."}[5m])) > 0.05
         for: 5m
         labels:
           severity: critical
@@ -285,7 +285,7 @@ groups:
           description: "{{ $value }} erreurs/sec"
 
       - alert: HighLatency
-        expr: histogram_quantile(0.95, rate(safercloud_http_request_duration_seconds_bucket[5m])) > 2
+        expr: histogram_quantile(0.95, rate(kagibi_http_request_duration_seconds_bucket[5m])) > 2
         for: 10m
         labels:
           severity: warning
@@ -293,7 +293,7 @@ groups:
           summary: "Latence P95 > 2s"
 
       - alert: MFAFailureSpike
-        expr: rate(safercloud_mfa_verifications_total{status="failure"}[5m]) > 10
+        expr: rate(kagibi_mfa_verifications_total{status="failure"}[5m]) > 10
         for: 2m
         labels:
           severity: warning
@@ -301,7 +301,7 @@ groups:
           summary: "Pic d'échecs MFA détecté"
 
       - alert: AuthErrorSpike
-        expr: rate(safercloud_auth_errors_total[5m]) > 20
+        expr: rate(kagibi_auth_errors_total[5m]) > 20
         for: 5m
         labels:
           severity: warning

@@ -18,7 +18,7 @@
               <span class="amount">0€</span>
               <span class="period">/mois</span>
             </div>
-            <p class="plan-description">Parfait pour découvrir SaferCloud</p>
+            <p class="plan-description">Parfait pour découvrir Kagibi</p>
             <ul class="plan-features">
               <li>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

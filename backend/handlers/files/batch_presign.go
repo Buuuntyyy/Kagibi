@@ -11,13 +11,19 @@ import (
 	"sync"
 	"time"
 
-	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/s3storage"
+	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/s3storage"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
+)
+
+const (
+	errInvalidRequest = "Invalid request: "
+	errFetchFiles     = "Failed to fetch files"
+	whereUserIDQuery  = "user_id = ?"
 )
 
 // BatchPresignRequest represents a batch presign request
@@ -60,7 +66,7 @@ func BatchPresignDownloadHandler(c *gin.Context, db *bun.DB) {
 
 	var req BatchPresignRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidRequest + err.Error()})
 		return
 	}
 
@@ -78,7 +84,7 @@ func BatchPresignDownloadHandler(c *gin.Context, db *bun.DB) {
 		Where("id IN (?)", bun.In(req.FileIDs)).
 		Scan(ctx); err != nil {
 		log.Printf("Failed to fetch files for batch presign: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch files"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errFetchFiles})
 		return
 	}
 
@@ -218,7 +224,7 @@ func checkShareAccess(ctx context.Context, db *bun.DB, fileID int64, userID stri
 	// Check if any parent folder is shared with this user
 	var folders []pkg.Folder
 	if err := db.NewSelect().Model(&folders).
-		Where("user_id = ?", file.UserID).
+		Where(whereUserIDQuery, file.UserID).
 		Scan(ctx); err != nil {
 		return false
 	}
@@ -258,7 +264,7 @@ func BatchPresignByPathHandler(c *gin.Context, db *bun.DB) {
 
 	var req BatchPresignByPathRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidRequest + err.Error()})
 		return
 	}
 
@@ -272,11 +278,11 @@ func BatchPresignByPathHandler(c *gin.Context, db *bun.DB) {
 	// Fetch files by paths
 	var files []pkg.File
 	if err := db.NewSelect().Model(&files).
-		Where("user_id = ?", ownerID).
+		Where(whereUserIDQuery, ownerID).
 		Where("path IN (?)", bun.In(req.Paths)).
 		Scan(ctx); err != nil {
 		log.Printf("Failed to fetch files by path: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch files"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": errFetchFiles})
 		return
 	}
 
@@ -356,7 +362,7 @@ func GetSelectionTreeHandler(c *gin.Context, db *bun.DB) {
 
 	var req SelectionTreeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidRequest + err.Error()})
 		return
 	}
 
@@ -378,7 +384,7 @@ func GetSelectionTreeHandler(c *gin.Context, db *bun.DB) {
 		if err := db.NewSelect().Model(&files).
 			Where("id IN (?) AND user_id = ?", bun.In(req.FileIDs), userID).
 			Scan(ctx); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch files"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errFetchFiles})
 			return
 		}
 
@@ -408,7 +414,7 @@ func GetSelectionTreeHandler(c *gin.Context, db *bun.DB) {
 		for _, folder := range folders {
 			var files []pkg.File
 			if err := db.NewSelect().Model(&files).
-				Where("user_id = ?", userID).
+				Where(whereUserIDQuery, userID).
 				Where("path LIKE ?", folder.Path+"%").
 				Where("is_preview = ?", false).
 				Scan(ctx); err != nil {

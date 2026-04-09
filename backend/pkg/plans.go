@@ -1,31 +1,54 @@
 package pkg
 
-// Plan constants
+// Plan constants — Free / Pro / Business
 const (
-	PlanFree       = "free"
-	PlanBasic      = "basic"
-	PlanPro        = "pro"
-	PlanEnterprise = "enterprise"
+	PlanFree     = "free"
+	PlanPro      = "pro"
+	PlanBusiness = "business"
 )
 
 // Storage limits in bytes
 const (
-	StorageFree       int64 = 15 * 1024 * 1024 * 1024       // 15 GB
-	StorageBasic      int64 = 100 * 1024 * 1024 * 1024      // 100 GB
-	StoragePro        int64 = 1 * 1024 * 1024 * 1024 * 1024 // 1 TB
-	StorageEnterprise int64 = 5 * 1024 * 1024 * 1024 * 1024 // 5 TB
+	StorageFree     int64 = 20 * 1024 * 1024 * 1024  // 20 GB
+	StoragePro      int64 = 50 * 1024 * 1024 * 1024  // 50 GB
+	StorageBusiness int64 = 200 * 1024 * 1024 * 1024 // 200 GB
 )
 
-// GetStorageLimit returns the storage limit for a given plan
+// P2P share limits (max simultaneous active shares)
+const (
+	P2PLimitFree     = 5
+	P2PLimitPro      = 50
+	P2PLimitBusiness = 200
+)
+
+// Pricing in euro cents
+const (
+	PriceProMonthly      = 500   // 5,00 €/month
+	PriceProYearly       = 5000  // 50,00 €/year  (~17% discount)
+	PriceBusinessMonthly = 1500  // 15,00 €/month
+	PriceBusinessYearly  = 15000 // 150,00 €/year (~17% discount)
+)
+
+// GetStorageLimit returns the storage limit in bytes for a given plan code.
 func GetStorageLimit(plan string) int64 {
 	switch plan {
-	case PlanBasic:
-		return StorageBasic
 	case PlanPro:
 		return StoragePro
-	case PlanEnterprise:
-		return StorageEnterprise
+	case PlanBusiness:
+		return StorageBusiness
 	default:
 		return StorageFree
+	}
+}
+
+// GetP2PLimit returns the maximum number of active P2P shares for a plan.
+func GetP2PLimit(plan string) int {
+	switch plan {
+	case PlanPro:
+		return P2PLimitPro
+	case PlanBusiness:
+		return P2PLimitBusiness
+	default:
+		return P2PLimitFree
 	}
 }

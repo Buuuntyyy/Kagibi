@@ -16,15 +16,15 @@ self.onmessage = async (e) => {
 
   try {
     if (type === 'ENCRYPT') {
-      const result = await encryptChunk(fileChunk, key, chunkIndex, baseNonce);
-      self.postMessage({ 
-        type: 'ENCRYPT_SUCCESS', 
-        encryptedChunk: result, 
-        chunkIndex 
+      const result = await encryptChunk(fileChunk, key, chunkIndex, baseNonce); // NOSONAR - async function returns a Promise
+      self.postMessage({
+        type: 'ENCRYPT_SUCCESS',
+        encryptedChunk: result,
+        chunkIndex
       }, [result]);
 
     } else if (type === 'DECRYPT') {
-      const result = await decryptChunk(fileChunk, key);
+      const result = await decryptChunk(fileChunk, key); // NOSONAR - async function returns a Promise
       self.postMessage({ 
         type: 'DECRYPT_SUCCESS', 
         decryptedChunk: result, 

@@ -7,7 +7,7 @@
     </div>
     <div class="path-banner">
       <div class="breadcrumbs">
-        <span class="breadcrumb-link current">Partage</span>
+        <span class="breadcrumb-link current">{{ t('nav.shared') }}</span>
       </div>
     </div>
 
@@ -15,17 +15,17 @@
       <!-- Section: Mes Partages -->
       <div class="accordion-item">
         <div class="accordion-header" @click="toggleSection('my-shares')" :class="{ active: sections['my-shares'] }">
-          <span class="accordion-title">Fichiers partagés ({{ shares.length }})</span>
+          <span class="accordion-title">{{ t('shared.myShares') }} ({{ shares.length }})</span>
           <span class="accordion-icon">{{ sections['my-shares'] ? '▼' : '▶' }}</span>
         </div>
         
         <div v-show="sections['my-shares']" class="accordion-content">
           <div v-if="loading" class="loading">
-            <div class="spinner"></div> Chargement...
+            <div class="spinner"></div> {{ t('shared.loading') }}
           </div>
           <div v-else-if="error" class="error">{{ error }}</div>
           <div v-else-if="shares.length === 0" class="empty">
-            <p>Vous n'avez aucun partage actif.</p>
+            <p>{{ t('shared.noShares') }}</p>
           </div>
           <FileTable 
             v-else 
@@ -38,8 +38,8 @@
             </template>
 
             <template #resource_type="{ item }">
-              <span v-if="item.resource_type === 'file'" class="badge file">Fichier</span>
-              <span v-else class="badge folder">Dossier</span>
+              <span v-if="item.resource_type === 'file'" class="badge file">{{ t('file.files') }}</span>
+              <span v-else class="badge folder">{{ t('file.folders') }}</span>
             </template>
 
             <template #views="{ item }">
@@ -52,21 +52,21 @@
 
             <template #expires_at="{ item }">
               <span :class="{ 'expired': isExpired(item.expires_at) }">
-                {{ item.expires_at ? formatDate(item.expires_at) : 'Jamais' }}
+                {{ item.expires_at ? formatDate(item.expires_at) : t('shared.expired') }}
               </span>
             </template>
 
             <template #link="{ item }">
               <div class="link-actions">
-                <button @click.stop="copyLink(item.link)" class="icon-btn" title="Copier le lien">
+                <button @click.stop="copyLink(item.link)" class="icon-btn" :title="t('shared.copyLink')">
                   📋
                 </button>
               </div>
             </template>
 
             <template #actions="{ item }">
-              <button @click.stop="deleteShare(item.id)" class="delete-btn" title="Supprimer le partage">
-                🗑️ Supprimer
+              <button @click.stop="deleteShare(item.id)" class="delete-btn" :title="t('shared.deleteShare')">
+                🗑️ {{ t('common.delete') }}
               </button>
             </template>
           </FileTable>
@@ -76,7 +76,7 @@
       <!-- Section: Partagés avec moi -->
       <div class="accordion-item">
         <div class="accordion-header" @click="toggleSection('shared-with-me')" :class="{ active: sections['shared-with-me'] }">
-          <span class="accordion-title">Partagés avec moi</span>
+          <span class="accordion-title">{{ t('shared.sharedWithMe') }}</span>
           <span class="accordion-icon">{{ sections['shared-with-me'] ? '▼' : '▶' }}</span>
         </div>
         <div v-show="sections['shared-with-me']" class="accordion-content">
@@ -88,14 +88,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, reactive, watch } from 'vue';
+import { ref, onMounted, computed, reactive, watch }from 'vue';
 import { useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import api from '../api';
 import FileTable from './file/FileTable.vue';
 import SharedWithMe from './sharedWithMe.vue';
 import { usePreferencesStore } from '../stores/preferences';
 import { useFileStore } from '../stores/files';
 
+const { t } = useI18n();
 const route = useRoute();
 const preferenceStore = usePreferencesStore();
 const fileStore = useFileStore();

@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"safercloud/backend/pkg"
+	"kagibi/backend/pkg"
 
 	"github.com/uptrace/bun"
 )

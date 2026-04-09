@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/workers"
+	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/workers"
 
 	"log"
 	"regexp"

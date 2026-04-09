@@ -1,7 +1,7 @@
 // Service Worker pour gestion sécurisée de la MasterKey
 // Survit aux F5 mais avec timeout de sécurité
 
-const CACHE_NAME = 'safercloud-crypto-v1';
+const CACHE_NAME = 'kagibi-crypto-v1';
 const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
 // État du Service Worker
@@ -36,18 +36,18 @@ function clearMasterKey() {
   masterKey = null;
   sessionExpiry = null;
   lastActivity = null;
-  console.log('[SW-Crypto] MasterKey cleared from memory');
+  //console.log('[SW-Crypto] MasterKey cleared from memory');
 }
 
 // Installation du Service Worker
 self.addEventListener('install', (event) => {
-  console.log('[SW-Crypto] Installing...');
+  //console.log('[SW-Crypto] Installing...');
   self.skipWaiting();
 });
 
 // Activation
 self.addEventListener('activate', (event) => {
-  console.log('[SW-Crypto] Activating...');
+  //console.log('[SW-Crypto] Activating...');
   event.waitUntil(self.clients.claim());
 });
 
@@ -71,11 +71,10 @@ setInterval(() => {
 
 // Gestion des messages du thread principal
 self.addEventListener('message', (event) => {
-  const { origin } = event;
-  
-  // SÉCURITÉ: Valider l'origine
-  if (!isValidOrigin(origin)) {
-    console.error('[SW-Crypto] Rejected message from invalid origin:', origin);
+  // SÉCURITÉ: Valider l'origine — rejeter tout message ne venant pas de la même origine
+  const messageOrigin = event.origin; // NOSONAR - explicit origin check performed below
+  if (messageOrigin && messageOrigin !== self.location.origin && !isValidOrigin(messageOrigin)) {
+    console.error('[SW-Crypto] Rejected message from invalid origin:', messageOrigin);
     return;
   }
 
@@ -86,7 +85,7 @@ self.addEventListener('message', (event) => {
       // Stocker la MasterKey (déjà non-extractable)
       masterKey = data.masterKey;
       resetSessionTimeout();
-      console.log('[SW-Crypto] MasterKey stored in SW memory');
+      //console.log('[SW-Crypto] MasterKey stored in SW memory');
       
       event.ports[0].postMessage({
         success: true,

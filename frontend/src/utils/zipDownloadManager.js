@@ -110,7 +110,7 @@ class ZipDownloadManager {
         })
         await navigator.serviceWorker.ready
         this.worker = registration.active || registration.waiting || registration.installing
-        console.log('[DownloadManager] Service Worker registered')
+        //console.log('[DownloadManager] Service Worker registered')
       } catch (error) {
         console.warn('[DownloadManager] Service Worker registration failed, using fallback:', error)
         this.worker = null
@@ -553,7 +553,7 @@ class ZipDownloadManager {
       
       // Wait for any download to complete before continuing
       if (this.activeDownloads.size >= MAX_CONCURRENT_DOWNLOADS) {
-        await Promise.race(downloadPromises.filter(p => p))
+        await Promise.race(downloadPromises.filter(Boolean))
       }
       
       // Small delay to prevent tight loop
@@ -1027,7 +1027,7 @@ export { ZipDownloadManager }
  * const response = await fetch(url)
  * const trackedStream = trackStreamProgress(
  *   response.body,
- *   (bytes) => console.log(`Downloaded: ${bytes}`),
+ *   (bytes) => //console.log(`Downloaded: ${bytes}`),
  *   16
  * )
  * const reader = trackedStream.getReader()

@@ -96,82 +96,12 @@
       </div>
     </section>
 
-    <!-- Pricing Preview -->
-    <section class="pricing-preview">
-      <div class="container">
-        <h2 class="section-title">Tarification Transparente</h2>
-        <p class="section-subtitle">Commencez gratuitement, évoluez à votre rythme</p>
-        <div class="pricing-grid">
-          <div class="pricing-card">
-            <h3 class="plan-name">Gratuit</h3>
-            <div class="plan-price">
-              <span class="amount">0€</span>
-              <span class="period">/mois</span>
-            </div>
-            <ul class="plan-features">
-              <li>5 Go de stockage</li>
-              <li>Transferts P2P illimités</li>
-              <li>Chiffrement E2E</li>
-            </ul>
-            <router-link to="/login" class="btn btn-outline">Commencer</router-link>
-          </div>
-
-          <div class="pricing-card">
-            <h3 class="plan-name">Personnel</h3>
-            <div class="plan-price">
-              <span class="amount">5€</span>
-              <span class="period">/mois</span>
-            </div>
-            <ul class="plan-features">
-              <li>100 Go de stockage</li>
-              <li>Transferts P2P illimités</li>
-              <li>Support prioritaire</li>
-            </ul>
-            <router-link to="/login" class="btn btn-outline">Choisir</router-link>
-          </div>
-
-          <div class="pricing-card featured">
-            <div class="featured-badge">Populaire</div>
-            <h3 class="plan-name">Expert</h3>
-            <div class="plan-price">
-              <span class="amount">15€</span>
-              <span class="period">/mois</span>
-            </div>
-            <ul class="plan-features">
-              <li>1 To de stockage</li>
-              <li>P2P illimité</li>
-              <li>Support prioritaire</li>
-            </ul>
-            <router-link to="/login" class="btn btn-primary">Choisir</router-link>
-          </div>
-
-          <div class="pricing-card">
-            <h3 class="plan-name">Pay-as-you-go</h3>
-            <div class="plan-price">
-              <span class="amount-small">1.50€</span>
-              <span class="period">+ 0.15€/Go/h</span>
-            </div>
-            <ul class="plan-features">
-              <li>Facturation à l'usage</li>
-              <li>Flexible et évolutif</li>
-              <li>Aucun engagement</li>
-            </ul>
-            <router-link to="/login" class="btn btn-outline">Choisir</router-link>
-          </div>
-        </div>
-        <div class="pricing-note">
-          <router-link to="/pricing" class="link-primary">Voir tous les plans →</router-link>
-        </div>
-      </div>
-    </section>
-
     <!-- Final CTA -->
     <section class="final-cta">
       <div class="container">
         <h2>Reprenez le Contrôle de Vos Données</h2>
-        <p>Pas de carte bancaire requise pour commencer</p>
         <router-link to="/login" class="btn btn-primary btn-large">
-          Créer mon compte gratuitement
+          Créer mon compte
         </router-link>
       </div>
     </section>
@@ -197,7 +127,7 @@ onMounted(() => {
     })
   }, observerOptions)
 
-  document.querySelectorAll('.feature-card, .pricing-card').forEach(el => {
+  document.querySelectorAll('.feature-card').forEach(el => {
     observer.observe(el)
   })
 })

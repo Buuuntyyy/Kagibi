@@ -1,11 +1,11 @@
-# SaferCloud Makefile
-# Makefile for building, testing, and deploying SaferCloud
+# Kagibi Makefile
+# Makefile for building, testing, and deploying Kagibi
 
 .PHONY: help build push deploy clean test all
 
 # Configuration
 REGISTRY ?= docker.io
-NAMESPACE ?= safercloud
+NAMESPACE ?= kagibi
 VERSION ?= latest
 KUBECONFIG ?= ~/.kube/config
 
@@ -16,7 +16,7 @@ RED := \033[0;31m
 NC := \033[0m # No Color
 
 help: ## Show this help message
-	@echo "$(GREEN)SaferCloud Makefile$(NC)"
+	@echo "$(GREEN)Kagibi Makefile$(NC)"
 	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""
@@ -84,51 +84,51 @@ deploy-kustomize: ## Deploy using Kustomize
 # Status and monitoring
 status: ## Show deployment status
 	@echo "$(YELLOW)Checking deployment status...$(NC)"
-	kubectl get pods -n safercloud
-	kubectl get svc -n safercloud
-	kubectl get ingress -n safercloud
+	kubectl get pods -n kagibi
+	kubectl get svc -n kagibi
+	kubectl get ingress -n kagibi
 
 logs-backend: ## Show backend logs
-	kubectl logs -f deployment/backend -n safercloud
+	kubectl logs -f deployment/backend -n kagibi
 
 logs-frontend: ## Show frontend logs
-	kubectl logs -f deployment/frontend -n safercloud
+	kubectl logs -f deployment/frontend -n kagibi
 
 logs-website: ## Show website logs
-	kubectl logs -f deployment/website -n safercloud
+	kubectl logs -f deployment/website -n kagibi
 
 # Scale targets
 scale-backend: ## Scale backend (usage: make scale-backend REPLICAS=5)
-	kubectl scale deployment/backend --replicas=$(REPLICAS) -n safercloud
+	kubectl scale deployment/backend --replicas=$(REPLICAS) -n kagibi
 
 scale-frontend: ## Scale frontend (usage: make scale-frontend REPLICAS=5)
-	kubectl scale deployment/frontend --replicas=$(REPLICAS) -n safercloud
+	kubectl scale deployment/frontend --replicas=$(REPLICAS) -n kagibi
 
 scale-website: ## Scale website (usage: make scale-website REPLICAS=3)
-	kubectl scale deployment/website --replicas=$(REPLICAS) -n safercloud
+	kubectl scale deployment/website --replicas=$(REPLICAS) -n kagibi
 
 # Update targets
 update-backend: build-backend push-backend ## Build, push, and update backend
-	kubectl rollout restart deployment/backend -n safercloud
-	kubectl rollout status deployment/backend -n safercloud
+	kubectl rollout restart deployment/backend -n kagibi
+	kubectl rollout status deployment/backend -n kagibi
 
 update-frontend: build-frontend push-frontend ## Build, push, and update frontend
-	kubectl rollout restart deployment/frontend -n safercloud
-	kubectl rollout status deployment/frontend -n safercloud
+	kubectl rollout restart deployment/frontend -n kagibi
+	kubectl rollout status deployment/frontend -n kagibi
 
 update-website: build-website push-website ## Build, push, and update website
-	kubectl rollout restart deployment/website -n safercloud
-	kubectl rollout status deployment/website -n safercloud
+	kubectl rollout restart deployment/website -n kagibi
+	kubectl rollout status deployment/website -n kagibi
 
 # Rollback targets
 rollback-backend: ## Rollback backend deployment
-	kubectl rollout undo deployment/backend -n safercloud
+	kubectl rollout undo deployment/backend -n kagibi
 
 rollback-frontend: ## Rollback frontend deployment
-	kubectl rollout undo deployment/frontend -n safercloud
+	kubectl rollout undo deployment/frontend -n kagibi
 
 rollback-website: ## Rollback website deployment
-	kubectl rollout undo deployment/website -n safercloud
+	kubectl rollout undo deployment/website -n kagibi
 
 # Testing targets
 test-backend: ## Run backend tests
@@ -141,8 +141,8 @@ test: test-backend test-frontend ## Run all tests
 
 # Clean targets
 clean: ## Delete Kubernetes resources
-	@echo "$(RED)Deleting SaferCloud from Kubernetes...$(NC)"
-	kubectl delete namespace safercloud
+	@echo "$(RED)Deleting Kagibi from Kubernetes...$(NC)"
+	kubectl delete namespace kagibi
 
 clean-images: ## Remove local Docker images
 	@echo "$(YELLOW)Removing local images...$(NC)"
@@ -160,37 +160,37 @@ dev-frontend: ## Run frontend in development mode
 
 # Backup targets
 backup-db: ## Create database backup
-	kubectl create job --from=cronjob/postgres-backup manual-backup-$(shell date +%Y%m%d-%H%M%S) -n safercloud
+	kubectl create job --from=cronjob/postgres-backup manual-backup-$(shell date +%Y%m%d-%H%M%S) -n kagibi
 
 list-backups: ## List all backups
-	kubectl exec -it postgres-0 -n safercloud -- ls -lh /backups
+	kubectl exec -it postgres-0 -n kagibi -- ls -lh /backups
 
 # Monitoring targets
 metrics: ## Show pod metrics
-	kubectl top pods -n safercloud
+	kubectl top pods -n kagibi
 	kubectl top nodes
 
 events: ## Show recent events
-	kubectl get events -n safercloud --sort-by='.lastTimestamp'
+	kubectl get events -n kagibi --sort-by='.lastTimestamp'
 
 describe-backend: ## Describe backend deployment
-	kubectl describe deployment/backend -n safercloud
+	kubectl describe deployment/backend -n kagibi
 
 describe-frontend: ## Describe frontend deployment
-	kubectl describe deployment/frontend -n safercloud
+	kubectl describe deployment/frontend -n kagibi
 
 describe-website: ## Describe website deployment
-	kubectl describe deployment/website -n safercloud
+	kubectl describe deployment/website -n kagibi
 
 # Port forwarding targets
 port-forward-backend: ## Port forward backend to localhost:8080
-	kubectl port-forward svc/backend-service 8080:8080 -n safercloud
+	kubectl port-forward svc/backend-service 8080:8080 -n kagibi
 
 port-forward-frontend: ## Port forward frontend to localhost:3000
-	kubectl port-forward svc/frontend-service 3000:80 -n safercloud
+	kubectl port-forward svc/frontend-service 3000:80 -n kagibi
 
 port-forward-db: ## Port forward PostgreSQL to localhost:5432
-	kubectl port-forward svc/postgres-service 5432:5432 -n safercloud
+	kubectl port-forward svc/postgres-service 5432:5432 -n kagibi
 
 # Info targets
 info: ## Show configuration info

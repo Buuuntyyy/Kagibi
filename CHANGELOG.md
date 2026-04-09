@@ -170,7 +170,7 @@ func GetSecurityEvents(c *gin.Context)
    - Error handling amélioré
 
 🔧 backend/main.go
-   - Import "safercloud/backend/handlers/security"
+   - Import "kagibi/backend/handlers/security"
    - Ajout registerSecurityRoutes() call
    - Ajout fonction registerSecurityRoutes()
 

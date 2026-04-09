@@ -2,11 +2,11 @@
   <div v-if="isOpen" class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>Déplacer les éléments</h3>
+        <h3>{{ t('dialogs.move.title') }}</h3>
         <button @click="close" class="btn-close">×</button>
       </div>
       <div class="modal-body">
-        <p>Choisissez le dossier de destination :</p>
+        <p>{{ t('dialogs.move.selectDestination') }}</p>
         <div class="path-display">
           <span @click="goUp" class="back-arrow" :class="{ 'disabled': currentPath === '/' }">↑</span>
           <span>{{ currentPath }}</span>
@@ -20,8 +20,8 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button @click="close">Annuler</button>
-        <button @click="confirmMove" class="btn-primary">Déplacer ici</button>
+        <button @click="close">{{ t('dialogs.move.cancel') }}</button>
+        <button @click="confirmMove" class="btn-primary">{{ t('dialogs.move.moveHere') }}</button>
       </div>
     </div>
   </div>
@@ -29,7 +29,10 @@
 
 <script setup>
 import { ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import api from '../api';
+
+const { t } = useI18n();
 
 const props = defineProps({
   isOpen: Boolean,

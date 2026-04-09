@@ -11,3 +11,13 @@ export const formatDate = (dateString) => {
   const date = new Date(dateString)
   return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
+
+export const formatSpeed = (bytesPerSecond) => {
+  const value = Number(bytesPerSecond) || 0
+  if (value <= 0) return '0 B/s'
+
+  const units = ['B/s', 'KB/s', 'MB/s', 'GB/s', 'TB/s']
+  const k = 1024
+  const i = Math.min(Math.floor(Math.log(value) / Math.log(k)), units.length - 1)
+  return Number.parseFloat((value / Math.pow(k, i)).toFixed(2)) + ' ' + units[i]
+}

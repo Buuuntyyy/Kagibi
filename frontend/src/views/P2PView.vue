@@ -6,8 +6,8 @@
         <div class="p2p-container">
           <div class="main-card">
         <div class="card-header">
-           <h2>Transfert P2P Sécurisé</h2>
-           <p>Envoyez des fichiers directement à vos amis connectés, sans passer par le serveur.</p>
+           <h2>{{ t('p2p.pageTitle') }}</h2>
+           <p>{{ t('p2p.pageDesc') }}</p>
         </div>
 
         <div class="transfer-flow">
@@ -15,12 +15,12 @@
             <div class="flow-step" :class="{ active: !selectedFriend, completed: selectedFriend }">
                 <div class="step-icon">1</div>
                 <div class="step-content">
-                    <h3>Destinataire</h3>
+                    <h3>{{ t('p2p.selectFriend') }}</h3>
                     <div v-if="!selectedFriend">
-                        <p class="secondary-text">Sélectionnez un ami en ligne</p>
+                        <p class="secondary-text">{{ t('p2p.selectFriendDesc') }}</p>
                         <div class="friend-selector">
                            <div v-if="onlineFriends.length === 0" class="no-friends">
-                               Aucun ami en ligne
+                               {{ t('p2p.noOnlineFriends') }}
                            </div>
                            <div v-else class="friends-grid">
                                <div
@@ -73,7 +73,7 @@
             <div class="flow-step" :class="{ active: selectedFriend && !selectedFile, completed: selectedFile, disabled: !selectedFriend }">
                 <div class="step-icon">2</div>
                 <div class="step-content">
-                    <h3>Fichier</h3>
+                    <h3>{{ t('p2p.selectFile') }}</h3>
                     <input type="file" id="p2p-file-input" @change="handleFileSelect" style="display: none" />
 
                     <div v-if="!selectedFile"
@@ -83,8 +83,8 @@
                          @dragover.prevent
                          @drop.prevent="handleDrop"
                     >
-                        <span v-if="!selectedFriend">Sélectionnez un destinataire d'abord</span>
-                        <span v-else>Cliquez ou glissez un fichier ici</span>
+                        <span v-if="!selectedFriend">{{ t('p2p.selectFriendDesc') }}</span>
+                        <span v-else>{{ t('p2p.dropFile') }}</span>
                     </div>
 
                     <div v-else class="file-display">
@@ -95,7 +95,7 @@
                             <span class="fname" :title="selectedFile.name">{{ selectedFile.name }}</span>
                             <span class="fsize">{{ formatSize(selectedFile.size) }}</span>
                         </div>
-                        <button class="change-file-btn" @click="selectedFile = null">Changer</button>
+                        <button class="change-file-btn" @click="selectedFile = null">{{ t('p2p.changeFile') }}</button>
                     </div>
                 </div>
             </div>
@@ -103,9 +103,9 @@
             <!-- STEP 3: ACTION -->
             <div class="flow-step action-step">
                 <button class="send-big-btn" :disabled="!canSend" @click="startTransfer">
-                    <span v-if="!canSend">En attente...</span>
+                    <span v-if="!canSend">{{ t('p2p.selectFriendAndFile') }}</span>
                     <span v-else>
-                        Envoyer le fichier
+                        {{ t('p2p.sendFile') }}
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:8px;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </span>
                 </button>
@@ -120,11 +120,13 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useFriendStore } from '../stores/friends'
 import { useAuthStore } from '../stores/auth'
 import { useP2PStore } from '../stores/p2p'
 import LeftBar from '../components/bar/leftBar.vue'
 
+const { t } = useI18n()
 const friendStore = useFriendStore()
 const authStore = useAuthStore()
 const p2pStore = useP2PStore()

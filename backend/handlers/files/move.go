@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/workers"
+	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/workers"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"

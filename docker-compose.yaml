@@ -1,4 +1,6 @@
 services:
+  # ── Shared infrastructure ────────────────────────────────────────────────────
+
   db:
     image: postgres:14-alpine
     restart: always
@@ -15,9 +17,41 @@ services:
       - ./db_data:/var/lib/postgresql/data/
 
   redis-db:
-    image: redis:alpine  # Utilise l'image Redis (version légère)
+    image: redis:alpine
     restart: always
     ports:
-      - "6379:6379"      # Port Redis standard
+      - "6379:6379"
     volumes:
-      - ./redis-data:/data # Persistance des données Redis
+      - ./redis-data:/data
+
+  # ── Backend ──────────────────────────────────────────────────────────────────
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis-db
+    env_file:
+      - .env
+    environment:
+      AUTH_PROVIDER: local
+      DATABASE_URL: postgres://user:password@db:5432/mydb?sslmode=disable
+      REDIS_URL: redis://redis-db:6379
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-use-a-long-random-string}
+    ports:
+      - "8080:8080"
+
+  # ── Frontend ─────────────────────────────────────────────────────────────────
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    env_file:
+      - .env
+    ports:
+      - "80:80"

@@ -4,7 +4,7 @@
       <span class="chevron" :class="{ 'open': isOpen }">
         <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
       </span>
-      <h4 class="section-title">Suggestions</h4>
+      <h4 class="section-title">{{ t('search.suggestions') }}</h4>
     </div>
     
     <div v-show="isOpen" class="accordion-content">
@@ -15,6 +15,7 @@
           class="recent-card"
           :class="item.type"
           @click="openItem(item)"
+          @contextmenu.prevent.stop="handleContextMenu($event, item)"
         >
           <div class="icon-wrapper">
              <!-- Folder Icon -->
@@ -29,25 +30,67 @@
           
           <div class="card-details">
             <span class="item-name" :title="item.displayName">{{ item.displayName }}</span>
-            <span class="item-type-text">{{ item.type === 'folder' ? 'Dossier' : 'Fichier' }}</span>
+            <span class="item-type-text">{{ item.type === 'folder' ? t('file.folderType') : t('file.fileType') }}</span>
           </div>
         </div>
       </div>
       
       <div v-else class="empty-state">
         <span class="empty-icon">🕒</span>
-        <span>Les éléments récemment ouverts apparaîtront ici</span>
+        <span>{{ t('search.noSuggestions') }}</span>
       </div>
     </div>
+    
+    <!-- Context Menu -->
+    <ContextMenu
+      v-if="contextMenu.visible"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :item="contextMenu.item"
+      @close="closeContextMenu"
+    >
+      <template #custom-actions>
+        <div class="menu-item" @click="handleContextAction('preview')" v-if="contextMenu.item.type === 'file'">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+          </svg>
+          {{ t('file.preview') }}
+        </div>
+        <div class="menu-item" @click="handleContextAction('download')" v-if="contextMenu.item.type === 'file'">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+          </svg>
+          {{ t('file.download') }}
+        </div>
+        <div class="menu-item" @click="handleContextAction('share')">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/>
+          </svg>
+          {{ t('file.share') }}
+        </div>
+      </template>
+    </ContextMenu>
   </div>
 </template>
 
 <script setup>
 import { computed, ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useFileStore } from '../../stores/files'
+import ContextMenu from './ContextMenu.vue'
+
+const emit = defineEmits(['open-share-dialog'])
 
 const fileStore = useFileStore()
+const { t } = useI18n()
 const isOpen = ref(true)
+
+const contextMenu = ref({
+  visible: false,
+  x: 0,
+  y: 0,
+  item: null
+})
 
 onMounted(() => {
   fileStore.fetchRecents()
@@ -85,18 +128,66 @@ const router = useRouter()
 const openItem = async (item) => {
   if (item.type === 'folder') {
     // Set a pending navigation path so FileList.vue will use it after mount
-    fileStore.pendingNavigatePath = item.path;
+    fileStore.pendingNavigatePath = item.path || item.Path;
     if (router.currentRoute.value.path !== '/dashboard/files') {
       await router.push('/dashboard/files')
     } else {
       // If already on files, trigger navigation immediately
-      fileStore.fetchItems(item.path)
+      fileStore.fetchItems(item.path || item.Path)
     }
     fileStore.addToHistory(item)
   } else {
-    fileStore.downloadFile(item.ID, item.Name)
+    const fileId = item.ID || item.id;
+    const fileName = item.displayName || item.Name || item.name;
+    const mimeType = item.MimeType || item.mime_type;
+    const encryptedKey = item.EncryptedKey || item.encrypted_key;
+    fileStore.downloadFile(fileId, fileName, mimeType, false, encryptedKey)
     fileStore.addToHistory(item)
   }
+}
+
+const handleContextMenu = (event, item) => {
+  contextMenu.value = {
+    visible: true,
+    x: event.clientX,
+    y: event.clientY,
+    item: item
+  }
+}
+
+const closeContextMenu = () => {
+  contextMenu.value.visible = false
+}
+
+const handleContextAction = (action) => {
+  const item = contextMenu.value.item
+  const fileId = item.ID || item.id;
+  const fileName = item.displayName || item.Name || item.name;
+  const mimeType = item.MimeType || item.mime_type;
+  const encryptedKey = item.EncryptedKey || item.encrypted_key;
+
+  switch(action) {
+    case 'preview':
+      if (item.type === 'file') {
+        fileStore.downloadFile(fileId, fileName, mimeType, true, encryptedKey)
+      }
+      break
+    case 'download':
+      if (item.type === 'file') {
+        fileStore.downloadFile(fileId, fileName, mimeType, false, encryptedKey)
+      }
+      break
+    case 'share':
+      // Emit event to parent to open share dialog
+      emit('open-share-dialog', {
+        id: item.ID || item.id,
+        name: item.displayName || item.Name || item.name,
+        type: item.type
+      })
+      break
+  }
+  
+  closeContextMenu()
 }
 </script>
 

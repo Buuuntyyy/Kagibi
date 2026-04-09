@@ -1,15 +1,31 @@
 <template>
   <div class="search-bar" ref="searchBarRef">
-    <div class="search-wrapper" :class="{ focused: isFocused || showDropdown }">
+    <!-- Disabled state when filename encryption is active -->
+    <div v-if="filenamesAreEncrypted" class="search-wrapper search-wrapper--disabled" :title="t('search.encryptedDisabledTooltip', 'La recherche est désactivée car les noms de fichiers sont chiffrés')">
       <div class="icon-wrapper search-icon">
         <svg focusable="false" viewBox="0 0 24 24" height="24px" width="24px" fill="#5f6368">
           <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
         </svg>
       </div>
-      <input 
-        type="text" 
-        v-model="searchQuery" 
-        placeholder="Rechercher dans mes fichiers" 
+      <span class="search-disabled-label">{{ t('search.encryptedDisabled', 'Recherche désactivée (noms chiffrés)') }}</span>
+      <div class="icon-wrapper filter-icon">
+        <svg focusable="false" viewBox="0 0 24 24" height="24px" width="24px" fill="#5f6368">
+          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Normal search -->
+    <div v-else class="search-wrapper" :class="{ focused: isFocused || showDropdown }">
+      <div class="icon-wrapper search-icon">
+        <svg focusable="false" viewBox="0 0 24 24" height="24px" width="24px" fill="#5f6368">
+          <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+        </svg>
+      </div>
+      <input
+        type="text"
+        v-model="searchQuery"
+        :placeholder="t('search.placeholder')"
         @input="handleInput"
         @focus="handleFocus"
         @keydown.down.prevent="navigateResults(1)"
@@ -31,7 +47,7 @@
     <!-- Dropdown Results -->
     <div class="search-dropdown" v-if="showDropdown && hasResults">
       <div v-if="searchResults.folders.length > 0" class="result-group">
-        <div class="group-title">Dossiers</div>
+        <div class="group-title">{{ t('file.folders') }}</div>
         <div 
           v-for="(folder, index) in searchResults.folders" 
           :key="'folder-' + folder.ID"
@@ -51,7 +67,7 @@
       </div>
 
       <div v-if="searchResults.files.length > 0" class="result-group">
-        <div class="group-title">Fichiers</div>
+        <div class="group-title">{{ t('file.files') }}</div>
         <div 
           v-for="(file, index) in searchResults.files" 
           :key="'file-' + file.ID"
@@ -67,6 +83,26 @@
             <span class="item-name">{{ file.Name }}</span>
             <span class="item-path">{{ file.Path }}</span>
           </div>
+          <div class="item-actions">
+            <button 
+              class="action-btn preview-btn" 
+              @click.stop="previewFile(file)"
+              title="Visualiser"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+              </svg>
+            </button>
+            <button 
+              class="action-btn download-btn" 
+              @click.stop="downloadFile(file)"
+              title="Télécharger"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -77,13 +113,18 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFileStore } from '../../stores/files'
+import { useAuthStore } from '../../stores/auth'
 import api from '../../api'
 import { debounce } from 'lodash';
 
 const router = useRouter();
 const fileStore = useFileStore();
+const authStore = useAuthStore();
 const searchQuery = ref('');
 const isFocused = ref(false);
+
+// Search is disabled when the user opted into client-side filename encryption.
+const filenamesAreEncrypted = computed(() => authStore.user?.encrypt_filenames === true);
 const searchResults = ref({ folders: [], files: [] });
 const showDropdown = ref(false);
 const activeIndex = ref(-1);
@@ -165,8 +206,35 @@ const openItem = (item, type) => {
     }
   } else {
     // Ouverture/Aperçu du fichier
-    fileStore.downloadFile(item.ID, item.Name, item.MimeType, true);
+    const fileId = item.ID || item.id;
+    const fileName = item.Name || item.name;
+    const mimeType = item.MimeType || item.mime_type || 'application/octet-stream';
+    const encryptedKey = item.EncryptedKey || item.encrypted_key;
+    
+    fileStore.downloadFile(fileId, fileName, mimeType, true, encryptedKey);
   }
+  showDropdown.value = false;
+  searchQuery.value = '';
+};
+
+const previewFile = (file) => {
+  const fileId = file.ID || file.id;
+  const fileName = file.Name || file.name;
+  const mimeType = file.MimeType || file.mime_type || 'application/octet-stream';
+  const encryptedKey = file.EncryptedKey || file.encrypted_key;
+  
+  fileStore.downloadFile(fileId, fileName, mimeType, true, encryptedKey);
+  showDropdown.value = false;
+  searchQuery.value = '';
+};
+
+const downloadFile = (file) => {
+  const fileId = file.ID || file.id;
+  const fileName = file.Name || file.name;
+  const mimeType = file.MimeType || file.mime_type || 'application/octet-stream';
+  const encryptedKey = file.EncryptedKey || file.encrypted_key;
+  
+  fileStore.downloadFile(fileId, fileName, mimeType, false, encryptedKey);
   showDropdown.value = false;
   searchQuery.value = '';
 };
@@ -207,6 +275,22 @@ onUnmounted(() => {
   max-width: 700px;
   transition: background-color 0.1s, box-shadow 0.1s;
   height: 40px;
+}
+
+.search-wrapper--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.search-disabled-label {
+  flex-grow: 1;
+  padding: 0 8px;
+  font-size: 14px;
+  color: var(--secondary-text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .search-wrapper.focused,
@@ -286,10 +370,16 @@ onUnmounted(() => {
   padding: 8px 16px;
   cursor: pointer;
   transition: background-color 0.1s;
+  position: relative;
 }
 
 .result-item:hover, .result-item.active {
   background-color: var(--hover-background-color);
+}
+
+.result-item:hover .item-actions {
+  opacity: 1;
+  visibility: visible;
 }
 
 .item-icon {
@@ -302,6 +392,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex: 1;
 }
 
 .item-name {
@@ -318,5 +409,47 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Action Buttons */
+.item-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--secondary-text-color);
+  transition: background-color 0.2s, color 0.2s;
+  padding: 0;
+}
+
+.action-btn:hover {
+  background-color: var(--hover-background-color);
+  color: var(--main-text-color);
+}
+
+.preview-btn:hover {
+  color: #1a73e8;
+}
+
+.download-btn:hover {
+  color: #34a853;
+}
+
+.action-btn:active {
+  transform: scale(0.95);
 }
 </style>
