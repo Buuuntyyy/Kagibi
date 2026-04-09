@@ -18,9 +18,9 @@ import (
 // The JWT secret must match the recordAuthToken.secret configured in PocketBase settings.
 //
 // To configure PocketBase to use a specific JWT secret:
-//   1. Start PocketBase
-//   2. The backend will call SetupJWTSecret() at startup if POCKETBASE_JWT_SECRET is set
-//   3. Or set it manually in the PocketBase admin UI: Settings → Application → Auth token signing key
+//  1. Start PocketBase
+//  2. The backend will call SetupJWTSecret() at startup if POCKETBASE_JWT_SECRET is set
+//  3. Or set it manually in the PocketBase admin UI: Settings → Application → Auth token signing key
 type PocketBaseProvider struct {
 	url            string
 	adminEmail     string

@@ -2,10 +2,10 @@ package files
 
 import (
 	"fmt"
-	"log"
-	"net/http"
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/s3storage"
+	"log"
+	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"

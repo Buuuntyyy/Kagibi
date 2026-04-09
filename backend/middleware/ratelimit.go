@@ -16,13 +16,13 @@ import (
 var endpointWindows = map[string][2]int64{
 	// Auth — strict limits to prevent brute-force and account enumeration
 	// [window_seconds, max_requests]
-	"/api/v1/auth/login":            {60, 5},
-	"/api/v1/auth/signup":           {60, 3},
-	"/api/v1/auth/refresh":          {60, 30},
-	"/api/v1/auth/update-password":  {60, 2},
-	"/api/v1/auth/register":         {60, 3},
-	"/api/v1/auth/recovery/init":    {60, 3},
-	"/api/v1/auth/recovery/finish":  {60, 3},
+	"/api/v1/auth/login":           {60, 5},
+	"/api/v1/auth/signup":          {60, 3},
+	"/api/v1/auth/refresh":         {60, 30},
+	"/api/v1/auth/update-password": {60, 2},
+	"/api/v1/auth/register":        {60, 3},
+	"/api/v1/auth/recovery/init":   {60, 3},
+	"/api/v1/auth/recovery/finish": {60, 3},
 	// MFA — strict limits to prevent TOTP brute-force
 	"/api/v1/auth/mfa/verify":    {60, 5},
 	"/api/v1/auth/mfa/enroll":    {60, 3},

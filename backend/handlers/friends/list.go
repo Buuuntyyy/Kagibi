@@ -3,8 +3,8 @@ package friends
 
 import (
 	"context"
-	"net/http"
 	"kagibi/backend/pkg"
+	"net/http"
 
 	"github.com/uptrace/bun"
 

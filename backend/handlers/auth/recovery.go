@@ -3,10 +3,10 @@ package auth
 import (
 	"context"
 	"crypto/hmac"
-	"log"
-	"net/http"
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
+	"log"
+	"net/http"
 	"strconv"
 	"time"
 
