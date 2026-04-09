@@ -2,7 +2,7 @@
   <div v-if="isOpen" class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <div class="modal-header">
-        <h3>Partager "{{ item?.Name || item?.name }}"</h3>
+        <h3>{{ t('share.title', { name: item?.Name || item?.name }) }}</h3>
         <button @click="close" class="btn-close">×</button>
       </div>
 
@@ -10,12 +10,12 @@
 
         <!-- === FRIENDS SECTION === -->
         <div class="friends-section">
-            <h4 class="section-title">Partage avec des amis (Sécurisé)</h4>
+            <h4 class="section-title">{{ t('share.withFriends') }}</h4>
             
             <div v-if="friends.length === 0" class="empty-friends">
-                Vous n'avez pas encore d'amis. 
+                {{ t('friends.noFriends') }}
                 <br>
-                <router-link to="/friends">Ajouter des amis</router-link>
+                <router-link to="/friends">{{ t('friends.addFriend') }}</router-link>
             </div>
 
             <div v-else class="friends-list">
@@ -30,8 +30,8 @@
                        </div>
                     </div>
 
-                    <div v-if="!friend.public_key" class="key-missing" title="Clé manquante">
-                       ⚠️ Pas de clé
+                    <div v-if="!friend.public_key" class="key-missing" :title="t('share.keyMissing')">
+                       ⚠️ {{ t('share.noKey') }}
                     </div>
 
                     <button v-else 
@@ -44,8 +44,8 @@
                             : 'btn-outline'
                         ]">
                         <span v-if="sharing[friend.id]">...</span>
-                        <span v-else-if="isFriendShared(friend.id)">Arrêter</span>
-                        <span v-else>Envoyer</span>
+                        <span v-else-if="isFriendShared(friend.id)">{{ t('share.stop') }}</span>
+                        <span v-else>{{ t('share.send') }}</span>
                     </button>
                  </div>
             </div>
@@ -112,6 +112,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useFileStore } from '../stores/files';
 import { useFriendStore } from '../stores/friends';
 import { useAuthStore } from '../stores/auth';
@@ -119,6 +120,8 @@ import { useUIStore } from '../stores/ui';
 import api from '../api';
 import { decryptKeyWithPrivateKey, importKeyFromPEM, encryptKeyWithPublicKey, generateMasterKey } from '../utils/crypto';
 import sodium from 'libsodium-wrappers-sumo';
+
+const { t } = useI18n();
 
 const props = defineProps({
   isOpen: Boolean,
@@ -297,7 +300,7 @@ const isFriendShared = (friendId) => {
 }
 
 const shareWithFriend = async (friend) => {
-    console.log("Starting shareWithFriend for:", friend.name);
+    //console.log("Starting shareWithFriend for:", friend.name);
     if (!props.item || !friend.public_key) return;
     
     // Check if already shared, if so -> Revoke logic
@@ -339,13 +342,13 @@ const shareWithFriend = async (friend) => {
     sharing.value[friend.id] = true;
     try {
         await sodium.ready;
-        console.log("Sodium ready. Resource type check...");
+        //console.log("Sodium ready. Resource type check...");
         
         let encryptedKeyForFriend = "";
         let folderFileKeys = {};
         // props.item can be file or folder. Check type.
         const resourceType = (props.item.type === 'folder' || props.item.is_dir) ? 'folder' : 'file';
-        console.log("ResourceType detected:", resourceType);
+        //console.log("ResourceType detected:", resourceType);
 
         if (resourceType === 'file') {
              // Handle case sensitivity from Go backend (PascalCase) vs potentially camelCase
@@ -375,6 +378,19 @@ const shareWithFriend = async (friend) => {
 
              const friendPublicKey = await importKeyFromPEM(friend.public_key, 'spki');
              encryptedKeyForFriend = await encryptKeyWithPublicKey(fileKeyRawBuffer, friendPublicKey);
+             
+             // Send share request for file
+             //console.log("Sending file share request...");
+             await api.post('/shares/direct', {
+                resource_id: props.item.ID || props.item.id,
+                resource_type: resourceType,
+                friend_id: friend.id,
+                encrypted_key: encryptedKeyForFriend,
+                permission: 'read',
+             });
+             //console.log("File share request successful.");
+             sharedStatus.value[friend.id] = true;
+             
         } else if (resourceType === 'folder') {
             // --- FOLDER SHARING LOGIC ---
             if (!authStore.masterKey) {
@@ -389,7 +405,7 @@ const shareWithFriend = async (friend) => {
             // Note: Currently frontend might not have updated 'encrypted_key' if we just generated it. 
             // We blindly trust props.item or check logic.
             const existingEncKey = props.item.EncryptedKey || props.item.encrypted_key;
-            console.log("Existing Folder Key found:", !!existingEncKey);
+            //console.log("Existing Folder Key found:", !!existingEncKey);
 
             if (existingEncKey) {
                  // Decrypt existing folder key
@@ -401,7 +417,7 @@ const shareWithFriend = async (friend) => {
                      authStore.masterKey,
                      data
                  );
-                 console.log("Folder key decrypted successfully.");
+                 //console.log("Folder key decrypted successfully.");
                  // Import as CryptoKey
                  folderKeyCrypto = await window.crypto.subtle.importKey(
                     "raw", 
@@ -411,7 +427,7 @@ const shareWithFriend = async (friend) => {
                     ["encrypt", "decrypt"]
                  );
             } else {
-                 console.log("No existing key, generating new one...");
+                 //console.log("No existing key, generating new one...");
                  // Generate NEW Folder Key
                  folderKeyCrypto = await generateMasterKey(); // Returns AES-GCM CryptoKey
                  folderKeyRaw = await window.crypto.subtle.exportKey("raw", folderKeyCrypto);
@@ -451,7 +467,7 @@ const shareWithFriend = async (friend) => {
             // If item.Path is '/', the folder's path is "/Name".
             // If item.Path is '/Parent', the folder's path is "/Parent/Name".
             
-            console.log("DEBUG: props.item props:", props.item);
+            //console.log("DEBUG: props.item props:", props.item);
             
             // NOTE: props.item often comes from the File list where keys match the Go struct or JSON response.
             // Go Struct: Name, Path.
@@ -476,13 +492,13 @@ const shareWithFriend = async (friend) => {
                 folderPath = (itemParentPath === '/' ? '' : itemParentPath) + '/' + itemName;
             }
             
-            console.log("Fetching recursive list for path:", folderPath);
+            //console.log("Fetching recursive list for path:", folderPath);
             
             // Fetch ALL content recursively (Files AND Folders)
             const listRes = await api.get(`/files/list-recursive?path=${encodeURIComponent(folderPath)}`);
             const files = listRes.data.files || [];
             const subFolders = listRes.data.folders || [];
-            console.log(`Recursive list returned: ${files.length} files, ${subFolders.length} folders.`);
+            //console.log(`Recursive list returned: ${files.length} files, ${subFolders.length} folders.`);
             
             // 1. Process Files
             for (const file of files) {
@@ -561,7 +577,7 @@ const shareWithFriend = async (friend) => {
                  }
             }
         
-            console.log(`Sending share request. FileKeys: ${Object.keys(folderFileKeys).length}, FolderKeys: ${Object.keys(folderFolderKeys).length}`);
+            //console.log(`Sending share request. FileKeys: ${Object.keys(folderFileKeys).length}, FolderKeys: ${Object.keys(folderFolderKeys).length}`);
             await api.post('/shares/direct', {
                 resource_id: props.item.ID || props.item.id,
                 resource_type: resourceType,
@@ -571,19 +587,8 @@ const shareWithFriend = async (friend) => {
                 folder_file_keys: folderFileKeys,
                 folder_folder_keys: folderFolderKeys
             });
-            console.log("Share request successful.");
+            //console.log("Share request successful.");
 
-            sharedStatus.value[friend.id] = true;
-
-        } else {
-             // File Share
-             await api.post('/shares/direct', {
-                resource_id: props.item.ID || props.item.id,
-                resource_type: resourceType,
-                friend_id: friend.id,
-                encrypted_key: encryptedKeyForFriend,
-                permission: 'read',
-            });
             sharedStatus.value[friend.id] = true;
         }
 

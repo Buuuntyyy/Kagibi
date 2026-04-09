@@ -6,11 +6,13 @@ import (
 	"net/http"
 	"time"
 
-	"safercloud/backend/pkg"
+	"kagibi/backend/pkg"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
+
+const logFriendUpdateFailed = "Failed to emit friend_update event: %v"
 
 type AddFriendRequest struct {
 	FriendCode string `json:"friendCode"`
@@ -72,13 +74,13 @@ func (h *FriendHandler) AddFriend(c *gin.Context) {
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), h.DB, targetUser.ID, "friend_update", map[string]interface{}{
 		"action": "friend_request_received",
 	}); err != nil {
-		log.Printf("Failed to emit friend_update event: %v", err)
+		log.Printf(logFriendUpdateFailed, err)
 	}
 	// Notify sender
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), h.DB, currentUserID, "friend_update", map[string]interface{}{
 		"action": "friend_request_sent",
 	}); err != nil {
-		log.Printf("Failed to emit friend_update event: %v", err)
+		log.Printf(logFriendUpdateFailed, err)
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Demande d'ami envoyée"})
@@ -112,13 +114,13 @@ func (h *FriendHandler) AcceptFriend(c *gin.Context) {
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), h.DB, friendship.UserID1, "friend_update", map[string]interface{}{
 		"action": "friend_request_accepted",
 	}); err != nil {
-		log.Printf("Failed to emit friend_update event: %v", err)
+		log.Printf(logFriendUpdateFailed, err)
 	}
 	// Notify accepter
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), h.DB, currentUserID, "friend_update", map[string]interface{}{
 		"action": "friend_request_accepted",
 	}); err != nil {
-		log.Printf("Failed to emit friend_update event: %v", err)
+		log.Printf(logFriendUpdateFailed, err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Ami accepté"})

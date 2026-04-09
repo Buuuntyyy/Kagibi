@@ -3,7 +3,7 @@
  * Détecte et log les événements de sécurité suspects
  */
 
-import { supabase } from '../supabase'
+import { authClient } from '../auth-client'
 
 class SecurityMonitor {
   constructor() {
@@ -64,18 +64,17 @@ class SecurityMonitor {
   async reportToBackend(event) {
     const sanitizedEvent = this.sanitizeEventForBackend(event);
     try {
-      // Essayer d'obtenir le token de Supabase
+      // Get token from the current auth provider (Supabase or PocketBase)
       let token = null;
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        token = session?.access_token;
+        token = await authClient.getToken();
       } catch (error) {
-        // Silencieusement ignorer si Supabase n'est pas disponible
+        // Silently ignore if auth provider is not available
       }
       
       // Fallback à localStorage
       if (!token) {
-        token = localStorage.getItem('safercloud_token');
+        token = localStorage.getItem('kagibi_token');
       }
       
       const headers = {
@@ -92,12 +91,11 @@ class SecurityMonitor {
         body: JSON.stringify(sanitizedEvent)
       });
 
-      if (response.ok) {
-        // Event reported successfully
-      } else if (response.status === 401) {
-        // Not authenticated yet, event cached locally
-      } else {
-        // Backend returned non-OK status
+      if (!response.ok) {
+        if (response.status !== 401) {
+          console.warn('[SecurityMonitor] Backend returned non-OK status:', response.status)
+        }
+        // 401 = not authenticated yet, event is cached locally
       }
     } catch (error) {
       // Cannot reach backend (normal before auth)

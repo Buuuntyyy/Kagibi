@@ -18,32 +18,30 @@
             <line x1="12" y1="9" x2="12" y2="13" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
-          <h3 id="delete-dialog-title">Confirmer la suppression</h3>
+          <h3 id="delete-dialog-title">{{ t('dialogs.deleteAccount.title') }}</h3>
           <button class="btn-close" type="button" @click="handleClose" :disabled="isDeletingAccount">×</button>
         </div>
         <div class="delete-dialog-body">
-          <p><strong>CETTE ACTION EST IMMÉDIATE ET DÉFINITIVEMENT IRRÉVERSIBLE.</strong></p>
-          <p><strong>En cliquant sur "Supprimer définitivement" :</strong></p>
+          <p><strong>{{ t('dialogs.deleteAccount.warning') }}</strong></p>
+          <p><strong>{{ t('dialogs.deleteAccount.description') }}</strong></p>
           <ul>
-            <li>Votre compte sera <strong>supprimé immédiatement</strong></li>
-            <li>Vos fichiers seront <strong>effacés immédiatement</strong></li>
-            <li>Vos clés de chiffrement seront <strong>détruites immédiatement</strong></li>
-            <li>Vos partages seront <strong>révoqués immédiatement</strong></li>
-            <li>Toutes vos données seront <strong>irrécupérables</strong></li>
+            <li>{{ t('dialogs.deleteAccount.point1') }}</li>
+            <li>{{ t('dialogs.deleteAccount.point2') }}</li>
+            <li>{{ t('dialogs.deleteAccount.point3') }}</li>
+            <li>{{ t('dialogs.deleteAccount.point4') }}</li>
           </ul>
           <div class="critical-warning">
-            <p><strong>AUCUNE RÉCUPÉRATION POSSIBLE, AUCUN RETOUR EN ARRIÈRE</strong></p>
-            <p>Il n'y a <strong>AUCUN DÉLAI DE GRÂCE</strong>. La suppression est <strong>INSTANTANÉE</strong> et <strong>DÉFINITIVE</strong>.</p>
+            <p><strong>{{ t('dialogs.deleteAccount.criticalWarning') }}</strong></p>
           </div>
           <div class="confirmation-section">
             <label for="confirmInput">
-              Tapez <code>SUPPRIMER DÉFINITIVEMENT</code> pour confirmer :
+              {{ t('dialogs.deleteAccount.confirmText') }} <code>{{ t('dialogs.deleteAccount.deleteMyAccount') }}</code> :
             </label>
             <input
               id="confirmInput"
               v-model="confirmationText"
               type="text"
-              placeholder="SUPPRIMER DÉFINITIVEMENT"
+              :placeholder="t('dialogs.deleteAccount.deleteMyAccount')"
               class="confirmation-input"
               autocomplete="off"
             />
@@ -51,16 +49,16 @@
         </div>
         <div class="delete-dialog-footer">
           <button class="btn-secondary" type="button" @click="handleClose" :disabled="isDeletingAccount">
-            Annuler
+            {{ t('dialogs.deleteAccount.cancel') }}
           </button>
           <button
             class="btn-danger"
             type="button"
             @click="$emit('confirm')"
-            :disabled="confirmationText !== 'SUPPRIMER DEFINITIVEMENT' || isDeletingAccount"
+            :disabled="confirmationText !== t('dialogs.deleteAccount.deleteMyAccount') || isDeletingAccount"
           >
-            <span v-if="isDeletingAccount">Suppression irréversible...</span>
-            <span v-else>Supprimer définitivement (irréversible)</span>
+            <span v-if="isDeletingAccount">{{ t('dialogs.deleteAccount.deleting') }}</span>
+            <span v-else>{{ t('dialogs.deleteAccount.deleteButton') }}</span>
           </button>
         </div>
       </div>
@@ -70,6 +68,9 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   modelValue: {

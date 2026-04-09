@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/s3storage"
+	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/s3storage"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -27,6 +27,8 @@ const (
 	DownloadPresignTTL = 5 * time.Minute   // 5 minutes for downloads
 	MaxPartSize        = 100 * 1024 * 1024 // 100MB max per part
 	MinPartSize        = 5 * 1024 * 1024   // 5MB min (S3 requirement except last part)
+	errInvalidReq      = "Invalid request: "
+	userPrefixFormat   = "users/%s/"
 )
 
 // InitiateMultipartRequest represents the request body for initiating multipart upload
@@ -65,6 +67,7 @@ type CompleteMultipartRequest struct {
 	ShareKeys    string         `json:"share_keys"`
 	PreviewID    *int64         `json:"preview_id"`
 	IsPreview    bool           `json:"is_preview"`
+	Synced       bool           `json:"synced"`
 }
 
 // CompletePart represents a completed part with ETag
@@ -92,20 +95,26 @@ func InitiateMultipartHandler(c *gin.Context, db *bun.DB) {
 
 	var req InitiateMultipartRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidReq + err.Error()})
 		return
 	}
 
-	// Validate user exists and check quota
-	var user pkg.User
-	if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(ctx); err != nil {
-		log.Printf("SECURITY: Multipart init for unknown user: %s", userID)
-		c.JSON(http.StatusForbidden, gin.H{"error": "User not found"})
-		return
+	// Validate user plan exists and check quota (auto-create free plan if missing)
+	planState, err := pkg.FindUserPlanByUserID(db, userID)
+	if err != nil || planState == nil {
+		log.Printf("[Multipart] user_plans row missing for %s, creating free plan", userID)
+		planState = &pkg.UserPlan{
+			UserID:          userID,
+			Plan:            pkg.PlanFree,
+			StorageLimit:    pkg.StorageFree,
+			StorageUsed:     0,
+			P2PMaxExchanges: pkg.P2PLimitFree,
+		}
+		_ = pkg.UpsertUserPlan(db, planState)
 	}
 
-	// Strict quota check
-	if user.StorageUsed+req.TotalSize > user.StorageLimit {
+	// Quota check
+	if planState.StorageUsed+req.TotalSize > planState.StorageLimit {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Storage quota exceeded"})
 		return
 	}
@@ -222,12 +231,12 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 
 	var req CompleteMultipartRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidReq + err.Error()})
 		return
 	}
 
 	// Security: Verify the key belongs to this user
-	expectedPrefix := fmt.Sprintf("users/%s/", userID)
+	expectedPrefix := fmt.Sprintf(userPrefixFormat, userID)
 	if !strings.HasPrefix(req.Key, expectedPrefix) {
 		log.Printf("SECURITY: User %s attempted to complete upload for key: %s", userID, req.Key)
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
@@ -320,6 +329,7 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		EncryptedKey: req.EncryptedKey,
 		PreviewID:    req.PreviewID,
 		IsPreview:    req.IsPreview,
+		Synced:       req.Synced,
 	}
 
 	delta, err := upsertFileInDB(ctx, tx, fileRecord, req.TotalSize)
@@ -370,12 +380,12 @@ func AbortMultipartHandler(c *gin.Context, db *bun.DB) {
 
 	var req AbortMultipartRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidReq + err.Error()})
 		return
 	}
 
 	// Security: Verify the key belongs to this user
-	expectedPrefix := fmt.Sprintf("users/%s/", userID)
+	expectedPrefix := fmt.Sprintf(userPrefixFormat, userID)
 	if !strings.HasPrefix(req.Key, expectedPrefix) {
 		log.Printf("SECURITY: User %s attempted to abort upload for key: %s", userID, req.Key)
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
@@ -495,12 +505,12 @@ func RefreshPresignedURLsHandler(c *gin.Context, db *bun.DB) {
 
 	var req RefreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidReq + err.Error()})
 		return
 	}
 
 	// Security: Verify the key belongs to this user
-	expectedPrefix := fmt.Sprintf("users/%s/", userID)
+	expectedPrefix := fmt.Sprintf(userPrefixFormat, userID)
 	if !strings.HasPrefix(req.Key, expectedPrefix) {
 		log.Printf("SECURITY: User %s attempted to refresh URL for key: %s", userID, req.Key)
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})

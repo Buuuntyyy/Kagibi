@@ -1,4 +1,4 @@
-name: SaferCloud CI
+name: Kagibi CI
 
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: safercloud_test
+          POSTGRES_DB: kagibi_test
           POSTGRES_USER: test
           POSTGRES_PASSWORD: testpassword
         ports:
@@ -89,7 +89,7 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: safercloud_test
+          POSTGRES_DB: kagibi_test
           POSTGRES_USER: test
           POSTGRES_PASSWORD: testpassword
         ports:
@@ -125,7 +125,7 @@ jobs:
         TEST_DB_PORT: 5432
         TEST_DB_USER: test
         TEST_DB_PASSWORD: testpassword
-        TEST_DB_NAME: safercloud_test
+        TEST_DB_NAME: kagibi_test
         TEST_REDIS_HOST: localhost
         TEST_REDIS_PORT: 6379
       run: |
@@ -186,7 +186,7 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_DB: safercloud_test
+          POSTGRES_DB: kagibi_test
           POSTGRES_USER: test
           POSTGRES_PASSWORD: testpassword
         ports:
@@ -230,7 +230,7 @@ jobs:
     - name: Start Backend Server
       working-directory: ./backend
       env:
-        DATABASE_URL: postgres://test:testpassword@localhost:5432/safercloud_test
+        DATABASE_URL: postgres://test:testpassword@localhost:5432/kagibi_test
         REDIS_URL: redis://localhost:6379
         JWT_SECRET: test-secret-key-for-ci
         PORT: 8080

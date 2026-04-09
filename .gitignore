@@ -2,9 +2,20 @@ db_data/*
 redis-data/*
 backend/.tmp/*
 backend/uploads/*
-
+.gemini/
+.claude/
+.github/skills
+_bmad/
+_bmad-output/
+schema_dump_*.sql
 backend/.env
 frontend/.env
+
+# Kubernetes secrets with real values
+k8s/security/secrets.yaml
+k8s/*
+
+*.exe
 
 frontend/utils/tests.security.js
 

@@ -25,8 +25,8 @@ package users
 
 import (
 	"fmt"
+	"kagibi/backend/pkg"
 	"net/http"
-	"safercloud/backend/pkg"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -151,14 +151,24 @@ func ExportUserDataHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	planState, err := pkg.FindUserPlanByUserID(db, userID)
+	if err != nil || planState == nil {
+		planState = &pkg.UserPlan{
+			UserID:       userID,
+			Plan:         pkg.PlanFree,
+			StorageLimit: pkg.StorageFree,
+			StorageUsed:  0,
+		}
+	}
+
 	profile := ExportProfile{
 		ID:                  user.ID,
 		Name:                user.Name,
 		Email:               user.Email,
 		AvatarURL:           user.AvatarURL,
-		Plan:                user.Plan,
-		StorageUsed:         user.StorageUsed,
-		StorageLimit:        user.StorageLimit,
+		Plan:                planState.Plan,
+		StorageUsed:         planState.StorageUsed,
+		StorageLimit:        planState.StorageLimit,
 		FriendCode:          user.FriendCode,
 		PublicKey:           user.PublicKey,
 		EncryptedPrivateKey: user.EncryptedPrivateKey,
@@ -323,7 +333,7 @@ func ExportUserDataHandler(c *gin.Context, db *bun.DB) {
 			Format:        "application/json",
 			FormatVersion: "1.0",
 			LegalBasis:    "RGPD Article 20 - Droit à la portabilité des données / Loi Informatique et Libertés art. 55",
-			ServiceName:   "SaferCloud",
+			ServiceName:   "Kagibi",
 			UserID:        userID,
 		},
 		Profile:        profile,
@@ -336,7 +346,7 @@ func ExportUserDataHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	// Réponse en téléchargement JSON
-	filename := fmt.Sprintf("safercloud-export-%s.json", time.Now().UTC().Format("2006-01-02"))
+	filename := fmt.Sprintf("kagibi-export-%s.json", time.Now().UTC().Format("2006-01-02"))
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	c.Header("Content-Type", "application/json; charset=utf-8")
 	c.IndentedJSON(http.StatusOK, export)

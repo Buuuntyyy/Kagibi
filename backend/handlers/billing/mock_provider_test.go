@@ -9,21 +9,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	testUserID    = "user-123"
+	testUserEmail = "test@example.com"
+	testUserName  = "Test User"
+	testInvoiceID = "inv-456"
+)
+
 func TestMockPaymentProvider_CreateCustomer(t *testing.T) {
 	provider := NewMockPaymentProvider()
 
 	ctx := context.Background()
 	customer, err := provider.CreateCustomer(ctx, CreateCustomerRequest{
-		ExternalID: "user-123",
-		Email:      "test@example.com",
-		Name:       "Test User",
+		ExternalID: testUserID,
+		Email:      testUserEmail,
+		Name:       testUserName,
 	})
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, customer.ID)
-	assert.Equal(t, "user-123", customer.ExternalID)
-	assert.Equal(t, "test@example.com", customer.Email)
-	assert.Equal(t, "Test User", customer.Name)
+	assert.Equal(t, testUserID, customer.ExternalID)
+	assert.Equal(t, testUserEmail, customer.Email)
+	assert.Equal(t, testUserName, customer.Name)
 }
 
 func TestMockPaymentProvider_CreateCustomerFailure(t *testing.T) {
@@ -32,9 +39,9 @@ func TestMockPaymentProvider_CreateCustomerFailure(t *testing.T) {
 
 	ctx := context.Background()
 	_, err := provider.CreateCustomer(ctx, CreateCustomerRequest{
-		ExternalID: "user-123",
-		Email:      "test@example.com",
-		Name:       "Test User",
+		ExternalID: testUserID,
+		Email:      testUserEmail,
+		Name:       testUserName,
 	})
 
 	require.Error(t, err)
@@ -47,7 +54,7 @@ func TestMockPaymentProvider_CreatePaymentLink(t *testing.T) {
 	ctx := context.Background()
 	link, err := provider.CreatePaymentLink(ctx, CreatePaymentLinkRequest{
 		CustomerID:  "cust-123",
-		InvoiceID:   "inv-456",
+		InvoiceID:   testInvoiceID,
 		Amount:      1500, // 15.00 EUR
 		Currency:    "EUR",
 		Description: "Test Invoice",
@@ -59,7 +66,7 @@ func TestMockPaymentProvider_CreatePaymentLink(t *testing.T) {
 	assert.Equal(t, int64(1500), link.Amount)
 	assert.Equal(t, "EUR", link.Currency)
 	assert.Equal(t, "pending", link.Status)
-	assert.Equal(t, "inv-456", link.InvoiceID)
+	assert.Equal(t, testInvoiceID, link.InvoiceID)
 }
 
 func TestMockPaymentProvider_GetPaymentStatus(t *testing.T) {
@@ -70,7 +77,7 @@ func TestMockPaymentProvider_GetPaymentStatus(t *testing.T) {
 	// First create a payment
 	link, err := provider.CreatePaymentLink(ctx, CreatePaymentLinkRequest{
 		CustomerID: "cust-123",
-		InvoiceID:  "inv-456",
+		InvoiceID:  testInvoiceID,
 		Amount:     1500,
 		Currency:   "EUR",
 	})

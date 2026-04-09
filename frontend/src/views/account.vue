@@ -1,8 +1,8 @@
 <template>
   <div class="account-page">
     <div class="page-header">
-      <h1>Mon Compte</h1>
-      <p class="subtitle">Gérez vos informations personnelles et vos préférences.</p>
+      <h1>{{ t('account.title') }}</h1>
+      <p class="subtitle">{{ t('account.subtitle') }}</p>
     </div>
 
     <!-- Plan Banner -->
@@ -10,16 +10,16 @@
       <div class="plan-content">
         <span class="plan-icon">🌟</span>
         <div class="plan-details">
-          <span class="plan-title">Votre plan actuel</span>
+          <span class="plan-title">{{ t('account.currentPlan') }}</span>
           <span class="plan-value">{{ formatPlanName(authStore.user?.plan) }}</span>
         </div>
       </div>
-      <button class="btn-upgrade" @click="navigateToBilling">Mettre à niveau</button>
+      <button class="btn-upgrade" @click="openUpgradeInfoPopup">{{ t('account.upgrade') }}</button>
     </div>
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
-      <p>Chargement du profil...</p>
+      <p>{{ t('account.loading') }}</p>
     </div>
 
     <div v-else class="content-grid">
@@ -29,11 +29,11 @@
           <AvatarSelector v-model="selectedAvatar" />
         </div>
         <div class="user-info">
-          <h2>{{ authStore.user?.name || 'Utilisateur' }}</h2>
+          <h2>{{ authStore.user?.name || t('account.username') }}</h2>
           <p class="email">{{ authStore.user?.email || 'email@exemple.com' }}</p>
           <div class="divider"></div>
           <p class="joined-date">
-             Membre depuis le {{ formatDate(authStore.user?.created_at) }}
+             {{ t('account.memberSince') }} {{ formatDate(authStore.user?.created_at) }}
           </p>
         </div>
       </div>
@@ -44,13 +44,13 @@
         <!-- Account Settings -->
         <section class="settings-section">
           <div class="section-header">
-            <h3>Profil</h3>
+            <h3>{{ t('account.profile') }}</h3>
           </div>
           <div class="section-body">
             <div class="form-row">
               <div class="input-group">
                 <label>
-                  Nom d'utilisateur
+                  {{ t('account.username') }}
                   <input
                     type="text"
                     v-model="usernameForm.newName"
@@ -59,7 +59,7 @@
                 </label>
               </div>
               <button class="btn-secondary" @click="handleUpdateUsername" :disabled="updatingUsername">
-                {{ updatingUsername ? 'Mise à jour...' : 'Modifier' }}
+                {{ updatingUsername ? t('account.updating') : t('account.modify') }}
               </button>
             </div>
           </div>
@@ -67,13 +67,13 @@
 
         <section class="settings-section">
           <div class="section-header">
-            <h3>Sécurité</h3>
+            <h3>{{ t('account.security') }}</h3>
           </div>
           <div class="section-body">
             <form @submit.prevent="handleUpdatePassword" class="password-form">
               <div class="input-group password-with-toggle">
                 <label>
-                  Mot de passe actuel
+                  {{ t('account.currentPassword') }}
                   <div class="password-input-wrapper">
                     <input
                       :type="showCurrentPassword ? 'text' : 'password'"
@@ -85,7 +85,7 @@
                       type="button"
                       class="toggle-password-btn"
                       @click="showCurrentPassword = !showCurrentPassword"
-                      title="Afficher/Masquer"
+                      :title="t('account.showHide')"
                     >
                       <svg v-if="!showCurrentPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -99,10 +99,10 @@
                   </div>
                 </label>
               </div>
-              <div class="password-row">
-                 <div class="input-group password-with-toggle">
+              <div class="password-stack">
+                <div class="input-group password-with-toggle">
                   <label>
-                    Nouveau mot de passe
+                    {{ t('account.newPassword') }}
                     <div class="password-input-wrapper">
                       <input
                         :type="showNewPassword ? 'text' : 'password'"
@@ -114,7 +114,7 @@
                         type="button"
                         class="toggle-password-btn"
                         @click="showNewPassword = !showNewPassword"
-                        title="Afficher/Masquer"
+                        :title="t('account.showHide')"
                       >
                         <svg v-if="!showNewPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -128,9 +128,10 @@
                     </div>
                   </label>
                 </div>
+                <PasswordCriteria :password="passwordForm.new" />
                 <div class="input-group password-with-toggle">
                   <label>
-                    Confirmer
+                    {{ t('account.confirmPassword') }}
                     <div class="password-input-wrapper">
                       <input
                         :type="showConfirmPassword ? 'text' : 'password'"
@@ -142,7 +143,7 @@
                         type="button"
                         class="toggle-password-btn"
                         @click="showConfirmPassword = !showConfirmPassword"
-                        title="Afficher/Masquer"
+                        :title="t('account.showHide')"
                       >
                         <svg v-if="!showConfirmPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -159,7 +160,7 @@
               </div>
               <div class="form-actions">
                 <button type="submit" class="btn-primary" :disabled="updatingPassword">
-                  {{ updatingPassword ? 'Mise à jour...' : 'Mettre à jour le mot de passe' }}
+                  {{ updatingPassword ? t('account.updatingPassword') : t('account.updatePassword') }}
                 </button>
               </div>
             </form>
@@ -169,7 +170,7 @@
         <!-- MFA Settings -->
         <section class="settings-section">
           <div class="section-header">
-            <h3>Authentification à deux facteurs</h3>
+            <h3>{{ t('account.mfaTitle') }}</h3>
           </div>
           <div class="section-body">
             <MFASettings />
@@ -178,14 +179,14 @@
 
         <section class="settings-section">
           <div class="section-header">
-             <h3>Préférences</h3>
+             <h3>{{ t('account.preferences') }}</h3>
           </div>
           <div class="section-body">
              <div class="pref-list">
                <div class="pref-item">
                   <div class="pref-text">
-                     <span class="pref-title">Menu Contextuel</span>
-                     <span class="pref-desc">Afficher un menu d'actions au clic-droit sur les fichiers</span>
+                     <span class="pref-title">{{ t('account.contextMenu') }}</span>
+                     <span class="pref-desc">{{ t('account.contextMenuDesc') }}</span>
                   </div>
                   <label class="toggle-switch">
                      <input type="checkbox" v-model="preferenceStore.enableContextMenu">
@@ -194,8 +195,8 @@
                </div>
                <div class="pref-item">
                   <div class="pref-text">
-                     <span class="pref-title">Barre d'outils</span>
-                     <span class="pref-desc">Afficher la barre d'actions au-dessus de la liste de fichiers</span>
+                     <span class="pref-title">{{ t('account.toolbar') }}</span>
+                     <span class="pref-desc">{{ t('account.toolbarDesc') }}</span>
                   </div>
                   <label class="toggle-switch">
                      <input type="checkbox" v-model="preferenceStore.showToolBar">
@@ -204,8 +205,8 @@
                </div>
               <div class="pref-item">
                 <div class="pref-text">
-                  <span class="pref-title">Taille des dossiers</span>
-                  <span class="pref-desc">Afficher la taille des dossiers (calcul immédiat, hors previews)</span>
+                  <span class="pref-title">{{ t('account.folderSizes') }}</span>
+                  <span class="pref-desc">{{ t('account.folderSizesDesc') }}</span>
                 </div>
                 <label class="toggle-switch">
                   <input type="checkbox" v-model="preferenceStore.showFolderSizes">
@@ -218,13 +219,13 @@
 
         <section class="settings-section">
            <div class="section-header">
-             <h3>Informations légales</h3>
+             <h3>{{ t('account.legalInfo') }}</h3>
            </div>
            <div class="section-body">
              <div class="legal-links">
-                <router-link to="/cgu" class="legal-link">Conditions Générales d'Utilisation</router-link>
-                <router-link to="/privacy" class="legal-link">Politique de Confidentialité</router-link>
-                <router-link to="/credits" class="legal-link">Mentions légales et crédits</router-link>
+                <router-link to="/cgu" class="legal-link">{{ t('account.termsOfService') }}</router-link>
+                <router-link to="/privacy" class="legal-link">{{ t('account.privacyPolicy') }}</router-link>
+                <router-link to="/credits" class="legal-link">{{ t('account.legalCredits') }}</router-link>
              </div>
            </div>
         </section>
@@ -232,19 +233,16 @@
         <!-- Portabilité - RGPD Article 20 -->
         <section class="settings-section">
           <div class="section-header">
-            <h3>Portabilité des données</h3>
+            <h3>{{ t('account.dataPortability') }}</h3>
           </div>
           <div class="section-body">
             <div class="portability-item">
               <div class="portability-info">
                 <p class="portability-desc">
-                  Conformement au RGPD (Article 20) et a la Loi Informatique et Libertes (Article 55),
-                  vous pouvez exporter l'intégralité de vos données personnelles dans un format
-                  structuré, couramment utilisé et lisible par machine (JSON).
+                  {{ t('account.dataPortabilityDesc') }}
                 </p>
                 <p class="portability-details">
-                  L'export inclut votre profil, l'arborescence de vos fichiers et dossiers,
-                  vos tags, vos liens de partage, vos contacts et votre activité récente.
+                  {{ t('account.dataPortabilityDetails') }}
                 </p>
               </div>
               <div class="portability-actions">
@@ -258,7 +256,7 @@
                     <polyline points="7 10 12 15 17 10"/>
                     <line x1="12" y1="15" x2="12" y2="3"/>
                   </svg>
-                  {{ exportingData ? 'Export en cours...' : 'Exporter mes données' }}
+                  {{ exportingData ? t('account.exportingData') : t('account.exportData') }}
                 </button>
               </div>
             </div>
@@ -268,16 +266,16 @@
         <!-- Danger Zone - RGPD Article 17 -->
         <section class="settings-section danger-zone">
           <div class="section-header">
-            <h3>Zone sensible</h3>
+            <h3>{{ t('account.dangerZone') }}</h3>
           </div>
           <div class="section-body danger-zone-body">
             <div class="danger-zone-item">
               <div class="danger-zone-info">
-                <h4>Supprimer ce compte</h4>
-                <p>Cette action est définitive et entraîne la suppression de toutes vos données.</p>
+                <h4>{{ t('account.deleteAccount') }}</h4>
+                <p>{{ t('account.deleteAccountDesc') }}</p>
               </div>
               <button @click="showDeleteModal = true" class="btn-danger-outline">
-                Supprimer ce compte
+                {{ t('account.deleteAccount') }}
               </button>
             </div>
           </div>
@@ -308,7 +306,65 @@
           <p>{{ errorModal.message }}</p>
         </div>
         <div class="error-modal-footer">
-          <button class="btn-primary" @click="closeErrorModal">Fermer</button>
+          <button class="btn-primary" @click="closeErrorModal">{{ t('account.close') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div v-if="successModal.show" class="success-modal-overlay" @click="closeSuccessModal">
+      <div class="success-modal" @click.stop>
+        <div class="success-modal-header">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" class="success-icon">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M10 14.5l3 3 5-5.5" stroke="white" stroke-width="2" fill="none"/>
+          </svg>
+          <h3>{{ successModal.title }}</h3>
+          <button class="btn-close-modal" @click="closeSuccessModal">×</button>
+        </div>
+        <div class="success-modal-body">
+          <p>{{ successModal.message }}</p>
+        </div>
+        <div class="success-modal-footer">
+          <button class="btn-primary" @click="closeSuccessModal">{{ t('account.close') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MFA Challenge Modal -->
+    <MFAChallengeModal
+      v-model="showMFAChallenge"
+      :context="mfaChallengeContext"
+      @verified="onMFAVerified"
+      @cancelled="onMFACancelled"
+    />
+
+    <div v-if="upgradeInfoModal.show" class="success-modal-overlay" @click="closeUpgradeInfoPopup">
+      <div class="success-modal" @click.stop>
+        <div class="success-modal-header">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" class="success-icon">
+            <circle cx="12" cy="12" r="10"/>
+            <text x="12" y="16" text-anchor="middle" fill="white" font-size="12" font-weight="bold">i</text>
+          </svg>
+          <h3>Abonnements bientôt disponibles</h3>
+          <button class="btn-close-modal" @click="closeUpgradeInfoPopup">×</button>
+        </div>
+        <div class="success-modal-body">
+          <p>
+            Les abonnements ne sont pas encore disponibles. En attendant, vous pouvez soutenir le projet via Buy me a coffee.
+          </p>
+        </div>
+        <div class="success-modal-footer">
+          <a
+            v-if="buyMeACoffeeUrl"
+            :href="buyMeACoffeeUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-primary"
+          >
+            ☕ Buy me a coffee
+          </a>
+          <button class="btn-secondary" @click="closeUpgradeInfoPopup">{{ t('account.close') }}</button>
         </div>
       </div>
     </div>
@@ -344,8 +400,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
 import { useBillingStore } from '../stores/billing'
 import { usePreferencesStore } from '../stores/preferences'
@@ -355,6 +412,10 @@ import AvatarSelector from '../components/AvatarSelector.vue'
 import DeleteAccountDialog from '../components/DeleteAccountDialog.vue'
 import MFASettings from '../components/MFASettings.vue'
 import MFAChallengeModal from '../components/MFAChallengeModal.vue'
+import PasswordCriteria from '../components/auth/PasswordCriteria.vue'
+import { checkPasswordCriteria, getPasswordErrors } from '../utils/passwordStrength'
+
+const { t } = useI18n()
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -400,6 +461,10 @@ const successModal = ref({
   message: ''
 })
 
+const upgradeInfoModal = ref({
+  show: false,
+})
+
 const showDeleteModal = ref(false)
 const deleteConfirmationText = ref('')
 const isDeletingAccount = ref(false)
@@ -426,6 +491,19 @@ const showError = (title, message) => {
 
 const showSuccess = (title, message) => {
   successModal.value = { show: true, title, message }
+}
+
+const buyMeACoffeeUrl = computed(() => {
+  const runtimeUrl = typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : ''
+  return runtimeUrl || import.meta.env.VITE_BUY_ME_A_COFFEE_URL || ''
+})
+
+const openUpgradeInfoPopup = () => {
+  upgradeInfoModal.value.show = true
+}
+
+const closeUpgradeInfoPopup = () => {
+  upgradeInfoModal.value.show = false
 }
 
 const onMFAVerified = async () => {
@@ -546,8 +624,10 @@ const handleUpdatePassword = async () => {
     return
   }
 
-  if (passwordForm.value.new.length < 20) {
-    showError('Erreur', 'Le nouveau mot de passe doit contenir au moins 20 caractères.')
+  const { valid } = checkPasswordCriteria(passwordForm.value.new)
+  if (!valid) {
+    const errors = getPasswordErrors(passwordForm.value.new)
+    showError('Erreur', errors[0])
     return
   }
 
@@ -640,7 +720,7 @@ const handleExportData = async () => {
     const link = document.createElement('a')
     const date = new Date().toISOString().split('T')[0]
     link.href = url
-    link.download = `safercloud-export-${date}.json`
+    link.download = `kagibi-export-${date}.json`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -956,6 +1036,12 @@ const executeDeleteAccount = async () => {
 
 .password-row .input-group {
   flex: 1;
+}
+
+.password-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .input-group {

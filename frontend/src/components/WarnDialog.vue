@@ -21,7 +21,7 @@
         </div>
         
         <div class="warn-footer">
-            <button class="warn-btn" @click="uiStore.closeAlert">D'accord</button>
+            <button class="warn-btn" @click="uiStore.closeAlert">{{ t('common.ok') }}</button>
         </div>
       </div>
     </div>
@@ -29,7 +29,10 @@
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
 import { useUIStore } from '../stores/ui'
+
+const { t } = useI18n()
 const uiStore = useUIStore()
 </script>
 

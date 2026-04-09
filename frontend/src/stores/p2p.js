@@ -11,17 +11,18 @@ import {
 } from '../utils/crypto'
 import axios from 'axios'
 import { API_BASE_URL } from '../api'
+import { authClient } from '../auth-client'
 
-// Fonction utilitaire pour récupérer la config ICE depuis le backend
+// Fetch ICE config from the backend (works with both Supabase and PocketBase)
 async function fetchICEConfig() {
-    console.log("[P2P] Fetching ICE Config (v3 - Supabase Realtime)...");
+    //console.log("[P2P] Fetching ICE Config...");
     try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get(`${API_BASE_URL}/p2p/ice-config`, {
+        const token = await authClient.getToken();
+        const response = await axios.get(`${API_BASE_URL}p2p/ice-config`, {
             headers: { Authorization: `Bearer ${token}` }
         });
         if (response.data && response.data.iceServers) {
-            console.log("[P2P] Retrieved ICE Servers:", response.data.iceServers);
+            //console.log("[P2P] Retrieved ICE Servers:", response.data.iceServers);
             return { iceServers: response.data.iceServers };
         }
     } catch (e) {
@@ -40,9 +41,40 @@ export const useP2PStore = defineStore('p2p', {
   state: () => ({
     incomingOffer: null, 
     activeTransfer: null, 
-    candidateQueue: [] // Store candidates that arrive before acceptance
+    candidateQueue: [], // Store candidates that arrive before acceptance
+    heartbeatInterval: null // Interval for session maintenance
   }),
   actions: {
+    startHeartbeat() {
+        if (this.heartbeatInterval) return; // Already running
+        
+        //console.log('[P2P] Starting session heartbeat');
+        // Send heartbeat every 2.5 minutes (well before 5min Redis TTL)
+        this.heartbeatInterval = setInterval(async () => {
+            if (!this.activeTransfer) {
+                this.stopHeartbeat();
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('token');
+                await axios.get(`${API_BASE_URL}/heartbeat`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                //console.log('[P2P] Session heartbeat sent');
+            } catch (e) {
+                console.error('[P2P] Heartbeat failed:', e);
+            }
+        }, 150000); // 2.5 minutes
+    },
+    
+    stopHeartbeat() {
+        if (this.heartbeatInterval) {
+            //console.log('[P2P] Stopping session heartbeat');
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+    },
     async handleSignal(payload) {
         const { sender_id, type, data } = payload;
         
@@ -92,7 +124,7 @@ export const useP2PStore = defineStore('p2p', {
                  }
 
                  // Pending offer, queue candidate
-                 console.log("Queuing candidate for pending offer");
+                 //console.log("Queuing candidate for pending offer");
                  this.candidateQueue.push(candidatePayload);
             }
         }
@@ -114,21 +146,40 @@ export const useP2PStore = defineStore('p2p', {
 
          // Fetch ICE Config from backend
          const rtcConfig = await fetchICEConfig();
-         console.log("Using RTC Config:", rtcConfig);
+         //console.log("Using RTC Config:", rtcConfig);
 
          const pc = new RTCPeerConnection(rtcConfig);
          const realtimeStore = useRealtimeStore();
          const uiStore = useUIStore();
 
          pc.oniceconnectionstatechange = () => {
+             //console.log("ICE Connection state:", pc.iceConnectionState);
+             if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
+                 this.activeTransfer.connectionInfo.iceState = pc.iceConnectionState;
+                 
+                 if (pc.iceConnectionState === 'checking') {
+                     this.activeTransfer.connectionInfo.stage = 'Négociation de la connexion...';
+                 } else if (pc.iceConnectionState === 'connected') {
+                     this.activeTransfer.connectionInfo.stage = 'Connecté';
+                     this.detectConnectionType(pc, transferId);
+                 }
+             }
+             
              if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-                 console.error("ICE Connection Failed/Disconnected");
-                 uiStore.showError(
-                     "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
-                     "Échec de Connexion"
-                 );
+                 // Only show error if transfer is NOT already complete
                  if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
-                     this.activeTransfer.status = 'Error';
+                     const isDone = this.activeTransfer.status === 'Done' || this.activeTransfer.status === 'Complete';
+                     if (!isDone) {
+                         console.error("ICE Connection Failed/Disconnected during active transfer");
+                         uiStore.showError(
+                             "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
+                             "Échec de Connexion"
+                         );
+                         this.activeTransfer.status = 'Error';
+                         this.activeTransfer.connectionInfo.stage = 'Échec de connexion';
+                     } else {
+                         //console.log("ICE disconnected after successful transfer completion - ignoring");
+                     }
                  }
              }
          };
@@ -156,8 +207,17 @@ export const useP2PStore = defineStore('p2p', {
              status: 'Connecting...',
              progress: 0,
              fileName: file.name,
-             transferId: transferId
+             transferId: transferId,
+             connectionInfo: {
+                 stage: 'Initialisation...',
+                 iceState: 'new',
+                 connectionType: null,
+                 usingTurn: false
+             }
          };
+         
+         // Start heartbeat to prevent session timeout
+         this.startHeartbeat();
 
          const offer = await pc.createOffer();
          await pc.setLocalDescription(offer);
@@ -221,14 +281,33 @@ export const useP2PStore = defineStore('p2p', {
         const transferId = offerData.transferId;
 
         pc.oniceconnectionstatechange = () => {
+             //console.log("ICE Connection state:", pc.iceConnectionState);
+             if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
+                 this.activeTransfer.connectionInfo.iceState = pc.iceConnectionState;
+                 
+                 if (pc.iceConnectionState === 'checking') {
+                     this.activeTransfer.connectionInfo.stage = 'Négociation de la connexion...';
+                 } else if (pc.iceConnectionState === 'connected') {
+                     this.activeTransfer.connectionInfo.stage = 'Connecté';
+                     this.detectConnectionType(pc, transferId);
+                 }
+             }
+             
              if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-                 console.error("ICE Connection Failed/Disconnected");
-                 uiStore.showError(
-                     "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
-                     "Échec de Connexion"
-                 );
+                 // Only show error if transfer is NOT already complete
                  if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
-                     this.activeTransfer.status = 'Error';
+                     const isDone = this.activeTransfer.status === 'Done' || this.activeTransfer.status === 'Complete';
+                     if (!isDone) {
+                         console.error("ICE Connection Failed/Disconnected during active transfer");
+                         uiStore.showError(
+                             "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
+                             "Échec de Connexion"
+                         );
+                         this.activeTransfer.status = 'Error';
+                         this.activeTransfer.connectionInfo.stage = 'Échec de connexion';
+                     } else {
+                         //console.log("ICE disconnected after successful transfer completion - ignoring");
+                     }
                  }
              }
         };
@@ -254,8 +333,17 @@ export const useP2PStore = defineStore('p2p', {
              fileKey: fileKey,
              buffer: [],
              receivedSize: 0,
-             transferId: transferId
+             transferId: transferId,
+             connectionInfo: {
+                 stage: 'Initialisation...',
+                 iceState: 'new',
+                 connectionType: null,
+                 usingTurn: false
+             }
         };
+        
+        // Start heartbeat to prevent session timeout
+        this.startHeartbeat();
 
 
         pc.ondatachannel = (event) => {
@@ -268,7 +356,7 @@ export const useP2PStore = defineStore('p2p', {
         await pc.setRemoteDescription(new RTCSessionDescription(offerData.sdp));
         
         // Flush queued candidates
-        console.log(`Flushing ${this.candidateQueue.length} queued candidates`);
+        //console.log(`Flushing ${this.candidateQueue.length} queued candidates`);
         for (const candidateData of this.candidateQueue) {
             try {
                 await pc.addIceCandidate(new RTCIceCandidate(candidateData));
@@ -297,6 +385,7 @@ export const useP2PStore = defineStore('p2p', {
             this.activeTransfer.pc.close();
             this.activeTransfer = null;
         }
+        this.stopHeartbeat();
     },
 
     async sendFileData(file, key, dc) {
@@ -352,8 +441,20 @@ export const useP2PStore = defineStore('p2p', {
          await waitForBuffer();
          dc.send(new TextEncoder().encode("EOF"));
          this.activeTransfer.status = 'Done';
+         
+         // Close DataChannel and PeerConnection after a short delay
+         setTimeout(() => {
+             if (dc && dc.readyState === 'open') {
+                 dc.close();
+             }
+             if (pc && pc.connectionState !== 'closed') {
+                 pc.close();
+             }
+         }, 500);
+         
          setTimeout(() => {
              this.activeTransfer = null;
+             this.stopHeartbeat();
          }, 2000);
     },
 
@@ -408,10 +509,52 @@ export const useP2PStore = defineStore('p2p', {
         }
     },
     
+    async detectConnectionType(pc, transferId) {
+        try {
+            const stats = await pc.getStats();
+            let usingTurn = false;
+            let connectionType = 'direct';
+            
+            stats.forEach(report => {
+                if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                    const localCandidate = stats.get(report.localCandidateId);
+                    const remoteCandidate = stats.get(report.remoteCandidateId);
+                    
+                    if (localCandidate && localCandidate.candidateType === 'relay') {
+                        usingTurn = true;
+                        connectionType = 'relay (TURN)';
+                    } else if (remoteCandidate && remoteCandidate.candidateType === 'relay') {
+                        usingTurn = true;
+                        connectionType = 'relay (TURN)';
+                    } else if (localCandidate && localCandidate.candidateType === 'srflx') {
+                        connectionType = 'via STUN (NAT traversal)';
+                    } else if (localCandidate && localCandidate.candidateType === 'host') {
+                        connectionType = 'connexion directe (LAN)';
+                    }
+                }
+            });
+            
+            if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
+                this.activeTransfer.connectionInfo.usingTurn = usingTurn;
+                this.activeTransfer.connectionInfo.connectionType = connectionType;
+                
+                if (usingTurn) {
+                    this.activeTransfer.connectionInfo.stage = 'Connecté via serveur relais TURN';
+                } else {
+                    this.activeTransfer.connectionInfo.stage = `Connecté en ${connectionType}`;
+                }
+            }
+            
+            //console.log('[P2P] Connection type detected:', connectionType, 'Using TURN:', usingTurn);
+        } catch (e) {
+            console.error('[P2P] Failed to detect connection type:', e);
+        }
+    },
+    
     finishReceive() {
         if (!this.activeTransfer || this.activeTransfer.status === 'Complete') return;
 
-        console.log("Finishing transfer. Expected:", this.activeTransfer.fileSize, "Received:", this.activeTransfer.receivedSize);
+        //console.log("Finishing transfer. Expected:", this.activeTransfer.fileSize, "Received:", this.activeTransfer.receivedSize);
         // buffer is now a sparse array (map-like), we need to flatten it in order
         // Object.keys(buffer) handles sparse arrays but not guaranteed numeric sort.
         // But since we used numeric index assignment, we can iterate up to length.
@@ -431,8 +574,17 @@ export const useP2PStore = defineStore('p2p', {
         window.URL.revokeObjectURL(url);
         
         this.activeTransfer.status = 'Complete';
+        
+        // Close PeerConnection after successful reception
+        setTimeout(() => {
+            if (this.activeTransfer && this.activeTransfer.pc && this.activeTransfer.pc.connectionState !== 'closed') {
+                this.activeTransfer.pc.close();
+            }
+        }, 500);
+        
         setTimeout(() => {
             this.activeTransfer = null;
+            this.stopHeartbeat();
         }, 2000);
     }
   }

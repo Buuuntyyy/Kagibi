@@ -4,8 +4,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"safercloud/backend/pkg/monitoring"
-
+	"kagibi/backend/pkg/monitoring"
 )
 
 // MetricsMiddleware est un middleware Gin qui enregistre automatiquement
