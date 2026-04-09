@@ -4,9 +4,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"kagibi/backend/pkg"
 	"log"
 	"net/http"
-	"safercloud/backend/pkg"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -35,8 +35,22 @@ func validateCryptoKeys(salt, encryptedKey string) error {
 	}
 
 	// 3. Validate base64 format of encrypted key
-	keyBytes, err := base64.StdEncoding.DecodeString(encryptedKey)
-	if err != nil {
+	// Accepter les 4 variantes : le web produit RawURLEncoding (sodium URLSAFE_NO_PADDING),
+	// d'autres clients peuvent produire StdEncoding ou les variantes sans padding.
+	var keyBytes []byte
+	var b64Err error
+	for _, enc := range []interface{ DecodeString(string) ([]byte, error) }{
+		base64.RawURLEncoding,
+		base64.URLEncoding,
+		base64.StdEncoding,
+		base64.RawStdEncoding,
+	} {
+		keyBytes, b64Err = enc.DecodeString(encryptedKey)
+		if b64Err == nil {
+			break
+		}
+	}
+	if b64Err != nil {
 		return fmt.Errorf("invalid encrypted key format: must be base64-encoded")
 	}
 

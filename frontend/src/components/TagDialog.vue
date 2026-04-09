@@ -1,7 +1,7 @@
 <template>
   <div v-if="isOpen" class="modal-overlay">
     <div class="modal-content">
-      <h3>Tags existants</h3>
+      <h3>{{ t('dialogs.tag.title') }}</h3>
       
       <div class="tags-list">
         <div 
@@ -17,10 +17,10 @@
       </div>
 
       <div class="create-tag-section">
-        <h4>Créer un nouveau Tag</h4>
+        <h4>{{ t('dialogs.tag.createNew') }}</h4>
         <div class="input-group">
-            <input v-model="newTagName" placeholder="Nom du tag" class="tag-input"/>
-            <button @click="createTag" :disabled="!newTagName" class="btn-create">Créer</button>
+            <input v-model="newTagName" :placeholder="t('dialogs.tag.tagName')" class="tag-input"/>
+            <button @click="createTag" :disabled="!newTagName" class="btn-create">{{ t('dialogs.tag.create') }}</button>
         </div>
         <div class="color-selection">
             <div 
@@ -35,8 +35,8 @@
       </div>
 
       <div class="modal-actions">
-        <button @click="cancel">Annuler</button>
-        <button @click="confirm" class="btn-primary">Enregistrer</button>
+        <button @click="cancel">{{ t('dialogs.tag.cancel') }}</button>
+        <button @click="confirm" class="btn-primary">{{ t('dialogs.tag.confirm') }}</button>
       </div>
     </div>
   </div>
@@ -44,7 +44,10 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useTagStore } from '../stores/tags'
+
+const { t } = useI18n()
 
 const props = defineProps({
   isOpen: Boolean,

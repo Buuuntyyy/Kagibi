@@ -75,7 +75,62 @@ func FindUserByID(db *bun.DB, userID string) (*User, error) {
 
 func CreateUser(db *bun.DB, user *User) error {
 	ctx := context.Background()
-	_, err := db.NewInsert().Model(user).Exec(ctx)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err = tx.NewInsert().Model(user).Exec(ctx); err != nil {
+		return err
+	}
+
+	planState := &UserPlan{
+		UserID:           user.ID,
+		Plan:             PlanFree,
+		StorageLimit:     StorageFree,
+		StorageUsed:      0,
+		P2PMaxExchanges:  P2PLimitFree,
+		P2PExchangesUsed: 0,
+	}
+	if _, err = tx.NewInsert().Model(planState).Exec(ctx); err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	return err
+}
+
+func FindUserPlanByUserID(db *bun.DB, userID string) (*UserPlan, error) {
+	var plan UserPlan
+	err := db.NewSelect().Model(&plan).Where("user_id = ?", userID).Scan(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return &plan, nil
+}
+
+func CountUserActiveP2PExchanges(db *bun.DB, userID string) (int, error) {
+	return db.NewSelect().TableExpr("file_shares fs").
+		Join("JOIN files f ON f.id = fs.file_id").
+		Where("f.user_id = ?", userID).
+		Count(context.Background())
+}
+
+func UpsertUserPlan(db *bun.DB, plan *UserPlan) error {
+	_, err := db.NewInsert().Model(plan).
+		On("CONFLICT (user_id) DO UPDATE").
+		Set("plan = EXCLUDED.plan").
+		Set("storage_limit = EXCLUDED.storage_limit").
+		Set("storage_used = EXCLUDED.storage_used").
+		Set("p2p_max_exchanges = EXCLUDED.p2p_max_exchanges").
+		Set("p2p_exchanges_used = EXCLUDED.p2p_exchanges_used").
+		Set("updated_at = CURRENT_TIMESTAMP").
+		Exec(context.Background())
 	return err
 }
 
@@ -404,7 +459,7 @@ func GetFolderContentRecursive(db *bun.DB, userID string, rootPath string) ([]Fi
 }
 
 // supprimer un fichier
-func DeleteFile(db *bun.DB, fileID int64, userID string) error {
+func DeleteFile(db bun.IDB, fileID int64, userID string) error {
 	ctx := context.Background()
 
 	// Delete associated share links
@@ -419,7 +474,7 @@ func DeleteFile(db *bun.DB, fileID int64, userID string) error {
 	return err
 }
 
-func DeleteFolder(db *bun.DB, folderID int64, userID string) error {
+func DeleteFolder(db bun.IDB, folderID int64, userID string) error {
 	ctx := context.Background()
 
 	// Delete associated share links

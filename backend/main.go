@@ -2,32 +2,33 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"kagibi/backend/handlers/auth"
+	billinghandlers "kagibi/backend/handlers/billing"
+	"kagibi/backend/handlers/files"
+	"kagibi/backend/handlers/folders"
+	"kagibi/backend/handlers/friends"
+	"kagibi/backend/handlers/keys"
+	"kagibi/backend/handlers/security"
+	"kagibi/backend/handlers/shares"
+	"kagibi/backend/handlers/tags"
+	"kagibi/backend/handlers/users"
+	wshandler "kagibi/backend/handlers/ws"
+	"kagibi/backend/middleware"
+	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/authprovider"
+	"kagibi/backend/pkg/monitoring"
+	"kagibi/backend/pkg/s3storage"
+	"kagibi/backend/pkg/workers"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"safercloud/backend/handlers/auth"
-	billinghandlers "safercloud/backend/handlers/billing"
-	"safercloud/backend/handlers/files"
-	"safercloud/backend/handlers/folders"
-	"safercloud/backend/handlers/friends"
-	"safercloud/backend/handlers/keys"
-	"safercloud/backend/handlers/security"
-	"safercloud/backend/handlers/shares"
-	"safercloud/backend/handlers/tags"
-	"safercloud/backend/handlers/users"
-	"safercloud/backend/middleware"
-	"safercloud/backend/pkg"
-	billingpkg "safercloud/backend/pkg/billing"
-	"safercloud/backend/pkg/monitoring"
-	"safercloud/backend/pkg/s3storage"
-	"safercloud/backend/pkg/workers"
 	"strings"
 	"syscall"
 
 	"time"
 
-	"github.com/MicahParks/keyfunc/v3"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -36,44 +37,45 @@ import (
 )
 
 func main() {
-	log.Println("Starting SaferCloud Backend v3.0 (Supabase Realtime)...")
-
 	loadEnv()
-	initS3()
-	initBillingProvider()
 
+	// DB must be initialized before auth so LocalProvider can access auth_users
 	db := pkg.NewDB()
 	migrateDB(db)
+
+	// Register the WebSocket hub so EmitRealtimeEvent can push live events
+	pkg.SetWSHub(wshandler.GlobalHub)
+
+	provider := initAuth(db)
+	log.Printf("Starting Kagibi Backend v3.0 (auth provider: %s)...", provider.Name())
+
+	initS3()
+	setupBillingProvider()
 
 	redisClient := initRedis()
 
 	// Start Workers
 	workers.StartWorker(redisClient)
 	workers.StartCleanupWorker(db)
-	workers.StartAccountCleanupWorker(db) // RGPD Article 17 - Nettoyage comptes supprimés
+	workers.StartAccountCleanupWorker(db) // RGPD Article 17
 
-	// Initialize Handlers (no more WebSocket Manager)
-	friendHandler := friends.NewFriendHandler(db)
-	jwks, jwtSecret := initAuth()
+	friendHandler := friends.NewFriendHandler(db, wshandler.GlobalHub.IsConnected)
+	setupPresenceHooks(db)
 
-	// Démarrer le serveur de métriques Prometheus (port 9090)
 	metricsServer := monitoring.NewServer(9090)
+	monitoring.StartSessionMonitor(redisClient)
 	if err := metricsServer.Start(); err != nil {
 		log.Printf("Warning: Failed to start metrics server: %v", err)
 	}
 
-	// Setup Server
-	router := setupRouter()
-
-	registerRoutes(router, db, redisClient, jwks, jwtSecret, friendHandler)
-
+	router := setupRouter(redisClient)
+	registerRoutes(router, db, redisClient, provider, friendHandler)
 	startServerWithGracefulShutdown(router, metricsServer)
 }
 
 func loadEnv() {
 	if err := godotenv.Load(); err != nil {
 		log.Printf("Warning: Could not load .env file: %v", err)
-		log.Println("Using environment variables or defaults")
 	} else {
 		log.Println("✓ .env file loaded successfully")
 	}
@@ -87,38 +89,8 @@ func initS3() {
 	}
 }
 
-// initBillingProvider initialise le provider de facturation
-// BILLING_ENABLED=false : DisabledProvider (self-hosted, illimité)
-// BILLING_SERVICE_URL set : WebhookProvider (production avec service externe)
-// Par défaut : MockProvider (dev avec limite 5Go)
-func initBillingProvider() {
-	// Vérifier si le billing est complètement désactivé (mode self-hosted)
-	if os.Getenv("BILLING_ENABLED") == "false" {
-		provider := billingpkg.NewDisabledProvider()
-		billingpkg.SetProvider(provider)
-		log.Println("[Billing] DISABLED - Self-hosted mode (unlimited storage)")
-		return
-	}
-
-	billingURL := os.Getenv("BILLING_SERVICE_URL")
-	billingSecret := os.Getenv("BILLING_SERVICE_SECRET")
-
-	if billingURL != "" && billingSecret != "" {
-		// Mode production: utiliser le service de billing externe
-		provider := billingpkg.NewWebhookProvider(billingURL, billingSecret)
-		billingpkg.SetProvider(provider)
-		log.Println("[Billing] WebhookProvider initialized - connected to external billing service")
-	} else {
-		// Mode dev/open-source: utiliser le mock provider
-		provider := billingpkg.NewMockProvider()
-		billingpkg.SetProvider(provider)
-		log.Println("[Billing] MockProvider initialized - free plan mode (5GB storage)")
-	}
-}
-
 func migrateDB(db *bun.DB) {
-	err := pkg.Migrate(db)
-	if err != nil {
+	if err := pkg.Migrate(db); err != nil {
 		log.Printf("Failed to migrate: %v", err)
 	}
 	log.Println("Migrations executed successfully!")
@@ -145,25 +117,24 @@ func initRedis() *redis.Client {
 	return client
 }
 
-func initAuth() (keyfunc.Keyfunc, string) {
-	jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
-	supabaseURL := os.Getenv("SUPABASE_URL")
-	var jwks keyfunc.Keyfunc
-
-	if supabaseURL != "" {
-		jwksURL := supabaseURL + "/auth/v1/.well-known/jwks.json"
-		var err error
-		jwks, err = keyfunc.NewDefault([]string{jwksURL})
-		if err != nil {
-			log.Printf("Attention: Impossible d'initialiser JWKS: %v. Les tokens ES256 échoueront.", err)
-		} else {
-			log.Println("JWKS initialisé avec succès pour validation ES256")
+// initAuth creates the auth provider based on the AUTH_PROVIDER environment variable.
+// Supported values: "local" (default), "supabase", "pocketbase"
+func initAuth(db *bun.DB) authprovider.AuthProvider {
+	switch os.Getenv("AUTH_PROVIDER") {
+	case "supabase":
+		return authprovider.NewSupabaseProvider()
+	case "pocketbase":
+		p := authprovider.NewPocketBaseProvider()
+		if err := p.SetupJWTSecret(); err != nil {
+			log.Fatalf("Fatal: PocketBase JWT secret configuration failed — backend and PocketBase would use different signing keys, causing all token validations to fail: %v", err)
 		}
+		return p
+	default: // "local" or unset
+		return authprovider.NewLocalProvider(db)
 	}
-	return jwks, jwtSecret
 }
 
-func setupRouter() *gin.Engine {
+func setupRouter(redisClient *redis.Client) *gin.Engine {
 	router := gin.Default()
 	config := cors.DefaultConfig()
 
@@ -182,53 +153,77 @@ func setupRouter() *gin.Engine {
 	router.Use(cors.New(config))
 
 	router.Use(middleware.SecureHeaders())
-	router.Use(middleware.RateLimitMiddleware())
-
-	// Middleware de métriques Prometheus
+	router.Use(middleware.RateLimitMiddleware(redisClient))
 	router.Use(middleware.MetricsMiddleware())
 
 	return router
 }
 
-func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, jwks keyfunc.Keyfunc, jwtSecret string, friendHandler *friends.FriendHandler) {
+func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, provider authprovider.AuthProvider, friendHandler *friends.FriendHandler) {
 	api := router.Group("/api/v1")
 
-	// Authentication Routes (Public + Protected)
+	// Public auth routes (no JWT required)
 	authGroup := api.Group("/auth")
+	authGroup.POST("/login", auth.LocalLoginHandler(provider))
+	authGroup.POST("/signup", auth.LocalSignupHandler(provider))
+	authGroup.POST("/refresh", auth.LocalRefreshHandler(provider, redisClient))
 	authGroup.POST("/recovery/init", func(c *gin.Context) { auth.RecoveryInitHandler(c, db) })
-	authGroup.POST("/recovery/finish", func(c *gin.Context) { auth.RecoveryFinishHandler(c, db) })
+	authGroup.POST("/recovery/finish", func(c *gin.Context) { auth.RecoveryFinishHandler(c, db, provider, redisClient) })
 
-	// Public Share Routes
+	// Public share routes
 	publicShareRoutes := api.Group("/public/share")
 	publicShareRoutes.GET("/:token", func(c *gin.Context) { shares.GetShareLinkHandler(c, db) })
 	publicShareRoutes.GET("/:token/download", func(c *gin.Context) { shares.DownloadSharedFileHandler(c, db) })
 	publicShareRoutes.GET("/:token/download/file/:file_id", func(c *gin.Context) { shares.DownloadFileFromSharedFolderHandler(c, db) })
 	publicShareRoutes.GET("/:token/browse/*subpath", func(c *gin.Context) { shares.BrowseSharedFolderHandler(c, db) })
 
-	// Protected Routes
-	protected := api.Group("")
-	protected.Use(middleware.AuthMiddleware(jwks, jwtSecret))
+	// MFA routes — protected by JWT, registered on the auth group
+	mfaGroup := authGroup.Group("/mfa")
+	mfaGroup.Use(middleware.AuthMiddleware(provider, redisClient))
+	mfaGroup.GET("/factors", auth.MFAListFactorsHandler(provider))
+	mfaGroup.POST("/enroll", auth.MFAEnrollHandler(provider))
+	mfaGroup.POST("/challenge", auth.MFAChallengeHandler(provider))
+	mfaGroup.POST("/verify", auth.MFAVerifyHandler(provider))
+	mfaGroup.DELETE("/unenroll", auth.MFAUnenrollHandler(provider, redisClient))
 
-	registerUserRoutes(protected, db, redisClient)
+	// Protected routes (JWT required)
+	authMW := middleware.AuthMiddleware(provider, redisClient)
+	protected := api.Group("")
+	protected.Use(authMW)
+
+	registerUserRoutes(protected, db, redisClient, provider)
 	registerFileRoutes(protected, db, redisClient)
 	registerFolderRoutes(protected, db)
 	registerTagRoutes(protected, db)
 	registerFriendRoutes(protected, friendHandler)
 	registerShareRoutes(protected, db)
 	registerSecurityRoutes(protected)
-	registerBillingRoutes(api, protected)
+	registerBillingRoutes(api, protected, authMW, db)
 	registerP2PRoutes(protected, db)
+	registerEventRoutes(protected, db)
 
-	// System
+	// WebSocket endpoint — authenticated via Authorization header or Sec-WebSocket-Protocol trick.
+	wsAllowedOrigins := strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",")
+	if len(wsAllowedOrigins) == 0 || wsAllowedOrigins[0] == "" {
+		wsAllowedOrigins = []string{"http://localhost:5173", "http://localhost:3000"}
+	}
+	api.GET("/ws", wshandler.WebSocketHandler(provider, redisClient, wsAllowedOrigins))
+
 	router.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	router.GET("/api/v1/ping", func(c *gin.Context) { c.JSON(200, gin.H{"message": "pong", "version": "3.0"}) })
+
+	protected.GET("/heartbeat", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "alive", "timestamp": time.Now().Unix()})
+	})
 }
 
-func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Client) {
-	g.POST("/auth/register", func(c *gin.Context) { auth.RegisterHandler(c, db) })
+func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Client, provider authprovider.AuthProvider) {
+	g.POST("/auth/register", func(c *gin.Context) { auth.RegisterHandler(c, db, provider) })
 	g.GET("/auth/keys", func(c *gin.Context) { auth.GetUserKeys(c, db) })
 	g.POST("/auth/logout", func(c *gin.Context) { auth.LogoutHandler(c, redisClient) })
-	g.DELETE("/auth/account", func(c *gin.Context) { auth.DeleteAccount(db)(c) }) // RGPD Article 17 - Droit à l'effacement
+	g.POST("/auth/ws-token", auth.WsTokenHandler(redisClient))
+	g.POST("/auth/update-password", auth.LocalUpdatePasswordHandler(provider, redisClient))
+	g.DELETE("/auth/account", auth.DeleteAccount(db, provider))
 
 	usersG := g.Group("/users")
 	usersG.GET("/", func(c *gin.Context) { users.ListUsersHandler(c, db) })
@@ -239,7 +234,7 @@ func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	usersG.POST("/recent", func(c *gin.Context) { users.AddRecentActivityHandler(c, db) })
 	usersG.GET("/recent", func(c *gin.Context) { users.GetRecentActivityHandler(c, db) })
 	usersG.POST("/keys", func(c *gin.Context) { keys.UpdateKeysHandler(c, db) })
-	usersG.GET("/export", func(c *gin.Context) { users.ExportUserDataHandler(c, db) }) // RGPD Article 20 - Droit à la portabilité
+	usersG.GET("/export", func(c *gin.Context) { users.ExportUserDataHandler(c, db) })
 	usersG.GET("/security-settings", func(c *gin.Context) { users.GetSecuritySettingsHandler(c, db) })
 	usersG.PUT("/security-settings", func(c *gin.Context) { users.UpdateSecuritySettingsHandler(c, db) })
 }
@@ -258,15 +253,11 @@ func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	filesG.GET("/download/:fileID", func(c *gin.Context) { files.DownloadFileHandler(c, db) })
 	filesG.GET("/preview/:fileID", func(c *gin.Context) { files.PreviewFileHandler(c, db) })
 	filesG.GET("/search", func(c *gin.Context) { files.SearchFilesHandler(c, db) })
-
-	// Direct-to-S3 Multipart Upload Routes
 	filesG.POST("/multipart/initiate", func(c *gin.Context) { files.InitiateMultipartHandler(c, db) })
 	filesG.POST("/multipart/complete", func(c *gin.Context) { files.CompleteMultipartHandler(c, db) })
 	filesG.POST("/multipart/abort", func(c *gin.Context) { files.AbortMultipartHandler(c, db) })
 	filesG.POST("/multipart/refresh-url", func(c *gin.Context) { files.RefreshPresignedURLsHandler(c, db) })
 	filesG.GET("/download/:fileID/presigned", func(c *gin.Context) { files.GetPresignedDownloadHandler(c, db) })
-
-	// Batch Presign Routes (for ZIP download)
 	filesG.POST("/batch-presign", func(c *gin.Context) { files.BatchPresignDownloadHandler(c, db) })
 	filesG.POST("/selection-tree", func(c *gin.Context) { files.GetSelectionTreeHandler(c, db) })
 }
@@ -295,12 +286,13 @@ func registerFriendRoutes(g *gin.RouterGroup, h *friends.FriendHandler) {
 }
 
 func registerShareRoutes(g *gin.RouterGroup, db *bun.DB) {
+	const routeDirect = "/direct" // NOSONAR - route path repeated intentionally for HTTP method differentiation
 	sharesG := g.Group("/shares")
 	sharesG.GET("/list", func(c *gin.Context) { shares.ListSharesHandler(c, db) })
 	sharesG.POST("/link", func(c *gin.Context) { shares.CreateShareLinkHandler(c, db) })
-	sharesG.POST("/direct", func(c *gin.Context) { shares.CreateDirectShareHandler(c, db) })
-	sharesG.GET("/direct", func(c *gin.Context) { shares.ListDirectSharesForResourceHandler(c, db) })
-	sharesG.DELETE("/direct", func(c *gin.Context) { shares.RemoveDirectShareHandler(c, db) })
+	sharesG.POST(routeDirect, func(c *gin.Context) { shares.CreateDirectShareHandler(c, db) })
+	sharesG.GET(routeDirect, func(c *gin.Context) { shares.ListDirectSharesForResourceHandler(c, db) })
+	sharesG.DELETE(routeDirect, func(c *gin.Context) { shares.RemoveDirectShareHandler(c, db) })
 	sharesG.GET("/check-path", func(c *gin.Context) { shares.GetActiveSharesForPathHandler(c, db) })
 	sharesG.GET("/file/:fileID", func(c *gin.Context) { shares.GetShareForResourceHandler(c, db) })
 	sharesG.GET("/direct/folder/:folderID/content", func(c *gin.Context) { shares.GetSharedFolderContentHandler(c, db) })
@@ -316,17 +308,15 @@ func registerSecurityRoutes(g *gin.RouterGroup) {
 	securityG.GET("/events", func(c *gin.Context) { security.GetSecurityEvents(c) })
 }
 
-// P2P Signaling Routes (replaces WebSocket signaling)
 func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 	p2pG := g.Group("/p2p")
 
-	// Send a P2P signal to another user
 	p2pG.POST("/signal", func(c *gin.Context) {
 		userID, _ := c.Get("user_id")
 		var req struct {
-			TargetUserID string                 `json:"target_user_id" binding:"required"`
-			SignalType   string                 `json:"signal_type" binding:"required"`
-			Payload      map[string]interface{} `json:"payload" binding:"required"`
+			TargetUserID string         `json:"target_user_id" binding:"required"`
+			SignalType   string         `json:"signal_type" binding:"required"`
+			Payload      map[string]any `json:"payload" binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
@@ -345,10 +335,12 @@ func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 			return
 		}
 
+		// Push signal over WebSocket for immediate delivery
+		wshandler.GlobalHub.SendP2PSignalToUser(req.TargetUserID, userID.(string), req.SignalType, req.Payload)
+
 		c.JSON(200, gin.H{"status": "sent", "signal_id": signal.ID})
 	})
 
-	// Poll for pending P2P signals
 	p2pG.GET("/signals", func(c *gin.Context) {
 		userID, _ := c.Get("user_id")
 		var signals []pkg.P2PSignal
@@ -364,7 +356,6 @@ func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 			return
 		}
 
-		// Mark fetched signals as consumed
 		if len(signals) > 0 {
 			var ids []int64
 			for _, s := range signals {
@@ -375,51 +366,114 @@ func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 				Where("id IN (?)", bun.In(ids)).
 				Exec(c.Request.Context())
 		}
-
 		c.JSON(200, gin.H{"signals": signals})
 	})
 
-	// ICE Configuration (TURN/STUN servers)
-	p2pG.GET("/ice-config", func(c *gin.Context) {
+	p2pG.GET("ice-config", func(c *gin.Context) {
 		turnURL := os.Getenv("TURN_SERVER_URL")
 		turnUser := os.Getenv("TURN_USERNAME")
 		turnCred := os.Getenv("TURN_CREDENTIAL")
 
-		iceServers := []map[string]interface{}{
-			{"urls": []string{"stun:stun.l.google.com:19302"}},
+		iceServers := []map[string]any{
+			{"urls": []string{"stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"}},
 		}
 
 		if turnURL != "" {
-			iceServers = append(iceServers, map[string]interface{}{
-				"urls":       []string{turnURL},
+			turnURLs := []string{turnURL}
+			if !strings.Contains(turnURL, "?transport=") {
+				turnURLs = append(turnURLs, turnURL+"?transport=tcp")
+			}
+			iceServers = append(iceServers, map[string]any{
+				"urls":       turnURLs,
 				"username":   turnUser,
 				"credential": turnCred,
 			})
 		}
-
 		c.JSON(200, gin.H{"iceServers": iceServers})
 	})
 }
 
-// registerBillingRoutes enregistre les routes de facturation
-// Utilise le nouveau système de provider pluggable
-func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup) {
-	// Webhook receiver (pour le service de billing externe)
-	billinghandlers.RegisterWebhookRoute(api)
+// registerEventRoutes adds a polling endpoint for realtime events.
+// Used by the frontend when Supabase Realtime is not available (PocketBase mode).
+func registerEventRoutes(g *gin.RouterGroup, db *bun.DB) {
+	g.GET("/events/poll", func(c *gin.Context) {
+		userID, _ := c.Get("user_id")
+		sinceID := c.DefaultQuery("since_id", "0")
 
-	// Toutes les routes (publiques + protégées)
-	billinghandlers.RegisterRoutes(protected, middleware.AuthMiddleware(nil, os.Getenv("SUPABASE_JWT_SECRET")))
+		var events []pkg.RealtimeEvent
+		err := db.NewSelect().
+			Model(&events).
+			Where("user_id = ? AND id > ?", userID, sinceID).
+			Order("id ASC").
+			Limit(50).
+			Scan(c.Request.Context())
+
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to fetch events"})
+			return
+		}
+		c.JSON(200, gin.H{"events": events})
+	})
 }
 
-func startServer(router *gin.Engine) {
-	if err := router.Run(":8080"); err != nil {
-		log.Fatalf("Failed to run server: %v", err)
+func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup, authMW gin.HandlerFunc, db *bun.DB) {
+	billinghandlers.RegisterWebhookRoute(api, db)
+	billinghandlers.RegisterRoutes(protected, authMW, db)
+}
+
+// setupPresenceHooks wires WebSocket connect/disconnect events to broadcast
+// online/offline presence updates to each connected friend.
+func setupPresenceHooks(db *bun.DB) {
+	wshandler.ConnectHook = func(userID string) {
+		broadcastPresence(db, userID, true)
+	}
+	wshandler.DisconnectHook = func(userID string) {
+		broadcastPresence(db, userID, false)
 	}
 }
 
-// startServerWithGracefulShutdown démarre le serveur avec un arrêt gracieux
+func broadcastPresence(db *bun.DB, userID string, online bool) {
+	var friendships []pkg.Friendship
+	if err := db.NewSelect().
+		Model(&friendships).
+		Where("(user_id_1 = ? OR user_id_2 = ?) AND status = 'accepted'", userID, userID).
+		Scan(context.Background()); err != nil {
+		log.Printf("[Presence] Failed to fetch friends for user=%s: %v", userID, err)
+		return
+	}
+
+	// Message announcing userID's status to all friends
+	selfMsg, _ := json.Marshal(map[string]any{
+		"type":    "presence_update",
+		"user_id": userID,
+		"online":  online,
+	})
+
+	for _, f := range friendships {
+		friendID := f.UserID2
+		if f.UserID2 == userID {
+			friendID = f.UserID1
+		}
+
+		// Tell each friend about userID's new status
+		wshandler.GlobalHub.SendToUser(friendID, selfMsg)
+
+		// Bootstrap: when userID just came online, also tell userID about each friend's
+		// current status — they may have connected before userID and would never
+		// otherwise receive a presence update.
+		if online {
+			friendOnline := wshandler.GlobalHub.IsConnected(friendID)
+			bootstrapMsg, _ := json.Marshal(map[string]any{
+				"type":    "presence_update",
+				"user_id": friendID,
+				"online":  friendOnline,
+			})
+			wshandler.GlobalHub.SendToUser(userID, bootstrapMsg)
+		}
+	}
+}
+
 func startServerWithGracefulShutdown(router *gin.Engine, metricsServer *monitoring.Server) {
-	// Configuration du serveur HTTP principal
 	srv := &http.Server{
 		Addr:         ":8080",
 		Handler:      router,
@@ -428,7 +482,6 @@ func startServerWithGracefulShutdown(router *gin.Engine, metricsServer *monitori
 		IdleTimeout:  120 * time.Second,
 	}
 
-	// Démarrage du serveur principal dans une goroutine
 	go func() {
 		log.Println("Serveur principal démarré sur le port 8080")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -436,24 +489,17 @@ func startServerWithGracefulShutdown(router *gin.Engine, metricsServer *monitori
 		}
 	}()
 
-	// Configuration du canal pour les signaux système
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-	// Attente du signal d'arrêt
 	<-quit
 	log.Println("\nSignal d'arrêt reçu, arrêt gracieux en cours...")
 
-	// Contexte avec timeout pour le shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Arrêt du serveur de métriques
 	if err := metricsServer.Shutdown(ctx); err != nil {
 		log.Printf("Erreur lors de l'arrêt du serveur de métriques: %v", err)
 	}
-
-	// Arrêt du serveur principal
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("Erreur lors de l'arrêt du serveur principal: %v", err)
 	} else {

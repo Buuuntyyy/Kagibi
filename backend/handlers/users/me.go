@@ -1,8 +1,8 @@
 package users
 
 import (
+	"kagibi/backend/pkg"
 	"net/http"
-	"safercloud/backend/pkg"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -22,6 +22,8 @@ type UserResponse struct {
 	StorageUsed         int64     `json:"storage_used"`
 	StorageLimit        int64     `json:"storage_limit"`
 	Plan                string    `json:"plan"`
+	P2PMaxExchanges     int       `json:"p2p_max_exchanges"`
+	P2PExchangesUsed    int       `json:"p2p_exchanges_used"`
 	FriendCode          string    `json:"friend_code"`
 	PublicKey           string    `json:"public_key"`
 	EncryptedPrivateKey string    `json:"encrypted_private_key"`
@@ -50,6 +52,24 @@ func MeHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	activeP2P, _ := pkg.CountUserActiveP2PExchanges(db, userID)
+
+	planState, err := pkg.FindUserPlanByUserID(db, userID)
+	if err != nil || planState == nil {
+		planState = &pkg.UserPlan{
+			UserID:           user.ID,
+			Plan:             pkg.PlanFree,
+			StorageLimit:     pkg.StorageFree,
+			StorageUsed:      0,
+			P2PMaxExchanges:  pkg.P2PLimitFree,
+			P2PExchangesUsed: activeP2P,
+		}
+		_ = pkg.UpsertUserPlan(db, planState)
+	} else {
+		planState.P2PExchangesUsed = activeP2P
+		_ = pkg.UpsertUserPlan(db, planState)
+	}
+
 	// 4. Construire une réponse filtrée avec UNIQUEMENT les champs nécessaires
 	// EXCLUT : password_hash, salt, encrypted_master_key, encrypted_master_key_recovery, recovery_hash, recovery_salt
 	response := UserResponse{
@@ -57,9 +77,11 @@ func MeHandler(c *gin.Context, db *bun.DB) {
 		Name:                user.Name,
 		Email:               user.Email,
 		AvatarURL:           user.AvatarURL,
-		StorageUsed:         user.StorageUsed,
-		StorageLimit:        user.StorageLimit,
-		Plan:                user.Plan,
+		StorageUsed:         planState.StorageUsed,
+		StorageLimit:        planState.StorageLimit,
+		Plan:                planState.Plan,
+		P2PMaxExchanges:     planState.P2PMaxExchanges,
+		P2PExchangesUsed:    planState.P2PExchangesUsed,
 		FriendCode:          user.FriendCode,
 		PublicKey:           user.PublicKey,
 		EncryptedPrivateKey: user.EncryptedPrivateKey,

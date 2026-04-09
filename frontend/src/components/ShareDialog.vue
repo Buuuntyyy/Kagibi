@@ -1,37 +1,37 @@
 <template>
   <div v-if="isOpen" class="modal-overlay">
     <div class="modal-content">
-      <h3>Partager "{{ item?.name }}"</h3>
+      <h3>{{ t('dialogs.share.title', { name: item?.name || '' }) }}</h3>
       
       <div v-if="!generatedLink" class="share-form">
         <div class="form-group">
           <label>
             <input type="text" />
-            Expiration (optionnel)
+            {{ t('dialogs.share.expiration') }}
           </label>
           <input type="datetime-local" v-model="expiresAt" class="date-input" />
         </div>
         
         <div class="modal-actions">
-          <button @click="close">Annuler</button>
+          <button @click="close">{{ t('dialogs.share.cancel') }}</button>
           <button @click="generateLink" class="btn-primary" :disabled="loading">
-            {{ loading ? 'Génération...' : 'Générer le lien' }}
+            {{ loading ? t('common.loading') : t('dialogs.share.generate') }}
           </button>
         </div>
       </div>
 
       <div v-else class="share-result">
-        <p>Lien de partage généré :</p>
+        <p>{{ t('dialogs.share.shareLink') }} :</p>
         <div class="link-display">
           <input type="text" :value="generatedLink" readonly ref="linkInput" />
           <button @click="copyLink" class="btn-copy">
-            <span v-if="copied">Copié !</span>
-            <span v-else>Copier</span>
+            <span v-if="copied">{{ t('dialogs.share.copied') }}</span>
+            <span v-else>{{ t('dialogs.share.copy') }}</span>
           </button>
         </div>
         
         <div class="modal-actions">
-          <button @click="close" class="btn-primary">Fermer</button>
+          <button @click="close" class="btn-primary">{{ t('dialogs.share.close') }}</button>
         </div>
       </div>
     </div>
@@ -40,7 +40,10 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useFileStore } from '../stores/files'
+
+const { t } = useI18n()
 
 const props = defineProps({
   isOpen: Boolean,

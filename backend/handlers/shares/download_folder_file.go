@@ -3,10 +3,11 @@ package shares
 import (
 	"fmt"
 	"io"
+	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/monitoring"
+	"kagibi/backend/pkg/s3storage"
 	"log"
 	"net/http"
-	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/s3storage"
 	"strconv"
 	"strings"
 	"time"
@@ -80,6 +81,8 @@ func DownloadFileFromSharedFolderHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 	defer output.Body.Close()
+
+	monitoring.FileDownloadsTotal.Inc()
 
 	// Headers
 	c.Header("Content-Description", "File Transfer")

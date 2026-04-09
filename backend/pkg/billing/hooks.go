@@ -22,12 +22,15 @@ func HookUserRegistered(ctx context.Context, userID, email string) {
 	event := UserCreatedEvent{
 		UserID:    userID,
 		Email:     email,
+		CreatedAt: time.Now(),
 		Timestamp: time.Now(),
 	}
 
-	if err := provider.OnUserCreated(ctx, event); err != nil {
-		log.Printf("[Billing] Error on user created hook: %v", err)
-	}
+	go func() {
+		if err := provider.OnUserCreated(context.Background(), event); err != nil {
+			log.Printf("[Billing] Failed to notify user creation: %v", err)
+		}
+	}()
 }
 
 // HookUserDeleted est appelé quand un utilisateur supprime son compte
@@ -37,9 +40,11 @@ func HookUserDeleted(ctx context.Context, userID string) {
 		return
 	}
 
-	if err := provider.OnUserDeleted(ctx, userID); err != nil {
-		log.Printf("[Billing] Error on user deleted hook: %v", err)
-	}
+	go func() {
+		if err := provider.OnUserDeleted(context.Background(), userID); err != nil {
+			log.Printf("[Billing] Failed to notify user deletion: %v", err)
+		}
+	}()
 }
 
 // === Hooks pour événements de stockage ===
@@ -195,19 +200,9 @@ func GetUserStorageUsed(ctx context.Context, userID string) int64 {
 }
 
 // GetUserBandwidthLimit retourne la limite de bande passante mensuelle en bytes
+// La bande passante n'est plus limitée par plan — retourne une valeur illimitée.
 func GetUserBandwidthLimit(ctx context.Context, userID string) int64 {
-	provider := GetProvider()
-	if provider == nil {
-		return 10 * 1024 * 1024 * 1024 // 10 Go par défaut
-	}
-
-	plan, err := provider.GetUserPlan(ctx, userID)
-	if err != nil {
-		log.Printf("[Billing] Error getting user plan: %v", err)
-		return 10 * 1024 * 1024 * 1024
-	}
-
-	return plan.BandwidthLimitGB * 1024 * 1024 * 1024
+	return -1 // illimité
 }
 
 // === Helpers pour souscriptions ===
@@ -241,4 +236,68 @@ func CancelUserSubscription(ctx context.Context, userID, idempotencyKey string) 
 	}
 
 	return provider.CancelSubscription(ctx, userID, idempotencyKey)
+}
+
+// === Quota Checks supplémentaires ===
+
+// CheckP2PAllowed vérifie si l'utilisateur peut effectuer un transfert P2P
+func CheckP2PAllowed(ctx context.Context, userID string, fileSize int64) (bool, string) {
+	provider := GetProvider()
+	if provider == nil {
+		return true, ""
+	}
+
+	plan, err := provider.GetUserPlan(ctx, userID)
+	if err != nil {
+		return true, "" // fail-open
+	}
+
+	p2pLimitGB, ok := plan.Features["p2p_limit_gb"]
+	if !ok {
+		return true, ""
+	}
+
+	limitGB, _ := p2pLimitGB.(float64)
+	if limitGB < 0 {
+		return true, "" // -1 = illimité
+	}
+
+	// Vérification basique sur la taille du fichier individuel
+	// La vérification détaillée du cumul mensuel est faite par le service billing privé
+	limitBytes := int64(limitGB * 1024 * 1024 * 1024)
+	if fileSize > limitBytes {
+		return false, fmt.Sprintf("Fichier trop volumineux pour le transfert P2P. Limite: %.0f Go", limitGB)
+	}
+
+	return true, ""
+}
+
+// CheckFileSizeAllowed vérifie la taille max par fichier selon le plan
+func CheckFileSizeAllowed(ctx context.Context, userID string, fileSize int64) (bool, string) {
+	provider := GetProvider()
+	if provider == nil {
+		return true, ""
+	}
+
+	plan, err := provider.GetUserPlan(ctx, userID)
+	if err != nil {
+		return true, "" // fail-open
+	}
+
+	maxFileSizeMB, ok := plan.Features["max_file_size_mb"]
+	if !ok {
+		return true, ""
+	}
+
+	limitMB, _ := maxFileSizeMB.(float64)
+	if limitMB < 0 {
+		return true, "" // -1 = illimité
+	}
+
+	limitBytes := int64(limitMB * 1024 * 1024)
+	if fileSize > limitBytes {
+		return false, fmt.Sprintf("Fichier trop volumineux. Limite: %.0f Mo pour le plan %s", limitMB, plan.Name)
+	}
+
+	return true, ""
 }

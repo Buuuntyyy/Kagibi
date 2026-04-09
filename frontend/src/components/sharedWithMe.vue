@@ -1,18 +1,18 @@
 <template>
   <div class="shared-with-me-container">
     <div v-if="loading" class="loading">
-      <div class="spinner"></div> Chargement...
+      <div class="spinner"></div> {{ t('shared.loadingShort') }}
     </div>
     
     <div v-if="currentFolder" class="folder-header">
-         <button @click="navigateUp" class="back-btn">⬅ Retour</button>
-         <span class="current-path">Dossier: {{ currentFolder.name }}</span>
+         <button @click="navigateUp" class="back-btn">⬅ {{ t('shared.back') }}</button>
+         <span class="current-path">{{ t('shared.folderPrefix') }} {{ currentFolder.name }}</span>
     </div>
 
     <div v-if="error" class="error">{{ error }}</div>
     <div v-else-if="!loading && items.length === 0" class="empty">
-      <p v-if="currentFolder">Dossier vide.</p>
-      <p v-else>Aucun fichier partagé avec vous.</p>
+      <p v-if="currentFolder">{{ t('shared.emptyFolder') }}</p>
+      <p v-else>{{ t('shared.emptySharedWithMe') }}</p>
     </div>
     
     <FileTable 
@@ -57,11 +57,11 @@
     >
         <template #custom-actions>
             <div class="menu-item" @click="handleContextAction('download')" v-if="contextMenu.item.type === 'file'">
-              <span class="menu-icon">⬇️</span> Télécharger (Déchiffrer)
+              <span class="menu-icon">⬇️</span> {{ t('shared.downloadDecrypt') }}
             </div>
              <div class="menu-divider"></div>
             <div class="menu-item delete" @click="handleContextAction('delete')">
-              <span class="menu-icon">🗑️</span> Retirer ce partage
+              <span class="menu-icon">🗑️</span> {{ t('shared.removeShare') }}
             </div>
         </template>
     </ContextMenu>
@@ -71,6 +71,7 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import FileTable from './file/FileTable.vue';
 import { formatSize, formatDate } from '../utils/format';
 import api from '../api';
@@ -82,6 +83,7 @@ import sodium from 'libsodium-wrappers-sumo';
 
 const fileStore = useFileStore();
 const authStore = useAuthStore();
+const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 const items = ref([]);
@@ -109,10 +111,10 @@ const contextMenu = ref({
 
 const columns = [
   { key: 'icon', label: '', headerClass: 'icon-col', cellClass: 'icon-col' },
-  { key: 'shared_name', label: 'Nom', cellClass: 'name-cell' },
-  { key: 'owner', label: 'Propriétaire' },
-  { key: 'size', label: 'Taille' },
-  { key: 'actions', label: 'Actions' }
+  { key: 'shared_name', label: t('file.columnName'), cellClass: 'name-cell' },
+  { key: 'owner', label: t('shared.owner') },
+  { key: 'size', label: t('file.columnSize') },
+  { key: 'actions', label: t('shared.actions') }
 ]
 
 const sharedFolders = computed(() => {
@@ -149,7 +151,7 @@ const fetchSharedWithMe = async () => {
         await authStore.ensureRSAKeys(authStore.masterKey);
       } catch (e) {
         console.error("Failed to ensure RSA keys:", e);
-        error.value = "Impossible de charger les clés de déchiffrement.";
+        error.value = t('shared.decryptKeysLoadError');
         return;
       }
     }
@@ -164,7 +166,7 @@ const fetchSharedWithMe = async () => {
         type: share.type, 
         size: share.size || 0,
         shared_at: share.shared_at,
-        owner_name: share.owner_name || 'Inconnu',
+        owner_name: share.owner_name || t('shared.unknownOwner'),
         // Determine if direct share for context actions
         is_direct: !!share.file_id || !!share.folder_id,
         // Helper specifically for download
@@ -185,7 +187,7 @@ const fetchSharedWithMe = async () => {
 
   } catch (err) {
     console.error("Error fetching shared with me:", err);
-    error.value = "Impossible de charger les fichiers partagés avec vous.";
+    error.value = t('shared.loadSharedWithMeError');
   } finally {
     loading.value = false;
   }
@@ -219,7 +221,7 @@ const fetchFolderContent = async (folderID) => {
         items.value = [...folders, ...files];
     } catch (err) {
         console.error("Error fetching folder content:", err);
-        error.value = "Impossible d'ouvrir le dossier.";
+      error.value = t('shared.openFolderError');
     } finally {
         loading.value = false;
     }
@@ -261,7 +263,7 @@ const handleOpenFolder = async (folder) => {
         // If we are at root, we need to decrypt the folder key
         if (!currentFolder.value) {
              if (!folder.encrypted_key) {
-                 alert("Clé de dossier manquante");
+             alert(t('shared.missingFolderKey'));
                  return;
              }
              
@@ -271,7 +273,7 @@ const handleOpenFolder = async (folder) => {
              }
              
              if (!authStore.privateKey) {
-                 throw new Error("Clé privée RSA non disponible");
+               throw new Error(t('shared.privateKeyUnavailable'));
              }
              
              // Decrypt Root Folder Key
@@ -304,7 +306,7 @@ const handleOpenFolder = async (folder) => {
         await fetchFolderContent(folder.resource_id);
     } catch (e) {
         console.error("Failed to open folder:", e);
-        alert("Erreur lors de l'ouverture du dossier (Déchiffrement): " + e.message);
+      alert(`${t('shared.openFolderDecryptError')}: ${e.message}`);
         // Reset navigation if failed
         if (folderStack.value.length > 0) {
              // pop back?
@@ -323,8 +325,8 @@ const handleContextAction = async (action) => {
                 await downloadSharedFile(item);
         }
     }
-    else if (action === 'delete') {
-         if (confirm("Voulez-vous retirer ce partage de votre liste ?")) {
+        else if (action === 'delete') {
+          if (confirm(t('shared.removeShareConfirm'))) {
              try {
                 let url = `/shares/with-me/${item.id}`;
                 // Determine type query param
@@ -340,7 +342,7 @@ const handleContextAction = async (action) => {
                 await fetchSharedWithMe();
              } catch (e) {
                  console.error(e);
-                 alert("Erreur lors de la suppression");
+               alert(t('shared.deleteError'));
              }
          }
     }
@@ -379,7 +381,7 @@ const downloadSharedFile = async (item) => {
 
         if (currentFolderKey.value) {
              // We are inside a shared folder
-             if (!item.encrypted_key) throw new Error("Clé manquante pour le fichier");
+             if (!item.encrypted_key) throw new Error(t('shared.missingFileKey'));
              
              // Decrypt using AES-GCM (FolderKey)
              const encryptedBytes = sodium.from_base64(item.encrypted_key);
@@ -395,13 +397,13 @@ const downloadSharedFile = async (item) => {
                 );
                 fileKeyCrypto = await window.crypto.subtle.importKey("raw", fileKeyRaw, "AES-GCM", true, ["decrypt"]);
              } catch (e) {
-                 throw new Error("Echec du déchiffrement de la clé du fichier (AES-GCM).");
+               throw new Error(t('shared.decryptFileKeyError'));
              }
 
         } else {
             // Root Share (Direct)
             if (!item.encrypted_key) {
-                throw new Error("Clé de chiffrement manquante.");
+            throw new Error(t('shared.missingEncryptionKey'));
             }
             
             // Ensure RSA keys are loaded before attempting decryption
@@ -411,7 +413,7 @@ const downloadSharedFile = async (item) => {
             
             // Decrypt User Private Key first if not ready
             if (!authStore.privateKey) {
-                 throw new Error("Clé privée non disponible.");
+                throw new Error(t('shared.privateKeyUnavailable'));
             }
 
             const encryptedKeyBytes = sodium.from_base64(item.encrypted_key);
@@ -451,7 +453,7 @@ const downloadSharedFile = async (item) => {
 
     } catch (e) {
         console.error("Download error:", e);
-        alert("Erreur lors du téléchargement/déchiffrement : " + e.message);
+    alert(`${t('shared.downloadDecryptError')}: ${e.message}`);
     }
 }
 

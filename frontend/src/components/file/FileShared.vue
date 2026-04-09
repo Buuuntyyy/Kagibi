@@ -4,12 +4,12 @@
       <span class="chevron" :class="{ 'open': isOpen }">
         <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
       </span>
-      <h4 class="section-title">Partagés avec moi</h4>
+      <h4 class="section-title">{{ t('shared.sharedWithMe') }}</h4>
     </div>
     
     <div v-show="isOpen" class="accordion-content">
       <div v-if="loading" class="loading-state">
-        <span>Chargement...</span>
+        <span>{{ t('shared.loadingShort') }}</span>
       </div>
       <div v-else-if="sharedItems.length > 0" class="cards-row">
             <div 
@@ -40,7 +40,7 @@
       
       <div v-else class="empty-state">
         <span class="empty-icon">📂</span>
-        <span>Aucun fichier partagé</span>
+        <span>{{ t('shared.emptySharedWithMe') }}</span>
       </div>
     </div>
   </div>
@@ -49,6 +49,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n'
 import api from '../../api'
 import { useAuthStore } from '../../stores/auth'
 import { useFileStore } from '../../stores/files'
@@ -56,6 +57,7 @@ import sodium from 'libsodium-wrappers-sumo'
 import { decryptChunkedFileWorker } from '../../utils/crypto'
 
 const router = useRouter()
+const { t } = useI18n()
 const authStore = useAuthStore()
 const fileStore = useFileStore()
 const isOpen = ref(true)
@@ -123,13 +125,13 @@ const downloadSharedFile = async (item) => {
         // Root Share (Direct)
         if (!item.encrypted_key) {
              console.error("Clé de chiffrement manquante.");
-             alert("Impossible d'ouvrir le fichier : clé manquante.");
+             alert(t('shared.openFileMissingKey'));
              return;
         }
         
         if (!authStore.privateKey) {
              console.error("Clé privée non disponible.");
-             alert("Clé privée non disponible.");
+             alert(t('shared.privateKeyUnavailable'));
              return;
         }
 
@@ -169,7 +171,7 @@ const downloadSharedFile = async (item) => {
 
     } catch (e) {
         console.error("Download error:", e);
-        alert("Erreur lors du téléchargement/déchiffrement : " + e.message);
+      alert(`${t('shared.downloadDecryptError')}: ${e.message}`);
     }
 }
 

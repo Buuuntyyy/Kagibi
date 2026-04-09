@@ -2,7 +2,7 @@
   <footer class="site-footer">
     <div class="footer-content">
       <div class="footer-section">
-        <p class="footer-text">© 2026 SaferCloud - Stockage sécurisé Zero-Knowledge</p>
+        <p class="footer-text">© 2026 Kagibi - Stockage sécurisé Zero-Knowledge</p>
       </div>
       <div class="footer-section credits">
         <button @click="showCredits = !showCredits" class="credits-toggle">

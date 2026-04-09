@@ -1,4 +1,4 @@
-# Backend SaferCloud - Go API + Zero-Knowledge Architecture
+# Backend Kagibi - Go API + Zero-Knowledge Architecture
 
 **API REST** qui stocke uniquement des données chiffrées et ne possède aucune clé de déchiffrement.
 
@@ -6,7 +6,7 @@
 
 ## Vue d'ensemble
 
-Le backend SaferCloud est une API Go qui respecte les principes **Zero-Knowledge** :
+Le backend Kagibi est une API Go qui respecte les principes **Zero-Knowledge** :
 - Stocke uniquement `EncryptedMasterKey` (inutilisable sans password)
 - Fichiers chiffrés dans S3/MinIO
 - JWT validation via Supabase
@@ -58,7 +58,7 @@ Créez `.env`:
 
 ```bash
 # Base de données
-DATABASE_URL=postgresql://user:password@localhost:5432/safercloud
+DATABASE_URL=postgresql://user:password@localhost:5432/kagibi
 
 # Redis
 REDIS_URL=redis://localhost:6379
@@ -72,7 +72,7 @@ S3_ENDPOINT=http://localhost:9000
 S3_REGION=us-east-1
 S3_ACCESS_KEY=minioadmin
 S3_SECRET_KEY=minioadmin
-S3_BUCKET=safercloud-files
+S3_BUCKET=kagibi-files
 
 # CORS
 ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
@@ -535,11 +535,11 @@ docker-compose up -d
 ### Variables d'Environnement Production
 
 ```bash
-DATABASE_URL=postgres://prod_user:prod_pass@db:5432/safercloud
+DATABASE_URL=postgres://prod_user:prod_pass@db:5432/kagibi
 REDIS_URL=redis://redis:6379
 S3_ENDPOINT=https://s3.amazonaws.com
-S3_BUCKET=safercloud-prod
-ALLOWED_ORIGINS=https://safercloud.com
+S3_BUCKET=kagibi-prod
+ALLOWED_ORIGINS=https://kagibi.com
 ```
 
 ---

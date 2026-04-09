@@ -3,52 +3,28 @@ import api from '../api'
 
 export const useBillingStore = defineStore('billing', {
   state: () => ({
-    // Billing status
+    // Billing status (kept for fallback compatibility in other components)
     enabled: true,
     providerType: 'mock',
     features: {
-      subscriptions: true,
-      quotas: true,
-      invoices: false
+      quotas: true
     },
 
-    // Current plan info
+    // Current plan & usage info
     currentPlan: null,
-    subscriptions: [],
     currentUsage: null,
 
-    // Invoices
-    invoices: [],
-    pendingInvoice: null,
-
-    // Loading states
+    // States
     loading: false,
-    loadingInvoices: false,
-
-    // Error states
     error: null,
-
-    // Customer info
-    customer: {
-      id: null,
-      externalId: null,
-      email: null,
-      name: null
-    }
   }),
 
   getters: {
-    // Check if billing is enabled
+    // Check if billing/quotas are enabled
     isBillingEnabled: (state) => state.enabled,
 
     // Check if self-hosted mode (no billing)
     isSelfHosted: (state) => !state.enabled || state.providerType === 'disabled',
-
-    // Should show subscription UI
-    showSubscriptionUI: (state) => state.enabled && state.features.subscriptions,
-
-    // Should show invoices
-    showInvoices: (state) => state.enabled && state.features.invoices,
 
     // Has quota enforcement
     hasQuotas: (state) => state.enabled && state.features.quotas,
@@ -56,46 +32,24 @@ export const useBillingStore = defineStore('billing', {
     // Get the current plan code
     planCode: (state) => state.currentPlan?.code || 'free',
 
-    // Check if user has a paid plan
-    isPaidPlan: (state) => {
-      return state.currentPlan && state.currentPlan.price_monthly_cents > 0
-    },
-
-    // Check if user has any active subscription
-    hasActiveSubscription: (state) => {
-      return state.subscriptions.some(sub => sub.status === 'active')
-    },
-
-    // Get total usage amount for current period
-    currentUsageAmount: (state) => {
-      return state.currentUsage?.total_amount_cents || 0
-    },
-
-    // Format amount in euros
-    formatAmount: () => (cents, currency = 'EUR') => {
-      return new Intl.NumberFormat('fr-FR', {
-        style: 'currency',
-        currency: currency
-      }).format(cents / 100)
-    },
-
-    // Check if there's a pending payment
-    hasPendingPayment: (state) => {
-      return state.pendingInvoice && state.pendingInvoice.payment_link_url
-    },
-
     // Get storage usage in GB
     storageUsageGB: (state) => {
-      if (!state.currentUsage?.charges) return 0
-      const storageCharge = state.currentUsage.charges.find(c => c.code === 'storage_gb')
-      return storageCharge ? parseFloat(storageCharge.units) : 0
+      return state.currentUsage?.storage_used_gb || 0
     },
 
-    // Get P2P usage in MB
-    p2pUsageMB: (state) => {
-      if (!state.currentUsage?.charges) return 0
-      const p2pCharge = state.currentUsage.charges.find(c => c.code === 'p2p_mb')
-      return p2pCharge ? parseFloat(p2pCharge.units) : 0
+    // Get bandwidth usage in GB
+    bandwidthUsageGB: (state) => {
+      return state.currentUsage?.bandwidth_used_gb || 0
+    },
+
+    // Get active P2P shares count
+    p2pActiveShares: (state) => {
+      return state.currentUsage?.p2p_shares_active || 0
+    },
+
+    // Get P2P shares limit from current plan
+    p2pSharesLimit: (state) => {
+      return state.currentPlan?.p2p_shares_limit || 5
     }
   },
 
@@ -106,34 +60,37 @@ export const useBillingStore = defineStore('billing', {
         const response = await api.get('/billing/status')
         this.enabled = response.data.enabled
         this.providerType = response.data.provider_type
-        this.features = response.data.features
+        this.features = response.data.features || { quotas: true }
       } catch (error) {
-        console.error('[BillingStore] Failed to fetch billing status:', error)
-        // Par défaut, considérer comme activé
-        this.enabled = true
-        this.providerType = 'mock'
+        const status = error?.response?.status
+        if (status === 401 || status === 404) {
+          // Endpoint absent ou non authentifié : billing désactivé silencieusement.
+          this.enabled = false
+          this.providerType = 'disabled'
+        } else {
+          console.error('[BillingStore] Failed to fetch billing status:', error)
+          this.enabled = false
+          this.providerType = 'disabled'
+        }
       }
     },
 
-    // Fetch current plan and subscription info
+    // Fetch current plan and subscription info (for quotas limit)
     async fetchCurrentPlan() {
       this.loading = true
       this.error = null
 
       try {
         const response = await api.get('/billing/plan')
-        const data = response.data
-
-        this.currentPlan = data
-
+        this.currentPlan = response.data
       } catch (err) {
         console.error('[BillingStore] Failed to fetch plan:', err)
-        this.error = err.response?.data?.error || 'Impossible de charger les informations de facturation'
+        this.error = err.response?.data?.error || 'Impossible de chager les informations de plan'
 
         // Set default free plan on error
         this.currentPlan = {
           code: 'free',
-          name: 'Plan Gratuit',
+          name: 'Gratuit',
           price_monthly_cents: 0,
           currency: 'EUR',
           interval: 'monthly'
@@ -143,70 +100,38 @@ export const useBillingStore = defineStore('billing', {
       }
     },
 
-    // Fetch all invoices
-    async fetchInvoices() {
-      if (!this.showInvoices) {
-        this.invoices = []
-        return
-      }
-
-      this.loadingInvoices = true
-
+    // Fetch current usage
+    async fetchUsage() {
       try {
-        const response = await api.get('/billing/invoices')
-        this.invoices = response.data || []
+        const response = await api.get('/billing/usage')
+        this.currentUsage = response.data
       } catch (err) {
-        console.error('[BillingStore] Failed to fetch invoices:', err)
-        this.invoices = []
-      } finally {
-        this.loadingInvoices = false
+        console.error('[BillingStore] Failed to fetch usage:', err)
       }
     },
 
-    // Fetch pending invoices only
-    async fetchPendingInvoices() {
-      if (!this.showInvoices) {
-        return
-      }
-
+    // Check P2P quota before creating a share
+    async checkP2PQuota() {
       try {
-        const response = await api.get('/billing/invoices')
-        const invoices = response.data || []
-        const pending = invoices.find(inv => inv.status === 'pending')
-        if (pending) {
-          this.pendingInvoice = pending
-        }
+        const response = await api.get('/billing/quota/p2p')
+        return response.data
       } catch (err) {
-        console.error('[BillingStore] Failed to fetch pending invoices:', err)
+        // Fail-open
+        return { allowed: true }
       }
     },
 
-    // Get payment link for an invoice and redirect
-    async payInvoice(invoiceId) {
+    // Check quota before upload (called from upload logic)
+    async checkQuota(requestedBytes) {
       try {
-        const response = await api.get(`/billing/invoices/${invoiceId}/payment-link`)
-        const paymentUrl = response.data.payment_url
-
-        if (paymentUrl) {
-          // Open payment in new tab
-          window.open(paymentUrl, '_blank')
-          return true
-        }
-
-        return false
+        const response = await api.post('/billing/quota/check', {
+          requested_bytes: requestedBytes
+        })
+        return response.data
       } catch (err) {
-        console.error('[BillingStore] Failed to get payment link:', err)
-        this.error = err.response?.data?.error || 'Impossible de récupérer le lien de paiement'
-        return false
+        // Fail-open
+        return { allowed: true }
       }
-    },
-
-    // Pay pending invoice directly
-    async payPendingInvoice() {
-      if (!this.pendingInvoice?.id) {
-        return false
-      }
-      return this.payInvoice(this.pendingInvoice.id)
     },
 
     // Clear error
@@ -219,24 +144,12 @@ export const useBillingStore = defineStore('billing', {
       this.enabled = true
       this.providerType = 'mock'
       this.features = {
-        subscriptions: true,
-        quotas: true,
-        invoices: false
+        quotas: true
       }
       this.currentPlan = null
-      this.subscriptions = []
       this.currentUsage = null
-      this.invoices = []
-      this.pendingInvoice = null
       this.loading = false
-      this.loadingInvoices = false
       this.error = null
-      this.customer = {
-        id: null,
-        externalId: null,
-        email: null,
-        name: null
-      }
     }
   }
 })

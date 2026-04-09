@@ -4,7 +4,7 @@ package monitoring
 EXEMPLE D'UTILISATION DES MÉTRIQUES PROMETHEUS DANS VOS HANDLERS
 
 Ce fichier contient des exemples d'utilisation des métriques personnalisées
-dans différentes parties de votre application SaferCloud.
+dans différentes parties de votre application Kagibi.
 */
 
 import (
@@ -18,8 +18,8 @@ func ExampleRecordFileUpload() {
 	RecordFileUpload(fileSizeBytes)
 
 	// Les métriques suivantes seront automatiquement incrémentées :
-	// - safercloud_file_uploads_total +1
-	// - safercloud_file_upload_size_bytes observe 512000
+	// - kagibi_file_uploads_total +1
+	// - kagibi_file_upload_size_bytes observe 512000
 }
 
 // Exemple 2: Mesurer la latence d'une opération de chiffrement
@@ -32,7 +32,7 @@ func ExampleRecordEncryption() {
 	duration := time.Since(start)
 	RecordEncryption(duration)
 
-	// La métrique safercloud_encryption_duration_seconds observera la durée
+	// La métrique kagibi_encryption_duration_seconds observera la durée
 }
 
 // Exemple 3: Enregistrer une erreur d'authentification
@@ -49,7 +49,7 @@ func ExampleRecordAuthError() {
 	// Credentials invalides
 	RecordAuthError("invalid_credentials")
 
-	// La métrique safercloud_auth_errors_total{type="..."} sera incrémentée
+	// La métrique kagibi_auth_errors_total{type="..."} sera incrémentée
 }
 
 // Exemple 4: Enregistrer une vérification MFA
@@ -58,7 +58,7 @@ func ExampleRecordMFAVerification() {
 	isValid := true // ou false si le code est invalide
 	RecordMFAVerification(isValid)
 
-	// La métrique safercloud_mfa_verifications_total{status="success"|"failure"} sera incrémentée
+	// La métrique kagibi_mfa_verifications_total{status="success"|"failure"} sera incrémentée
 }
 
 // Exemple 5: Enregistrer une requête S3
@@ -73,7 +73,7 @@ func ExampleRecordS3Request() {
 	// Après une suppression S3
 	RecordS3Request("delete", false) // en cas d'erreur
 
-	// La métrique safercloud_s3_requests_total{operation="...",status="..."} sera incrémentée
+	// La métrique kagibi_s3_requests_total{operation="...",status="..."} sera incrémentée
 }
 
 // Exemple 6: Utilisation complète dans un handler de fichier
@@ -136,28 +136,28 @@ DASHBOARD GRAFANA RECOMMANDÉ
 Voici les queries Prometheus utiles pour votre dashboard:
 
 1. Taux de requêtes par endpoint:
-   rate(safercloud_http_requests_total[5m])
+   rate(kagibi_http_requests_total[5m])
 
 2. Latence moyenne par endpoint (P95):
-   histogram_quantile(0.95, rate(safercloud_http_request_duration_seconds_bucket[5m]))
+   histogram_quantile(0.95, rate(kagibi_http_request_duration_seconds_bucket[5m]))
 
 3. Taux d'erreurs HTTP:
-   sum(rate(safercloud_http_requests_total{status=~"5.."}[5m])) by (endpoint)
+   sum(rate(kagibi_http_requests_total{status=~"5.."}[5m])) by (endpoint)
 
 4. Uploads de fichiers par minute:
-   rate(safercloud_file_uploads_total[1m]) * 60
+   rate(kagibi_file_uploads_total[1m]) * 60
 
 5. Taille moyenne des uploads:
-   rate(safercloud_file_upload_size_bytes_sum[5m]) / rate(safercloud_file_upload_size_bytes_count[5m])
+   rate(kagibi_file_upload_size_bytes_sum[5m]) / rate(kagibi_file_upload_size_bytes_count[5m])
 
 6. Taux d'erreurs d'authentification:
-   rate(safercloud_auth_errors_total[5m])
+   rate(kagibi_auth_errors_total[5m])
 
 7. Taux de succès MFA:
-   rate(safercloud_mfa_verifications_total{status="success"}[5m]) / rate(safercloud_mfa_verifications_total[5m])
+   rate(kagibi_mfa_verifications_total{status="success"}[5m]) / rate(kagibi_mfa_verifications_total[5m])
 
 8. Connexions actives:
-   safercloud_active_connections
+   kagibi_active_connections
 
 9. Utilisation mémoire Go:
    go_memstats_alloc_bytes
@@ -168,7 +168,7 @@ Voici les queries Prometheus utiles pour votre dashboard:
 CONFIGURATION PROMETHEUS (prometheus.yml):
 
 scrape_configs:
-  - job_name: 'safercloud'
+  - job_name: 'kagibi'
     static_configs:
       - targets: ['localhost:9090']
     scrape_interval: 15s
@@ -177,22 +177,22 @@ scrape_configs:
 ALERTES RECOMMANDÉES:
 
 groups:
-  - name: safercloud_alerts
+  - name: kagibi_alerts
     rules:
       - alert: HighErrorRate
-        expr: sum(rate(safercloud_http_requests_total{status=~"5.."}[5m])) > 0.05
+        expr: sum(rate(kagibi_http_requests_total{status=~"5.."}[5m])) > 0.05
         for: 5m
         annotations:
           summary: "Taux d'erreur HTTP élevé"
 
       - alert: HighMFAFailureRate
-        expr: rate(safercloud_mfa_verifications_total{status="failure"}[5m]) / rate(safercloud_mfa_verifications_total[5m]) > 0.5
+        expr: rate(kagibi_mfa_verifications_total{status="failure"}[5m]) / rate(kagibi_mfa_verifications_total[5m]) > 0.5
         for: 2m
         annotations:
           summary: "Taux d'échec MFA élevé"
 
       - alert: HighAuthErrorRate
-        expr: rate(safercloud_auth_errors_total[5m]) > 10
+        expr: rate(kagibi_auth_errors_total[5m]) > 10
         for: 5m
         annotations:
           summary: "Taux d'erreur d'authentification élevé"

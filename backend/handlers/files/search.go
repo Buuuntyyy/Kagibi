@@ -1,8 +1,8 @@
 package files
 
 import (
+	"kagibi/backend/pkg"
 	"net/http"
-	"safercloud/backend/pkg"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -22,14 +22,26 @@ func SearchFilesHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// Recherche dans la base de données (Supabase)
-	// On cherche dans les fichiers ET les dossiers
+	// Search is unavailable when the user has opted into client-side filename encryption,
+	// because names stored in the database are opaque encrypted blobs.
+	user, err := pkg.FindUserByID(db, userID)
+	if err == nil && user.EncryptFilenames {
+		c.JSON(http.StatusOK, gin.H{
+			"files":           []pkg.File{},
+			"folders":         []pkg.Folder{},
+			"search_disabled": true,
+			"reason":          "filename_encryption_enabled",
+		})
+		return
+	}
+
+	// Recherche dans les fichiers ET les dossiers par nom (plaintext ILIKE)
 	var files []pkg.File
-	err := db.NewSelect().
+	err = db.NewSelect().
 		Model(&files).
 		Where("user_id = ?", userID).
-		Where("name ILIKE ?", "%"+query+"%"). // ILIKE pour insensible à la casse (PostgreSQL)
-		Where("is_preview = ?", false).       // Exclure les fichiers preview
+		Where("name ILIKE ?", "%"+query+"%").
+		Where("is_preview = ?", false).
 		Order("created_at DESC").
 		Scan(c.Request.Context())
 

@@ -37,15 +37,12 @@ const isLandingPage = computed(() => {
   return ['LandingHome', 'Pricing', 'Transfer'].includes(route.name)
 })
 
-// Fetch billing status on app mount
-onMounted(() => {
-  billingStore.fetchBillingStatus()
-})
-
-// Connect Supabase Realtime when authenticated
+// Connect Supabase Realtime and fetch billing status when authenticated.
+// Both calls require a valid session — never call them before auth is confirmed.
 watch(() => authStore.isAuthenticated, (isAuthenticated) => {
   if (isAuthenticated) {
     realtimeStore.connect()
+    billingStore.fetchBillingStatus()
   } else {
     realtimeStore.disconnect()
   }
@@ -89,7 +86,8 @@ body {
   flex-grow: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .landing-content {
