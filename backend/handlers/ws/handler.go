@@ -14,7 +14,10 @@ import (
 	"kagibi/backend/pkg/authprovider"
 )
 
-const wsTokenPrefix = "ws_token:"
+const (
+	wsTokenPrefix     = "ws_token:"
+	secWebSocketProto = "Sec-WebSocket-Protocol"
+)
 
 // WebSocketHandler upgrades an HTTP connection to WebSocket.
 // Authentication is read from (in order of preference):
@@ -75,8 +78,8 @@ func WebSocketHandler(provider authprovider.AuthProvider, redisClient *redis.Cli
 		// When the client used the Sec-WebSocket-Protocol trick, echo "token" back
 		// so the browser does not close the connection due to a protocol mismatch.
 		var responseHeader http.Header
-		if proto := c.Request.Header.Get("Sec-WebSocket-Protocol"); proto != "" {
-			responseHeader = http.Header{"Sec-WebSocket-Protocol": []string{"token"}}
+		if proto := c.Request.Header.Get(secWebSocketProto); proto != "" {
+			responseHeader = http.Header{secWebSocketProto: []string{"token"}}
 		}
 
 		conn, err := upgrader.Upgrade(c.Writer, c.Request, responseHeader)
@@ -115,7 +118,7 @@ func tokenFromRequest(r *http.Request) string {
 	// Browser WebSocket API cannot send custom headers, so the client encodes the
 	// token as the second subprotocol: new WebSocket(url, ['token', jwt]).
 	// The browser sends "Sec-WebSocket-Protocol: token, <JWT>".
-	if proto := r.Header.Get("Sec-WebSocket-Protocol"); proto != "" {
+	if proto := r.Header.Get(secWebSocketProto); proto != "" {
 		parts := strings.SplitN(proto, ",", 2)
 		if len(parts) == 2 && strings.TrimSpace(parts[0]) == "token" {
 			return strings.TrimSpace(parts[1])

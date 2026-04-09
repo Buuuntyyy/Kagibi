@@ -15,6 +15,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	testSecret = "test-secret"
+	testUserID = "user-123"
+)
+
 // testProvider is a minimal AuthProvider for testing purposes.
 type testProvider struct {
 	secret      []byte
@@ -39,7 +44,7 @@ func TestAuthMiddleware(t *testing.T) {
 	t.Run("No Cookie", func(t *testing.T) {
 		_, _ = redismock.NewClientMock()
 		r := gin.New()
-		r.Use(AuthMiddleware(newTestProvider("test-secret"), nil))
+		r.Use(AuthMiddleware(newTestProvider(testSecret), nil))
 		r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 		w := httptest.NewRecorder()
@@ -54,7 +59,7 @@ func TestAuthMiddleware(t *testing.T) {
 		mock.ExpectGet("fake-session").SetErr(redis.Nil)
 
 		r := gin.New()
-		r.Use(AuthMiddleware(newTestProvider("test-secret"), client))
+		r.Use(AuthMiddleware(newTestProvider(testSecret), client))
 		r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 		w := httptest.NewRecorder()
@@ -67,22 +72,22 @@ func TestAuthMiddleware(t *testing.T) {
 
 	t.Run("Valid Session", func(t *testing.T) {
 		client, mock := redismock.NewClientMock()
-		mock.ExpectGet("valid-session").SetVal("user-123")
+		mock.ExpectGet("valid-session").SetVal(testUserID)
 		// No active revocation for this user
 		mock.ExpectGet("token_revoke:user-123").SetErr(redis.Nil)
 
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"sub": "user-123",
+			"sub": testUserID,
 			"exp": time.Now().Add(time.Hour).Unix(),
 			"iat": time.Now().Unix(),
 		})
-		tokenString, _ := token.SignedString([]byte("test-secret"))
+		tokenString, _ := token.SignedString([]byte(testSecret))
 
 		r := gin.New()
-		r.Use(AuthMiddleware(newTestProvider("test-secret"), client))
+		r.Use(AuthMiddleware(newTestProvider(testSecret), client))
 		r.GET("/", func(c *gin.Context) {
 			userID, _ := c.Get("user_id")
-			assert.Equal(t, "user-123", userID)
+			assert.Equal(t, testUserID, userID)
 			c.Status(http.StatusOK)
 		})
 

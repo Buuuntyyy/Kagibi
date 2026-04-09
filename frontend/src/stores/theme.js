@@ -9,7 +9,7 @@ export const useThemeStore = defineStore('theme', () => {
   }
 
   watchEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme.value)
+    document.documentElement.dataset.theme = theme.value
     localStorage.setItem('theme', theme.value)
   })
 

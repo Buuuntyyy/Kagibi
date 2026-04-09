@@ -11,12 +11,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const registerPath = "/register"
+
 func TestRegisterHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	t.Run("Missing Required Fields", func(t *testing.T) {
 		router := gin.New()
-		router.POST("/register", func(c *gin.Context) {
+		router.POST(registerPath, func(c *gin.Context) {
 			var req struct {
 				Email     string `json:"email"`
 				Password  string `json:"password"`
@@ -40,7 +42,7 @@ func TestRegisterHandler(t *testing.T) {
 		jsonBody, _ := json.Marshal(body)
 
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("POST", "/register", bytes.NewBuffer(jsonBody))
+		req, _ := http.NewRequest("POST", registerPath, bytes.NewBuffer(jsonBody))
 		req.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, req)
 
@@ -49,7 +51,7 @@ func TestRegisterHandler(t *testing.T) {
 
 	t.Run("Invalid Email Format", func(t *testing.T) {
 		router := gin.New()
-		router.POST("/register", func(c *gin.Context) {
+		router.POST(registerPath, func(c *gin.Context) {
 			var req struct {
 				Email     string `json:"email"`
 				Password  string `json:"password"`
@@ -75,7 +77,7 @@ func TestRegisterHandler(t *testing.T) {
 		jsonBody, _ := json.Marshal(body)
 
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("POST", "/register", bytes.NewBuffer(jsonBody))
+		req, _ := http.NewRequest("POST", registerPath, bytes.NewBuffer(jsonBody))
 		req.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, req)
 

@@ -14,6 +14,54 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// checkTokenRevocation verifies the token has not been revoked via Redis.
+// Returns false (not revoked) if redisClient is nil.
+// Returns an error only on a hard Redis failure (not on redis.Nil / key absent).
+func checkTokenRevocation(redisClient *redis.Client, userID string, claims jwt.MapClaims) (revoked bool, redisErr error) {
+	if redisClient == nil {
+		return false, nil
+	}
+	iatFloat, ok := claims["iat"].(float64)
+	if !ok {
+		return false, nil
+	}
+	revokeKey := "token_revoke:" + userID
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	revokeStr, rErr := redisClient.Get(ctx, revokeKey).Result()
+	cancel()
+	if rErr == redis.Nil {
+		return false, nil
+	}
+	if rErr != nil {
+		return false, rErr
+	}
+	revokeTs, parseErr := strconv.ParseInt(revokeStr, 10, 64)
+	return parseErr == nil && int64(iatFloat) < revokeTs, nil
+}
+
+// extractUserID parses the user ID from the token claims using the provider-specific claim key.
+func extractUserID(provider authprovider.AuthProvider, claims jwt.MapClaims) (string, bool) {
+	userIDClaim := provider.GetUserIDClaim()
+	userIDRaw, exists := claims[userIDClaim]
+	if !exists {
+		return "", false
+	}
+	userID, ok := userIDRaw.(string)
+	return userID, ok && userID != ""
+}
+
+// trackActiveSession records the user as active in Redis with a 15-minute TTL (best-effort).
+func trackActiveSession(redisClient *redis.Client, userID string) {
+	if redisClient == nil {
+		return
+	}
+	go func(uid string) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		redisClient.Set(ctx, "active_user:"+uid, "1", 15*time.Minute)
+	}(userID)
+}
+
 // AuthMiddleware validates JWT tokens using the configured auth provider (Supabase or PocketBase).
 // It supports HS256 tokens and extracts the user ID from the provider-specific claim.
 func AuthMiddleware(provider authprovider.AuthProvider, redisClient *redis.Client) gin.HandlerFunc {
@@ -45,42 +93,24 @@ func AuthMiddleware(provider authprovider.AuthProvider, redisClient *redis.Clien
 			return
 		}
 
-		userIDClaim := provider.GetUserIDClaim()
-		userIDRaw, exists := claims[userIDClaim]
-		if !exists {
-			log.Printf("[Auth/%s] Missing user ID claim '%s' in token", provider.Name(), userIDClaim)
+		userID, valid := extractUserID(provider, claims)
+		if !valid {
+			log.Printf("[Auth/%s] Missing or invalid user ID claim in token", provider.Name())
 			c.AbortWithStatusJSON(401, gin.H{"error": "Claims invalides"})
 			return
 		}
 
-		userID, ok := userIDRaw.(string)
-		if !ok || userID == "" {
-			c.AbortWithStatusJSON(401, gin.H{"error": "User ID invalide"})
+		// Token revocation check — rejects tokens issued before a password change or MFA disable.
+		revoked, redisErr := checkTokenRevocation(redisClient, userID, claims)
+		if redisErr != nil {
+			// Redis error (timeout, connection failure) — fail-closed.
+			log.Printf("[Auth] Redis revocation check failed for user %s: %v", userID, redisErr)
+			c.AbortWithStatusJSON(503, gin.H{"error": "Service temporarily unavailable"})
 			return
 		}
-
-		// Token revocation check — rejects tokens issued before a password change or MFA disable.
-		// On those events, "token_revoke:<userID>" is set to the Unix timestamp of the change.
-		// Any token whose iat (issued-at) is older than that timestamp is rejected.
-		if redisClient != nil {
-			if iatFloat, ok := claims["iat"].(float64); ok {
-				revokeKey := "token_revoke:" + userID
-				ctx2, cancel2 := context.WithTimeout(context.Background(), 500*time.Millisecond)
-				revokeStr, rErr := redisClient.Get(ctx2, revokeKey).Result()
-				cancel2()
-				if rErr == nil {
-					if revokeTs, parseErr := strconv.ParseInt(revokeStr, 10, 64); parseErr == nil && int64(iatFloat) < revokeTs {
-						c.AbortWithStatusJSON(401, gin.H{"error": "Token révoqué"})
-						return
-					}
-				} else if rErr != redis.Nil {
-					// Redis error (timeout, connection failure) — fail-closed.
-					// Allowing revoked tokens through during Redis unavailability is a security regression.
-					log.Printf("[Auth] Redis revocation check failed for user %s: %v", userID, rErr)
-					c.AbortWithStatusJSON(503, gin.H{"error": "Service temporarily unavailable"})
-					return
-				}
-			}
+		if revoked {
+			c.AbortWithStatusJSON(401, gin.H{"error": "Token révoqué"})
+			return
 		}
 
 		c.Set("user_id", userID)
@@ -92,14 +122,7 @@ func AuthMiddleware(provider authprovider.AuthProvider, redisClient *redis.Clien
 		}
 		c.Set("aal", aal)
 
-		// Track active session in Redis (TTL 15 minutes) for monitoring
-		if redisClient != nil {
-			go func(uid string) {
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				defer cancel()
-				redisClient.Set(ctx, "active_user:"+uid, "1", 15*time.Minute)
-			}(userID)
-		}
+		trackActiveSession(redisClient, userID)
 
 		c.Next()
 	}

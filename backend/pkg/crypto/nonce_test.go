@@ -12,6 +12,35 @@ const (
 	fmtWrongByteLen    = "expected %d bytes, got %d"
 )
 
+func testNonceIsNonZero(t *testing.T, nonce []byte) {
+	t.Helper()
+	for _, b := range nonce {
+		if b != 0 {
+			return
+		}
+	}
+	t.Error("nonce should not be all zeros")
+}
+
+func testNoncesAreUnique(t *testing.T, sampleSize int) {
+	t.Helper()
+	seen := make(map[string]struct{}, sampleSize)
+	for i := 0; i < sampleSize; i++ {
+		nonce, err := GenerateNonce()
+		if err != nil {
+			t.Fatalf("unexpected error at iteration %d: %v", i, err)
+		}
+		key := string(nonce)
+		if _, exists := seen[key]; exists {
+			t.Fatalf("duplicate nonce detected at iteration %d", i)
+		}
+		seen[key] = struct{}{}
+	}
+	if len(seen) != sampleSize {
+		t.Errorf("expected %d unique nonces, got %d", sampleSize, len(seen))
+	}
+}
+
 func TestGenerateNonce(t *testing.T) {
 	t.Run("generates 12 bytes", func(t *testing.T) {
 		nonce, err := GenerateNonce()
@@ -28,39 +57,11 @@ func TestGenerateNonce(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtUnexpectedError, err)
 		}
-
-		allZero := true
-		for _, b := range nonce {
-			if b != 0 {
-				allZero = false
-				break
-			}
-		}
-		if allZero {
-			t.Error("nonce should not be all zeros")
-		}
+		testNonceIsNonZero(t, nonce)
 	})
 
 	t.Run("generates unique nonces - 10000 samples", func(t *testing.T) {
-		const sampleSize = 10000
-		seen := make(map[string]struct{}, sampleSize)
-
-		for i := 0; i < sampleSize; i++ {
-			nonce, err := GenerateNonce()
-			if err != nil {
-				t.Fatalf("unexpected error at iteration %d: %v", i, err)
-			}
-
-			key := string(nonce)
-			if _, exists := seen[key]; exists {
-				t.Fatalf("duplicate nonce detected at iteration %d", i)
-			}
-			seen[key] = struct{}{}
-		}
-
-		if len(seen) != sampleSize {
-			t.Errorf("expected %d unique nonces, got %d", sampleSize, len(seen))
-		}
+		testNoncesAreUnique(t, 10000)
 	})
 }
 
@@ -94,6 +95,46 @@ func TestGenerateBaseNonce(t *testing.T) {
 	})
 }
 
+func testChunkCounterEncoding(t *testing.T, base []byte) {
+	t.Helper()
+	tests := []struct {
+		index    uint32
+		expected []byte
+	}{
+		{0, []byte{0, 0, 0, 0}},
+		{1, []byte{1, 0, 0, 0}},
+		{256, []byte{0, 1, 0, 0}},
+		{0xFFFFFFFF, []byte{0xFF, 0xFF, 0xFF, 0xFF}},
+		{0x12345678, []byte{0x78, 0x56, 0x34, 0x12}},
+	}
+	for _, tc := range tests {
+		nonce, err := GenerateChunkNonce(base, tc.index)
+		if err != nil {
+			t.Fatalf("unexpected error for index %d: %v", tc.index, err)
+		}
+		counter := nonce[8:12]
+		if !bytes.Equal(counter, tc.expected) {
+			t.Errorf("index %d: got counter %v, want %v", tc.index, counter, tc.expected)
+		}
+	}
+}
+
+func testChunkNoncesAreUnique(t *testing.T, base []byte, chunkCount uint32) {
+	t.Helper()
+	seen := make(map[string]struct{}, chunkCount)
+	for i := uint32(0); i < chunkCount; i++ {
+		nonce, err := GenerateChunkNonce(base, i)
+		if err != nil {
+			t.Fatalf("unexpected error at chunk %d: %v", i, err)
+		}
+		key := string(nonce)
+		if _, exists := seen[key]; exists {
+			t.Fatalf("duplicate nonce detected at chunk %d", i)
+		}
+		seen[key] = struct{}{}
+	}
+}
+
 func TestGenerateChunkNonce(t *testing.T) {
 	t.Run("generates 12 bytes from base + counter", func(t *testing.T) {
 		base := make([]byte, BaseNonceLength)
@@ -112,7 +153,6 @@ func TestGenerateChunkNonce(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtUnexpectedError, err)
 		}
-
 		if !bytes.Equal(nonce[:8], base) {
 			t.Errorf("base nonce not preserved: got %v, want %v", nonce[:8], base)
 		}
@@ -120,48 +160,12 @@ func TestGenerateChunkNonce(t *testing.T) {
 
 	t.Run("encodes counter in little-endian", func(t *testing.T) {
 		base := make([]byte, BaseNonceLength)
-
-		tests := []struct {
-			index    uint32
-			expected []byte
-		}{
-			{0, []byte{0, 0, 0, 0}},
-			{1, []byte{1, 0, 0, 0}},
-			{256, []byte{0, 1, 0, 0}},
-			{0xFFFFFFFF, []byte{0xFF, 0xFF, 0xFF, 0xFF}},
-			{0x12345678, []byte{0x78, 0x56, 0x34, 0x12}},
-		}
-
-		for _, tc := range tests {
-			nonce, err := GenerateChunkNonce(base, tc.index)
-			if err != nil {
-				t.Fatalf("unexpected error for index %d: %v", tc.index, err)
-			}
-
-			counter := nonce[8:12]
-			if !bytes.Equal(counter, tc.expected) {
-				t.Errorf("index %d: got counter %v, want %v", tc.index, counter, tc.expected)
-			}
-		}
+		testChunkCounterEncoding(t, base)
 	})
 
 	t.Run("generates unique nonces for all chunks", func(t *testing.T) {
 		base, _ := GenerateBaseNonceSimple()
-		const chunkCount = 10000
-		seen := make(map[string]struct{}, chunkCount)
-
-		for i := uint32(0); i < chunkCount; i++ {
-			nonce, err := GenerateChunkNonce(base, i)
-			if err != nil {
-				t.Fatalf("unexpected error at chunk %d: %v", i, err)
-			}
-
-			key := string(nonce)
-			if _, exists := seen[key]; exists {
-				t.Fatalf("duplicate nonce detected at chunk %d", i)
-			}
-			seen[key] = struct{}{}
-		}
+		testChunkNoncesAreUnique(t, base, 10000)
 	})
 
 	t.Run("rejects invalid base nonce", func(t *testing.T) {
@@ -171,7 +175,6 @@ func TestGenerateChunkNonce(t *testing.T) {
 			make([]byte, 9),
 			make([]byte, 12),
 		}
-
 		for _, base := range invalidBases {
 			_, err := GenerateChunkNonce(base, 0)
 			if err == nil {
@@ -258,36 +261,43 @@ func TestEncryptedChunkFormat(t *testing.T) {
 	})
 }
 
+func collectConcurrentNonces(t *testing.T, gen *Generator, goroutines, perGoroutine int) []string {
+	t.Helper()
+	var wg sync.WaitGroup
+	results := make(chan string, goroutines*perGoroutine)
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < perGoroutine; j++ {
+				nonce, err := gen.Generate()
+				if err != nil {
+					t.Errorf("generate failed: %v", err)
+					return
+				}
+				results <- string(nonce)
+			}
+		}()
+	}
+	wg.Wait()
+	close(results)
+	var all []string
+	for n := range results {
+		all = append(all, n)
+	}
+	return all
+}
+
 func TestConcurrentGeneration(t *testing.T) {
 	t.Run("thread-safe generation", func(t *testing.T) {
 		gen := NewGenerator(true)
 		const goroutines = 100
 		const perGoroutine = 100
 
-		var wg sync.WaitGroup
-		results := make(chan string, goroutines*perGoroutine)
+		all := collectConcurrentNonces(t, gen, goroutines, perGoroutine)
 
-		for i := 0; i < goroutines; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for j := 0; j < perGoroutine; j++ {
-					nonce, err := gen.Generate()
-					if err != nil {
-						t.Errorf("generate failed: %v", err)
-						return
-					}
-					results <- string(nonce)
-				}
-			}()
-		}
-
-		wg.Wait()
-		close(results)
-
-		// Check for duplicates
-		seen := make(map[string]struct{})
-		for nonce := range results {
+		seen := make(map[string]struct{}, len(all))
+		for _, nonce := range all {
 			if _, exists := seen[nonce]; exists {
 				t.Error("duplicate nonce detected in concurrent generation")
 			}

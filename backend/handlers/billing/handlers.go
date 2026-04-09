@@ -12,6 +12,8 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const errFailedGetUserPlan = "Failed to get user plan"
+
 func getUserPlanState(db *bun.DB, userID string) (*pkg.UserPlan, error) {
 	planState, err := pkg.FindUserPlanByUserID(db, userID)
 	if err == nil && planState != nil {
@@ -76,7 +78,7 @@ func GetCurrentPlanHandler(db *bun.DB) gin.HandlerFunc {
 		}
 		planState, err := getUserPlanState(db, userID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user plan"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errFailedGetUserPlan})
 			return
 		}
 		// Return plan info directly from DB — no billing provider required
@@ -145,7 +147,7 @@ func GetUsageHandler(db *bun.DB) gin.HandlerFunc {
 		}
 		planState, err := getUserPlanState(db, userID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user plan"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errFailedGetUserPlan})
 			return
 		}
 		activeShares, _ := db.NewSelect().TableExpr("file_shares fs").
@@ -184,7 +186,7 @@ func CheckQuotaHandler(db *bun.DB) gin.HandlerFunc {
 		}
 		planState, err := getUserPlanState(db, userID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user plan"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errFailedGetUserPlan})
 			return
 		}
 		remaining := planState.StorageLimit - planState.StorageUsed

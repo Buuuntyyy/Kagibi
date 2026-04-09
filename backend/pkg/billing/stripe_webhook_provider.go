@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const customerSubscriptionPath = "/api/v1/customers/%s/subscription"
+
 // StripeWebhookProvider communique avec votre service privé Stripe via API REST.
 // Aucune dépendance directe à Stripe SDK — toute la logique Stripe
 // est dans votre repo privé. Celui-ci est un simple client HTTP.
@@ -125,7 +127,7 @@ func (s *StripeWebhookProvider) CreateSubscription(ctx context.Context, userID, 
 
 func (s *StripeWebhookProvider) GetSubscription(ctx context.Context, userID string) (*Subscription, error) {
 	var sub Subscription
-	err := s.doJSON(ctx, "GET", fmt.Sprintf("/api/v1/customers/%s/subscription", userID), nil, &sub)
+	err := s.doJSON(ctx, "GET", fmt.Sprintf(customerSubscriptionPath, userID), nil, &sub)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +136,7 @@ func (s *StripeWebhookProvider) GetSubscription(ctx context.Context, userID stri
 
 func (s *StripeWebhookProvider) UpdateSubscription(ctx context.Context, userID, newPlanCode, idempotencyKey string) (*Subscription, error) {
 	var sub Subscription
-	err := s.doJSON(ctx, "PUT", fmt.Sprintf("/api/v1/customers/%s/subscription", userID), map[string]string{
+	err := s.doJSON(ctx, "PUT", fmt.Sprintf(customerSubscriptionPath, userID), map[string]string{
 		"plan_code":       newPlanCode,
 		"idempotency_key": idempotencyKey,
 	}, &sub)
@@ -142,7 +144,7 @@ func (s *StripeWebhookProvider) UpdateSubscription(ctx context.Context, userID, 
 }
 
 func (s *StripeWebhookProvider) CancelSubscription(ctx context.Context, userID, idempotencyKey string) error {
-	return s.doJSON(ctx, "DELETE", fmt.Sprintf("/api/v1/customers/%s/subscription", userID), map[string]string{
+	return s.doJSON(ctx, "DELETE", fmt.Sprintf(customerSubscriptionPath, userID), map[string]string{
 		"idempotency_key": idempotencyKey,
 	}, nil)
 }

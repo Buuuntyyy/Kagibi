@@ -308,10 +308,8 @@ func registerSecurityRoutes(g *gin.RouterGroup) {
 	securityG.GET("/events", func(c *gin.Context) { security.GetSecurityEvents(c) })
 }
 
-func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
-	p2pG := g.Group("/p2p")
-
-	p2pG.POST("/signal", func(c *gin.Context) {
+func p2pSignalHandler(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		userID, _ := c.Get("user_id")
 		var req struct {
 			TargetUserID string         `json:"target_user_id" binding:"required"`
@@ -322,40 +320,33 @@ func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 			c.JSON(400, gin.H{"error": err.Error()})
 			return
 		}
-
 		signal := &pkg.P2PSignal{
 			SenderID:   userID.(string),
 			TargetID:   req.TargetUserID,
 			SignalType: req.SignalType,
 			Payload:    req.Payload,
 		}
-
 		if _, err := db.NewInsert().Model(signal).Exec(c.Request.Context()); err != nil {
 			c.JSON(500, gin.H{"error": "Failed to send signal"})
 			return
 		}
-
-		// Push signal over WebSocket for immediate delivery
 		wshandler.GlobalHub.SendP2PSignalToUser(req.TargetUserID, userID.(string), req.SignalType, req.Payload)
-
 		c.JSON(200, gin.H{"status": "sent", "signal_id": signal.ID})
-	})
+	}
+}
 
-	p2pG.GET("/signals", func(c *gin.Context) {
+func p2pFetchSignalsHandler(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		userID, _ := c.Get("user_id")
 		var signals []pkg.P2PSignal
-
-		err := db.NewSelect().
+		if err := db.NewSelect().
 			Model(&signals).
 			Where("target_id = ? AND consumed = false", userID).
 			Order("created_at ASC").
-			Scan(c.Request.Context())
-
-		if err != nil {
+			Scan(c.Request.Context()); err != nil {
 			c.JSON(500, gin.H{"error": "Failed to fetch signals"})
 			return
 		}
-
 		if len(signals) > 0 {
 			var ids []int64
 			for _, s := range signals {
@@ -367,17 +358,17 @@ func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 				Exec(c.Request.Context())
 		}
 		c.JSON(200, gin.H{"signals": signals})
-	})
+	}
+}
 
-	p2pG.GET("ice-config", func(c *gin.Context) {
+func p2pIceConfigHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
 		turnURL := os.Getenv("TURN_SERVER_URL")
 		turnUser := os.Getenv("TURN_USERNAME")
 		turnCred := os.Getenv("TURN_CREDENTIAL")
-
 		iceServers := []map[string]any{
 			{"urls": []string{"stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"}},
 		}
-
 		if turnURL != "" {
 			turnURLs := []string{turnURL}
 			if !strings.Contains(turnURL, "?transport=") {
@@ -390,7 +381,14 @@ func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 			})
 		}
 		c.JSON(200, gin.H{"iceServers": iceServers})
-	})
+	}
+}
+
+func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
+	p2pG := g.Group("/p2p")
+	p2pG.POST("/signal", p2pSignalHandler(db))
+	p2pG.GET("/signals", p2pFetchSignalsHandler(db))
+	p2pG.GET("ice-config", p2pIceConfigHandler())
 }
 
 // registerEventRoutes adds a polling endpoint for realtime events.

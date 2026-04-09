@@ -16,6 +16,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const queryIDEq = "id = ?"
+
 // authUser maps to the auth_users table managed exclusively by LocalProvider.
 type authUser struct {
 	bun.BaseModel      `bun:"table:auth_users,alias:au"`
@@ -124,7 +126,7 @@ func (p *LocalProvider) FindAuthUserByEmail(email string) (*authUser, error) {
 
 // DeleteUser removes the auth_users record for the given user ID.
 func (p *LocalProvider) DeleteUser(userID string) error {
-	_, err := p.db.NewDelete().Model((*authUser)(nil)).Where("id = ?", userID).Exec(context.Background())
+	_, err := p.db.NewDelete().Model((*authUser)(nil)).Where(queryIDEq, userID).Exec(context.Background())
 	return err
 }
 
@@ -136,7 +138,7 @@ func (p *LocalProvider) UpdateUserPassword(userID, newPassword string) error {
 	}
 	_, err = p.db.NewUpdate().Model((*authUser)(nil)).
 		Set("password_hash = ?", hash).
-		Where("id = ?", userID).
+		Where(queryIDEq, userID).
 		Exec(context.Background())
 	return err
 }
@@ -145,7 +147,7 @@ func (p *LocalProvider) UpdateUserPassword(userID, newPassword string) error {
 // Returns a typed error string when the old password is wrong so callers can return 401.
 func (p *LocalProvider) UpdateUserPasswordWithVerification(userID, oldPassword, newPassword string) error {
 	var au authUser
-	if err := p.db.NewSelect().Model(&au).Where("id = ?", userID).Scan(context.Background()); err != nil {
+	if err := p.db.NewSelect().Model(&au).Where(queryIDEq, userID).Scan(context.Background()); err != nil {
 		return fmt.Errorf("user not found")
 	}
 	if err := p.CheckPassword(au.PasswordHash, oldPassword); err != nil {
@@ -157,7 +159,7 @@ func (p *LocalProvider) UpdateUserPasswordWithVerification(userID, oldPassword, 
 // GetAuthUserByID returns the full auth_users row for the given user ID.
 func (p *LocalProvider) GetAuthUserByID(userID string) (*authUser, error) {
 	var au authUser
-	if err := p.db.NewSelect().Model(&au).Where("id = ?", userID).Scan(context.Background()); err != nil {
+	if err := p.db.NewSelect().Model(&au).Where(queryIDEq, userID).Scan(context.Background()); err != nil {
 		return nil, err
 	}
 	return &au, nil
@@ -189,7 +191,7 @@ func (p *LocalProvider) StartTOTPEnrollment(userID, email, friendlyName string) 
 	_, err = p.db.NewUpdate().Model((*authUser)(nil)).
 		Set("totp_secret = ?, totp_factor_id = ?, totp_friendly_name = ?, totp_enabled = false",
 			key.Secret(), factorID, friendlyName).
-		Where("id = ?", userID).
+		Where(queryIDEq, userID).
 		Exec(context.Background())
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to store TOTP secret: %w", err)
@@ -221,7 +223,7 @@ func (p *LocalProvider) ValidateTOTPCode(userID, code string) error {
 
 	if !totp.Validate(code, au.TOTPSecret) {
 		newAttempts := au.TOTPFailedAttempts + 1
-		upd := p.db.NewUpdate().Model((*authUser)(nil)).Where("id = ?", userID)
+		upd := p.db.NewUpdate().Model((*authUser)(nil)).Where(queryIDEq, userID)
 		if newAttempts >= 5 {
 			lockedUntil := time.Now().Add(15 * time.Minute)
 			upd = upd.Set("totp_failed_attempts = ?, totp_locked_until = ?", newAttempts, lockedUntil)
@@ -236,7 +238,7 @@ func (p *LocalProvider) ValidateTOTPCode(userID, code string) error {
 	now := time.Now()
 	_, _ = p.db.NewUpdate().Model((*authUser)(nil)).
 		Set("totp_failed_attempts = 0, totp_locked_until = NULL, totp_last_code = ?, totp_last_code_at = ?", code, now).
-		Where("id = ?", userID).
+		Where(queryIDEq, userID).
 		Exec(context.Background())
 	return nil
 }
@@ -245,7 +247,7 @@ func (p *LocalProvider) ValidateTOTPCode(userID, code string) error {
 func (p *LocalProvider) ActivateTOTP(userID string) error {
 	_, err := p.db.NewUpdate().Model((*authUser)(nil)).
 		Set("totp_enabled = true").
-		Where("id = ?", userID).
+		Where(queryIDEq, userID).
 		Exec(context.Background())
 	return err
 }
@@ -268,7 +270,7 @@ func (p *LocalProvider) SyncMFAStatus(userID string, enabled bool) error {
 func (p *LocalProvider) DisableTOTP(userID string) error {
 	_, err := p.db.NewUpdate().Model((*authUser)(nil)).
 		Set("totp_enabled = false, totp_secret = NULL, totp_factor_id = NULL, totp_friendly_name = NULL").
-		Where("id = ?", userID).
+		Where(queryIDEq, userID).
 		Exec(context.Background())
 	return err
 }

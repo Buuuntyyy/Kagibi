@@ -112,12 +112,12 @@ const getContrastColor = (hexcolor) => {
     if (!hexcolor || hexcolor[0] !== '#') return 'black';
     
     // Convert to RGB value
-    var r = Number.parseInt(hexcolor.substr(1,2),16);
-    var g = Number.parseInt(hexcolor.substr(3,2),16);
-    var b = Number.parseInt(hexcolor.substr(5,2),16);
-    
+    const r = Number.parseInt(hexcolor.substr(1,2),16);
+    const g = Number.parseInt(hexcolor.substr(3,2),16);
+    const b = Number.parseInt(hexcolor.substr(5,2),16);
+
     // Get YIQ ratio
-    var yiq = ((r*299)+(g*587)+(b*114))/1000;
+    const yiq = ((r*299)+(g*587)+(b*114))/1000;
     
     // Check contrast
     return (yiq >= 128) ? 'black' : 'white';

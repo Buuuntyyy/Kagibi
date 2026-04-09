@@ -99,87 +99,81 @@ func StartWorker(redisClient *redis.Client) {
 
 func processTask(task S3Task) {
 	ctx := context.Background()
-
 	if task.Type == TaskUpload {
-		// Check if file exists before trying to open
-		if _, err := os.Stat(task.SrcKey); err != nil {
-			log.Printf("S3 Worker ERROR: File does not exist! Path: %s, Error: %v", task.SrcKey, err)
-			return
-		}
+		processUploadTask(ctx, task)
+		return
+	}
+	processMoveTask(ctx, task)
+}
 
-		// Upload from local temp file to S3
-		file, err := os.Open(task.SrcKey)
-		if err != nil {
-			log.Printf("S3 Worker ERROR: Cannot open temp file %s: %v", task.SrcKey, err)
-			return
-		}
-		defer file.Close()
-
-		uploader := manager.NewUploader(s3storage.Client)
-		_, err = uploader.Upload(ctx, &s3.PutObjectInput{
-			Bucket:      aws.String(s3storage.BucketName),
-			Key:         aws.String(task.DestKey),
-			Body:        file,
-			ContentType: aws.String(task.ContentType),
-		})
-
-		if err != nil {
-			log.Printf("S3 Worker ERROR: Upload failed for %s: %v", task.DestKey, err)
-			// Retry logic could be added here
-			return
-		}
-
-		// Delete temp file on success
-		file.Close()
-		if err := os.Remove(task.SrcKey); err != nil {
-			log.Printf("S3 Worker WARNING: Failed to delete temp file %s: %v", task.SrcKey, err)
-		}
+func processUploadTask(ctx context.Context, task S3Task) {
+	if _, err := os.Stat(task.SrcKey); err != nil {
+		log.Printf("S3 Worker ERROR: File does not exist! Path: %s, Error: %v", task.SrcKey, err)
 		return
 	}
 
+	file, err := os.Open(task.SrcKey)
+	if err != nil {
+		log.Printf("S3 Worker ERROR: Cannot open temp file %s: %v", task.SrcKey, err)
+		return
+	}
+	defer file.Close()
+
+	uploader := manager.NewUploader(s3storage.Client)
+	_, err = uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(s3storage.BucketName),
+		Key:         aws.String(task.DestKey),
+		Body:        file,
+		ContentType: aws.String(task.ContentType),
+	})
+	if err != nil {
+		log.Printf("S3 Worker ERROR: Upload failed for %s: %v", task.DestKey, err)
+		return
+	}
+
+	file.Close()
+	if err := os.Remove(task.SrcKey); err != nil {
+		log.Printf("S3 Worker WARNING: Failed to delete temp file %s: %v", task.SrcKey, err)
+	}
+}
+
+func processMoveTask(ctx context.Context, task S3Task) {
 	if task.IsFolder {
-		// List objects with prefix SrcKey
-		// Note: SrcKey for folder should end with "/"
-		srcPrefix := task.SrcKey
-		if !strings.HasSuffix(srcPrefix, "/") {
-			srcPrefix += "/"
-		}
-		destPrefix := task.DestKey
-		if !strings.HasSuffix(destPrefix, "/") {
-			destPrefix += "/"
-		}
-
-		paginator := s3.NewListObjectsV2Paginator(s3storage.Client, &s3.ListObjectsV2Input{
-			Bucket: aws.String(s3storage.BucketName),
-			Prefix: aws.String(srcPrefix),
-		})
-
-		for paginator.HasMorePages() {
-			page, err := paginator.NextPage(ctx)
-			if err != nil {
-				log.Printf("Error listing objects for folder move: %v", err)
-				return
-			}
-
-			for _, obj := range page.Contents {
-				oldKey := *obj.Key
-				// Replace prefix
-				newKey := strings.Replace(oldKey, srcPrefix, destPrefix, 1)
-
-				err := copyAndDelete(ctx, oldKey, newKey)
-				if err != nil {
-					log.Printf("Error moving object %s: %v", oldKey, err)
-					// Continue with other files? Or stop?
-					// For now, continue to try to move as much as possible.
-				}
-			}
-		}
-
+		processFolderMove(ctx, task)
 	} else {
-		// Single file
-		err := copyAndDelete(ctx, task.SrcKey, task.DestKey)
-		if err != nil {
+		if err := copyAndDelete(ctx, task.SrcKey, task.DestKey); err != nil {
 			log.Printf("Error moving file %s: %v", task.SrcKey, err)
+		}
+	}
+}
+
+func processFolderMove(ctx context.Context, task S3Task) {
+	srcPrefix := task.SrcKey
+	if !strings.HasSuffix(srcPrefix, "/") {
+		srcPrefix += "/"
+	}
+	destPrefix := task.DestKey
+	if !strings.HasSuffix(destPrefix, "/") {
+		destPrefix += "/"
+	}
+
+	paginator := s3.NewListObjectsV2Paginator(s3storage.Client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s3storage.BucketName),
+		Prefix: aws.String(srcPrefix),
+	})
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			log.Printf("Error listing objects for folder move: %v", err)
+			return
+		}
+		for _, obj := range page.Contents {
+			oldKey := *obj.Key
+			newKey := strings.Replace(oldKey, srcPrefix, destPrefix, 1)
+			if err := copyAndDelete(ctx, oldKey, newKey); err != nil {
+				log.Printf("Error moving object %s: %v", oldKey, err)
+			}
 		}
 	}
 }

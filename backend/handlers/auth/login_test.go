@@ -11,12 +11,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const loginPath = "/login"
+
 func TestLoginHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	t.Run("Missing Fields", func(t *testing.T) {
 		router := gin.New()
-		router.POST("/login", func(c *gin.Context) {
+		router.POST(loginPath, func(c *gin.Context) {
 			var req struct {
 				Email    string `json:"email"`
 				Password string `json:"password"`
@@ -36,7 +38,7 @@ func TestLoginHandler(t *testing.T) {
 		jsonBody, _ := json.Marshal(body)
 
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("POST", "/login", bytes.NewBuffer(jsonBody))
+		req, _ := http.NewRequest("POST", loginPath, bytes.NewBuffer(jsonBody))
 		req.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, req)
 
@@ -45,7 +47,7 @@ func TestLoginHandler(t *testing.T) {
 
 	t.Run("Invalid JSON", func(t *testing.T) {
 		router := gin.New()
-		router.POST("/login", func(c *gin.Context) {
+		router.POST(loginPath, func(c *gin.Context) {
 			var req struct {
 				Email    string `json:"email"`
 				Password string `json:"password"`
@@ -58,7 +60,7 @@ func TestLoginHandler(t *testing.T) {
 		})
 
 		w := httptest.NewRecorder()
-		req, _ := http.NewRequest("POST", "/login", bytes.NewBufferString("invalid-json"))
+		req, _ := http.NewRequest("POST", loginPath, bytes.NewBufferString("invalid-json"))
 		req.Header.Set("Content-Type", "application/json")
 		router.ServeHTTP(w, req)
 

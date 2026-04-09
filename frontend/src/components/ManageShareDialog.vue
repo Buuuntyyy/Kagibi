@@ -299,11 +299,82 @@ const isFriendShared = (friendId) => {
     return sharedStatus.value[friendId];
 }
 
+// Decrypt a key encrypted with master key (AES-GCM, IV prepended)
+async function decryptWithMasterKey(encryptedB64, masterKey) {
+    const encBytes = sodium.from_base64(encryptedB64);
+    const iv = encBytes.slice(0, 12);
+    const data = encBytes.slice(12);
+    return window.crypto.subtle.decrypt({ name: "AES-GCM", iv }, masterKey, data);
+}
+
+// Encrypt a raw key buffer with a CryptoKey, returning IV+ciphertext as base64
+async function encryptWithKey(rawKeyBuffer, cryptoKey) {
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, rawKeyBuffer);
+    const combined = new Uint8Array(iv.byteLength + encrypted.byteLength);
+    combined.set(iv);
+    combined.set(new Uint8Array(encrypted), iv.byteLength);
+    return sodium.to_base64(combined);
+}
+
+// Encrypt child file and folder keys with the parent folder key
+async function encryptChildKeys(files, subFolders, folderKeyCrypto, masterKey) {
+    const folderFileKeys = {};
+    for (const file of files) {
+        const fEncKey = file.EncryptedKey || file.encrypted_key;
+        if (!fEncKey) { console.warn(`File ${file.Name} has no key, skipping.`); continue; }
+        try {
+            const fileKeyRaw = await decryptWithMasterKey(fEncKey, masterKey);
+            folderFileKeys[file.ID || file.id] = await encryptWithKey(fileKeyRaw, folderKeyCrypto);
+        } catch(err) { console.warn(`Failed to process key for file ${file.Name}:`, err); }
+    }
+    const folderFolderKeys = {};
+    for (const folder of subFolders) {
+        const fEncKey = folder.EncryptedKey || folder.encrypted_key;
+        if (!fEncKey) { console.warn(`Folder ${folder.Name} has no key, skipping.`); continue; }
+        try {
+            const subFolderKeyRaw = await decryptWithMasterKey(fEncKey, masterKey);
+            folderFolderKeys[folder.ID || folder.id] = await encryptWithKey(subFolderKeyRaw, folderKeyCrypto);
+        } catch(err) { console.warn(`Failed to process key for folder ${folder.Name}:`, err); }
+    }
+    return { folderFileKeys, folderFolderKeys };
+}
+
+// Get or create a folder key, persisting a new one to the backend if needed
+async function getOrCreateFolderKey(itemId, existingEncKey, masterKey, item) {
+    if (existingEncKey) {
+        const folderKeyRaw = await decryptWithMasterKey(existingEncKey, masterKey);
+        const folderKeyCrypto = await window.crypto.subtle.importKey(
+            "raw", folderKeyRaw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]
+        );
+        return { folderKeyRaw, folderKeyCrypto };
+    }
+    const folderKeyCrypto = await generateMasterKey();
+    const folderKeyRaw = await window.crypto.subtle.exportKey("raw", folderKeyCrypto);
+    const encryptedKeyBase64 = await encryptWithKey(folderKeyRaw, masterKey);
+    await api.put(`/folders/${itemId}/key`, { encrypted_key: encryptedKeyBase64 });
+    if (item) {
+        item.encrypted_key = encryptedKeyBase64;
+        item.EncryptedKey = encryptedKeyBase64;
+    }
+    return { folderKeyRaw, folderKeyCrypto };
+}
+
+// Resolve the full folder path from item properties
+function resolveFolderPath(item) {
+    const itemName = item.Name || item.name;
+    let itemParentPath = item.Path || item.path || '/';
+    if (!itemParentPath) itemParentPath = '/';
+    if (itemParentPath.endsWith('/' + itemName)) {
+        console.warn("Detected Path might be full path. Using as is:", itemParentPath);
+        return itemParentPath;
+    }
+    return (itemParentPath === '/' ? '' : itemParentPath) + '/' + itemName;
+}
+
 const shareWithFriend = async (friend) => {
-    //console.log("Starting shareWithFriend for:", friend.name);
     if (!props.item || !friend.public_key) return;
-    
-    // Check if already shared, if so -> Revoke logic
+
     if (isFriendShared(friend.id)) {
         uiStore.requestDeleteConfirmation({
            title: "Arrêter le partage",
@@ -313,19 +384,12 @@ const shareWithFriend = async (friend) => {
              try {
                 const resourceType = (props.item.type === 'folder' || props.item.is_dir) ? 'folder' : 'file';
                 const resourceId = props.item.ID || props.item.id;
-
                 await api.delete(`/shares/direct`, {
-                    params: {
-                        resource_id: resourceId,
-                        resource_type: resourceType,
-                        friend_id: friend.id
-                    }
+                    params: { resource_id: resourceId, resource_type: resourceType, friend_id: friend.id }
                 });
-
                 sharedStatus.value[friend.id] = false;
              } catch(e) {
                 console.error("Revoke failed:", e);
-                // If 404, assume already deleted and update UI
                 if (e.response && e.response.status === 404) {
                      sharedStatus.value[friend.id] = false;
                 } else {
@@ -342,45 +406,17 @@ const shareWithFriend = async (friend) => {
     sharing.value[friend.id] = true;
     try {
         await sodium.ready;
-        //console.log("Sodium ready. Resource type check...");
-        
-        let encryptedKeyForFriend = "";
-        let folderFileKeys = {};
-        // props.item can be file or folder. Check type.
         const resourceType = (props.item.type === 'folder' || props.item.is_dir) ? 'folder' : 'file';
-        //console.log("ResourceType detected:", resourceType);
 
         if (resourceType === 'file') {
-             // Handle case sensitivity from Go backend (PascalCase) vs potentially camelCase
              const itemEncryptedKey = props.item.EncryptedKey || props.item.encrypted_key;
+             if (!itemEncryptedKey) throw new Error("Clé du fichier manquante. Impossible de partager.");
+             if (!authStore.masterKey) throw new Error("Clé Maître non disponible (Session expirée ?). Veuillez vous reconnecter.");
+             if (!authStore.privateKey) throw new Error("Clé privée non disponible. Veuillez vous reconnecter.");
 
-             if (!itemEncryptedKey) {
-                  throw new Error("Clé du fichier manquante. Impossible de partager.");
-             }
-             
-             if (!authStore.masterKey) {
-                  throw new Error("Clé Maître non disponible (Session expirée ?). Veuillez vous reconnecter.");
-             }
-             
-             if (!authStore.privateKey) {
-                  throw new Error("Clé privée non disponible. Veuillez vous reconnecter.");
-             }
-
-             const fileKeyEncryptedBytes = sodium.from_base64(itemEncryptedKey);
-             const iv = fileKeyEncryptedBytes.slice(0, 12);
-             const data = fileKeyEncryptedBytes.slice(12);
-             
-             const fileKeyRawBuffer = await window.crypto.subtle.decrypt(
-                 { name: "AES-GCM", iv: iv },
-                 authStore.masterKey,
-                 data
-             );
-
+             const fileKeyRawBuffer = await decryptWithMasterKey(itemEncryptedKey, authStore.masterKey);
              const friendPublicKey = await importKeyFromPEM(friend.public_key, 'spki');
-             encryptedKeyForFriend = await encryptKeyWithPublicKey(fileKeyRawBuffer, friendPublicKey);
-             
-             // Send share request for file
-             //console.log("Sending file share request...");
+             const encryptedKeyForFriend = await encryptKeyWithPublicKey(fileKeyRawBuffer, friendPublicKey);
              await api.post('/shares/direct', {
                 resource_id: props.item.ID || props.item.id,
                 resource_type: resourceType,
@@ -388,196 +424,29 @@ const shareWithFriend = async (friend) => {
                 encrypted_key: encryptedKeyForFriend,
                 permission: 'read',
              });
-             //console.log("File share request successful.");
              sharedStatus.value[friend.id] = true;
-             
+
         } else if (resourceType === 'folder') {
-            // --- FOLDER SHARING LOGIC ---
-            if (!authStore.masterKey) {
-                  throw new Error("Clé Maître non disponible (Session expirée ?). Veuillez vous reconnecter.");
-            }
+            if (!authStore.masterKey) throw new Error("Clé Maître non disponible (Session expirée ?). Veuillez vous reconnecter.");
 
-            let folderKeyRaw;
-            let folderKeyCrypto;
             const itemId = props.item.ID || props.item.id;
-            
-            // Check if folder already has a key (in props or we fetch/update it)
-            // Note: Currently frontend might not have updated 'encrypted_key' if we just generated it. 
-            // We blindly trust props.item or check logic.
             const existingEncKey = props.item.EncryptedKey || props.item.encrypted_key;
-            //console.log("Existing Folder Key found:", !!existingEncKey);
+            const { folderKeyRaw, folderKeyCrypto } = await getOrCreateFolderKey(
+                itemId, existingEncKey, authStore.masterKey, props.item
+            );
 
-            if (existingEncKey) {
-                 // Decrypt existing folder key
-                 const folderKeyEncryptedBytes = sodium.from_base64(existingEncKey);
-                 const iv = folderKeyEncryptedBytes.slice(0, 12);
-                 const data = folderKeyEncryptedBytes.slice(12);
-                 folderKeyRaw = await window.crypto.subtle.decrypt(
-                     { name: "AES-GCM", iv: iv },
-                     authStore.masterKey,
-                     data
-                 );
-                 //console.log("Folder key decrypted successfully.");
-                 // Import as CryptoKey
-                 folderKeyCrypto = await window.crypto.subtle.importKey(
-                    "raw", 
-                    folderKeyRaw, 
-                    { name: "AES-GCM" }, 
-                    false, 
-                    ["encrypt", "decrypt"]
-                 );
-            } else {
-                 //console.log("No existing key, generating new one...");
-                 // Generate NEW Folder Key
-                 folderKeyCrypto = await generateMasterKey(); // Returns AES-GCM CryptoKey
-                 folderKeyRaw = await window.crypto.subtle.exportKey("raw", folderKeyCrypto);
-                 
-                 // Encrypt with Master Key and Save to Backend
-                 const iv = window.crypto.getRandomValues(new Uint8Array(12));
-                 const encryptedFolderKeyBuffer = await window.crypto.subtle.encrypt(
-                    { name: "AES-GCM", iv: iv },
-                    authStore.masterKey,
-                    folderKeyRaw
-                 );
-                 
-                 const combined = new Uint8Array(iv.byteLength + encryptedFolderKeyBuffer.byteLength);
-                 combined.set(iv);
-                 combined.set(new Uint8Array(encryptedFolderKeyBuffer), iv.byteLength);
-                 const encryptedKeyBase64 = sodium.to_base64(combined);
+            const friendPublicKey = await importKeyFromPEM(friend.public_key, 'spki');
+            const encryptedKeyForFriend = await encryptKeyWithPublicKey(folderKeyRaw, friendPublicKey);
 
-                 // Persist to backend
-                 await api.put(`/folders/${itemId}/key`, {
-                     encrypted_key: encryptedKeyBase64
-                 });
-                 
-                 // Update local prop item
-                 if (props.item) {
-                    props.item.encrypted_key = encryptedKeyBase64;
-                    props.item.EncryptedKey = encryptedKeyBase64;
-                 }
-            }
-
-            // Encrypt Folder Key for Friend
-             const friendPublicKey = await importKeyFromPEM(friend.public_key, 'spki');
-             encryptedKeyForFriend = await encryptKeyWithPublicKey(folderKeyRaw, friendPublicKey);
-
-            // Fetch files in folder to share their keys
-            // Construct path: 
-            // The item (folder) has a Path property which is its PARENT folder.
-            // If item.Path is '/', the folder's path is "/Name".
-            // If item.Path is '/Parent', the folder's path is "/Parent/Name".
-            
-            //console.log("DEBUG: props.item props:", props.item);
-            
-            // NOTE: props.item often comes from the File list where keys match the Go struct or JSON response.
-            // Go Struct: Name, Path.
-            const itemName = props.item.Name || props.item.name;
-            let itemParentPath = props.item.Path || props.item.path || '';
-            
-            // Normalize path separator
-            // If empty, assume root "/"
-            if (!itemParentPath) itemParentPath = '/';
-            
-            // NOTE: There is a potential bug where the frontend object already contains the FULL path in 'path' property
-            // if it was modified by the store logic.
-            // However, usually API returns 'Path' as parent.
-            // Let's verify if 'itemParentPath' ends with 'itemName'.
-            
-            let folderPath;
-            if (itemParentPath.endsWith('/' + itemName)) {
-                // Heuristic: It looks like 'path' is already the full path. Use it as is.
-                folderPath = itemParentPath;
-                console.warn("Detected Path might be full path. Using as is:", folderPath);
-            } else {
-                folderPath = (itemParentPath === '/' ? '' : itemParentPath) + '/' + itemName;
-            }
-            
-            //console.log("Fetching recursive list for path:", folderPath);
-            
-            // Fetch ALL content recursively (Files AND Folders)
+            const folderPath = resolveFolderPath(props.item);
             const listRes = await api.get(`/files/list-recursive?path=${encodeURIComponent(folderPath)}`);
             const files = listRes.data.files || [];
             const subFolders = listRes.data.folders || [];
-            //console.log(`Recursive list returned: ${files.length} files, ${subFolders.length} folders.`);
-            
-            // 1. Process Files
-            for (const file of files) {
-                const fEncKey = file.EncryptedKey || file.encrypted_key;
-                if (!fEncKey) {
-                    console.warn(`File ${file.Name} has no key, skipping.`);
-                    continue;
-                }
 
-                try {
-                    // Decrypt File Key (Master -> File)
-                    const fKeyEncBytes = sodium.from_base64(fEncKey);
-                    const ivF = fKeyEncBytes.slice(0, 12);
-                    const dataF = fKeyEncBytes.slice(12);
-                    
-                    const fileKeyRaw = await window.crypto.subtle.decrypt(
-                        { name: "AES-GCM", iv: ivF },
-                        authStore.masterKey,
-                        dataF
-                    );
-                    
-                    // Encrypt File Key with FOLDER Key
-                    const ivFK = window.crypto.getRandomValues(new Uint8Array(12));
-                    const encFKey = await window.crypto.subtle.encrypt(
-                        { name: "AES-GCM", iv: ivFK },
-                        folderKeyCrypto,
-                        fileKeyRaw
-                    );
-                    
-                    const combinedFK = new Uint8Array(ivFK.byteLength + encFKey.byteLength);
-                    combinedFK.set(ivFK);
-                    combinedFK.set(new Uint8Array(encFKey), ivFK.byteLength);
+            const { folderFileKeys, folderFolderKeys } = await encryptChildKeys(
+                files, subFolders, folderKeyCrypto, authStore.masterKey
+            );
 
-                    folderFileKeys[file.ID || file.id] = sodium.to_base64(combinedFK);
-                } catch(err) {
-                    console.warn(`Failed to process key for file ${file.Name}:`, err);
-                }
-            }
-
-            // 2. Process Subfolders
-            const folderFolderKeys = {};
-            for (const folder of subFolders) {
-                 const fEncKey = folder.EncryptedKey || folder.encrypted_key;
-                 if (!fEncKey) {
-                    console.warn(`Folder ${folder.Name} has no key, skipping.`);
-                    continue;
-                 }
-
-                 try {
-                     // Decrypt Folder Key (Master -> Folder)
-                     const fKeyEncBytes = sodium.from_base64(fEncKey);
-                     const ivF = fKeyEncBytes.slice(0, 12);
-                     const dataF = fKeyEncBytes.slice(12);
-                     
-                     const subFolderKeyRaw = await window.crypto.subtle.decrypt(
-                         { name: "AES-GCM", iv: ivF },
-                         authStore.masterKey,
-                         dataF
-                     );
-                     
-                     // Encrypt SubFolder Key with PARENT FOLDER Key
-                     const ivFK = window.crypto.getRandomValues(new Uint8Array(12));
-                     const encFKey = await window.crypto.subtle.encrypt(
-                         { name: "AES-GCM", iv: ivFK },
-                         folderKeyCrypto,
-                         subFolderKeyRaw
-                     );
-                     
-                     const combinedFK = new Uint8Array(ivFK.byteLength + encFKey.byteLength);
-                     combinedFK.set(ivFK);
-                     combinedFK.set(new Uint8Array(encFKey), ivFK.byteLength);
- 
-                     folderFolderKeys[folder.ID || folder.id] = sodium.to_base64(combinedFK);
-                 } catch(err) {
-                     console.warn(`Failed to process key for folder ${folder.Name}:`, err);
-                 }
-            }
-        
-            //console.log(`Sending share request. FileKeys: ${Object.keys(folderFileKeys).length}, FolderKeys: ${Object.keys(folderFolderKeys).length}`);
             await api.post('/shares/direct', {
                 resource_id: props.item.ID || props.item.id,
                 resource_type: resourceType,
@@ -587,8 +456,6 @@ const shareWithFriend = async (friend) => {
                 folder_file_keys: folderFileKeys,
                 folder_folder_keys: folderFolderKeys
             });
-            //console.log("Share request successful.");
-
             sharedStatus.value[friend.id] = true;
         }
 

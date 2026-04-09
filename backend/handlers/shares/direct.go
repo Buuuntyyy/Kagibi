@@ -15,7 +15,11 @@ import (
 	"github.com/uptrace/bun"
 )
 
-const logStorageUpdateFailed = "Failed to emit storage_update event"
+const (
+	logStorageUpdateFailed = "Failed to emit storage_update event"
+	errInvalidResourceType = "Invalid resource type"
+	queryIDEq              = "id = ?"
+)
 
 type CreateDirectShareRequest struct {
 	ResourceID       int64            `json:"resource_id"`   // File or Folder ID
@@ -46,7 +50,7 @@ func CreateDirectShareHandler(c *gin.Context, db *bun.DB) {
 	case "folder":
 		err = handleFolderShare(c.Request.Context(), db, req)
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid resource type"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidResourceType})
 		return
 	}
 
@@ -60,7 +64,7 @@ func CreateDirectShareHandler(c *gin.Context, db *bun.DB) {
 }
 
 func checkUserExists(ctx context.Context, db *bun.DB, userID string) (bool, error) {
-	return db.NewSelect().Model((*pkg.User)(nil)).Where("id = ?", userID).Exists(ctx)
+	return db.NewSelect().Model((*pkg.User)(nil)).Where(queryIDEq, userID).Exists(ctx)
 }
 
 func handleFileShare(ctx context.Context, db *bun.DB, req CreateDirectShareRequest) error {
@@ -205,9 +209,9 @@ func deleteShareByID(ctx context.Context, db *bun.DB, shareIDStr, resourceType s
 
 	switch resourceType {
 	case "file":
-		res, err = db.NewDelete().Model((*pkg.FileShare)(nil)).Where("id = ?", shareID).Exec(ctx)
+		res, err = db.NewDelete().Model((*pkg.FileShare)(nil)).Where(queryIDEq, shareID).Exec(ctx)
 	case "folder":
-		res, err = db.NewDelete().Model((*pkg.FolderShare)(nil)).Where("id = ?", shareID).Exec(ctx)
+		res, err = db.NewDelete().Model((*pkg.FolderShare)(nil)).Where(queryIDEq, shareID).Exec(ctx)
 	default:
 		return fmt.Errorf("Invalid resource type for ID deletion")
 	}
@@ -235,7 +239,7 @@ func deleteShareByResource(ctx context.Context, db *bun.DB, resourceIDStr, resou
 			Where("folder_id = ? AND shared_with_user_id = ?", resID, friendID).
 			Exec(ctx)
 	default:
-		return fmt.Errorf("Invalid resource type")
+		return fmt.Errorf(errInvalidResourceType)
 	}
 	return err
 }
@@ -243,7 +247,7 @@ func deleteShareByResource(ctx context.Context, db *bun.DB, resourceIDStr, resou
 func handleRemoveError(c *gin.Context, err error) {
 	if err.Error() == "Share not found" {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-	} else if strings.Contains(err.Error(), "Invalid resource type") {
+	} else if strings.Contains(err.Error(), errInvalidResourceType) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	} else {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke share: " + err.Error()})

@@ -24,6 +24,7 @@
 package users
 
 import (
+	"context"
 	"fmt"
 	"kagibi/backend/pkg"
 	"net/http"
@@ -144,189 +145,48 @@ func ExportUserDataHandler(c *gin.Context, db *bun.DB) {
 
 	ctx := c.Request.Context()
 
-	// 1. Profil utilisateur
-	user, err := pkg.FindUserByID(db, userID)
+	profile, err := buildExportProfile(ctx, db, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Utilisateur non trouvé"})
 		return
 	}
 
-	planState, err := pkg.FindUserPlanByUserID(db, userID)
-	if err != nil || planState == nil {
-		planState = &pkg.UserPlan{
-			UserID:       userID,
-			Plan:         pkg.PlanFree,
-			StorageLimit: pkg.StorageFree,
-			StorageUsed:  0,
-		}
-	}
-
-	profile := ExportProfile{
-		ID:                  user.ID,
-		Name:                user.Name,
-		Email:               user.Email,
-		AvatarURL:           user.AvatarURL,
-		Plan:                planState.Plan,
-		StorageUsed:         planState.StorageUsed,
-		StorageLimit:        planState.StorageLimit,
-		FriendCode:          user.FriendCode,
-		PublicKey:           user.PublicKey,
-		EncryptedPrivateKey: user.EncryptedPrivateKey,
-		EncryptedMasterKey:  user.EncryptedMasterKey,
-		Salt:                user.Salt,
-		CreatedAt:           user.CreatedAt,
-		UpdatedAt:           user.UpdatedAt,
-	}
-
-	// 2. Fichiers (métadonnées uniquement, hors previews)
-	var dbFiles []pkg.File
-	err = db.NewSelect().Model(&dbFiles).
-		Where("user_id = ? AND is_preview = false", userID).
-		Order("path ASC", "name ASC").
-		Scan(ctx)
+	exportFiles, err := fetchExportFiles(ctx, db, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la récupération des fichiers"})
 		return
 	}
 
-	exportFiles := make([]ExportFile, 0, len(dbFiles))
-	for _, f := range dbFiles {
-		exportFiles = append(exportFiles, ExportFile{
-			ID:           f.ID,
-			Name:         f.Name,
-			Path:         f.Path,
-			Size:         f.Size,
-			MimeType:     f.MimeType,
-			EncryptedKey: f.EncryptedKey,
-			Tags:         f.Tags,
-			CreatedAt:    f.CreatedAt,
-			UpdatedAt:    f.UpdatedAt,
-		})
-	}
-
-	// 3. Dossiers
-	var dbFolders []pkg.Folder
-	err = db.NewSelect().Model(&dbFolders).
-		Where("user_id = ?", userID).
-		Order("path ASC").
-		Scan(ctx)
+	exportFolders, err := fetchExportFolders(ctx, db, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la récupération des dossiers"})
 		return
 	}
 
-	exportFolders := make([]ExportFolder, 0, len(dbFolders))
-	for _, f := range dbFolders {
-		exportFolders = append(exportFolders, ExportFolder{
-			ID:           f.ID,
-			Name:         f.Name,
-			Path:         f.Path,
-			EncryptedKey: f.EncryptedKey,
-			Tags:         f.Tags,
-			CreatedAt:    f.CreatedAt,
-			UpdatedAt:    f.UpdatedAt,
-		})
-	}
-
-	// 4. Tags
-	var dbTags []pkg.Tag
-	err = db.NewSelect().Model(&dbTags).
-		Where("user_id = ?", userID).
-		Scan(ctx)
+	exportTags, err := fetchExportTags(ctx, db, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la récupération des tags"})
 		return
 	}
 
-	exportTags := make([]ExportTag, 0, len(dbTags))
-	for _, t := range dbTags {
-		exportTags = append(exportTags, ExportTag{
-			ID:    t.ID,
-			Name:  t.Name,
-			Color: t.Color,
-		})
-	}
-
-	// 5. Liens de partage
-	var dbShares []pkg.ShareLink
-	err = db.NewSelect().Model(&dbShares).
-		Where("owner_id = ?", userID).
-		Scan(ctx)
+	exportShares, err := fetchExportShares(ctx, db, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la récupération des partages"})
 		return
 	}
 
-	exportShares := make([]ExportShareLink, 0, len(dbShares))
-	for _, s := range dbShares {
-		exportShares = append(exportShares, ExportShareLink{
-			ID:           s.ID,
-			ResourceID:   s.ResourceID,
-			ResourceType: s.ResourceType,
-			Path:         s.Path,
-			Token:        s.Token,
-			ExpiresAt:    s.ExpiresAt,
-			Views:        s.Views,
-			CreatedAt:    s.CreatedAt,
-		})
-	}
-
-	// 6. Amis
-	var dbFriendships []pkg.Friendship
-	err = db.NewSelect().Model(&dbFriendships).
-		Where("user_id_1 = ? OR user_id_2 = ?", userID, userID).
-		Scan(ctx)
+	exportFriends, err := fetchExportFriends(ctx, db, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la récupération des amis"})
 		return
 	}
 
-	exportFriends := make([]ExportFriend, 0, len(dbFriendships))
-	for _, f := range dbFriendships {
-		friendID := f.UserID2
-		role := "initiateur"
-		if f.UserID1 != userID {
-			friendID = f.UserID1
-			role = "destinataire"
-		}
-		exportFriends = append(exportFriends, ExportFriend{
-			FriendID:  friendID,
-			Status:    f.Status,
-			Role:      role,
-			CreatedAt: f.CreatedAt,
-		})
-	}
-
-	// 7. Activité récente
-	var dbActivity []pkg.RecentActivity
-	err = db.NewSelect().Model(&dbActivity).
-		Where("?TableAlias.user_id = ?", userID).
-		Relation("File").
-		Relation("Folder").
-		Order("accessed_at DESC").
-		Scan(ctx)
+	exportActivity, err := fetchExportActivity(ctx, db, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la récupération de l'activité"})
 		return
 	}
 
-	exportActivity := make([]ExportActivity, 0, len(dbActivity))
-	for _, a := range dbActivity {
-		entry := ExportActivity{
-			FileID:     a.FileID,
-			FolderID:   a.FolderID,
-			AccessedAt: a.AccessedAt,
-		}
-		if a.File != nil {
-			entry.FileName = a.File.Name
-		}
-		if a.Folder != nil {
-			entry.FolderName = a.Folder.Name
-		}
-		exportActivity = append(exportActivity, entry)
-	}
-
-	// Construction de l'export final
 	export := PortabilityExport{
 		ExportMetadata: ExportMetadata{
 			ExportDate:    time.Now().UTC().Format(time.RFC3339),
@@ -345,9 +205,188 @@ func ExportUserDataHandler(c *gin.Context, db *bun.DB) {
 		RecentActivity: exportActivity,
 	}
 
-	// Réponse en téléchargement JSON
 	filename := fmt.Sprintf("kagibi-export-%s.json", time.Now().UTC().Format("2006-01-02"))
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	c.Header("Content-Type", "application/json; charset=utf-8")
 	c.IndentedJSON(http.StatusOK, export)
+}
+
+func buildExportProfile(ctx context.Context, db *bun.DB, userID string) (ExportProfile, error) {
+	var user pkg.User
+	if err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(ctx); err != nil {
+		return ExportProfile{}, err
+	}
+
+	var plan pkg.UserPlan
+	_ = db.NewSelect().Model(&plan).Where("user_id = ?", userID).Scan(ctx)
+
+	return ExportProfile{
+		ID:                  user.ID,
+		Name:                user.Name,
+		Email:               user.Email,
+		AvatarURL:           user.AvatarURL,
+		Plan:                plan.Plan,
+		StorageUsed:         plan.StorageUsed,
+		StorageLimit:        plan.StorageLimit,
+		FriendCode:          user.FriendCode,
+		PublicKey:           user.PublicKey,
+		EncryptedPrivateKey: user.EncryptedPrivateKey,
+		EncryptedMasterKey:  user.EncryptedMasterKey,
+		Salt:                user.Salt,
+		CreatedAt:           user.CreatedAt,
+		UpdatedAt:           user.UpdatedAt,
+	}, nil
+}
+
+func fetchExportFiles(ctx context.Context, db *bun.DB, userID string) ([]ExportFile, error) {
+	var files []pkg.File
+	if err := db.NewSelect().Model(&files).
+		Where("user_id = ?", userID).
+		Where("is_preview = ?", false).
+		OrderExpr("path ASC").
+		Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	result := make([]ExportFile, len(files))
+	for i, f := range files {
+		result[i] = ExportFile{
+			ID:           f.ID,
+			Name:         f.Name,
+			Path:         f.Path,
+			Size:         f.Size,
+			MimeType:     f.MimeType,
+			EncryptedKey: f.EncryptedKey,
+			Tags:         f.Tags,
+			CreatedAt:    f.CreatedAt,
+			UpdatedAt:    f.UpdatedAt,
+		}
+	}
+	return result, nil
+}
+
+func fetchExportFolders(ctx context.Context, db *bun.DB, userID string) ([]ExportFolder, error) {
+	var folders []pkg.Folder
+	if err := db.NewSelect().Model(&folders).
+		Where("user_id = ?", userID).
+		OrderExpr("path ASC").
+		Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	result := make([]ExportFolder, len(folders))
+	for i, f := range folders {
+		result[i] = ExportFolder{
+			ID:           f.ID,
+			Name:         f.Name,
+			Path:         f.Path,
+			EncryptedKey: f.EncryptedKey,
+			Tags:         f.Tags,
+			CreatedAt:    f.CreatedAt,
+			UpdatedAt:    f.UpdatedAt,
+		}
+	}
+	return result, nil
+}
+
+func fetchExportTags(ctx context.Context, db *bun.DB, userID string) ([]ExportTag, error) {
+	var tags []pkg.Tag
+	if err := db.NewSelect().Model(&tags).
+		Where("user_id = ?", userID).
+		OrderExpr("name ASC").
+		Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	result := make([]ExportTag, len(tags))
+	for i, t := range tags {
+		result[i] = ExportTag{
+			ID:    t.ID,
+			Name:  t.Name,
+			Color: t.Color,
+		}
+	}
+	return result, nil
+}
+
+func fetchExportShares(ctx context.Context, db *bun.DB, userID string) ([]ExportShareLink, error) {
+	var links []pkg.ShareLink
+	if err := db.NewSelect().Model(&links).
+		Where("owner_id = ?", userID).
+		OrderExpr("created_at DESC").
+		Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	result := make([]ExportShareLink, len(links))
+	for i, l := range links {
+		result[i] = ExportShareLink{
+			ID:           l.ID,
+			ResourceID:   l.ResourceID,
+			ResourceType: l.ResourceType,
+			Path:         l.Path,
+			Token:        l.Token,
+			ExpiresAt:    l.ExpiresAt,
+			Views:        l.Views,
+			CreatedAt:    l.CreatedAt,
+		}
+	}
+	return result, nil
+}
+
+func fetchExportFriends(ctx context.Context, db *bun.DB, userID string) ([]ExportFriend, error) {
+	var friendships []pkg.Friendship
+	if err := db.NewSelect().Model(&friendships).
+		Where("user_id_1 = ? OR user_id_2 = ?", userID, userID).
+		OrderExpr("created_at DESC").
+		Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	result := make([]ExportFriend, len(friendships))
+	for i, f := range friendships {
+		friendID := f.UserID2
+		role := "initiator"
+		if f.UserID2 == userID {
+			friendID = f.UserID1
+			role = "recipient"
+		}
+		result[i] = ExportFriend{
+			FriendID:  friendID,
+			Status:    f.Status,
+			Role:      role,
+			CreatedAt: f.CreatedAt,
+		}
+	}
+	return result, nil
+}
+
+func fetchExportActivity(ctx context.Context, db *bun.DB, userID string) ([]ExportActivity, error) {
+	var activities []pkg.RecentActivity
+	if err := db.NewSelect().Model(&activities).
+		Relation("File").
+		Relation("Folder").
+		Where("?TableAlias.user_id = ?", userID).
+		OrderExpr("accessed_at DESC").
+		Limit(500).
+		Scan(ctx); err != nil {
+		return nil, err
+	}
+
+	result := make([]ExportActivity, len(activities))
+	for i, a := range activities {
+		entry := ExportActivity{
+			FileID:     a.FileID,
+			FolderID:   a.FolderID,
+			AccessedAt: a.AccessedAt,
+		}
+		if a.File != nil {
+			entry.FileName = a.File.Name
+		}
+		if a.Folder != nil {
+			entry.FolderName = a.Folder.Name
+		}
+		result[i] = entry
+	}
+	return result, nil
 }

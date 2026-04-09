@@ -120,6 +120,47 @@ func LocalSignupHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 // LocalRefreshHandler handles POST /api/v1/auth/refresh (public — current token in Authorization header).
 // Issues a new 7-day token if the current token signature is valid (even if near expiry).
 // Checks Redis for token revocation (e.g. post password-change) before issuing a new token.
+// isTokenRevoked checks Redis to determine whether the given token (identified
+// by its iat claim) was issued before a revocation event for the user.
+// Returns true if the token should be rejected. A missing Redis key means no
+// revocation has been recorded — the token is considered valid.
+func isTokenRevoked(redisClient *redis.Client, userID string, claims jwt.MapClaims) bool {
+	if redisClient == nil {
+		return false
+	}
+	iatFloat, ok := claims["iat"].(float64)
+	if !ok {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	revokeStr, rErr := redisClient.Get(ctx, "token_revoke:"+userID).Result()
+	cancel()
+	if rErr != nil {
+		return false
+	}
+	revokeTs, parseErr := strconv.ParseInt(revokeStr, 10, 64)
+	return parseErr == nil && int64(iatFloat) < revokeTs
+}
+
+// parseLocalToken parses and validates a JWT using the LocalProvider secret,
+// returning the token claims on success.
+func parseLocalToken(lp interface{ GetJWTSecret() []byte }, tokenStr string) (jwt.MapClaims, error) {
+	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrTokenUnverifiable
+		}
+		return lp.GetJWTSecret(), nil
+	})
+	if err != nil || !token.Valid {
+		return nil, jwt.ErrTokenSignatureInvalid
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, jwt.ErrTokenInvalidClaims
+	}
+	return claims, nil
+}
+
 func LocalRefreshHandler(provider authprovider.AuthProvider, redisClient *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		lp, ok := getLocalProvider(provider)
@@ -135,20 +176,9 @@ func LocalRefreshHandler(provider authprovider.AuthProvider, redisClient *redis.
 		}
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 
-		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, jwt.ErrTokenUnverifiable
-			}
-			return lp.GetJWTSecret(), nil
-		})
-		if err != nil || !token.Valid {
+		claims, err := parseLocalToken(lp, tokenStr)
+		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token invalide ou expiré"})
-			return
-		}
-
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Claims invalides"})
 			return
 		}
 
@@ -160,18 +190,9 @@ func LocalRefreshHandler(provider authprovider.AuthProvider, redisClient *redis.
 		}
 
 		// Reject refresh if the token was issued before a password change or MFA disable.
-		if redisClient != nil {
-			if iatFloat, ok := claims["iat"].(float64); ok {
-				ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-				revokeStr, rErr := redisClient.Get(ctx, "token_revoke:"+userID).Result()
-				cancel()
-				if rErr == nil {
-					if revokeTs, parseErr := strconv.ParseInt(revokeStr, 10, 64); parseErr == nil && int64(iatFloat) < revokeTs {
-						c.JSON(http.StatusUnauthorized, gin.H{"error": "Token révoqué"})
-						return
-					}
-				}
-			}
+		if isTokenRevoked(redisClient, userID, claims) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token révoqué"})
+			return
 		}
 
 		newToken, err := lp.GenerateTokenWithAAL(userID, email, aal)

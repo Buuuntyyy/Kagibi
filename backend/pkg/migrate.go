@@ -12,6 +12,29 @@ import (
 func Migrate(db *bun.DB) error {
 	ctx := context.Background()
 
+	if err := migrateAuthUsers(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateCoreModels(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateSchemaAlterations(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateCoreIndices(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateBillingTables(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateUserSettings(ctx, db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func migrateAuthUsers(ctx context.Context, db *bun.DB) error {
 	// auth_users table — used by LocalProvider (AUTH_PROVIDER=local)
 	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "auth_users" (
 		"id"            TEXT PRIMARY KEY,
@@ -42,7 +65,10 @@ func Migrate(db *bun.DB) error {
 			log.Printf("Warning: failed to add TOTP column: %v", err)
 		}
 	}
+	return nil
+}
 
+func migrateCoreModels(ctx context.Context, db *bun.DB) error {
 	// Crée les tables si elles n'existent pas
 	models := []any{
 		(*User)(nil),
@@ -69,9 +95,12 @@ func Migrate(db *bun.DB) error {
 			return fmt.Errorf("failed to create table: %w", err)
 		}
 	}
+	return nil
+}
 
+func migrateSchemaAlterations(ctx context.Context, db *bun.DB) error {
 	// Manually add the 'path' column to 'share_links' if it doesn't exist
-	_, err = db.ExecContext(ctx, `ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "path" VARCHAR NOT NULL DEFAULT '';`)
+	_, err := db.ExecContext(ctx, `ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "path" VARCHAR NOT NULL DEFAULT '';`)
 	if err != nil {
 		return fmt.Errorf("failed to add path column to share_links: %w", err)
 	}
@@ -121,9 +150,10 @@ func Migrate(db *bun.DB) error {
 	if err != nil {
 		return fmt.Errorf("failed to update existing paths in share_links: %w", err)
 	}
+	return nil
+}
 
-	// --- INDICES FOR PERFORMANCE ---
-
+func migrateCoreIndices(ctx context.Context, db *bun.DB) error {
 	for _, idx := range []string{
 		// Files
 		`CREATE INDEX IF NOT EXISTS idx_files_user_path   ON files (user_id, path)`,
@@ -151,11 +181,12 @@ func Migrate(db *bun.DB) error {
 			log.Printf("Warning: failed to create index: %v", err)
 		}
 	}
+	return nil
+}
 
-	// --- BILLING TABLES ---
-
+func migrateBillingTables(ctx context.Context, db *bun.DB) error {
 	// Add synced column to files (desktop sync indicator)
-	_, err = db.ExecContext(ctx, `ALTER TABLE "files" ADD COLUMN IF NOT EXISTS "synced" BOOLEAN NOT NULL DEFAULT false;`)
+	_, err := db.ExecContext(ctx, `ALTER TABLE "files" ADD COLUMN IF NOT EXISTS "synced" BOOLEAN NOT NULL DEFAULT false;`)
 	if err != nil {
 		log.Printf("Warning: failed to add synced column to files: %v", err)
 	}
@@ -283,11 +314,14 @@ func Migrate(db *bun.DB) error {
 			log.Printf("Warning: failed to create index: %v", err)
 		}
 	}
+	return nil
+}
 
+func migrateUserSettings(ctx context.Context, db *bun.DB) error {
 	// --- RGPD Article 17 - Droit à l'effacement ---
 
 	// Add deleted_at column to profiles table for soft delete
-	_, err = db.ExecContext(ctx, `ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMPTZ;`)
+	_, err := db.ExecContext(ctx, `ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMPTZ;`)
 	if err != nil {
 		log.Printf("Warning: failed to add deleted_at column to profiles: %v", err)
 	}

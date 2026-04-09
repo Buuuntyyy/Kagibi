@@ -335,124 +335,115 @@ class ZipDownloadManager {
   }
 
   /**
+   * Stream and collect decrypted chunks from a reader into an array.
+   * Returns the array of decrypted chunks, or null if aborted.
+   */
+  async streamAndDecryptChunks(file, fileKey, reader) {
+    let buffer = new Uint8Array(0)
+    let chunkIndex = 0
+    const decryptedChunks = []
+
+    while (!this.aborted) {
+      const { done, value } = await reader.read()
+      if (this.aborted) { reader.cancel(); return null }
+
+      if (value) {
+        const newBuffer = new Uint8Array(buffer.length + value.length)
+        newBuffer.set(buffer)
+        newBuffer.set(value, buffer.length)
+        buffer = newBuffer
+        file.bytesDownloaded += value.length
+        this.bytesDownloaded += value.length
+        if (file.size > 0) {
+          file.progress = Math.min(95, Math.round((file.bytesDownloaded / file.size) * 100))
+        }
+        this.scheduleProgressUpdate()
+      }
+
+      while (buffer.length >= ENCRYPTED_CHUNK_SIZE && !this.aborted) {
+        const encryptedChunk = buffer.slice(0, ENCRYPTED_CHUNK_SIZE)
+        buffer = buffer.slice(ENCRYPTED_CHUNK_SIZE)
+        decryptedChunks.push(await this.decryptChunk(encryptedChunk, fileKey, chunkIndex))
+        chunkIndex++
+      }
+
+      if (done) {
+        if (buffer.length > 0 && !this.aborted) {
+          this.setStatus(DownloadStatus.DECRYPTING)
+          decryptedChunks.push(await this.decryptChunk(buffer, fileKey, chunkIndex))
+        }
+        break
+      }
+    }
+
+    return decryptedChunks
+  }
+
+  /**
+   * Combine an array of Uint8Array chunks into a single Uint8Array.
+   */
+  combineChunks(chunks) {
+    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+    const combined = new Uint8Array(totalLength)
+    let offset = 0
+    for (const chunk of chunks) {
+      combined.set(chunk, offset)
+      offset += chunk.length
+    }
+    return combined
+  }
+
+  /**
+   * Trigger a blob download in the browser.
+   */
+  triggerBlobDownload(data, fileName, mimeType = '') {
+    const blob = new Blob([data], mimeType ? { type: mimeType } : undefined)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 5000)
+  }
+
+  /**
    * Download, decrypt and save a single file with streaming progress
    */
   async downloadAndDecryptSingleFile(file, fileName) {
     file.status = 'downloading'
     file.abortController = new AbortController()
-    
+
     try {
-      // Import the file's encryption key
       const fileKey = await this.importFileKey(file.encryptedKey)
-      
-      // Fetch with streaming
-      const response = await fetch(file.presignedUrl, {
-        signal: file.abortController.signal
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-      
-      // Get size from Content-Length if not known
+      const response = await fetch(file.presignedUrl, { signal: file.abortController.signal })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
       const contentLength = parseInt(response.headers.get('content-length') || '0', 10)
       if (contentLength > 0) {
         file.size = contentLength
         this.totalSize = contentLength
       }
-      
-      const reader = response.body.getReader()
-      let buffer = new Uint8Array(0)
-      let chunkIndex = 0
-      const decryptedChunks = []
-      
+
       file.bytesDownloaded = 0
-      
-      // Stream and collect encrypted data
-      while (!this.aborted) {
-        const { done, value } = await reader.read()
-        
-        if (this.aborted) {
-          reader.cancel()
-          return
-        }
-        
-        if (value) {
-          // Append to buffer
-          const newBuffer = new Uint8Array(buffer.length + value.length)
-          newBuffer.set(buffer)
-          newBuffer.set(value, buffer.length)
-          buffer = newBuffer
-          
-          file.bytesDownloaded += value.length
-          this.bytesDownloaded += value.length
-          
-          // Update progress
-          if (file.size > 0) {
-            file.progress = Math.min(95, Math.round((file.bytesDownloaded / file.size) * 100))
-          }
-          
-          this.scheduleProgressUpdate()
-        }
-        
-        // Process complete encrypted chunks
-        while (buffer.length >= ENCRYPTED_CHUNK_SIZE && !this.aborted) {
-          const encryptedChunk = buffer.slice(0, ENCRYPTED_CHUNK_SIZE)
-          buffer = buffer.slice(ENCRYPTED_CHUNK_SIZE)
-          
-          // Decrypt chunk
-          const decrypted = await this.decryptChunk(encryptedChunk, fileKey, chunkIndex)
-          decryptedChunks.push(decrypted)
-          chunkIndex++
-        }
-        
-        if (done) {
-          // Process final partial chunk
-          if (buffer.length > 0 && !this.aborted) {
-            this.setStatus(DownloadStatus.DECRYPTING)
-            const decrypted = await this.decryptChunk(buffer, fileKey, chunkIndex)
-            decryptedChunks.push(decrypted)
-          }
-          break
-        }
-      }
-      
-      if (this.aborted) return
-      
-      // Combine all decrypted chunks
+      const reader = response.body.getReader()
+      const decryptedChunks = await this.streamAndDecryptChunks(file, fileKey, reader)
+      if (this.aborted || !decryptedChunks) return
+
       this.setStatus(DownloadStatus.FINALIZING)
-      const totalLength = decryptedChunks.reduce((sum, chunk) => sum + chunk.length, 0)
-      const completeFile = new Uint8Array(totalLength)
-      let offset = 0
-      for (const chunk of decryptedChunks) {
-        completeFile.set(chunk, offset)
-        offset += chunk.length
-      }
-      
-      // Create blob and trigger download
-      const blob = new Blob([completeFile])
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = fileName
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      
-      // Clean up after short delay
-      setTimeout(() => URL.revokeObjectURL(url), 5000)
-      
+      const completeFile = this.combineChunks(decryptedChunks)
+      this.triggerBlobDownload(completeFile, fileName)
+
       file.status = 'completed'
       file.progress = 100
       this.processedFiles = 1
-      
       this.setStatus(DownloadStatus.COMPLETED)
       this.callbacks.onComplete({
         totalFiles: 1,
-        totalSize: totalLength,
+        totalSize: completeFile.length,
         duration: Date.now() - this.startTime
       })
-      
     } catch (error) {
       if (error.name === 'AbortError') {
         file.status = 'aborted'
@@ -565,88 +556,66 @@ class ZipDownloadManager {
   }
 
   /**
+   * Stream decrypted chunks from a reader to the Service Worker ZIP assembler.
+   */
+  async streamChunksToWorker(file, fileKey, reader) {
+    let buffer = new Uint8Array(0)
+    let chunkIndex = 0
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (this.aborted) { reader.cancel(); break }
+
+      if (value) {
+        const newBuffer = new Uint8Array(buffer.length + value.length)
+        newBuffer.set(buffer)
+        newBuffer.set(value, buffer.length)
+        buffer = newBuffer
+        file.bytesDownloaded += value.length
+        this.bytesDownloaded += value.length
+        if (file.size > 0) {
+          file.progress = Math.min(99, Math.round((file.bytesDownloaded / file.size) * 100))
+        }
+        this.scheduleProgressUpdate()
+      }
+
+      while (buffer.length >= ENCRYPTED_CHUNK_SIZE && !this.aborted) {
+        const encryptedChunk = buffer.slice(0, ENCRYPTED_CHUNK_SIZE)
+        buffer = buffer.slice(ENCRYPTED_CHUNK_SIZE)
+        const decrypted = await this.decryptChunk(encryptedChunk, fileKey, chunkIndex)
+        await this.sendChunkToWorker(file.relativePath, decrypted, false, file.size)
+        chunkIndex++
+      }
+
+      if (done) {
+        if (buffer.length > 0 && !this.aborted) {
+          const decrypted = await this.decryptChunk(buffer, fileKey, chunkIndex)
+          await this.sendChunkToWorker(file.relativePath, decrypted, true, file.size)
+        } else {
+          await this.sendChunkToWorker(file.relativePath, new Uint8Array(0), true, file.size)
+        }
+        break
+      }
+    }
+  }
+
+  /**
    * Download a single file and stream decrypted chunks to ZIP
    */
   async downloadAndStreamFile(file) {
     file.status = 'downloading'
     file.abortController = new AbortController()
-    
+
     try {
-      // Import the file's encryption key
       const fileKey = await this.importFileKey(file.encryptedKey)
-      
-      // Fetch encrypted file stream
-      const response = await fetch(file.presignedUrl, {
-        signal: file.abortController.signal
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-      
+      const response = await fetch(file.presignedUrl, { signal: file.abortController.signal })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
       const reader = response.body.getReader()
-      let buffer = new Uint8Array(0)
-      let chunkIndex = 0
-      let isFirst = true
-      
-      while (true) {
-        const { done, value } = await reader.read()
-        
-        if (this.aborted) {
-          reader.cancel()
-          break
-        }
-        
-        if (value) {
-          // Append to buffer
-          const newBuffer = new Uint8Array(buffer.length + value.length)
-          newBuffer.set(buffer)
-          newBuffer.set(value, buffer.length)
-          buffer = newBuffer
-          
-          // Update byte counters
-          file.bytesDownloaded += value.length
-          this.bytesDownloaded += value.length
-          
-          // Update individual file progress (percentage based on encrypted size)
-          if (file.size > 0) {
-            file.progress = Math.min(99, Math.round((file.bytesDownloaded / file.size) * 100))
-          }
-          
-          // Throttled progress report
-          this.scheduleProgressUpdate()
-        }
-        
-        // Process complete encrypted chunks
-        while (buffer.length >= ENCRYPTED_CHUNK_SIZE && !this.aborted) {
-          const encryptedChunk = buffer.slice(0, ENCRYPTED_CHUNK_SIZE)
-          buffer = buffer.slice(ENCRYPTED_CHUNK_SIZE)
-          
-          // Decrypt chunk
-          const decrypted = await this.decryptChunk(encryptedChunk, fileKey, chunkIndex)
-          
-          // Send to Service Worker
-          await this.sendChunkToWorker(file.relativePath, decrypted, false, file.size)
-          
-          chunkIndex++
-        }
-        
-        if (done) {
-          // Process final partial chunk
-          if (buffer.length > 0 && !this.aborted) {
-            const decrypted = await this.decryptChunk(buffer, fileKey, chunkIndex)
-            await this.sendChunkToWorker(file.relativePath, decrypted, true, file.size)
-          } else {
-            // Mark file as complete even if no final chunk
-            await this.sendChunkToWorker(file.relativePath, new Uint8Array(0), true, file.size)
-          }
-          break
-        }
-      }
-      
+      await this.streamChunksToWorker(file, fileKey, reader)
+
       file.status = 'completed'
       file.progress = 100
-      
     } catch (error) {
       if (error.name === 'AbortError') {
         file.status = 'aborted'
@@ -777,118 +746,76 @@ class ZipDownloadManager {
   }
 
   /**
+   * Stream a single file from a URL, tracking progress, and return the raw encrypted bytes.
+   */
+  async fetchFileWithProgress(file) {
+    const response = await fetch(file.presignedUrl)
+    const contentLength = parseInt(response.headers.get('content-length') || '0', 10)
+    if (contentLength > 0 && file.size === 0) file.size = contentLength
+
+    const reader = response.body.getReader()
+    const chunks = []
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      chunks.push(value)
+      file.bytesDownloaded += value.length
+      this.bytesDownloaded += value.length
+      if (file.size > 0) {
+        file.progress = Math.min(99, Math.round((file.bytesDownloaded / file.size) * 100))
+      }
+      this.scheduleProgressUpdate()
+    }
+    return this.combineChunks(chunks)
+  }
+
+  /**
+   * Decrypt all chunks from a contiguous encrypted byte array.
+   */
+  async decryptAllChunks(encryptedData, fileKey) {
+    const decryptedParts = []
+    let offset = 0
+    let chunkIndex = 0
+    while (offset < encryptedData.length) {
+      const chunkSize = Math.min(ENCRYPTED_CHUNK_SIZE, encryptedData.length - offset)
+      const chunk = encryptedData.slice(offset, offset + chunkSize)
+      decryptedParts.push(await this.decryptChunk(chunk, fileKey, chunkIndex))
+      offset += chunkSize
+      chunkIndex++
+    }
+    return this.combineChunks(decryptedParts)
+  }
+
+  /**
    * Fallback download using in-memory ZIP (for browsers without Service Worker)
    * Uses streaming progress tracking for smooth UI updates
    */
   async downloadWithFallback(fileName) {
-    // Dynamic import fflate
     const fflate = await import('fflate')
-    
     const zipData = {}
-    
+
     for (const file of this.files.filter(f => f.presignedUrl)) {
       if (this.aborted) break
-      
       try {
         file.status = 'downloading'
         file.bytesDownloaded = 0
-        
-        // Import file key
         const fileKey = await this.importFileKey(file.encryptedKey)
-        
-        // Download with streaming progress tracking
-        const response = await fetch(file.presignedUrl)
-        
-        // Get content length for progress calculation
-        const contentLength = parseInt(response.headers.get('content-length') || '0', 10)
-        if (contentLength > 0 && file.size === 0) {
-          file.size = contentLength
-        }
-        
-        // Stream the response with progress tracking
-        const reader = response.body.getReader()
-        const chunks = []
-        
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          
-          chunks.push(value)
-          file.bytesDownloaded += value.length
-          this.bytesDownloaded += value.length
-          
-          // Update individual file progress
-          if (file.size > 0) {
-            file.progress = Math.min(99, Math.round((file.bytesDownloaded / file.size) * 100))
-          }
-          
-          this.scheduleProgressUpdate()
-        }
-        
-        // Combine chunks into single array
-        const encryptedLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
-        const encryptedData = new Uint8Array(encryptedLength)
-        let encPos = 0
-        for (const chunk of chunks) {
-          encryptedData.set(chunk, encPos)
-          encPos += chunk.length
-        }
-        
-        // Decrypt all chunks
-        const decryptedParts = []
-        let offset = 0
-        let chunkIndex = 0
-        
-        while (offset < encryptedData.length) {
-          const chunkSize = Math.min(ENCRYPTED_CHUNK_SIZE, encryptedData.length - offset)
-          const chunk = encryptedData.slice(offset, offset + chunkSize)
-          const decrypted = await this.decryptChunk(chunk, fileKey, chunkIndex)
-          decryptedParts.push(decrypted)
-          offset += chunkSize
-          chunkIndex++
-        }
-        
-        // Combine decrypted parts
-        const decryptedLength = decryptedParts.reduce((sum, part) => sum + part.length, 0)
-        const combined = new Uint8Array(decryptedLength)
-        let decPos = 0
-        for (const part of decryptedParts) {
-          combined.set(part, decPos)
-          decPos += part.length
-        }
-        
-        // Add to ZIP structure
-        zipData[file.relativePath] = combined
-        
+        const encryptedData = await this.fetchFileWithProgress(file)
+        zipData[file.relativePath] = await this.decryptAllChunks(encryptedData, fileKey)
         file.status = 'completed'
         file.progress = 100
         this.processedFiles++
         this.reportProgress()
-        
       } catch (error) {
         file.status = 'error'
         file.error = error.message
         console.error(`[DownloadManager] Fallback error for ${file.name}:`, error)
       }
     }
-    
-    // Create ZIP
+
     this.setStatus(DownloadStatus.FINALIZING)
-    
     const zipped = fflate.zipSync(zipData, { level: 0 })
-    
-    // Trigger download
-    const blob = new Blob([zipped], { type: 'application/zip' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = fileName
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    
-    setTimeout(() => URL.revokeObjectURL(url), 10000)
-    
+    this.triggerBlobDownload(zipped, fileName, 'application/zip')
     this.setStatus(DownloadStatus.COMPLETED)
     this.callbacks.onComplete({
       totalFiles: this.processedFiles,

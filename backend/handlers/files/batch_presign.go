@@ -110,82 +110,17 @@ func BatchPresignDownloadHandler(c *gin.Context, db *bun.DB) {
 		wg.Add(1)
 		go func(index int, fID int64) {
 			defer wg.Done()
-
-			semaphore <- struct{}{}        // Acquire
-			defer func() { <-semaphore }() // Release
-
-			file, exists := fileMap[fID]
-			if !exists {
-				mu.Lock()
-				results[index] = BatchPresignItem{
-					FileID: fID,
-					Error:  "File not found",
-				}
-				errorCount++
-				mu.Unlock()
-				return
-			}
-
-			// Verify ownership or share access
-			if file.UserID != userID {
-				// Check share access
-				hasAccess := checkShareAccess(ctx, db, fID, userID)
-				if !hasAccess {
-					mu.Lock()
-					results[index] = BatchPresignItem{
-						FileID: fID,
-						Error:  "Access denied",
-					}
-					errorCount++
-					mu.Unlock()
-					return
-				}
-			}
-
-			// Construct S3 key
-			normalizedPath := path.Clean(strings.ReplaceAll(file.Path, "\\", "/"))
-			if normalizedPath == "." {
-				normalizedPath = "/"
-			}
-			if !strings.HasPrefix(normalizedPath, "/") {
-				normalizedPath = "/" + normalizedPath
-			}
-			s3Key := fmt.Sprintf("users/%s%s", file.UserID, normalizedPath)
-
-			// Generate presigned URL
-			presignReq, err := presigner.PresignGetObject(ctx, &s3.GetObjectInput{
-				Bucket:                     aws.String(s3storage.BucketName),
-				Key:                        aws.String(s3Key),
-				ResponseContentDisposition: aws.String(fmt.Sprintf("attachment; filename=\"%s\"", file.Name)),
-				ResponseCacheControl:       aws.String("no-store"),
-			}, func(opts *s3.PresignOptions) {
-				opts.Expires = DownloadPresignTTL
-			})
-
-			if err != nil {
-				log.Printf("Presign error for file %d: %v", fID, err)
-				mu.Lock()
-				results[index] = BatchPresignItem{
-					FileID: fID,
-					Error:  "Failed to generate URL",
-				}
-				errorCount++
-				mu.Unlock()
-				return
-			}
-
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+			item, size := presignOneFile(ctx, db, presigner, fID, userID, fileMap)
 			mu.Lock()
-			results[index] = BatchPresignItem{
-				FileID:       fID,
-				URL:          presignReq.URL,
-				ExpiresIn:    int(DownloadPresignTTL.Seconds()),
-				FileName:     file.Name,
-				FileSize:     file.Size,
-				MimeType:     file.MimeType,
-				EncryptedKey: file.EncryptedKey,
+			results[index] = item
+			if item.Error != "" {
+				errorCount++
+			} else {
+				totalSize += size
+				successCount++
 			}
-			totalSize += file.Size
-			successCount++
 			mu.Unlock()
 		}(i, fileID)
 	}
@@ -201,6 +136,50 @@ func BatchPresignDownloadHandler(c *gin.Context, db *bun.DB) {
 		SuccessCount: successCount,
 		ErrorCount:   errorCount,
 	})
+}
+
+// presignOneFile generates a single presigned download URL for a file and returns the item and file size.
+func presignOneFile(ctx context.Context, db *bun.DB, presigner *s3.PresignClient, fID int64, userID string, fileMap map[int64]*pkg.File) (BatchPresignItem, int64) {
+	file, exists := fileMap[fID]
+	if !exists {
+		return BatchPresignItem{FileID: fID, Error: "File not found"}, 0
+	}
+
+	if file.UserID != userID && !checkShareAccess(ctx, db, fID, userID) {
+		return BatchPresignItem{FileID: fID, Error: "Access denied"}, 0
+	}
+
+	normalizedPath := path.Clean(strings.ReplaceAll(file.Path, "\\", "/"))
+	if normalizedPath == "." {
+		normalizedPath = "/"
+	}
+	if !strings.HasPrefix(normalizedPath, "/") {
+		normalizedPath = "/" + normalizedPath
+	}
+	s3Key := fmt.Sprintf("users/%s%s", file.UserID, normalizedPath)
+
+	presignReq, err := presigner.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket:                     aws.String(s3storage.BucketName),
+		Key:                        aws.String(s3Key),
+		ResponseContentDisposition: aws.String(fmt.Sprintf("attachment; filename=\"%s\"", file.Name)),
+		ResponseCacheControl:       aws.String("no-store"),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = DownloadPresignTTL
+	})
+	if err != nil {
+		log.Printf("Presign error for file %d: %v", fID, err)
+		return BatchPresignItem{FileID: fID, Error: "Failed to generate URL"}, 0
+	}
+
+	return BatchPresignItem{
+		FileID:       fID,
+		URL:          presignReq.URL,
+		ExpiresIn:    int(DownloadPresignTTL.Seconds()),
+		FileName:     file.Name,
+		FileSize:     file.Size,
+		MimeType:     file.MimeType,
+		EncryptedKey: file.EncryptedKey,
+	}, file.Size
 }
 
 // checkShareAccess verifies if user has access to a file through sharing
@@ -350,6 +329,16 @@ type SelectionTreeRequest struct {
 	FolderIDs []int64 `json:"folder_ids"`
 }
 
+// SelectionFileItem is a file entry in a selection tree response.
+type SelectionFileItem struct {
+	ID           int64  `json:"id"`
+	Name         string `json:"name"`
+	RelativePath string `json:"relative_path"`
+	Size         int64  `json:"size"`
+	MimeType     string `json:"mime_type"`
+	EncryptedKey string `json:"encrypted_key"`
+}
+
 func GetSelectionTreeHandler(c *gin.Context, db *bun.DB) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
@@ -366,84 +355,27 @@ func GetSelectionTreeHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	type FileItem struct {
-		ID           int64  `json:"id"`
-		Name         string `json:"name"`
-		RelativePath string `json:"relative_path"`
-		Size         int64  `json:"size"`
-		MimeType     string `json:"mime_type"`
-		EncryptedKey string `json:"encrypted_key"`
-	}
-
-	var allFiles []FileItem
+	var allFiles []SelectionFileItem
 	var totalSize int64
 
-	// Fetch direct files
 	if len(req.FileIDs) > 0 {
-		var files []pkg.File
-		if err := db.NewSelect().Model(&files).
-			Where("id IN (?) AND user_id = ?", bun.In(req.FileIDs), userID).
-			Scan(ctx); err != nil {
+		items, size, err := fetchDirectSelectionFiles(ctx, db, req.FileIDs, userID)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": errFetchFiles})
 			return
 		}
-
-		for _, f := range files {
-			allFiles = append(allFiles, FileItem{
-				ID:           f.ID,
-				Name:         f.Name,
-				RelativePath: f.Name, // At root level
-				Size:         f.Size,
-				MimeType:     f.MimeType,
-				EncryptedKey: f.EncryptedKey,
-			})
-			totalSize += f.Size
-		}
+		allFiles = append(allFiles, items...)
+		totalSize += size
 	}
 
-	// Fetch files from folders (recursively)
 	if len(req.FolderIDs) > 0 {
-		var folders []pkg.Folder
-		if err := db.NewSelect().Model(&folders).
-			Where("id IN (?) AND user_id = ?", bun.In(req.FolderIDs), userID).
-			Scan(ctx); err != nil {
+		items, size, err := fetchSelectionFolderFiles(ctx, db, req.FolderIDs, userID)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch folders"})
 			return
 		}
-
-		for _, folder := range folders {
-			var files []pkg.File
-			if err := db.NewSelect().Model(&files).
-				Where(whereUserIDQuery, userID).
-				Where("path LIKE ?", folder.Path+"%").
-				Where("is_preview = ?", false).
-				Scan(ctx); err != nil {
-				continue
-			}
-
-			for _, f := range files {
-				dir := path.Dir(f.Path)
-				relativePath := strings.TrimPrefix(dir, folder.Path)
-				relativePath = strings.TrimPrefix(relativePath, "/")
-
-				var fullRelativePath string
-				if relativePath == "" {
-					fullRelativePath = path.Join(folder.Name, f.Name)
-				} else {
-					fullRelativePath = path.Join(folder.Name, relativePath, f.Name)
-				}
-
-				allFiles = append(allFiles, FileItem{
-					ID:           f.ID,
-					Name:         f.Name,
-					RelativePath: fullRelativePath,
-					Size:         f.Size,
-					MimeType:     f.MimeType,
-					EncryptedKey: f.EncryptedKey,
-				})
-				totalSize += f.Size
-			}
-		}
+		allFiles = append(allFiles, items...)
+		totalSize += size
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -451,4 +383,78 @@ func GetSelectionTreeHandler(c *gin.Context, db *bun.DB) {
 		"total_size":  totalSize,
 		"total_files": len(allFiles),
 	})
+}
+
+func fetchDirectSelectionFiles(ctx context.Context, db *bun.DB, fileIDs []int64, userID string) ([]SelectionFileItem, int64, error) {
+	var files []pkg.File
+	if err := db.NewSelect().Model(&files).
+		Where("id IN (?) AND user_id = ?", bun.In(fileIDs), userID).
+		Scan(ctx); err != nil {
+		return nil, 0, err
+	}
+	var items []SelectionFileItem
+	var totalSize int64
+	for _, f := range files {
+		items = append(items, SelectionFileItem{
+			ID:           f.ID,
+			Name:         f.Name,
+			RelativePath: f.Name,
+			Size:         f.Size,
+			MimeType:     f.MimeType,
+			EncryptedKey: f.EncryptedKey,
+		})
+		totalSize += f.Size
+	}
+	return items, totalSize, nil
+}
+
+func fetchSelectionFolderFiles(ctx context.Context, db *bun.DB, folderIDs []int64, userID string) ([]SelectionFileItem, int64, error) {
+	var folders []pkg.Folder
+	if err := db.NewSelect().Model(&folders).
+		Where("id IN (?) AND user_id = ?", bun.In(folderIDs), userID).
+		Scan(ctx); err != nil {
+		return nil, 0, err
+	}
+	var items []SelectionFileItem
+	var totalSize int64
+	for _, folder := range folders {
+		folderItems, folderSize := fetchFilesFromFolder(ctx, db, userID, folder)
+		items = append(items, folderItems...)
+		totalSize += folderSize
+	}
+	return items, totalSize, nil
+}
+
+func fetchFilesFromFolder(ctx context.Context, db *bun.DB, userID string, folder pkg.Folder) ([]SelectionFileItem, int64) {
+	var files []pkg.File
+	if err := db.NewSelect().Model(&files).
+		Where(whereUserIDQuery, userID).
+		Where("path LIKE ?", folder.Path+"%").
+		Where("is_preview = ?", false).
+		Scan(ctx); err != nil {
+		return nil, 0
+	}
+	var items []SelectionFileItem
+	var totalSize int64
+	for _, f := range files {
+		dir := path.Dir(f.Path)
+		relativePath := strings.TrimPrefix(dir, folder.Path)
+		relativePath = strings.TrimPrefix(relativePath, "/")
+		var fullRelativePath string
+		if relativePath == "" {
+			fullRelativePath = path.Join(folder.Name, f.Name)
+		} else {
+			fullRelativePath = path.Join(folder.Name, relativePath, f.Name)
+		}
+		items = append(items, SelectionFileItem{
+			ID:           f.ID,
+			Name:         f.Name,
+			RelativePath: fullRelativePath,
+			Size:         f.Size,
+			MimeType:     f.MimeType,
+			EncryptedKey: f.EncryptedKey,
+		})
+		totalSize += f.Size
+	}
+	return items, totalSize
 }

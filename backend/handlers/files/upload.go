@@ -24,6 +24,11 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const (
+	queryUserIDAndPath = "user_id = ? AND path = ?"
+	errPathTraversal   = "path traversal detected"
+)
+
 type UploadRequest struct {
 	UserID       string
 	Path         string
@@ -42,7 +47,7 @@ func validatePath(inputPath string) (string, error) {
 	// Normalize separators and check traversal early
 	rawPath := strings.ReplaceAll(inputPath, "\\", "/")
 	if strings.Contains(rawPath, "..") {
-		return "", fmt.Errorf("path traversal detected")
+		return "", fmt.Errorf(errPathTraversal)
 	}
 
 	// 1. Clean the path using POSIX rules (virtual paths)
@@ -50,12 +55,12 @@ func validatePath(inputPath string) (string, error) {
 
 	// 2. Check if it starts with ".."
 	if strings.HasPrefix(cleanPath, "..") {
-		return "", fmt.Errorf("path traversal detected")
+		return "", fmt.Errorf(errPathTraversal)
 	}
 
 	// 3. Check if it contains ".."
 	if strings.Contains(cleanPath, "..") {
-		return "", fmt.Errorf("path traversal detected")
+		return "", fmt.Errorf(errPathTraversal)
 	}
 
 	// 4. Ensure it starts with "/"
@@ -302,13 +307,13 @@ func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) 
 	log.Printf("[UpsertFile] Attempting to upsert file: path=%s, user_id=%s, size=%d", file.Path, file.UserID, size)
 
 	exists, _ := tx.NewSelect().Model((*pkg.File)(nil)).
-		Where("user_id = ? AND path = ?", file.UserID, file.Path).
+		Where(queryUserIDAndPath, file.UserID, file.Path).
 		Exists(ctx)
 
 	if exists {
 		log.Printf("[UpsertFile] File exists, updating: path=%s", file.Path)
 		var oldFile pkg.File
-		if err := tx.NewSelect().Model(&oldFile).Where("user_id = ? AND path = ?", file.UserID, file.Path).Scan(ctx); err == nil {
+		if err := tx.NewSelect().Model(&oldFile).Where(queryUserIDAndPath, file.UserID, file.Path).Scan(ctx); err == nil {
 			// Update user storage: remove old, add new
 			_, _ = tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
 				Set("storage_used = storage_used - ? + ?", oldFile.Size, size).
@@ -316,7 +321,7 @@ func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) 
 			file.ID = oldFile.ID
 			// Return delta for folder sizes
 			delta := size - oldFile.Size
-			_, err := tx.NewUpdate().Model(file).Where("user_id = ? AND path = ?", file.UserID, file.Path).Exec(ctx)
+			_, err := tx.NewUpdate().Model(file).Where(queryUserIDAndPath, file.UserID, file.Path).Exec(ctx)
 			if err != nil {
 				log.Printf("[UpsertFile] ERROR updating file: %v", err)
 			} else {
@@ -324,7 +329,7 @@ func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) 
 			}
 			return delta, err
 		}
-		_, err := tx.NewUpdate().Model(file).Where("user_id = ? AND path = ?", file.UserID, file.Path).Exec(ctx)
+		_, err := tx.NewUpdate().Model(file).Where(queryUserIDAndPath, file.UserID, file.Path).Exec(ctx)
 		if err != nil {
 			log.Printf("[UpsertFile] ERROR updating file: %v", err)
 		} else {
