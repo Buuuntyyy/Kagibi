@@ -6,6 +6,8 @@ backend/uploads/*
 backend/.env
 frontend/.env
 
+k8s/*
+
 frontend/utils/tests.security.js
 
 docker/dump.sql
@@ -30,3 +32,10 @@ backend/bin/
 scripts/s3-cors-config.json
 
 RELEASE_STRATEGY.md
+
+# AI tools & local tooling
+.claude/
+.gemini/
+.github/skills/
+_bmad/
+_bmad-output/
