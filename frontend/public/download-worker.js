@@ -30,7 +30,7 @@ self.addEventListener('activate', (event) => {
 // Handle messages from main thread
 self.addEventListener('message', async (event) => {
   // Verify message origin — only accept messages from the same origin
-  if (event.origin && event.origin !== self.location.origin) {
+  if (event.origin !== self.location.origin) {
     console.error('[DownloadWorker] Rejected message from untrusted origin:', event.origin)
     return
   }
