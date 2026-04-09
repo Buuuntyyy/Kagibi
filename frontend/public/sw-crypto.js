@@ -9,18 +9,6 @@ let masterKey = null;
 let sessionExpiry = null;
 let lastActivity = Date.now();
 
-// Validation de l'origine
-const ALLOWED_ORIGINS = [
-  self.location.origin,
-  'http://localhost:5173',
-  'http://localhost:3000'
-];
-
-function isValidOrigin(origin) {
-  if (!origin) return false;
-  return ALLOWED_ORIGINS.includes(origin);
-}
-
 // Reset du timeout d'inactivité
 function resetSessionTimeout() {
   lastActivity = Date.now();
@@ -73,9 +61,8 @@ setInterval(() => {
 // Gestion des messages du thread principal
 self.addEventListener('message', (event) => {
   // SÉCURITÉ: Valider l'origine — rejeter tout message ne venant pas de la même origine
-  const messageOrigin = event.origin;
-  if (!isValidOrigin(messageOrigin)) {
-    console.error('[SW-Crypto] Rejected message from invalid origin:', messageOrigin);
+  if (event.origin !== self.location.origin) {
+    console.error('[SW-Crypto] Rejected message from invalid origin:', event.origin);
     return;
   }
 
