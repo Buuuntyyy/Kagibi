@@ -3,6 +3,7 @@
 **Stockage cloud chiffré de bout en bout, sans compromis.**
 
 Kagibi est une plateforme de stockage cloud conçue autour d'un principe simple : **ce que vous stockez ne regarde que vous**. Le serveur ne peut pas lire vos fichiers. Pas parce que nous promettons de ne pas le faire — mais parce que nous n'en avons pas la capacité technique.
+Ce projet a été développé par [Bunnntyyy] avec l'aide d'intelligence artificielle pour certaines tâches de développement et de documentation. L'objectif est de fournir une solution de stockage sécurisée, respectueuse de la vie privée, et facile à utiliser, tout en étant transparente sur son fonctionnement interne.
 
 ---
 
