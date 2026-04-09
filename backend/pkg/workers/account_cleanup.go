@@ -92,9 +92,9 @@ func deleteUserS3Files(ctx context.Context, userID string, files []pkg.File) {
 func deleteUserDBRecords(ctx context.Context, db *bun.DB, user pkg.User) {
 	userID := user.ID
 	models := []struct {
-		model    interface{}
-		name     string
-		extraFn  func() error
+		model   interface{}
+		name    string
+		extraFn func() error
 	}{
 		{(*pkg.File)(nil), "files", nil},
 		{(*pkg.Folder)(nil), "folders", nil},

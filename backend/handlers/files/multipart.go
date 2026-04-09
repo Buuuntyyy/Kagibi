@@ -27,9 +27,9 @@ const (
 	DownloadPresignTTL = 5 * time.Minute   // 5 minutes for downloads
 	MaxPartSize        = 100 * 1024 * 1024 // 100MB max per part
 	MinPartSize        = 5 * 1024 * 1024   // 5MB min (S3 requirement except last part)
-	errInvalidReq    = "Invalid request: "
-	userPrefixFormat = "users/%s/"
-	errAccessDenied  = "Access denied"
+	errInvalidReq      = "Invalid request: "
+	userPrefixFormat   = "users/%s/"
+	errAccessDenied    = "Access denied"
 )
 
 // InitiateMultipartRequest represents the request body for initiating multipart upload

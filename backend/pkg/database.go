@@ -15,11 +15,11 @@ import (
 )
 
 const (
-	queryPathEq       = "path = ?"
-	queryUserIDEq     = "user_id = ?"
-	queryTableUserID  = "?TableAlias.user_id = ?"
-	queryIDAndUserID  = "id = ? AND user_id = ?"
-	queryPathLike     = "path LIKE ?"
+	queryPathEq      = "path = ?"
+	queryUserIDEq    = "user_id = ?"
+	queryTableUserID = "?TableAlias.user_id = ?"
+	queryIDAndUserID = "id = ? AND user_id = ?"
+	queryPathLike    = "path LIKE ?"
 )
 
 func NewDB() *bun.DB {
