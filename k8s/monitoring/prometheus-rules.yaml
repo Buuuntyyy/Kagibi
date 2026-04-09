@@ -1,0 +1,100 @@
+---
+# ServiceMonitor for Prometheus to scrape Backend metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: backend-metrics
+  namespace: safercloud
+  labels:
+    app: backend
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# PodMonitor for more granular monitoring
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: safercloud-pods
+  namespace: safercloud
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      tier: application
+  podMetricsEndpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# PrometheusRule for alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: safercloud-alerts
+  namespace: safercloud
+  labels:
+    release: prometheus
+spec:
+  groups:
+  - name: safercloud
+    interval: 30s
+    rules:
+    - alert: HighPodCPU
+      expr: |
+        sum(rate(container_cpu_usage_seconds_total{namespace="safercloud"}[5m])) by (pod) > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High CPU usage detected on {{ $labels.pod }}"
+        description: "Pod {{ $labels.pod }} has CPU usage above 80% for more than 5 minutes."
+
+    - alert: HighPodMemory
+      expr: |
+        sum(container_memory_usage_bytes{namespace="safercloud"}) by (pod) / sum(container_spec_memory_limit_bytes{namespace="safercloud"}) by (pod) > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage detected on {{ $labels.pod }}"
+        description: "Pod {{ $labels.pod }} has memory usage above 90% for more than 5 minutes."
+
+    - alert: PodRestarting
+      expr: |
+        rate(kube_pod_container_status_restarts_total{namespace="safercloud"}[15m]) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod {{ $labels.pod }} is restarting"
+        description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last 15 minutes."
+
+    - alert: ServiceDown
+      expr: |
+        up{namespace="safercloud"} == 0
+      for: 2m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Service {{ $labels.job }} is down"
+        description: "Service {{ $labels.job }} has been down for more than 2 minutes."
+
+    - alert: HighErrorRate
+      expr: |
+        sum(rate(http_requests_total{namespace="safercloud", status=~"5.."}[5m])) by (service) / sum(rate(http_requests_total{namespace="safercloud"}[5m])) by (service) > 0.05
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High error rate on {{ $labels.service }}"
+        description: "Service {{ $labels.service }} has an error rate above 5% for more than 5 minutes."

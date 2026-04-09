@@ -9,6 +9,7 @@ import (
 
 	"kagibi/backend/pkg/authprovider"
 
+	"github.com/MicahParks/keyfunc/v3"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt/v5"

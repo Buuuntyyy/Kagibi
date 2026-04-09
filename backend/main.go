@@ -29,6 +29,7 @@ import (
 
 	"time"
 
+	"github.com/MicahParks/keyfunc/v3"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"

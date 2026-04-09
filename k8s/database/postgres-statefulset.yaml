@@ -1,0 +1,462 @@
+---
+# Supabase Postgres (Database)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: supabase-db
+  namespace: safercloud
+  labels:
+    app: supabase-db
+    tier: database
+spec:
+  serviceName: postgres-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: supabase-db
+  template:
+    metadata:
+      labels:
+        app: supabase-db
+        tier: database
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - supabase-db
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: postgres
+        image: supabase/postgres:15.8.1.085
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: safercloud-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: safercloud-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: safercloud-secrets
+              key: POSTGRES_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 50Gi
+
+---
+# PostgreSQL Service (internal)
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: safercloud
+  labels:
+    app: supabase-db
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  selector:
+    app: supabase-db
+
+---
+# Supabase Postgres Meta
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-meta
+  namespace: safercloud
+  labels:
+    app: supabase-meta
+    tier: database
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: supabase-meta
+  template:
+    metadata:
+      labels:
+        app: supabase-meta
+        tier: database
+    spec:
+      containers:
+      - name: postgres-meta
+        image: supabase/postgres-meta:v0.95.2
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: PG_META_PORT
+          value: "8080"
+        - name: PG_META_DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: safercloud-config
+              key: POSTGRES_HOST
+        - name: PG_META_DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: safercloud-config
+              key: POSTGRES_PORT
+        - name: PG_META_DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: safercloud-config
+              key: POSTGRES_DB
+        - name: PG_META_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: safercloud-secrets
+              key: POSTGRES_USER
+        - name: PG_META_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: safercloud-secrets
+              key: POSTGRES_PASSWORD
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-meta
+  namespace: safercloud
+  labels:
+    app: supabase-meta
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: supabase-meta
+
+---
+# Supabase Auth (GoTrue)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-auth
+  namespace: safercloud
+  labels:
+    app: supabase-auth
+    tier: database
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: supabase-auth
+  template:
+    metadata:
+      labels:
+        app: supabase-auth
+        tier: database
+    spec:
+      containers:
+      - name: gotrue
+        image: supabase/gotrue:v2.185.0
+        ports:
+        - containerPort: 9999
+          name: http
+        env:
+        - name: GOTRUE_API_HOST
+          value: "0.0.0.0"
+        - name: GOTRUE_API_PORT
+          value: "9999"
+        - name: GOTRUE_SITE_URL
+          value: "https://app.safercloud.com"
+        - name: GOTRUE_URI_ALLOW_LIST
+          value: "https://app.safercloud.com"
+        - name: GOTRUE_DB_DRIVER
+          value: "postgres"
+        - name: GOTRUE_DB_DATABASE_URL
+          value: "postgres://POSTGRES_USER:POSTGRES_PASSWORD@postgres-service:5432/POSTGRES_DB?sslmode=disable"
+        - name: GOTRUE_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: safercloud-secrets
+              key: JWT_SECRET
+        - name: GOTRUE_JWT_EXP
+          value: "3600"
+        - name: GOTRUE_JWT_AUD
+          value: "authenticated"
+        - name: GOTRUE_EXTERNAL_EMAIL_ENABLED
+          value: "true"
+        - name: GOTRUE_MAILER_AUTOCONFIRM
+          value: "true"
+        livenessProbe:
+          tcpSocket:
+            port: 9999
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+        readinessProbe:
+          tcpSocket:
+            port: 9999
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-auth
+  namespace: safercloud
+  labels:
+    app: supabase-auth
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9999
+    targetPort: 9999
+    protocol: TCP
+    name: http
+  selector:
+    app: supabase-auth
+
+---
+# Supabase Realtime
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-realtime
+  namespace: safercloud
+  labels:
+    app: supabase-realtime
+    tier: database
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: supabase-realtime
+  template:
+    metadata:
+      labels:
+        app: supabase-realtime
+        tier: database
+    spec:
+      containers:
+      - name: realtime
+        image: supabase/realtime:v2.72.0
+        ports:
+        - containerPort: 4000
+          name: http
+        env:
+        - name: PORT
+          value: "4000"
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: safercloud-config
+              key: POSTGRES_HOST
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: safercloud-config
+              key: POSTGRES_PORT
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: safercloud-config
+              key: POSTGRES_DB
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: safercloud-secrets
+              key: POSTGRES_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: safercloud-secrets
+              key: POSTGRES_PASSWORD
+        - name: DB_SSL
+          value: "disable"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: safercloud-secrets
+              key: JWT_SECRET
+        - name: SECRET_KEY_BASE
+          valueFrom:
+            secretKeyRef:
+              name: safercloud-secrets
+              key: REALTIME_SECRET_KEY_BASE
+        livenessProbe:
+          tcpSocket:
+            port: 4000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+        readinessProbe:
+          tcpSocket:
+            port: 4000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-realtime
+  namespace: safercloud
+  labels:
+    app: supabase-realtime
+spec:
+  type: ClusterIP
+  ports:
+  - port: 4000
+    targetPort: 4000
+    protocol: TCP
+    name: http
+  selector:
+    app: supabase-realtime
+
+---
+# Supabase Studio (Dashboard)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supabase-studio
+  namespace: safercloud
+  labels:
+    app: supabase-studio
+    tier: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: supabase-studio
+  template:
+    metadata:
+      labels:
+        app: supabase-studio
+        tier: database
+    spec:
+      containers:
+      - name: studio
+        image: supabase/studio:2026.01.27-sha-6aa59ff
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: STUDIO_PG_META_URL
+          value: "http://supabase-meta:8080"
+        - name: SUPABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: safercloud-secrets
+              key: SUPABASE_URL
+        - name: SUPABASE_ANON_KEY
+          valueFrom:
+            secretKeyRef:
+              name: safercloud-secrets
+              key: SUPABASE_ANON_KEY
+        - name: SUPABASE_SERVICE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: safercloud-secrets
+              key: SUPABASE_SERVICE_ROLE_KEY
+        - name: STUDIO_DEFAULT_ORGANIZATION
+          value: "SaferCloud"
+        - name: STUDIO_DEFAULT_PROJECT
+          value: "SaferCloud"
+        livenessProbe:
+          tcpSocket:
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+        readinessProbe:
+          tcpSocket:
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supabase-studio
+  namespace: safercloud
+  labels:
+    app: supabase-studio
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: supabase-studio

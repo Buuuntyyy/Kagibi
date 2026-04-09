@@ -368,6 +368,34 @@
         </div>
       </div>
     </div>
+
+    <!-- Success Modal -->
+    <div v-if="successModal.show" class="success-modal-overlay" @click="closeSuccessModal">
+      <div class="success-modal" @click.stop>
+        <div class="success-modal-header">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" class="success-icon">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M10 14.5l3 3 5-5.5" stroke="white" stroke-width="2" fill="none"/>
+          </svg>
+          <h3>{{ successModal.title }}</h3>
+          <button class="btn-close-modal" @click="closeSuccessModal">×</button>
+        </div>
+        <div class="success-modal-body">
+          <p>{{ successModal.message }}</p>
+        </div>
+        <div class="success-modal-footer">
+          <button class="btn-primary" @click="closeSuccessModal">Fermer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MFA Challenge Modal -->
+    <MFAChallengeModal
+      v-model="showMFAChallenge"
+      :context="mfaChallengeContext"
+      @verified="onMFAVerified"
+      @cancelled="onMFACancelled"
+    />
   </div>
 </template>
 
