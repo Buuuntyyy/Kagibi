@@ -89,12 +89,11 @@ func handleFolderShare(ctx context.Context, db *bun.DB, req CreateDirectShareReq
 	}
 
 	if err := upsertFolderFileKeys(ctx, db, req.ResourceID, req.FolderFileKeys); err != nil {
-		// Just log error? Returning error might be safer to indicate partial failure
-		fmt.Printf("FolderFileKeys Insert Error: %v\n", err)
+		log.Printf("[shares] FolderFileKeys upsert error: %v", err)
 	}
 
 	if err := upsertFolderSubFolderKeys(ctx, db, req.ResourceID, req.FolderFolderKeys); err != nil {
-		fmt.Printf("FolderFolderKeys Insert Error: %v\n", err)
+		log.Printf("[shares] FolderFolderKeys upsert error: %v", err)
 	}
 	return nil
 }
@@ -162,8 +161,6 @@ func RemoveDirectShareHandler(c *gin.Context, db *bun.DB) {
 	friendID := sanitizeInput(c.Query("friend_id"))
 	resourceIDStr := c.Query("resource_id")
 	resourceIDStr = sanitizeInput(resourceIDStr)
-
-	fmt.Printf("DEBUG: RemoveDirectShareHandler called. ResID=%s Type=%s FriendID=%s ShareID=%s\n", resourceIDStr, resourceType, friendID, shareIDStr)
 
 	if shareIDStr != "" {
 		if err := deleteShareByID(c.Request.Context(), db, shareIDStr, resourceType); err != nil {
