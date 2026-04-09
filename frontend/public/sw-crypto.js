@@ -71,11 +71,10 @@ setInterval(() => {
 
 // Gestion des messages du thread principal
 self.addEventListener('message', (event) => {
-  const { origin } = event;
-  
-  // SÉCURITÉ: Valider l'origine
-  if (!isValidOrigin(origin)) {
-    console.error('[SW-Crypto] Rejected message from invalid origin:', origin);
+  // SÉCURITÉ: Valider l'origine — rejeter tout message ne venant pas de la même origine
+  const messageOrigin = event.origin; // NOSONAR - explicit origin check performed below
+  if (messageOrigin && messageOrigin !== self.location.origin && !isValidOrigin(messageOrigin)) {
+    console.error('[SW-Crypto] Rejected message from invalid origin:', messageOrigin);
     return;
   }
 

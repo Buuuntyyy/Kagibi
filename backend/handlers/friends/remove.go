@@ -32,13 +32,13 @@ func (h *FriendHandler) RemoveFriend(c *gin.Context) {
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), h.DB, friendID, "friend_update", map[string]interface{}{
 		"action": "friend_removed",
 	}); err != nil {
-		log.Printf("Failed to emit friend_update event: %v", err)
+		log.Printf(logFriendUpdateFailed, err)
 	}
 	// Notify self
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), h.DB, currentUserID, "friend_update", map[string]interface{}{
 		"action": "friend_removed",
 	}); err != nil {
-		log.Printf("Failed to emit friend_update event: %v", err)
+		log.Printf(logFriendUpdateFailed, err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Ami supprimé"})
@@ -65,13 +65,13 @@ func (h *FriendHandler) RejectFriend(c *gin.Context) {
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), h.DB, friendship.UserID1, "friend_update", map[string]interface{}{
 		"action": "friend_request_rejected",
 	}); err != nil {
-		log.Printf("Failed to emit friend_update event: %v", err)
+		log.Printf(logFriendUpdateFailed, err)
 	}
 	// Notify self
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), h.DB, currentUserID, "friend_update", map[string]interface{}{
 		"action": "friend_request_rejected",
 	}); err != nil {
-		log.Printf("Failed to emit friend_update event: %v", err)
+		log.Printf(logFriendUpdateFailed, err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Demande rejetée"})

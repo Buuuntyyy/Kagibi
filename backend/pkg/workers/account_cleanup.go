@@ -15,6 +15,8 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const whereUserID = "user_id = ?"
+
 // StartAccountCleanupWorker démarre le worker de maintenance et nettoyage (RGPD)
 // Nettoie les données orphelines et les comptes dont la suppression immédiate a échoué
 // Exécute quotidiennement pour garantir l'intégrité des données
@@ -78,7 +80,7 @@ func cleanupUserData(ctx context.Context, db *bun.DB, user pkg.User) {
 	var files []pkg.File
 	err := db.NewSelect().
 		Model(&files).
-		Where("user_id = ?", userID).
+		Where(whereUserID, userID).
 		Scan(ctx)
 
 	if err != nil {
@@ -106,7 +108,7 @@ func cleanupUserData(ctx context.Context, db *bun.DB, user pkg.User) {
 	// 4. Hard delete des fichiers en DB
 	_, err = db.NewDelete().
 		Model((*pkg.File)(nil)).
-		Where("user_id = ?", userID).
+		Where(whereUserID, userID).
 		Exec(ctx)
 	if err != nil {
 		log.Printf("[RGPD] Failed to delete files for user %s: %v", userID, err)
@@ -115,7 +117,7 @@ func cleanupUserData(ctx context.Context, db *bun.DB, user pkg.User) {
 	// 5. Hard delete des dossiers
 	_, err = db.NewDelete().
 		Model((*pkg.Folder)(nil)).
-		Where("user_id = ?", userID).
+		Where(whereUserID, userID).
 		Exec(ctx)
 	if err != nil {
 		log.Printf("[RGPD] Failed to delete folders for user %s: %v", userID, err)
@@ -124,7 +126,7 @@ func cleanupUserData(ctx context.Context, db *bun.DB, user pkg.User) {
 	// 6. Hard delete des tags
 	_, err = db.NewDelete().
 		Model((*pkg.Tag)(nil)).
-		Where("user_id = ?", userID).
+		Where(whereUserID, userID).
 		Exec(ctx)
 	if err != nil {
 		log.Printf("[RGPD] Failed to delete tags for user %s: %v", userID, err)
@@ -133,7 +135,7 @@ func cleanupUserData(ctx context.Context, db *bun.DB, user pkg.User) {
 	// 7. Hard delete des activités récentes
 	_, err = db.NewDelete().
 		Model((*pkg.RecentActivity)(nil)).
-		Where("user_id = ?", userID).
+		Where(whereUserID, userID).
 		Exec(ctx)
 	if err != nil {
 		log.Printf("[RGPD] Failed to delete recent activities for user %s: %v", userID, err)
