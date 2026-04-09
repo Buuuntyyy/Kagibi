@@ -34,9 +34,9 @@ type User struct {
 	EncryptedMasterKeyRecovery string     `bun:"encrypted_master_key_recovery,notnull" json:"encrypted_master_key_recovery"`
 	RecoveryHash               string     `bun:"recovery_hash,notnull" json:"recovery_hash"`
 	RecoverySalt               string     `bun:"recovery_salt,notnull" json:"recovery_salt"`
-	FriendCode                 string     `bun:"friend_code,unique,notnull" json:"friend_code"`      // Short unique code for friends
-	PublicKey                  string     `bun:"public_key" json:"public_key"`                       // RSA Public Key (Standard PEM format)
-	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"` // RSA Private Key (Encrypted with MasterKey)
+	FriendCode                 string     `bun:"friend_code,unique,notnull" json:"friend_code"`                    // Short unique code for friends
+	PublicKey                  string     `bun:"public_key" json:"public_key"`                                     // RSA Public Key (Standard PEM format)
+	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"`               // RSA Private Key (Encrypted with MasterKey)
 	EncryptFilenames           bool       `bun:"encrypt_filenames,notnull,default:false" json:"encrypt_filenames"` // Client-side filename encryption opt-in
 	CreatedAt                  time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt                  time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
@@ -206,24 +206,24 @@ type RecentActivity struct {
 type RealtimeEvent struct {
 	bun.BaseModel `bun:"table:realtime_events"`
 
-	ID        int64                  `bun:"id,pk,autoincrement"`
-	UserID    string                 `bun:"user_id,notnull"`
-	EventType string                 `bun:"event_type,notnull"`
+	ID        int64          `bun:"id,pk,autoincrement"`
+	UserID    string         `bun:"user_id,notnull"`
+	EventType string         `bun:"event_type,notnull"`
 	Payload   map[string]any `bun:"payload,type:jsonb"`
-	CreatedAt time.Time              `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	CreatedAt time.Time      `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 }
 
 // P2PSignal represents a WebRTC signaling message
 type P2PSignal struct {
 	bun.BaseModel `bun:"table:p2p_signals"`
 
-	ID         int64                  `bun:"id,pk,autoincrement" json:"id"`
-	SenderID   string                 `bun:"sender_id,notnull" json:"sender_id"`
-	TargetID   string                 `bun:"target_id,notnull" json:"target_id"`
-	SignalType string                 `bun:"signal_type,notnull" json:"signal_type"`
+	ID         int64          `bun:"id,pk,autoincrement" json:"id"`
+	SenderID   string         `bun:"sender_id,notnull" json:"sender_id"`
+	TargetID   string         `bun:"target_id,notnull" json:"target_id"`
+	SignalType string         `bun:"signal_type,notnull" json:"signal_type"`
 	Payload    map[string]any `bun:"payload,type:jsonb" json:"payload"`
-	CreatedAt  time.Time              `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
-	Consumed   bool                   `bun:"consumed,notnull,default:false" json:"consumed"`
+	CreatedAt  time.Time      `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	Consumed   bool           `bun:"consumed,notnull,default:false" json:"consumed"`
 }
 
 // EmitRealtimeEvent inserts an event into the realtime_events table and

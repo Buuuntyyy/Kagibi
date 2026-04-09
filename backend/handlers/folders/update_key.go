@@ -3,9 +3,9 @@ package folders
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
+	"kagibi/backend/pkg"
 	"log"
 	"net/http"
-	"kagibi/backend/pkg"
 	"strings"
 )
 

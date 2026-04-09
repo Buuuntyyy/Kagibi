@@ -2,13 +2,12 @@ package auth
 
 import (
 	"crypto/rand"
+	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/authprovider"
 	"log"
 	"math/big"
 	"net/http"
-	"kagibi/backend/pkg"
-	"kagibi/backend/pkg/authprovider"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"

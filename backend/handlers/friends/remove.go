@@ -2,9 +2,9 @@
 package friends
 
 import (
+	"kagibi/backend/pkg"
 	"log"
 	"net/http"
-	"kagibi/backend/pkg"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"

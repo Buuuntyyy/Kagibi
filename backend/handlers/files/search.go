@@ -1,8 +1,8 @@
 package files
 
 import (
-	"net/http"
 	"kagibi/backend/pkg"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -27,10 +27,10 @@ func SearchFilesHandler(c *gin.Context, db *bun.DB) {
 	user, err := pkg.FindUserByID(db, userID)
 	if err == nil && user.EncryptFilenames {
 		c.JSON(http.StatusOK, gin.H{
-			"files":            []pkg.File{},
-			"folders":          []pkg.Folder{},
-			"search_disabled":  true,
-			"reason":           "filename_encryption_enabled",
+			"files":           []pkg.File{},
+			"folders":         []pkg.Folder{},
+			"search_disabled": true,
+			"reason":          "filename_encryption_enabled",
 		})
 		return
 	}

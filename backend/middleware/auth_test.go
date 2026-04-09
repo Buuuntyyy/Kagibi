@@ -17,15 +17,15 @@ import (
 
 // testProvider is a minimal AuthProvider for testing purposes.
 type testProvider struct {
-	secret       []byte
-	userIDClaim  string
+	secret      []byte
+	userIDClaim string
 }
 
-func (p *testProvider) Name() string                                     { return "test" }
-func (p *testProvider) GetUserIDClaim() string                           { return p.userIDClaim }
-func (p *testProvider) GetJWTSecret() []byte                             { return p.secret }
-func (p *testProvider) DeleteUser(_ string) error                        { return nil }
-func (p *testProvider) UpdateUserPassword(_, _ string) error             { return nil }
+func (p *testProvider) Name() string                         { return "test" }
+func (p *testProvider) GetUserIDClaim() string               { return p.userIDClaim }
+func (p *testProvider) GetJWTSecret() []byte                 { return p.secret }
+func (p *testProvider) DeleteUser(_ string) error            { return nil }
+func (p *testProvider) UpdateUserPassword(_, _ string) error { return nil }
 
 var _ authprovider.AuthProvider = (*testProvider)(nil)
 
