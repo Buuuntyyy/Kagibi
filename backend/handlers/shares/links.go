@@ -11,8 +11,9 @@ import (
 	"strconv"
 	"time"
 
-	"safercloud/backend/pkg"
-	"safercloud/backend/pkg/s3storage"
+	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/monitoring"
+	"kagibi/backend/pkg/s3storage"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -143,6 +144,8 @@ func DownloadSharedFileHandler(c *gin.Context, db *bun.DB) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
 		return
 	}
+
+	monitoring.FileDownloadsTotal.Inc()
 
 	if err := streamFileFromS3(c, shareLink.OwnerID, file); err != nil {
 		log.Printf("Error streaming file: %v", err)

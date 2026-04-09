@@ -17,11 +17,11 @@ export async function initSecureCryptoWorker() {
       // Attendre que le SW soit actif
       if (swRegistration.active) {
         serviceWorkerReady = true;
-        console.log('[SecureCrypto] Service Worker is active');
+        //console.log('[SecureCrypto] Service Worker is active');
       } else {
         await navigator.serviceWorker.ready;
         serviceWorkerReady = true;
-        console.log('[SecureCrypto] Service Worker is ready');
+        //console.log('[SecureCrypto] Service Worker is ready');
       }
 
       // Écouter les messages du SW
@@ -95,7 +95,7 @@ export async function generateNonExtractableMasterKey() {
     ["encrypt", "decrypt"]
   );
 
-  console.log('[SecureCrypto] Non-extractable MasterKey generated');
+  //console.log('[SecureCrypto] Non-extractable MasterKey generated');
   return masterKey;
 }
 
@@ -121,7 +121,7 @@ export async function makeKeyNonExtractable(extractableKey) {
     delete jwk[key];
   }
 
-  console.log('[SecureCrypto] Key made non-extractable');
+  //console.log('[SecureCrypto] Key made non-extractable');
   return nonExtractableKey;
 }
 
@@ -131,7 +131,7 @@ export async function makeKeyNonExtractable(extractableKey) {
 export async function storeMasterKeyInSW(masterKey) {
   try {
     const response = await sendMessageToSW('STORE_MASTER_KEY', { masterKey });
-    console.log('[SecureCrypto] MasterKey stored in SW:', response.message);
+    //console.log('[SecureCrypto] MasterKey stored in SW:', response.message);
     return true;
   } catch (error) {
     console.error('[SecureCrypto] Failed to store MasterKey in SW:', error);
@@ -148,7 +148,7 @@ export async function getMasterKeyFromSW() {
     const response = await sendMessageToSW('GET_MASTER_KEY');
     
     if (response.masterKey) {
-      console.log('[SecureCrypto] MasterKey retrieved from SW');
+      //console.log('[SecureCrypto] MasterKey retrieved from SW');
       return response.masterKey;
     }
     
@@ -169,7 +169,7 @@ export async function getMasterKeyFromSW() {
 export async function clearMasterKeyFromSW() {
   try {
     await sendMessageToSW('CLEAR_MASTER_KEY');
-    console.log('[SecureCrypto] MasterKey cleared from SW');
+    //console.log('[SecureCrypto] MasterKey cleared from SW');
     return true;
   } catch (error) {
     console.error('[SecureCrypto] Failed to clear MasterKey from SW:', error);
@@ -255,7 +255,7 @@ export function setupUserActivityTracking() {
     window.addEventListener(event, handleActivity, { passive: true });
   });
 
-  console.log('[SecureCrypto] User activity tracking enabled');
+  //console.log('[SecureCrypto] User activity tracking enabled');
 }
 
 // ============================================
@@ -302,7 +302,7 @@ export function detectXSSAttempts() {
     return false;
   }
   
-  console.log('[XSS-Detection] No unauthorized scripts detected');
+  //console.log('[XSS-Detection] No unauthorized scripts detected');
   return true;
 }
 
@@ -357,7 +357,7 @@ export function setupXSSMonitoring() {
     subtree: true
   });
   
-  console.log('[XSS-Monitoring] XSS monitoring enabled');
+  //console.log('[XSS-Monitoring] XSS monitoring enabled');
   return observer;
 }
 

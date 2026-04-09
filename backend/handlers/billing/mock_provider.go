@@ -9,6 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const errPaymentNotFound = "payment %s not found"
+
 // MockPaymentProvider implements PaymentProvider for testing purposes
 type MockPaymentProvider struct {
 	mu           sync.RWMutex
@@ -130,7 +132,7 @@ func (m *MockPaymentProvider) GetPaymentStatus(ctx context.Context, paymentID st
 	if !exists {
 		return nil, &PaymentProviderError{
 			Code:    "NOT_FOUND",
-			Message: fmt.Sprintf("payment %s not found", paymentID),
+			Message: fmt.Sprintf(errPaymentNotFound, paymentID),
 		}
 	}
 
@@ -144,7 +146,7 @@ func (m *MockPaymentProvider) SimulatePaymentSuccess(paymentID string) error {
 
 	status, exists := m.payments[paymentID]
 	if !exists {
-		return fmt.Errorf("payment %s not found", paymentID)
+		return fmt.Errorf(errPaymentNotFound, paymentID)
 	}
 
 	status.Status = "paid"
@@ -164,7 +166,7 @@ func (m *MockPaymentProvider) SimulatePaymentFailure(paymentID string) error {
 
 	status, exists := m.payments[paymentID]
 	if !exists {
-		return fmt.Errorf("payment %s not found", paymentID)
+		return fmt.Errorf(errPaymentNotFound, paymentID)
 	}
 
 	status.Status = "failed"

@@ -9,25 +9,25 @@
     <div v-if="isDragging" class="drag-overlay">
       <div class="drag-content">
         <span class="drag-icon">☁️</span>
-        <span class="drag-text">Déposez vos fichiers ici</span>
-        <span class="drag-subtext">Plusieurs fichiers supportés</span>
+        <span class="drag-text">{{ t('file.dragDrop') }}</span>
+        <span class="drag-subtext">{{ t('file.multipleFiles') }}</span>
       </div>
     </div>
 
     <div class="toolbar" v-if="preferenceStore.showToolBar">
       <div class="toolbar-left">
-        <button @click="triggerFileInput" class="btn-add-file">Ajouter un fichier</button>
-        <button @click="createNewFolder" class="btn-add-file">Créer un dossier</button>
+        <button @click="triggerFileInput" class="btn-add-file">{{ t('file.addFile') }}</button>
+        <button @click="createNewFolder" class="btn-add-file">{{ t('file.createFolder') }}</button>
       </div>
       <div class="toolbar-right">
         <button @click="renameSelectedItem" :disabled="selectedItems.length !== 1" class="btn-rename">
-          Renommer
+          {{ t('file.rename') }}
         </button>
         <button @click="downloadSelectedFiles" :disabled="selectedItems.length === 0" class="btn-download">
-          Télécharger
+          {{ t('file.download') }}
         </button>
         <button @click="deleteSelectedItems" :disabled="selectedItems.length === 0" class="btn-delete">
-          Supprimer
+          {{ t('common.delete') }}
         </button>
       </div>
     </div>
@@ -46,38 +46,39 @@
           <span v-if="index < pathSegments.length - 1" class="separator">/</span>
         </span>
       </div>
+
     </div>
 
     <!-- Selection Action Bar / Security Tip Bar -->
-    <div class="selection-gap" :class="{ 'has-content': selectedItems.length > 0 || !mfaSettings.mfa_enabled }">
+    <div class="selection-gap" :class="{ 'has-content': selectedItems.length > 0 || (!loadingSecuritySettings && !mfaSettings.mfa_enabled) }">
       <Transition name="selection-bar">
         <!-- Selection Actions -->
         <div v-if="selectedItems.length > 0" class="selection-action-bar">
           <div class="selection-actions">
-            <button class="action-btn download-action" @click.stop="downloadSelectedFiles" title="Télécharger">
+            <button class="action-btn download-action" @click.stop="downloadSelectedFiles" :title="t('file.download')">
             <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
-            <span>Télécharger</span>
+            <span>{{ t('file.download') }}</span>
           </button>
-          <button class="action-btn share-action" @click.stop="openShareForSelected" title="Partager" :disabled="selectedItems.length !== 1">
+          <button class="action-btn share-action" @click.stop="openShareForSelected" :title="t('file.share')" :disabled="selectedItems.length !== 1">
             <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
-            <span>Partager</span>
+            <span>{{ t('file.share') }}</span>
           </button>
-          <button class="action-btn delete-action" @click.stop="deleteSelectedItems" title="Supprimer">
+          <button class="action-btn delete-action" @click.stop="deleteSelectedItems" :title="t('common.delete')">
             <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/></svg>
-            <span>Supprimer</span>
+            <span>{{ t('common.delete') }}</span>
           </button>
           </div>
-          <span class="selection-count">{{ selectedItems.length }} élément{{ selectedItems.length > 1 ? 's' : '' }} sélectionné{{ selectedItems.length > 1 ? 's' : '' }}</span>
+          <span class="selection-count">{{ t('file.selectedItems', { count: selectedItems.length }) }}</span>
         </div>
 
         <!-- Security Tip Bar (shown when no items selected) -->
-        <div v-else-if="!mfaSettings.mfa_enabled" class="security-tip-bar" @click="navigateToSecurity">
+        <div v-else-if="!loadingSecuritySettings && !mfaSettings.mfa_enabled" class="security-tip-bar" @click="navigateToSecurity">
           <div class="tip-content">
             <svg class="tip-icon" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor">
               <path d="M0 0h24v24H0V0z" fill="none"/>
               <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
             </svg>
-            <span class="tip-text">💡 <strong>Conseil :</strong> Activez l'authentification à deux facteurs (MFA) pour sécuriser votre compte</span>
+            <span class="tip-text">💡 <strong>{{ t('file.securityTipWarningTitle') }}</strong> {{ t('file.securityTipWarningBody') }}</span>
           </div>
           <svg class="security-lock" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor">
             <path d="M0 0h24v24H0V0z" fill="none"/>
@@ -85,13 +86,13 @@
           </svg>
         </div>
 
-        <div v-else-if="mfaSettings.mfa_enabled" class="security-tip-bar success">
+        <div v-else-if="!loadingSecuritySettings && mfaSettings.mfa_enabled" class="security-tip-bar success">
           <div class="tip-content">
             <svg class="tip-icon" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor">
               <path d="M0 0h24v24H0V0z" fill="none"/>
               <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
             </svg>
-            <span class="tip-text">✅ <strong>Sécurisé :</strong> Utilisez un gestionnaire de mots de passe pour protéger vos identifiants</span>
+            <span class="tip-text">✅ <strong>{{ t('file.securityTipSuccessTitle') }}</strong> {{ t('file.securityTipSuccessBody') }}</span>
           </div>
           <svg class="security-lock" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor">
             <path d="M0 0h24v24H0V0z" fill="none"/>
@@ -113,7 +114,10 @@
           <div class="progress-bar">
             <div class="progress-fill" :style="{ width: fileStore.uploadProgress + '%' }"></div>
           </div>
+        </div>
+        <div class="upload-meta">
           <span class="progress-text">{{ fileStore.uploadProgress }}%</span>
+          <span class="upload-speed">{{ uploadSpeedText }}</span>
         </div>
       </div>
     </div>
@@ -148,36 +152,36 @@
     :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }">
       <template v-if="contextMenu.item">
         <div class="menu-item" @click.stop="handleContextAction('preview')" v-if="contextMenu.item.type === 'file'">
-          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></span> Aperçu
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></span> {{ t('file.preview') }}
         </div>
         <div class="menu-item" @click.stop="handleContextAction('download')">
-          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg></span> {{ contextMenu.item.type === 'folder' ? 'Télécharger (ZIP)' : 'Télécharger' }}
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg></span> {{ contextMenu.item.type === 'folder' ? t('file.downloadZip') : t('file.download') }}
         </div>
         <div class="menu-item" @click.stop="handleContextAction('rename')">
-          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M14.06 9.02l.92.92L5.92 19H5v-.92l9.06-9.06M17.66 3c-.25 0-.51.1-.7.29l-1.83 1.83 3.75 3.75 1.83-1.83c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.2-.2-.45-.29-.71-.29zm-3.6 3.19L3 17.25V21h3.75L17.81 9.94l-3.75-3.75z"/></svg></span> Renommer
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M14.06 9.02l.92.92L5.92 19H5v-.92l9.06-9.06M17.66 3c-.25 0-.51.1-.7.29l-1.83 1.83 3.75 3.75 1.83-1.83c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.2-.2-.45-.29-.71-.29zm-3.6 3.19L3 17.25V21h3.75L17.81 9.94l-3.75-3.75z"/></svg></span> {{ t('file.rename') }}
         </div>
         <div class="menu-item" @click.stop="handleContextAction('move')">
-          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 12v-3h-4v-4h4V8l5 5-5 5z"/></svg></span> Déplacer
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 12v-3h-4v-4h4V8l5 5-5 5z"/></svg></span> {{ t('file.move') }}
         </div>
         <div class="menu-item" @click.stop="handleContextAction('share')">
-          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg></span> Partager
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg></span> {{ t('file.share') }}
         </div>
         <div class="menu-item" v-if="contextMenu.item && contextMenu.item.shared" @click.stop="handleContextAction('get-share-link')">
-          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></span> Voir le lien de partage
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></span> {{ t('share.openLink') }}
         </div>
         <div class="menu-item" @click.stop="handleContextAction('tags')">
-          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16zM16 17H5V7h11l3.55 5L16 17z"/></svg></span> Tags
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16zM16 17H5V7h11l3.55 5L16 17z"/></svg></span> {{ t('file.tags') }}
         </div>
         <div class="menu-item delete" @click.stop="handleContextAction('delete')">
-          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/></svg></span> Supprimer
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/></svg></span> {{ t('file.delete') }}
         </div>
       </template>
       <template v-else>
         <div class="menu-item" @click.stop="handleContextAction('add-file')">
-          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15.01l1.41 1.41L11 14.83V19h2v-4.17l1.59 1.59L16 15.01 12.01 11 8 15.01z"/></svg></span> Ajouter un fichier
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15.01l1.41 1.41L11 14.83V19h2v-4.17l1.59 1.59L16 15.01 12.01 11 8 15.01z"/></svg></span> {{ t('file.addFile') }}
         </div>
         <div class="menu-item" @click.stop="handleContextAction('create-folder')">
-          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V6h5.17l2 2H20v10zm-8-4h2v2h2v-2h2v-2h-2v-2h-2v2h-2z"/></svg></span> Créer un dossier
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V6h5.17l2 2H20v10zm-8-4h2v2h2v-2h2v-2h-2v-2h-2v2h-2z"/></svg></span> {{ t('file.createFolder') }}
         </div>
       </template>
     </div>
@@ -213,15 +217,6 @@
       @close="closeMoveDialog"
       @move-to="onMoveTo"
     />
-    <FilePreview
-      :visible="fileStore.preview.show"
-      :fileUrl="fileStore.preview.url"
-      :fileName="fileStore.preview.name"
-      :mimeType="fileStore.preview.type"
-      :loading="fileStore.preview.loading"
-      :status="fileStore.preview.status"
-      @close="fileStore.preview.show = false"
-    />
     <MFAChallengeModal
       v-model="showMFAChallenge"
       :context="mfaChallengeContext"
@@ -234,6 +229,7 @@
 <script setup>
 import { onMounted, ref, computed, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { useFileStore } from '../../stores/files'
 import { useAuthStore } from '../../stores/auth'
@@ -250,11 +246,12 @@ import ShareDialog from '../ShareDialog.vue'
 import api from '../../api'
 import MoveDialog from '../MoveDialog.vue';
 import ManageShareDialog from '../ManageShareDialog.vue';
-import FilePreview from './FilePreview.vue';
 import FileTable from './FileTable.vue';
 import MFAChallengeModal from '../MFAChallengeModal.vue';
+import { formatSpeed } from '../../utils/format'
 
 const router = useRouter()
+const { t } = useI18n()
 const authStore = useAuthStore()
 const uiStore = useUIStore()
 const fileStore = useFileStore()
@@ -274,11 +271,17 @@ const mfaSettings = ref({
   mfa_enabled: false,
   mfa_verified: false
 })
+const loadingSecuritySettings = ref(true)
 
 const selectedItems = ref([])
 const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
 const fileInput = ref(null)
 const isDragging = ref(false)
+
+const uploadSpeedText = computed(() => {
+  if (fileStore.uploadState === 'encrypting') return 'Chiffrement...'
+  return formatSpeed(fileStore.uploadSpeed)
+})
 
 watch(
   () => preferenceStore.showFolderSizes,
@@ -343,18 +346,18 @@ const columns = computed(() => {
 
   cols.push(
     { key: 'icon', label: '', headerClass: 'icon-col', cellClass: 'icon-col' },
-    { key: 'name', label: 'Nom', cellClass: 'name-cell' },
+    { key: 'name', label: t('file.columnName'), cellClass: 'name-cell' },
   );
 
   if (fileStore.searchQuery && fileStore.searchQuery.trim() !== '') {
-    cols.push({ key: 'path', label: 'Chemin' });
+    cols.push({ key: 'path', label: t('file.columnPath') });
   }
 
   cols.push(
-    { key: 'tags', label: 'Tags' },
-    { key: 'created', label: 'Créé le' },
-    { key: 'updated', label: 'Modifié le' },
-    { key: 'size', label: 'Taille' }
+    { key: 'tags', label: t('file.tags') },
+    { key: 'created', label: t('file.columnCreated') },
+    { key: 'updated', label: t('file.columnUpdated') },
+    { key: 'size', label: t('file.columnSize') }
   );
   return cols;
 })
@@ -524,8 +527,8 @@ const closeContextMenu = () => {
 const pathSegments = computed(() => {
   if (fileStore.viewMode === 'shared') {
       const segments = [
-          { name: 'Mon Drive', path: 'DRIVE_ROOT' },
-          { name: 'Partagés avec moi', path: 'SHARE_ROOT' }
+      { name: t('file.myDrive'), path: 'DRIVE_ROOT' },
+        { name: t('shared.sharedWithMe'), path: 'SHARE_ROOT' }
       ];
       fileStore.sharedBreadcrumbs.forEach((crumb, index) => {
           segments.push({
@@ -538,7 +541,7 @@ const pathSegments = computed(() => {
   }
 
   const path = fileStore.currentPath
-  const segments = [{ name: 'Mon Drive', path: '/' }]
+  const segments = [{ name: t('file.myDrive'), path: '/' }]
 
   if (path === '/') return segments
 
@@ -547,7 +550,11 @@ const pathSegments = computed(() => {
 
   parts.forEach(part => {
     currentBuild += '/' + part
-    segments.push({ name: part, path: currentBuild })
+    // When filename encryption is enabled, look up the decrypted folder name from the
+    // cache populated by fetchItems. Falls back to the raw (encrypted) segment so
+    // breadcrumbs never break — the cache is filled on first navigation to each folder.
+    const displayName = fileStore.folderNameCache[currentBuild] || part
+    segments.push({ name: displayName, path: currentBuild })
   })
 
   return segments
@@ -608,12 +615,15 @@ onMounted(async () => {
 })
 
 const loadSecuritySettings = async () => {
+  loadingSecuritySettings.value = true
   try {
     const response = await api.get('/users/security-settings')
     mfaSettings.value = response.data
   } catch (error) {
     console.error('Failed to load security settings:', error)
     // Keep default values (MFA disabled)
+  } finally {
+    loadingSecuritySettings.value = false
   }
 }
 
@@ -975,11 +985,32 @@ const executeDownloadSelectedFiles = async (files, folders) => {
   await downloadStore.downloadSelection(fileIDs, folderIDs, zipName);
 }
 
+const isSyncedFolder = (item) => {
+  return item?.type === 'folder' && Boolean(item?.synced || item?.Synced)
+}
+
+const getDeleteWarningMessage = (items) => {
+  const syncedFolders = items.filter(isSyncedFolder)
+  if (syncedFolders.length === 0) return ''
+
+  if (syncedFolders.length === 1 && items.length === 1) {
+    return t('messages.syncedFolderDeleteWarningSingle', { name: syncedFolders[0].Name })
+  }
+
+  return t('messages.syncedFolderDeleteWarningMultiple', {
+    count: syncedFolders.length,
+    total: items.length
+  })
+}
+
 const deleteSelectedItems = () => {
   if (selectedItems.value.length === 0) return;
 
+  const warningMessage = getDeleteWarningMessage(selectedItems.value)
+
   uiStore.requestDeleteConfirmation({
     title: "Supprimer les éléments",
+    message: warningMessage,
     itemName: selectedItems.value.length === 1 ? selectedItems.value[0].Name : null,
     itemsCount: selectedItems.value.length,
     onConfirm: async () => {
@@ -1009,7 +1040,7 @@ const renameSelectedItem = async () => {
   if (selectedItems.value.length !== 1) return;
 
   const item = selectedItems.value[0];
-  const newName = await openInputDialog("Entrez le nouveau nom :", item.Name);
+  const newName = await openInputDialog(t('dialogs.rename.title'), item.Name, t('dialogs.rename.placeholder'));
 
   if (newName && newName !== item.Name) {
     try {
@@ -1106,7 +1137,7 @@ const handleFileUpload = async (event) => {
 }
 
 const createNewFolder = async () => {
-  const folderName = await openInputDialog("Entrez le nom du nouveau dossier :")
+  const folderName = await openInputDialog(t('dialogs.rename.newFolderTitle'), '', t('dialogs.rename.newFolderPlaceholder'))
   if (folderName) {
     await fileStore.createFolder(folderName)
   }
@@ -1245,9 +1276,34 @@ const onMFACancelled = () => {
   padding: 0.5rem 1rem;
   background-color: var(--card-color);
   display: flex;
-  justify-content: flex-start;
+  justify-content: space-between;
   align-items: center;
   gap: 1rem;
+}
+
+.path-banner-actions {
+  margin-left: auto;
+}
+
+.buy-me-coffee-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background-color: var(--hover-background-color);
+  color: var(--main-text-color);
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+
+.buy-me-coffee-link:hover {
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
 }
 
 .back-arrow {
@@ -1543,6 +1599,18 @@ button {
   display: flex;
   align-items: center;
   gap: 0.8rem;
+}
+
+.upload-meta {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.upload-speed {
+  font-size: 0.85rem;
+  color: var(--secondary-text-color);
 }
 
 .drag-overlay {

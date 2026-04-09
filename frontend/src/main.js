@@ -2,6 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
+import i18n from './i18n.js'
 import './style.css'
 import './styles/avatar-animations.css'
 import { useAuthStore } from './stores/auth'
@@ -17,14 +18,15 @@ const pinia = createPinia()
 const app = createApp(App)
 
 app.use(pinia)
+app.use(i18n)
 const authStore = useAuthStore(pinia);
 const realtimeStore = useRealtimeStore(pinia);
 
 // Register Supabase Realtime event handlers
 realtimeStore.onEvent('storage_update', (payload) => {
-  console.log('[Main] Storage update received:', payload);
+  //console.log('[Main] Storage update received:', payload);
   if (authStore.user && payload.storage_used !== undefined) {
-    authStore.user.storage_used = payload.storage_used;
+    authStore.updateUserStorage(payload.storage_used, payload.storage_limit);
   }
   // If action indicates share update, refetch files
   const shareActions = ['share_created', 'share_revoked', 'share_received', 'share_revoked_by_recipient', 'share_removed_from_imported'];
@@ -36,13 +38,13 @@ realtimeStore.onEvent('storage_update', (payload) => {
 });
 
 realtimeStore.onEvent('friend_update', (payload) => {
-  console.log('[Main] Friend update received:', payload);
+  //console.log('[Main] Friend update received:', payload);
   const friendStore = useFriendStore(pinia);
   friendStore.fetchFriends();
 });
 
 realtimeStore.onEvent('p2p_signal', (payload) => {
-  console.log('[Main] P2P signal received:', payload);
+  //console.log('[Main] P2P signal received:', payload);
   const p2pStore = useP2PStore(pinia);
   // Transform to expected format
   p2pStore.handleSignal({

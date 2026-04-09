@@ -1,0 +1,228 @@
+package ws
+
+import (
+	"encoding/json"
+	"log"
+	"sync"
+	"time"
+
+	"github.com/gorilla/websocket"
+)
+
+const (
+	writeWait      = 10 * time.Second
+	pongWait       = 60 * time.Second
+	pingPeriod     = (pongWait * 9) / 10
+	maxMessageSize = 512 * 1024 // 512 KB
+
+	// presenceGracePeriod is how long we wait before broadcasting "offline" after a
+	// user's last connection drops. Reconnects within this window are transparent.
+	presenceGracePeriod = 8 * time.Second
+)
+
+// Client represents a single WebSocket connection from an authenticated user.
+type Client struct {
+	userID string
+	hub    *Hub
+	conn   *websocket.Conn
+	send   chan []byte
+}
+
+// Hub maintains the set of active clients and routes messages to them.
+type Hub struct {
+	mu      sync.RWMutex
+	clients map[string][]*Client // userID → slice of connections
+}
+
+// GlobalHub is the singleton hub used throughout the application.
+var GlobalHub = &Hub{
+	clients: make(map[string][]*Client),
+}
+
+// pendingDisconnects holds timers that fire the DisconnectHook after the grace period.
+// If the user reconnects before the timer fires, the timer is cancelled.
+var pendingDisconnects sync.Map // map[userID string]*time.Timer
+
+// ConnectHook is called (in a goroutine) when a user's FIRST WebSocket connection opens
+// AND there is no pending disconnect timer (i.e. not a quick reconnect).
+var ConnectHook func(userID string)
+
+// DisconnectHook is called when a user's LAST connection has been gone for presenceGracePeriod.
+var DisconnectHook func(userID string)
+
+// Register adds a client to the hub.
+func (h *Hub) Register(c *Client) {
+	h.mu.Lock()
+	firstConn := len(h.clients[c.userID]) == 0
+	h.clients[c.userID] = append(h.clients[c.userID], c)
+	log.Printf("[WS] Client registered: user=%s (total: %d)", c.userID, len(h.clients[c.userID]))
+	h.mu.Unlock()
+
+	// If there was a pending offline timer, cancel it — the user reconnected in time.
+	// In that case we do NOT re-fire ConnectHook (we never fired DisconnectHook either).
+	if pendingTimer, wasPending := pendingDisconnects.LoadAndDelete(c.userID); wasPending {
+		pendingTimer.(*time.Timer).Stop()
+		log.Printf("[Presence] Reconnect within grace period for user=%s — no presence change", c.userID)
+		return
+	}
+
+	// Truly first connection: broadcast "online" to friends.
+	if firstConn && ConnectHook != nil {
+		go ConnectHook(c.userID)
+	}
+}
+
+// Unregister removes a client from the hub and schedules an offline broadcast
+// after presenceGracePeriod (cancelled if the user reconnects in time).
+func (h *Hub) Unregister(c *Client) {
+	h.mu.Lock()
+	list := h.clients[c.userID]
+	for i, client := range list {
+		if client == c {
+			h.clients[c.userID] = append(list[:i], list[i+1:]...)
+			close(c.send)
+			break
+		}
+	}
+	lastConn := len(h.clients[c.userID]) == 0
+	if lastConn {
+		delete(h.clients, c.userID)
+	}
+	log.Printf("[WS] Client unregistered: user=%s (remaining: %d)", c.userID, len(h.clients[c.userID]))
+	h.mu.Unlock()
+
+	if !lastConn || DisconnectHook == nil {
+		return
+	}
+
+	// Schedule the offline broadcast after the grace period.
+	userID := c.userID
+	timer := time.AfterFunc(presenceGracePeriod, func() {
+		pendingDisconnects.Delete(userID)
+		log.Printf("[Presence] Grace period elapsed, broadcasting offline for user=%s", userID)
+		DisconnectHook(userID)
+	})
+	pendingDisconnects.Store(userID, timer)
+}
+
+// SendToUser sends a raw JSON message to all connections belonging to userID.
+// It is safe to call from any goroutine.
+func (h *Hub) SendToUser(userID string, msg []byte) {
+	h.mu.RLock()
+	clients := make([]*Client, len(h.clients[userID]))
+	copy(clients, h.clients[userID])
+	h.mu.RUnlock()
+
+	for _, c := range clients {
+		if !safeSend(c.send, msg) {
+			log.Printf("[WS] Send buffer full or channel closed for user=%s, dropping message", userID)
+		}
+	}
+}
+
+// safeSend sends msg to ch without blocking, recovering from a panic if ch was
+// already closed by Unregister racing with SendToUser.
+func safeSend(ch chan []byte, msg []byte) (sent bool) {
+	defer func() {
+		if recover() != nil {
+			sent = false
+		}
+	}()
+	select {
+	case ch <- msg:
+		return true
+	default:
+		return false
+	}
+}
+
+// SendEventToUser marshals and delivers a structured event message.
+func (h *Hub) SendEventToUser(userID, eventType string, id int64, payload map[string]any) {
+	msg, err := json.Marshal(map[string]any{
+		"type":       "event",
+		"event_type": eventType,
+		"id":         id,
+		"payload":    payload,
+	})
+	if err != nil {
+		log.Printf("[WS] Failed to marshal event: %v", err)
+		return
+	}
+	h.SendToUser(userID, msg)
+}
+
+// SendP2PSignalToUser delivers a P2P signal over WebSocket.
+func (h *Hub) SendP2PSignalToUser(targetUserID, senderID, signalType string, payload map[string]any) {
+	msg, err := json.Marshal(map[string]any{
+		"type":        "p2p_signal",
+		"from":        senderID,
+		"signal_type": signalType,
+		"payload":     payload,
+	})
+	if err != nil {
+		log.Printf("[WS] Failed to marshal p2p signal: %v", err)
+		return
+	}
+	h.SendToUser(targetUserID, msg)
+}
+
+// IsConnected returns true if the user has at least one active WebSocket connection.
+func (h *Hub) IsConnected(userID string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.clients[userID]) > 0
+}
+
+// writePump pumps messages from the send channel to the WebSocket connection.
+func (c *Client) writePump() {
+	ticker := time.NewTicker(pingPeriod)
+	defer func() {
+		ticker.Stop()
+		c.conn.Close()
+	}()
+
+	for {
+		select {
+		case msg, ok := <-c.send:
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if !ok {
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+			if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				return
+			}
+
+		case <-ticker.C:
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
+}
+
+// readPump handles incoming messages (pong frames keep the connection alive).
+func (c *Client) readPump() {
+	defer func() {
+		c.hub.Unregister(c)
+		c.conn.Close()
+	}()
+
+	c.conn.SetReadLimit(maxMessageSize)
+	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	for {
+		_, _, err := c.conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+				log.Printf("[WS] Unexpected close for user=%s: %v", c.userID, err)
+			}
+			break
+		}
+	}
+}

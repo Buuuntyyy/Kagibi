@@ -13,7 +13,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	// Setup Gin
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(RateLimitMiddleware())
+	r.Use(RateLimitMiddleware(nil)) // nil Redis → fail-open (no rate limiting in unit tests)
 	r.GET("/", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})

@@ -8,6 +8,19 @@ import (
 	"github.com/uptrace/bun"
 )
 
+// WSHub is the subset of the WebSocket hub used by pkg to push events.
+// It is set at startup by main.go to avoid an import cycle.
+type WSHub interface {
+	SendEventToUser(userID, eventType string, id int64, payload map[string]any)
+	SendP2PSignalToUser(targetUserID, senderID, signalType string, payload map[string]any)
+}
+
+// wsHub is the global hub instance injected at startup.
+var wsHub WSHub
+
+// SetWSHub registers the WebSocket hub so that EmitRealtimeEvent can push live events.
+func SetWSHub(h WSHub) { wsHub = h }
+
 type User struct {
 	bun.BaseModel `bun:"table:profiles,alias:p"`
 
@@ -21,12 +34,10 @@ type User struct {
 	EncryptedMasterKeyRecovery string     `bun:"encrypted_master_key_recovery,notnull" json:"encrypted_master_key_recovery"`
 	RecoveryHash               string     `bun:"recovery_hash,notnull" json:"recovery_hash"`
 	RecoverySalt               string     `bun:"recovery_salt,notnull" json:"recovery_salt"`
-	StorageUsed                int64      `bun:"storage_used,notnull,default:0" json:"storage_used"`
-	StorageLimit               int64      `bun:"storage_limit,notnull,default:16106127360" json:"storage_limit"` // Default 15GB
-	Plan                       string     `bun:"plan,notnull,default:'free'" json:"plan"`
-	FriendCode                 string     `bun:"friend_code,unique,notnull" json:"friend_code"`      // Short unique code for friends
-	PublicKey                  string     `bun:"public_key" json:"public_key"`                       // RSA Public Key (Standard PEM format)
-	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"` // RSA Private Key (Encrypted with MasterKey)
+	FriendCode                 string     `bun:"friend_code,unique,notnull" json:"friend_code"`                    // Short unique code for friends
+	PublicKey                  string     `bun:"public_key" json:"public_key"`                                     // RSA Public Key (Standard PEM format)
+	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"`               // RSA Private Key (Encrypted with MasterKey)
+	EncryptFilenames           bool       `bun:"encrypt_filenames,notnull,default:false" json:"encrypt_filenames"` // Client-side filename encryption opt-in
 	CreatedAt                  time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt                  time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 	DeletedAt                  *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"` // RGPD Article 17 - Soft delete
@@ -38,6 +49,18 @@ type Friendship struct {
 	UserID2   string    `bun:"user_id_2,notnull"` // Recipient
 	Status    string    `bun:"status,notnull"`    // 'pending', 'accepted'
 	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+}
+
+type UserPlan struct {
+	bun.BaseModel    `bun:"table:user_plans,alias:up"`
+	UserID           string    `bun:"user_id,pk" json:"user_id"`
+	Plan             string    `bun:"plan,notnull,default:'free'" json:"plan"`
+	StorageLimit     int64     `bun:"storage_limit,notnull,default:21474836480" json:"storage_limit"`
+	StorageUsed      int64     `bun:"storage_used,notnull,default:0" json:"storage_used"`
+	P2PMaxExchanges  int       `bun:"p2p_max_exchanges,notnull,default:5" json:"p2p_max_exchanges"`
+	P2PExchangesUsed int       `bun:"p2p_exchanges_used,notnull,default:0" json:"p2p_exchanges_used"`
+	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt        time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 }
 
 type File struct {
@@ -52,6 +75,7 @@ type File struct {
 	PreviewID    *int64    `bun:"preview_id" json:"preview_id"`                     // ID du fichier de prévisualisation (miniature/compressé)
 	Preview      *File     `bun:"rel:belongs-to,join:preview_id=id" json:"preview"` // Metadata du fichier preview
 	IsPreview    bool      `bun:"is_preview,default:false" json:"is_preview"`       // Indique si c'est un fichier de prévisualisation (masqué par défaut)
+	Synced       bool      `bun:"synced,default:false" json:"synced"`               // true si uploadé via la sync desktop
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt    time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 }
@@ -182,34 +206,40 @@ type RecentActivity struct {
 type RealtimeEvent struct {
 	bun.BaseModel `bun:"table:realtime_events"`
 
-	ID        int64                  `bun:"id,pk,autoincrement"`
-	UserID    string                 `bun:"user_id,notnull"`
-	EventType string                 `bun:"event_type,notnull"`
-	Payload   map[string]interface{} `bun:"payload,type:jsonb"`
-	CreatedAt time.Time              `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	ID        int64          `bun:"id,pk,autoincrement"`
+	UserID    string         `bun:"user_id,notnull"`
+	EventType string         `bun:"event_type,notnull"`
+	Payload   map[string]any `bun:"payload,type:jsonb"`
+	CreatedAt time.Time      `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 }
 
 // P2PSignal represents a WebRTC signaling message
 type P2PSignal struct {
 	bun.BaseModel `bun:"table:p2p_signals"`
 
-	ID         int64                  `bun:"id,pk,autoincrement"`
-	SenderID   string                 `bun:"sender_id,notnull"`
-	TargetID   string                 `bun:"target_id,notnull"`
-	SignalType string                 `bun:"signal_type,notnull"`
-	Payload    map[string]interface{} `bun:"payload,type:jsonb"`
-	CreatedAt  time.Time              `bun:"created_at,nullzero,notnull,default:current_timestamp"`
-	Consumed   bool                   `bun:"consumed,notnull,default:false"`
+	ID         int64          `bun:"id,pk,autoincrement" json:"id"`
+	SenderID   string         `bun:"sender_id,notnull" json:"sender_id"`
+	TargetID   string         `bun:"target_id,notnull" json:"target_id"`
+	SignalType string         `bun:"signal_type,notnull" json:"signal_type"`
+	Payload    map[string]any `bun:"payload,type:jsonb" json:"payload"`
+	CreatedAt  time.Time      `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	Consumed   bool           `bun:"consumed,notnull,default:false" json:"consumed"`
 }
 
-// EmitRealtimeEvent inserts an event into the realtime_events table
-// Supabase Realtime will broadcast it to subscribed clients
-func EmitRealtimeEvent(ctx context.Context, db *bun.DB, userID, eventType string, payload map[string]interface{}) error {
+// EmitRealtimeEvent inserts an event into the realtime_events table and
+// pushes it immediately over WebSocket if the user is connected.
+func EmitRealtimeEvent(ctx context.Context, db *bun.DB, userID, eventType string, payload map[string]any) error {
 	event := &RealtimeEvent{
 		UserID:    userID,
 		EventType: eventType,
 		Payload:   payload,
 	}
-	_, err := db.NewInsert().Model(event).Exec(ctx)
-	return err
+	if _, err := db.NewInsert().Model(event).Exec(ctx); err != nil {
+		return err
+	}
+	// Push over WebSocket (no-op if hub not set or user has no active connection)
+	if wsHub != nil {
+		wsHub.SendEventToUser(userID, eventType, event.ID, payload)
+	}
+	return nil
 }

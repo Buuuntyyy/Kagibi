@@ -14,9 +14,9 @@
       <section class="legal-section">
         <h2>Éditeur du site</h2>
         <div class="legal-content">
-          <p><strong>SaferCloud</strong></p>
+          <p><strong>Kagibi</strong></p>
           <p>Application de stockage sécurisé Zero-Knowledge</p>
-          <p>© 2026 SaferCloud - Tous droits réservés</p>
+          <p>© 2026 Kagibi - Tous droits réservés</p>
         </div>
       </section>
 
@@ -79,7 +79,7 @@
         <h2>Propriété intellectuelle</h2>
         <div class="legal-content">
           <p>
-            L'ensemble du site SaferCloud, incluant sa structure, son design, son code source et son contenu textuel, 
+            L'ensemble du site Kagibi, incluant sa structure, son design, son code source et son contenu textuel, 
             constitue une œuvre protégée par le droit d'auteur. Toute reproduction ou représentation, totale ou partielle, 
             sans autorisation expresse est interdite et constituerait une contrefaçon sanctionnée par les articles L.335-2 
             et suivants du Code de la propriété intellectuelle.

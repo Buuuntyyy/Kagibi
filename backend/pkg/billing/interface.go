@@ -60,8 +60,11 @@ type BillingProvider interface {
 
 	// === Quota Enforcement ===
 
-	// CheckQuota vérifie si une opération est autorisée par le quota
+	// CheckQuota vérifie si une opération est autorisée par le quota stockage
 	CheckQuota(ctx context.Context, userID string, requestedBytes int64) (*QuotaCheckResult, error)
+
+	// CheckP2PQuota vérifie si un nouveau partage P2P peut être créé
+	CheckP2PQuota(ctx context.Context, userID string, currentActiveShares int) (*P2PQuotaCheckResult, error)
 
 	// === Invoices (Read-only depuis le core) ===
 
@@ -70,6 +73,15 @@ type BillingProvider interface {
 
 	// GetPaymentLink génère un lien de paiement pour une facture
 	GetPaymentLink(ctx context.Context, invoiceID string) (string, error)
+
+	// === Stripe Checkout (upgrade de plan) ===
+
+	// CreateCheckoutSession crée une session Stripe Checkout pour upgrade
+	// interval: "monthly" ou "yearly"
+	CreateCheckoutSession(ctx context.Context, userID, planCode, interval, successURL, cancelURL string) (string, error)
+
+	// CreatePortalSession crée une session Stripe Customer Portal
+	CreatePortalSession(ctx context.Context, userID, returnURL string) (string, error)
 }
 
 // =============================================================================
@@ -106,25 +118,28 @@ type Subscription struct {
 	ID                 string     `json:"id"`
 	UserID             string     `json:"user_id"`
 	PlanCode           string     `json:"plan_code"`
-	Status             string     `json:"status"` // "active", "canceled", "past_due", "trialing"
+	Status             string     `json:"status"` // "active", "canceled", "past_due", "trialing", "incomplete"
 	CurrentPeriodStart time.Time  `json:"current_period_start"`
 	CurrentPeriodEnd   time.Time  `json:"current_period_end"`
 	CanceledAt         *time.Time `json:"canceled_at,omitempty"`
 	TrialEndsAt        *time.Time `json:"trial_ends_at,omitempty"`
+	StripeSubID        string     `json:"stripe_subscription_id,omitempty"`
 }
 
 // Plan représente un plan tarifaire avec quotas
 type Plan struct {
-	Code             string                 `json:"code"`
-	Name             string                 `json:"name"`
-	Description      string                 `json:"description,omitempty"`
-	StorageLimitGB   int64                  `json:"storage_limit_gb"`
-	BandwidthLimitGB int64                  `json:"bandwidth_limit_gb,omitempty"`
-	PriceMonthly     int64                  `json:"price_monthly_cents"`
-	PriceYearly      int64                  `json:"price_yearly_cents,omitempty"`
-	Currency         string                 `json:"currency"`
-	Interval         string                 `json:"interval"` // "monthly", "yearly"
-	Features         map[string]interface{} `json:"features,omitempty"`
+	Code           string `json:"code"`
+	Name           string `json:"name"`
+	Description    string `json:"description,omitempty"`
+	StorageLimitGB int64  `json:"storage_limit_gb"`
+	P2PSharesLimit int    `json:"p2p_shares_limit"` // max simultaneous active P2P shares
+	PriceMonthly   int64  `json:"price_monthly_cents"`
+	PriceYearly    int64  `json:"price_yearly_cents,omitempty"` // 0 = not available
+	Currency       string `json:"currency"`
+	// StripePriceIDMonthly / Yearly are the IDs from your Stripe dashboard
+	StripePriceIDMonthly string                 `json:"stripe_price_id_monthly,omitempty"`
+	StripePriceIDYearly  string                 `json:"stripe_price_id_yearly,omitempty"`
+	Features             map[string]interface{} `json:"features,omitempty"`
 }
 
 // Usage représente l'usage de la période en cours
@@ -133,8 +148,7 @@ type Usage struct {
 	PeriodStart     time.Time `json:"period_start"`
 	PeriodEnd       time.Time `json:"period_end"`
 	StorageUsedGB   float64   `json:"storage_used_gb"`
-	BandwidthUsedGB float64   `json:"bandwidth_used_gb"`
-	P2PTransferGB   float64   `json:"p2p_transfer_gb,omitempty"`
+	P2PSharesActive int       `json:"p2p_shares_active"` // current active P2P shares count
 }
 
 // QuotaCheckResult est le résultat d'une vérification de quota
@@ -146,11 +160,20 @@ type QuotaCheckResult struct {
 	RemainingBytes int64  `json:"remaining_bytes"`
 }
 
+// P2PQuotaCheckResult est le résultat d'une vérification du quota P2P
+type P2PQuotaCheckResult struct {
+	Allowed         bool   `json:"allowed"`
+	Reason          string `json:"reason,omitempty"`
+	ActiveShares    int    `json:"active_shares"`
+	Limit           int    `json:"limit"`
+	RemainingShares int    `json:"remaining_shares"`
+}
+
 // Invoice représente une facture
 type Invoice struct {
 	ID          string     `json:"id"`
 	Number      string     `json:"number"`
-	Status      string     `json:"status"` // "draft", "pending", "paid", "failed"
+	Status      string     `json:"status"` // "draft", "open", "paid", "void", "uncollectible"
 	AmountCents int64      `json:"amount_cents"`
 	Currency    string     `json:"currency"`
 	IssuedAt    time.Time  `json:"issued_at"`

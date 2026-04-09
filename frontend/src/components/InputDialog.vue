@@ -11,8 +11,8 @@
         class="modal-input"
       />
       <div class="modal-actions">
-        <button @click="cancel" class="btn-cancel">Annuler</button>
-        <button @click="confirm" class="btn-confirm">Confirmer</button>
+        <button @click="cancel" class="btn-cancel">{{ t('common.cancel') }}</button>
+        <button @click="confirm" class="btn-confirm">{{ t('common.confirm') }}</button>
       </div>
     </div>
   </div>
@@ -20,6 +20,7 @@
 
 <script setup>
 import { ref, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps({
   isOpen: Boolean,
@@ -29,6 +30,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:isOpen', 'confirm', 'cancel'])
+const { t } = useI18n()
 
 const inputValue = ref('')
 const inputRef = ref(null)

@@ -12,7 +12,7 @@
              </linearGradient>
            </defs>
         </svg>
-        <span class="brand-name">SaferCloud</span>
+        <span class="brand-name">Kagibi</span>
       </div>
       <div class="header-actions" v-if="store.resourceName">
          <span class="shared-badge">Dossier Partagé</span>

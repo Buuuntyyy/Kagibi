@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import api from '../api'
 import { useAuthStore } from './auth'
 import { usePreferencesStore } from './preferences'
-import { encryptFile, decryptFile, generateMasterKey, wrapMasterKey, unwrapMasterKey, deriveKeyFromToken } from '../utils/crypto'
+import { encryptFile, decryptFile, generateMasterKey, wrapMasterKey, unwrapMasterKey, deriveKeyFromToken, encryptFileName, decryptFileName } from '../utils/crypto'
 import { encryptChunkWorker, decryptChunkedFileWorker, CHUNK_SIZE } from '../utils/crypto'
 import { generatePreview } from '../utils/previewGenerator'
 import { MultipartUploadManager, PART_SIZE, UploadState } from '../utils/multipartUpload'
@@ -63,10 +63,14 @@ export const useFileStore = defineStore('files', {
     sharedBreadcrumbs: [], // Array of { id, name }
     
     uploadProgress: 0,
+    uploadSpeed: 0,
     isUploading: false,
     uploadingFileName: '',
     uploadState: 'idle', // idle, encrypting, uploading, completing, error
     currentUploadManager: null, // MultipartUploadManager instance
+    lastUploadedBytes: 0,
+    lastUploadTimestamp: 0,
+    heartbeatInterval: null, // Interval for session keepalive during long operations
     
     // Preview State
     preview: {
@@ -84,6 +88,8 @@ export const useFileStore = defineStore('files', {
     recentFiles: [],
     // Used to coordinate navigation from Suggestions
     pendingNavigatePath: null,
+    // Maps encrypted folder path → decrypted display name (populated when encrypt_filenames=true)
+    folderNameCache: {},
   }),
   actions: {
     async fetchRecents() {
@@ -143,6 +149,31 @@ export const useFileStore = defineStore('files', {
     notifyShareUpdate() {
         this.shareUpdateTrigger++;
     },
+    
+    startHeartbeat() {
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+      }
+      // Send heartbeat every 2.5 minutes (150 seconds)
+      // Session timeout is 5 minutes, so this keeps it alive
+      this.heartbeatInterval = setInterval(async () => {
+        try {
+          await api.get('/heartbeat');
+          //console.log('[Upload/Download] Heartbeat sent to prevent session timeout');
+        } catch (err) {
+          console.error('[Upload/Download] Heartbeat failed:', err);
+        }
+      }, 150000);
+    },
+    
+    stopHeartbeat() {
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+        //console.log('[Upload/Download] Heartbeat stopped');
+      }
+    },
+    
         setSearchQuery(query) {
         this.searchQuery = query;
         this.searchFiles(query);
@@ -183,6 +214,22 @@ export const useFileStore = defineStore('files', {
         this.files = response.data.files || []
         this.folders = response.data.folders || []
         this.currentPath = safePath
+
+        // Decrypt names client-side when the user opted into filename encryption.
+        // Names are stored as opaque base64url AES-GCM blobs; we decrypt them in
+        // place so all existing UI code reading item.Name continues to work unchanged.
+        const authStore = useAuthStore()
+        if (authStore.user?.encrypt_filenames && authStore.masterKey) {
+          for (const file of this.files) {
+            file.Name = await decryptFileName(file.Name, authStore.masterKey)
+          }
+          for (const folder of this.folders) {
+            const decrypted = await decryptFileName(folder.Name, authStore.masterKey)
+            // Cache encrypted path → decrypted name so breadcrumbs can display correctly.
+            this.folderNameCache[folder.Path] = decrypted
+            folder.Name = decrypted
+          }
+        }
 
         // Record History
         const fid = response.data.current_folder_id;
@@ -350,8 +397,13 @@ export const useFileStore = defineStore('files', {
         this.fetchItems(newPath)
     },
 
-    async downloadFile(fileId, fileName, mimeType='application/octet-stream', preview = false) {
+    async downloadFile(fileId, fileName, mimeType='application/octet-stream', preview = false, encryptedKey = null) {
       const authStore = useAuthStore();
+      
+      // Start heartbeat to prevent session timeout during long downloads
+      if (!preview) {
+        this.startHeartbeat();
+      }
       
       // Attempt to correct MIME type based on extension if generic
       if ((!mimeType || mimeType.includes('application/octet-stream')) && fileName) {
@@ -453,6 +505,11 @@ export const useFileStore = defineStore('files', {
               console.error("Shared download error", e);
               alert("Erreur téléchargement partagé: " + e.message);
               if (preview) this.preview.show = false;
+          } finally {
+              // Stop heartbeat when download completes or fails
+              if (!preview) {
+                this.stopHeartbeat();
+              }
           }
           return;
       }
@@ -469,7 +526,8 @@ export const useFileStore = defineStore('files', {
       
       // Determine target file (Original or Preview)
       let targetFileId = fileId;
-      let targetEncryptedKey = file ? file.EncryptedKey : null;
+      // Use provided encryptedKey if available (from search results), otherwise get from store
+      let targetEncryptedKey = encryptedKey || (file ? file.EncryptedKey : null);
       let finalMimeType = mimeType;
 
       // Prefer server-side preview if available and requested
@@ -553,12 +611,22 @@ export const useFileStore = defineStore('files', {
         }
 
         // Add to history
-        this.addToHistory({ id: fileId, type: 'file', displayName: fileName });
-
+          this.addToHistory({ 
+              id: fileId, 
+              type: 'file', 
+              displayName: fileName,
+              MimeType: mimeType,
+              EncryptedKey: encryptedKey
+          });
       } catch (error) {
         console.error("Erreur download:", error);
         alert("Erreur lors du téléchargement.");
         if (preview) this.preview.show = false;
+      } finally {
+        // Stop heartbeat when download completes or fails
+        if (!preview) {
+          this.stopHeartbeat();
+        }
       }
     },
     async uploadFile(file, isPreview = false, previewID = null, previewPath = null) {
@@ -616,13 +684,39 @@ export const useFileStore = defineStore('files', {
       // Setup upload state
       this.isUploading = true;
       this.uploadProgress = 0;
+      this.uploadSpeed = 0;
       this.uploadingFileName = file.name;
       this.uploadState = 'encrypting';
+      this.lastUploadedBytes = 0;
+      this.lastUploadTimestamp = 0;
+      
+      // Start heartbeat to prevent session timeout during long uploads
+      if (!isPreview) {
+        this.startHeartbeat();
+      }
 
       // Create multipart upload manager
       const uploadManager = new MultipartUploadManager({
         onProgress: (percent, uploaded, total) => {
           this.uploadProgress = percent;
+
+          const now = Date.now();
+          if (this.lastUploadTimestamp === 0) {
+            this.lastUploadTimestamp = now;
+            this.lastUploadedBytes = uploaded;
+            return;
+          }
+
+          const elapsedMs = now - this.lastUploadTimestamp;
+          const uploadedDelta = uploaded - this.lastUploadedBytes;
+          if (elapsedMs >= 250 && uploadedDelta >= 0) {
+            const instantSpeed = uploadedDelta / (elapsedMs / 1000);
+            this.uploadSpeed = this.uploadSpeed > 0
+              ? (this.uploadSpeed * 0.7) + (instantSpeed * 0.3)
+              : instantSpeed;
+            this.lastUploadTimestamp = now;
+            this.lastUploadedBytes = uploaded;
+          }
         },
         onStateChange: (state) => {
           if (state === UploadState.UPLOADING) {
@@ -674,9 +768,17 @@ export const useFileStore = defineStore('files', {
 
         this.uploadState = 'uploading';
 
+        // Encrypt filename if the user opted into client-side filename encryption.
+        // The encrypted name is a base64url string that passes backend validation
+        // and is stored opaquely in both PostgreSQL and S3.
+        let uploadFileName = file.name;
+        if (authStore.user?.encrypt_filenames && authStore.masterKey) {
+          uploadFileName = await encryptFileName(file.name, authStore.masterKey);
+        }
+
         // Initiate multipart upload with backend
         await uploadManager.initiate(
-          file.name,
+          uploadFileName,
           uploadPath,
           'application/octet-stream',
           totalEncryptedSize,
@@ -693,7 +795,7 @@ export const useFileStore = defineStore('files', {
 
         // Complete the multipart upload
         const result = await uploadManager.complete(completedParts, {
-          fileName: file.name,
+          fileName: uploadFileName,
           filePath: uploadPath,
           totalSize: totalEncryptedSize,
           contentType: 'application/octet-stream',
@@ -723,8 +825,11 @@ export const useFileStore = defineStore('files', {
             if (!isPreview) {
                 this.isUploading = false;
                 this.uploadProgress = 0;
+                this.uploadSpeed = 0;
                 this.uploadState = 'idle';
                 this.currentUploadManager = null;
+                this.lastUploadedBytes = 0;
+                this.lastUploadTimestamp = 0;
             }
         }, 1000);
 
@@ -745,9 +850,23 @@ export const useFileStore = defineStore('files', {
         alert("Erreur lors de l'envoi du fichier: " + error.message);
         this.isUploading = false;
         this.uploadProgress = 0;
+        this.uploadSpeed = 0;
         this.uploadState = 'idle';
         this.currentUploadManager = null;
+        this.lastUploadedBytes = 0;
+        this.lastUploadTimestamp = 0;
+        
+        // Stop heartbeat on error
+        if (!isPreview) {
+          this.stopHeartbeat();
+        }
+        
         throw error;
+      } finally {
+        // Always stop heartbeat when upload completes
+        if (!isPreview) {
+          this.stopHeartbeat();
+        }
       }
     },
 
@@ -759,14 +878,22 @@ export const useFileStore = defineStore('files', {
         await this.currentUploadManager.abort();
         this.isUploading = false;
         this.uploadProgress = 0;
+        this.uploadSpeed = 0;
         this.uploadState = 'idle';
         this.currentUploadManager = null;
+        this.lastUploadedBytes = 0;
+        this.lastUploadTimestamp = 0;
       }
     },
     async createFolder(folderName) {
       try {
+        const authStore = useAuthStore()
+        let nameToSend = folderName;
+        if (authStore.user?.encrypt_filenames && authStore.masterKey) {
+          nameToSend = await encryptFileName(folderName, authStore.masterKey);
+        }
         await api.post('/folders/create', {
-          name: folderName,
+          name: nameToSend,
           path: this.currentPath,
         })
         this.fetchItems(this.currentPath)
@@ -805,10 +932,17 @@ export const useFileStore = defineStore('files', {
     },
     async renameItem(id, type, newName) {
       try {
+        const authStore = useAuthStore()
+        let nameToSend = newName;
+        if (authStore.user?.encrypt_filenames && authStore.masterKey) {
+          // Encrypt the complete new name (including extension) before sending.
+          // Backend extension auto-append is bypassed for encrypted names (no visible ext).
+          nameToSend = await encryptFileName(newName, authStore.masterKey);
+        }
         await api.post('/files/rename', {
           id: id,
           type: type,
-          new_name: newName
+          new_name: nameToSend
         })
         this.fetchItems(this.currentPath)
       } catch (error) {
@@ -862,16 +996,16 @@ export const useFileStore = defineStore('files', {
           if (folder) {
               try {
                   // Fetch ALL files in the folder recursively to get their keys
-                  console.log(`Fetching recursive files for path: ${folder.Path}`);
+                  //console.log(`Fetching recursive files for path: ${folder.Path}`);
                   const res = await api.get(`/files/list-recursive`, { params: { path: folder.Path } });
                   const filesInFolder = res.data.files || [];
-                  console.log(`Found ${filesInFolder.length} files in folder.`);
+                  //console.log(`Found ${filesInFolder.length} files in folder.`);
                   
                   const shareKey = await deriveKeyFromToken(token);
                   
                   let missingKeysCount = 0;
                   for (const f of filesInFolder) {
-                      console.log(`Processing file ${f.ID} (${f.Name}). Has Key: ${!!f.EncryptedKey}`);
+                      //console.log(`Processing file ${f.ID} (${f.Name}). Has Key: ${!!f.EncryptedKey}`);
                       if (f.EncryptedKey) {
                           const k = await unwrapMasterKey(f.EncryptedKey, authStore.masterKey);
                           const sk = await wrapMasterKey(k, shareKey);
@@ -880,7 +1014,7 @@ export const useFileStore = defineStore('files', {
                           missingKeysCount++;
                       }
                   }
-                  console.log(`Prepared keys for ${Object.keys(fileKeys).length} files.`);
+                  //console.log(`Prepared keys for ${Object.keys(fileKeys).length} files.`);
 
                   if (missingKeysCount > 0) {
                       console.warn(`${missingKeysCount} files in this folder are missing encryption keys.`);
