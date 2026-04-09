@@ -317,14 +317,6 @@ export async function downloadAndDecryptStream(fileId, masterKey, options = {}) 
     streamSaver?.abort()
     throw error
   }
-
-  // Return abort function
-  return {
-    abort: () => {
-      abortController.abort()
-      streamSaver?.abort()
-    }
-  }
 }
 
 /**

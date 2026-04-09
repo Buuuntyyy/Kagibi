@@ -553,7 +553,7 @@ class ZipDownloadManager {
       
       // Wait for any download to complete before continuing
       if (this.activeDownloads.size >= MAX_CONCURRENT_DOWNLOADS) {
-        await Promise.race(downloadPromises.filter(p => p))
+        await Promise.race(downloadPromises.filter(Boolean))
       }
       
       // Small delay to prevent tight loop
