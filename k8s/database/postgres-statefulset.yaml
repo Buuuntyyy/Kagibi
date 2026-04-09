@@ -238,7 +238,7 @@ spec:
         - name: GOTRUE_DB_DRIVER
           value: "postgres"
         - name: GOTRUE_DB_DATABASE_URL
-          value: "postgres://POSTGRES_USER:POSTGRES_PASSWORD@postgres-service:5432/POSTGRES_DB?sslmode=disable"
+          value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres-service:5432/$(POSTGRES_DB)?sslmode=disable" # NOSONAR - env vars resolved at runtime
         - name: GOTRUE_JWT_SECRET
           valueFrom:
             secretKeyRef:

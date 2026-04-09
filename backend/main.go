@@ -286,12 +286,13 @@ func registerFriendRoutes(g *gin.RouterGroup, h *friends.FriendHandler) {
 }
 
 func registerShareRoutes(g *gin.RouterGroup, db *bun.DB) {
+	const routeDirect = "/direct" // NOSONAR - route path repeated intentionally for HTTP method differentiation
 	sharesG := g.Group("/shares")
 	sharesG.GET("/list", func(c *gin.Context) { shares.ListSharesHandler(c, db) })
 	sharesG.POST("/link", func(c *gin.Context) { shares.CreateShareLinkHandler(c, db) })
-	sharesG.POST("/direct", func(c *gin.Context) { shares.CreateDirectShareHandler(c, db) })
-	sharesG.GET("/direct", func(c *gin.Context) { shares.ListDirectSharesForResourceHandler(c, db) })
-	sharesG.DELETE("/direct", func(c *gin.Context) { shares.RemoveDirectShareHandler(c, db) })
+	sharesG.POST(routeDirect, func(c *gin.Context) { shares.CreateDirectShareHandler(c, db) })
+	sharesG.GET(routeDirect, func(c *gin.Context) { shares.ListDirectSharesForResourceHandler(c, db) })
+	sharesG.DELETE(routeDirect, func(c *gin.Context) { shares.RemoveDirectShareHandler(c, db) })
 	sharesG.GET("/check-path", func(c *gin.Context) { shares.GetActiveSharesForPathHandler(c, db) })
 	sharesG.GET("/file/:fileID", func(c *gin.Context) { shares.GetShareForResourceHandler(c, db) })
 	sharesG.GET("/direct/folder/:folderID/content", func(c *gin.Context) { shares.GetSharedFolderContentHandler(c, db) })
