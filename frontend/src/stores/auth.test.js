@@ -34,7 +34,7 @@ class MockRegistrationWorker {
       }, 0)
     }
   }
-  terminate() {}
+  terminate() { /* no-op */ }
 }
 
 // ── Module mocks ─────────────────────────────────────────────────────────────

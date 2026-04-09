@@ -14,6 +14,11 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const (
+	errShareNotFound       = "Share not found"
+	queryIDAndSharedWith = "id = ? AND shared_with_user_id = ?"
+)
+
 type SharedWithMeResponse struct {
 	ID           int64     `json:"id"`
 	ShareLinkID  int64     `json:"share_link_id,omitempty"`
@@ -89,7 +94,7 @@ func fetchDirectFileShares(ctx context.Context, db *bun.DB, userID string) []Sha
 	var results []SharedWithMeResponse
 	for _, fs := range fileShares {
 		var file pkg.File
-		if err := db.NewSelect().Model(&file).Where("id = ?", fs.FileID).Scan(ctx); err == nil {
+		if err := db.NewSelect().Model(&file).Where(queryIDEq, fs.FileID).Scan(ctx); err == nil {
 			results = append(results, SharedWithMeResponse{
 				ID:           fs.ID,
 				ResourceType: "file",
@@ -114,7 +119,7 @@ func fetchDirectFolderShares(ctx context.Context, db *bun.DB, userID string) []S
 	var results []SharedWithMeResponse
 	for _, fs := range folderShares {
 		var folder pkg.Folder
-		if err := db.NewSelect().Model(&folder).Where("id = ?", fs.FolderID).Scan(ctx); err == nil {
+		if err := db.NewSelect().Model(&folder).Where(queryIDEq, fs.FolderID).Scan(ctx); err == nil {
 			results = append(results, SharedWithMeResponse{
 				ID:           fs.ID,
 				ResourceType: "folder",
@@ -133,12 +138,12 @@ func fetchDirectFolderShares(ctx context.Context, db *bun.DB, userID string) []S
 func getResourceDetails(ctx context.Context, db *bun.DB, resType string, resID int64) (string, int64) {
 	if resType == "file" {
 		var f pkg.File
-		if err := db.NewSelect().Model(&f).Where("id = ?", resID).Scan(ctx); err == nil {
+		if err := db.NewSelect().Model(&f).Where(queryIDEq, resID).Scan(ctx); err == nil {
 			return f.Name, f.Size
 		}
 	} else if resType == "folder" {
 		var f pkg.Folder
-		if err := db.NewSelect().Model(&f).Where("id = ?", resID).Scan(ctx); err == nil {
+		if err := db.NewSelect().Model(&f).Where(queryIDEq, resID).Scan(ctx); err == nil {
 			return f.Name, 0
 		}
 	}
@@ -147,7 +152,7 @@ func getResourceDetails(ctx context.Context, db *bun.DB, resType string, resID i
 
 func getOwnerName(ctx context.Context, db *bun.DB, userID string) string {
 	var owner pkg.User
-	if err := db.NewSelect().Model(&owner).Where("id = ?", userID).Scan(ctx); err == nil {
+	if err := db.NewSelect().Model(&owner).Where(queryIDEq, userID).Scan(ctx); err == nil {
 		return owner.Name
 	}
 	return "Unknown"
@@ -251,20 +256,20 @@ func sanitizeID(id string) string {
 
 func removeDirectFileShare(ctx context.Context, db *bun.DB, id, userID string) (string, error) {
 	var fs pkg.FileShare
-	if err := db.NewSelect().Model(&fs).Where("id = ? AND shared_with_user_id = ?", id, userID).Scan(ctx); err != nil {
-		return "", fmt.Errorf("Share not found")
+	if err := db.NewSelect().Model(&fs).Where(queryIDAndSharedWith, id, userID).Scan(ctx); err != nil {
+		return "", fmt.Errorf(errShareNotFound)
 	}
 
-	res, err := db.NewDelete().Model((*pkg.FileShare)(nil)).Where("id = ? AND shared_with_user_id = ?", id, userID).Exec(ctx)
+	res, err := db.NewDelete().Model((*pkg.FileShare)(nil)).Where(queryIDAndSharedWith, id, userID).Exec(ctx)
 	if err != nil {
 		return "", err
 	}
 	if rows, _ := res.RowsAffected(); rows == 0 {
-		return "", fmt.Errorf("Share not found")
+		return "", fmt.Errorf(errShareNotFound)
 	}
 
 	var file pkg.File
-	if err := db.NewSelect().Model(&file).Where("id = ?", fs.FileID).Scan(ctx); err == nil {
+	if err := db.NewSelect().Model(&file).Where(queryIDEq, fs.FileID).Scan(ctx); err == nil {
 		return file.UserID, nil
 	}
 	return "", nil
@@ -272,20 +277,20 @@ func removeDirectFileShare(ctx context.Context, db *bun.DB, id, userID string) (
 
 func removeDirectFolderShare(ctx context.Context, db *bun.DB, id, userID string) (string, error) {
 	var fs pkg.FolderShare
-	if err := db.NewSelect().Model(&fs).Where("id = ? AND shared_with_user_id = ?", id, userID).Scan(ctx); err != nil {
-		return "", fmt.Errorf("Share not found")
+	if err := db.NewSelect().Model(&fs).Where(queryIDAndSharedWith, id, userID).Scan(ctx); err != nil {
+		return "", fmt.Errorf(errShareNotFound)
 	}
 
-	res, err := db.NewDelete().Model((*pkg.FolderShare)(nil)).Where("id = ? AND shared_with_user_id = ?", id, userID).Exec(ctx)
+	res, err := db.NewDelete().Model((*pkg.FolderShare)(nil)).Where(queryIDAndSharedWith, id, userID).Exec(ctx)
 	if err != nil {
 		return "", err
 	}
 	if rows, _ := res.RowsAffected(); rows == 0 {
-		return "", fmt.Errorf("Share not found")
+		return "", fmt.Errorf(errShareNotFound)
 	}
 
 	var folder pkg.Folder
-	if err := db.NewSelect().Model(&folder).Where("id = ?", fs.FolderID).Scan(ctx); err == nil {
+	if err := db.NewSelect().Model(&folder).Where(queryIDEq, fs.FolderID).Scan(ctx); err == nil {
 		return folder.UserID, nil
 	}
 	return "", nil
@@ -299,7 +304,7 @@ func removeImportedShareLink(ctx context.Context, db *bun.DB, id, userID string)
 		return err
 	}
 	if rows, _ := res.RowsAffected(); rows == 0 {
-		return fmt.Errorf("Share not found")
+		return fmt.Errorf(errShareNotFound)
 	}
 	return nil
 }

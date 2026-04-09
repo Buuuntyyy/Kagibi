@@ -4,6 +4,8 @@ import (
 	"testing"
 )
 
+const testRootPath = "/var/www"
+
 func TestSecureJoin(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -13,25 +15,25 @@ func TestSecureJoin(t *testing.T) {
 	}{
 		{
 			name:       "Chemin valide simple",
-			root:       "/var/www",
+			root:       testRootPath,
 			unsafePath: "image.png",
 			wantErr:    false,
 		},
 		{
 			name:       "Chemin valide sous-dossier",
-			root:       "/var/www",
+			root:       testRootPath,
 			unsafePath: "uploads/image.png",
 			wantErr:    false,
 		},
 		{
 			name:       "Attaque Path Traversal simple",
-			root:       "/var/www",
+			root:       testRootPath,
 			unsafePath: "../etc/passwd",
 			wantErr:    true,
 		},
 		{
 			name:       "Attaque Path Traversal complexe",
-			root:       "/var/www",
+			root:       testRootPath,
 			unsafePath: "uploads/../../etc/passwd",
 			wantErr:    true,
 		},

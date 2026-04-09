@@ -68,196 +68,164 @@ class UploadQueueManager {
   }
 
   /**
+   * Dequeue up to `slots` pending items, marking them as in-progress.
+   */
+  dequeuePending(uploadStore, slots) {
+    const pendingUploads = []
+    for (let i = 0; i < slots; i++) {
+      const next = uploadStore.getNextPending()
+      if (!next) break
+      uploadStore.setStatus(next.id, UploadStatus.ENCRYPTING)
+      pendingUploads.push(next)
+    }
+    return pendingUploads
+  }
+
+  /**
    * Main queue processing loop
    * Maintains MAX_CONCURRENT_FILES active uploads
    */
   async processQueue() {
     const uploadStore = useUploadStore()
-    
+
     while (true) {
-      // Check if we can start more uploads
       const activeCount = uploadStore.getActiveCount()
       const availableSlots = MAX_CONCURRENT_FILES - activeCount
-      
+
       if (availableSlots <= 0) {
-        // Wait a bit before checking again
         await this.sleep(100)
         continue
       }
-      
-      // Get next pending uploads
-      const pendingUploads = []
-      for (let i = 0; i < availableSlots; i++) {
-        const next = uploadStore.getNextPending()
-        if (next) {
-          // Mark as starting to prevent re-picking
-          uploadStore.setStatus(next.id, UploadStatus.ENCRYPTING)
-          pendingUploads.push(next)
-        }
+
+      const pendingUploads = this.dequeuePending(uploadStore, availableSlots)
+
+      if (pendingUploads.length === 0 && activeCount === 0) break
+
+      for (const upload of pendingUploads) {
+        this.processUpload(upload).catch(err => {
+          console.error(`Upload ${upload.id} failed:`, err)
+        })
       }
-      
-      if (pendingUploads.length === 0 && activeCount === 0) {
-        // No more work to do
-        break
-      }
-      
-      if (pendingUploads.length > 0) {
-        // Start processing these uploads in parallel (fire and forget)
-        for (const upload of pendingUploads) {
-          this.processUpload(upload).catch(err => {
-            console.error(`Upload ${upload.id} failed:`, err)
-          })
-        }
-      }
-      
-      // Small delay before next iteration
+
       await this.sleep(50)
     }
-    
+
     this.isProcessing = false
     this.processingPromise = null
   }
 
   /**
+   * Upload a preview image for the given file, returning its ID or null.
+   */
+  async uploadPreview(file, targetPath, masterKey) {
+    const previewBlob = await generatePreview(file)
+    if (!previewBlob) return null
+    try {
+      const safeName = (file.name || 'file').replace(/[^a-zA-Z0-9.-]/g, '_')
+      const previewFile = new File([previewBlob], `preview_${safeName}.jpg`, { type: 'image/jpeg' })
+      const previewResult = await this.uploadSingleFile(previewFile, targetPath, masterKey, {
+        isPreview: true, silent: true
+      })
+      return previewResult?.ID ?? null
+    } catch (e) {
+      console.warn('Preview upload failed:', e)
+      return null
+    }
+  }
+
+  /**
+   * Build a share keys map: { shareID -> encryptedFileKey } for all active shares at path.
+   */
+  async buildShareKeysMap(fileKey, targetPath) {
+    const shareKeysMap = {}
+    try {
+      const shareRes = await api.get('/shares/check-path', { params: { path: targetPath } })
+      for (const share of (shareRes.data.shares || [])) {
+        const shareKey = await deriveKeyFromToken(share.Token)
+        shareKeysMap[share.ID] = await wrapMasterKey(fileKey, shareKey)
+      }
+    } catch (e) {
+      console.warn('Error checking shares:', e)
+    }
+    return shareKeysMap
+  }
+
+  /**
+   * Encrypt all chunks of a file and return the encrypted blobs array.
+   */
+  async encryptFileChunks(uploadStore, id, file, fileKey) {
+    const totalParts = Math.ceil(file.size / PART_SIZE)
+    const encryptedChunks = []
+    const baseNonce = generateBaseNonce()
+    let offset = 0
+    let chunkIndex = 0
+    while (offset < file.size) {
+      const currentUpload = uploadStore.uploads.get(id)
+      if (currentUpload?.status === UploadStatus.CANCELLED) throw new Error('Upload cancelled')
+      const chunkArrayBuffer = await file.slice(offset, offset + PART_SIZE).arrayBuffer()
+      encryptedChunks.push(await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex, baseNonce))
+      offset += PART_SIZE
+      chunkIndex++
+      const encryptProgress = Math.round((chunkIndex / totalParts) * ENCRYPTION_PROGRESS_WEIGHT * 100)
+      uploadStore.setProgress(id, encryptProgress, 0)
+    }
+    return encryptedChunks
+  }
+
+  /**
+   * Create a MultipartUploadManager wired to uploadStore progress updates.
+   */
+  createUploadManager(uploadStore, id) {
+    return new MultipartUploadManager({
+      onProgress: (percent, uploaded) => {
+        const uploadProgress = ENCRYPTION_PROGRESS_WEIGHT * 100 + (percent * (1 - ENCRYPTION_PROGRESS_WEIGHT - 0.05))
+        uploadStore.setProgress(id, Math.round(uploadProgress), uploaded)
+      },
+      onStateChange: (state) => {
+        if (state === UploadState.FAILED) uploadStore.setStatus(id, UploadStatus.FAILED)
+      },
+      onError: (error, partNumber) => {
+        console.error(`Part ${partNumber} error:`, error)
+      }
+    })
+  }
+
+  /**
    * Process a single file upload
-   * @param {Object} uploadItem 
+   * @param {Object} uploadItem
    */
   async processUpload(uploadItem) {
     const uploadStore = useUploadStore()
     const fileStore = useFileStore()
     const authStore = useAuthStore()
-    
     const { id, file, targetPath } = uploadItem
-    
-    try {
-      // Verify authentication
-      if (!authStore.isAuthenticated || !authStore.masterKey) {
-        throw new Error('Not authenticated')
-      }
 
+    try {
+      if (!authStore.isAuthenticated || !authStore.masterKey) throw new Error('Not authenticated')
       uploadStore.updateUpload(id, { startTime: Date.now() })
 
-      // === STEP 1: Generate Preview (if applicable) ===
-      let previewID = null
-      const previewBlob = await generatePreview(file)
-      if (previewBlob) {
-        try {
-          const safeName = (file.name || 'file').replace(/[^a-zA-Z0-9.-]/g, '_')
-          const previewName = `preview_${safeName}.jpg`
-          const previewFile = new File([previewBlob], previewName, { type: 'image/jpeg' })
-          
-          // Upload preview silently (doesn't count toward main progress)
-          const previewResult = await this.uploadSingleFile(previewFile, targetPath, authStore.masterKey, {
-            isPreview: true,
-            silent: true
-          })
-          
-          if (previewResult?.ID) {
-            previewID = previewResult.ID
-          }
-        } catch (e) {
-          console.warn('Preview upload failed:', e)
-        }
-      }
+      const previewID = await this.uploadPreview(file, targetPath, authStore.masterKey)
 
-      // === STEP 2: Generate File Key ===
       const fileKey = await generateMasterKey()
       const encryptedFileKey = await wrapMasterKey(fileKey, authStore.masterKey)
+      const shareKeysMap = await this.buildShareKeysMap(fileKey, targetPath)
 
-      // === STEP 3: Check Active Shares ===
-      let shareKeysMap = {}
-      try {
-        const shareRes = await api.get('/shares/check-path', { params: { path: targetPath } })
-        const activeShares = shareRes.data.shares || []
-        
-        for (const share of activeShares) {
-          const shareKey = await deriveKeyFromToken(share.Token)
-          const encryptedForShare = await wrapMasterKey(fileKey, shareKey)
-          shareKeysMap[share.ID] = encryptedForShare
-        }
-      } catch (e) {
-        console.warn('Error checking shares:', e)
-      }
-
-      // === STEP 4: Encrypt Chunks ===
       uploadStore.setStatus(id, UploadStatus.ENCRYPTING)
-      
-      const totalParts = Math.ceil(file.size / PART_SIZE)
-      const encryptedChunks = []
-      const baseNonce = generateBaseNonce()
-      
-      let offset = 0
-      let chunkIndex = 0
-      
-      while (offset < file.size) {
-        // Check if cancelled
-        const currentUpload = uploadStore.uploads.get(id)
-        if (currentUpload?.status === UploadStatus.CANCELLED) {
-          throw new Error('Upload cancelled')
-        }
-        
-        const chunkBlob = file.slice(offset, offset + PART_SIZE)
-        const chunkArrayBuffer = await chunkBlob.arrayBuffer()
-        
-        // Encrypt chunk
-        const encryptedChunkBlob = await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex, baseNonce)
-        encryptedChunks.push(encryptedChunkBlob)
-        
-        offset += PART_SIZE
-        chunkIndex++
-        
-        // Update progress (0-30% is encryption)
-        const encryptProgress = Math.round((chunkIndex / totalParts) * ENCRYPTION_PROGRESS_WEIGHT * 100)
-        uploadStore.setProgress(id, encryptProgress, 0)
-      }
-
-      // Calculate total encrypted size
-      const totalEncryptedSize = encryptedChunks.reduce((sum, chunk) => {
-        return sum + (chunk.size || chunk.byteLength || 0)
-      }, 0)
-      
+      const encryptedChunks = await this.encryptFileChunks(uploadStore, id, file, fileKey)
+      const totalEncryptedSize = encryptedChunks.reduce((sum, c) => sum + (c.size || c.byteLength || 0), 0)
       uploadStore.updateUpload(id, { encryptedSize: totalEncryptedSize, totalBytes: totalEncryptedSize })
 
-      // === STEP 5: Initiate & Upload to S3 ===
       uploadStore.setStatus(id, UploadStatus.UPLOADING)
-      
-      const manager = new MultipartUploadManager({
-        onProgress: (percent, uploaded, total) => {
-          // Map 0-100% upload progress to 30-95% total progress
-          const uploadProgress = ENCRYPTION_PROGRESS_WEIGHT * 100 + (percent * (1 - ENCRYPTION_PROGRESS_WEIGHT - 0.05))
-          uploadStore.setProgress(id, Math.round(uploadProgress), uploaded)
-        },
-        onStateChange: (state) => {
-          if (state === UploadState.FAILED) {
-            uploadStore.setStatus(id, UploadStatus.FAILED)
-          }
-        },
-        onError: (error, partNumber) => {
-          console.error(`Part ${partNumber} error:`, error)
-        }
-      })
-      
+      const manager = this.createUploadManager(uploadStore, id)
       uploadStore.updateUpload(id, { manager })
-      
-      // Initiate multipart upload
-      await manager.initiate(
-        file.name,
-        targetPath,
-        'application/octet-stream',
-        totalEncryptedSize,
-        encryptedFileKey
-      )
 
-      // Upload parts
+      await manager.initiate(file.name, targetPath, 'application/octet-stream', totalEncryptedSize, encryptedFileKey)
       const completedParts = await manager.uploadParts(encryptedChunks)
-      
-      // Free memory
       encryptedChunks.length = 0
 
-      // === STEP 6: Complete Upload ===
       uploadStore.setStatus(id, UploadStatus.COMPLETING)
       uploadStore.setProgress(id, 95, totalEncryptedSize)
-      
+
       const result = await manager.complete(completedParts, {
         fileName: file.name,
         filePath: targetPath,
@@ -269,39 +237,20 @@ class UploadQueueManager {
         isPreview: false
       })
 
-      // === SUCCESS ===
       uploadStore.setCompleted(id, result)
-      
-      // Refresh file list
       fileStore.fetchItems(fileStore.currentPath)
-      
-      // Update user quota
       authStore.fetchUser()
-      
-      // Add to history
       if (result?.file) {
-        fileStore.addToHistory({
-          ...result.file,
-          type: 'file',
-          displayName: result.file.Name
-        })
+        fileStore.addToHistory({ ...result.file, type: 'file', displayName: result.file.Name })
       }
-
       return result
 
     } catch (error) {
       console.error(`Upload ${id} failed:`, error)
-      
-      // Attempt cleanup
       const upload = uploadStore.uploads.get(id)
       if (upload?.manager) {
-        try {
-          await upload.manager.abort()
-        } catch (e) {
-          console.warn('Abort cleanup failed:', e)
-        }
+        try { await upload.manager.abort() } catch (e) { console.warn('Abort cleanup failed:', e) }
       }
-      
       uploadStore.setFailed(id, error)
       throw error
     }

@@ -21,6 +21,8 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const errLinkExpired = "Link expired"
+
 type createShareLinkRequest struct {
 	ResourceID   int64            `json:"resource_id"`
 	ResourceType string           `json:"resource_type"` // "file" or "folder"
@@ -101,7 +103,7 @@ func GetShareLinkHandler(c *gin.Context, db *bun.DB) {
 	shareLink, err := getValidShareLink(c.Request.Context(), db, token)
 	if err != nil {
 		status := http.StatusNotFound
-		if err.Error() == "Link expired" {
+		if err.Error() == errLinkExpired {
 			status = http.StatusGone
 		}
 		c.JSON(status, gin.H{"error": err.Error()})
@@ -127,7 +129,7 @@ func DownloadSharedFileHandler(c *gin.Context, db *bun.DB) {
 	shareLink, err := getValidShareLink(c.Request.Context(), db, token)
 	if err != nil {
 		status := http.StatusNotFound
-		if err.Error() == "Link expired" {
+		if err.Error() == errLinkExpired {
 			status = http.StatusGone
 		}
 		c.JSON(status, gin.H{"error": err.Error()})
@@ -264,7 +266,7 @@ func getValidShareLink(ctx context.Context, db *bun.DB, token string) (*pkg.Shar
 		return nil, fmt.Errorf("Link not found")
 	}
 	if shareLink.ExpiresAt != nil && shareLink.ExpiresAt.Before(time.Now()) {
-		return nil, fmt.Errorf("Link expired")
+		return nil, fmt.Errorf(errLinkExpired)
 	}
 	return &shareLink, nil
 }
@@ -272,13 +274,13 @@ func getValidShareLink(ctx context.Context, db *bun.DB, token string) (*pkg.Shar
 func incrementShareViews(ctx context.Context, db *bun.DB, id int64) {
 	_, _ = db.NewUpdate().Model(&pkg.ShareLink{}).
 		Set("views = views + 1").
-		Where("id = ?", id).
+		Where(queryIDEq, id).
 		Exec(ctx)
 }
 
 func getShareOwnerEmail(ctx context.Context, db *bun.DB, ownerID string) string {
 	var owner pkg.User
-	if err := db.NewSelect().Model(&owner).Where("id = ?", ownerID).Scan(ctx); err == nil {
+	if err := db.NewSelect().Model(&owner).Where(queryIDEq, ownerID).Scan(ctx); err == nil {
 		return owner.Email
 	}
 	return "Unknown"
@@ -287,7 +289,7 @@ func getShareOwnerEmail(ctx context.Context, db *bun.DB, ownerID string) string 
 func buildShareLinkResponse(ctx context.Context, db *bun.DB, sl *pkg.ShareLink, ownerEmail string) (gin.H, error) {
 	if sl.ResourceType == "file" {
 		var file pkg.File
-		if err := db.NewSelect().Model(&file).Where("id = ?", sl.ResourceID).Scan(ctx); err != nil {
+		if err := db.NewSelect().Model(&file).Where(queryIDEq, sl.ResourceID).Scan(ctx); err != nil {
 			return nil, fmt.Errorf("File not found")
 		}
 		return gin.H{
@@ -303,7 +305,7 @@ func buildShareLinkResponse(ctx context.Context, db *bun.DB, sl *pkg.ShareLink, 
 
 	// Folder
 	var folder pkg.Folder
-	if err := db.NewSelect().Model(&folder).Where("id = ?", sl.ResourceID).Scan(ctx); err != nil {
+	if err := db.NewSelect().Model(&folder).Where(queryIDEq, sl.ResourceID).Scan(ctx); err != nil {
 		return nil, fmt.Errorf("Folder not found")
 	}
 	return gin.H{
@@ -316,7 +318,7 @@ func buildShareLinkResponse(ctx context.Context, db *bun.DB, sl *pkg.ShareLink, 
 
 func getSharedFile(ctx context.Context, db *bun.DB, resourceID int64) (*pkg.File, error) {
 	var file pkg.File
-	err := db.NewSelect().Model(&file).Where("id = ?", resourceID).Scan(ctx)
+	err := db.NewSelect().Model(&file).Where(queryIDEq, resourceID).Scan(ctx)
 	if err != nil {
 		return nil, err
 	}

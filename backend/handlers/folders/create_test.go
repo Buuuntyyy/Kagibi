@@ -15,6 +15,8 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 )
 
+const foldersPath = "/folders"
+
 func TestCreateHandler(t *testing.T) {
 	// Setup Gin
 	gin.SetMode(gin.TestMode)
@@ -29,7 +31,7 @@ func TestCreateHandler(t *testing.T) {
 
 	// Setup Router
 	r := gin.New()
-	r.POST("/folders", func(c *gin.Context) {
+	r.POST(foldersPath, func(c *gin.Context) {
 		// Mock Auth Middleware
 		c.Set("user_id", "user-123")
 		CreateHandler(c, db)
@@ -42,7 +44,7 @@ func TestCreateHandler(t *testing.T) {
 			Path: "/root",
 		}
 		jsonValue, _ := json.Marshal(reqBody)
-		req, _ := http.NewRequest("POST", "/folders", bytes.NewBuffer(jsonValue))
+		req, _ := http.NewRequest("POST", foldersPath, bytes.NewBuffer(jsonValue))
 		req.Header.Set("Content-Type", "application/json")
 
 		// Mock DB Expectations
@@ -71,7 +73,7 @@ func TestCreateHandler(t *testing.T) {
 			Path: "/root",
 		}
 		jsonValue, _ := json.Marshal(reqBody)
-		req, _ := http.NewRequest("POST", "/folders", bytes.NewBuffer(jsonValue))
+		req, _ := http.NewRequest("POST", foldersPath, bytes.NewBuffer(jsonValue))
 		req.Header.Set("Content-Type", "application/json")
 
 		w := httptest.NewRecorder()

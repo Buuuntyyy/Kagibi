@@ -15,20 +15,25 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
+const (
+	errMFALocalOnly = "MFA only available in local auth mode"
+	errUserNotFound = "Utilisateur introuvable"
+)
+
 // MFAListFactorsHandler handles GET /api/v1/auth/mfa/factors (protected).
 // Returns the user's TOTP factor(s), compatible with the Supabase MFA factors shape.
 func MFAListFactorsHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		lp, ok := getLocalProvider(provider)
 		if !ok {
-			c.JSON(http.StatusNotImplemented, gin.H{"error": "MFA only available in local auth mode"})
+			c.JSON(http.StatusNotImplemented, gin.H{"error": errMFALocalOnly})
 			return
 		}
 
 		userID := c.GetString("user_id")
 		au, err := lp.GetAuthUserByID(userID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Utilisateur introuvable"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errUserNotFound})
 			return
 		}
 
@@ -56,7 +61,7 @@ func MFAEnrollHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		lp, ok := getLocalProvider(provider)
 		if !ok {
-			c.JSON(http.StatusNotImplemented, gin.H{"error": "MFA only available in local auth mode"})
+			c.JSON(http.StatusNotImplemented, gin.H{"error": errMFALocalOnly})
 			return
 		}
 
@@ -74,7 +79,7 @@ func MFAEnrollHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 		// Get user email for the OTP URI issuer label
 		au, err := lp.GetAuthUserByID(userID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Utilisateur introuvable"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errUserNotFound})
 			return
 		}
 
@@ -119,7 +124,7 @@ func MFAEnrollHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 func MFAChallengeHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if _, ok := getLocalProvider(provider); !ok {
-			c.JSON(http.StatusNotImplemented, gin.H{"error": "MFA only available in local auth mode"})
+			c.JSON(http.StatusNotImplemented, gin.H{"error": errMFALocalOnly})
 			return
 		}
 
@@ -132,13 +137,41 @@ func MFAChallengeHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 	}
 }
 
+// isSixDigitCode returns true if s is exactly 6 decimal digit characters.
+func isSixDigitCode(s string) bool {
+	if len(s) != 6 {
+		return false
+	}
+	for _, ch := range s {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// activateTOTPIfNeeded activates TOTP for the user if it is not already enabled.
+func activateTOTPIfNeeded(lp *authprovider.LocalProvider, userID, factorID string, totpEnabled bool) error {
+	if totpEnabled {
+		return nil
+	}
+	if err := lp.ActivateTOTP(userID); err != nil {
+		return err
+	}
+	if err := lp.SyncMFAStatus(userID, true); err != nil {
+		log.Printf("[MFA] sync_security_settings_error user=%s err=%v", userID, err)
+	}
+	log.Printf("[MFA] activated user=%s factor=%s", userID, factorID)
+	return nil
+}
+
 // MFAVerifyHandler handles POST /api/v1/auth/mfa/verify (protected).
 // Validates a TOTP code, activates the factor if unverified, and returns an AAL2 JWT.
 func MFAVerifyHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		lp, ok := getLocalProvider(provider)
 		if !ok {
-			c.JSON(http.StatusNotImplemented, gin.H{"error": "MFA only available in local auth mode"})
+			c.JSON(http.StatusNotImplemented, gin.H{"error": errMFALocalOnly})
 			return
 		}
 
@@ -154,21 +187,14 @@ func MFAVerifyHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 			return
 		}
 
-		// Validate code format: must be exactly 6 decimal digits
-		if len(req.Code) != 6 {
+		if !isSixDigitCode(req.Code) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Le code doit être composé de 6 chiffres"})
 			return
-		}
-		for _, ch := range req.Code {
-			if ch < '0' || ch > '9' {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Le code doit être composé de 6 chiffres"})
-				return
-			}
 		}
 
 		au, err := lp.GetAuthUserByID(userID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Utilisateur introuvable"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errUserNotFound})
 			return
 		}
 
@@ -178,20 +204,11 @@ func MFAVerifyHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 			return
 		}
 
-		// Activate the factor if this is the enrollment verification
-		if !au.TOTPEnabled {
-			if err := lp.ActivateTOTP(userID); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to activate MFA"})
-				return
-			}
-			// Keep user_security_settings in sync — mark MFA as enabled/verified
-			if err := lp.SyncMFAStatus(userID, true); err != nil {
-				log.Printf("[MFA] sync_security_settings_error user=%s err=%v", userID, err)
-			}
-			log.Printf("[MFA] activated user=%s factor=%s", userID, au.TOTPFactorID)
+		if err := activateTOTPIfNeeded(lp, userID, au.TOTPFactorID, au.TOTPEnabled); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to activate MFA"})
+			return
 		}
 
-		// Issue a new AAL2 token
 		token, err := lp.GenerateTokenWithAAL(userID, au.Email, "aal2")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
@@ -210,7 +227,7 @@ func MFAUnenrollHandler(provider authprovider.AuthProvider, redisClient *redis.C
 	return func(c *gin.Context) {
 		lp, ok := getLocalProvider(provider)
 		if !ok {
-			c.JSON(http.StatusNotImplemented, gin.H{"error": "MFA only available in local auth mode"})
+			c.JSON(http.StatusNotImplemented, gin.H{"error": errMFALocalOnly})
 			return
 		}
 
@@ -218,7 +235,7 @@ func MFAUnenrollHandler(provider authprovider.AuthProvider, redisClient *redis.C
 
 		au, err := lp.GetAuthUserByID(userID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Utilisateur introuvable"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": errUserNotFound})
 			return
 		}
 

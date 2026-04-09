@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+const (
+	headerContentType  = "Content-Type"
+	headerAppJSON      = "application/json"
+	headerBearerPrefix = "Bearer "
+)
+
 // PocketBaseProvider validates PocketBase HS256 JWTs and uses the PocketBase Admin API
 // for user management operations.
 //
@@ -73,7 +79,7 @@ func (p *PocketBaseProvider) getAdminToken() (string, error) {
 		if err != nil {
 			continue
 		}
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(headerContentType, headerAppJSON)
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -130,8 +136,8 @@ func (p *PocketBaseProvider) SetupJWTSecret() error {
 	if err != nil {
 		return fmt.Errorf("failed to create settings request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+adminToken)
+	req.Header.Set(headerContentType, headerAppJSON)
+	req.Header.Set("Authorization", headerBearerPrefix+adminToken)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
@@ -165,7 +171,7 @@ func (p *PocketBaseProvider) DeleteUser(userID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+adminToken)
+	req.Header.Set("Authorization", headerBearerPrefix+adminToken)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
@@ -202,8 +208,8 @@ func (p *PocketBaseProvider) UpdateUserPassword(userID, newPassword string) erro
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+adminToken)
+	req.Header.Set(headerContentType, headerAppJSON)
+	req.Header.Set("Authorization", headerBearerPrefix+adminToken)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)

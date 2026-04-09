@@ -141,52 +141,55 @@ func listContentItems(ctx context.Context, db *bun.DB, ownerID string, currentPa
 }
 
 func enrichContentWithKeys(ctx context.Context, db *bun.DB, rootFolderID int64, files []pkg.File, folders []pkg.Folder) FolderContentResponse {
-	// 1. Files
+	filesWithKeys := enrichFilesWithKeys(ctx, db, rootFolderID, files)
+	foldersWithKeys := enrichFoldersWithKeys(ctx, db, rootFolderID, folders)
+	return FolderContentResponse{Files: filesWithKeys, Folders: foldersWithKeys}
+}
+
+func enrichFilesWithKeys(ctx context.Context, db *bun.DB, folderID int64, files []pkg.File) []FileWithKey {
 	var fileIDs []int64
 	for _, f := range files {
 		fileIDs = append(fileIDs, f.ID)
 	}
-	fileKeyMap := make(map[int64]string)
+	keyMap := make(map[int64]string)
 	if len(fileIDs) > 0 {
 		var keys []pkg.FolderFileKey
 		if err := db.NewSelect().Model(&keys).
-			Where("folder_id = ?", rootFolderID).
+			Where("folder_id = ?", folderID).
 			Where("file_id IN (?)", bun.In(fileIDs)).
 			Scan(ctx); err == nil {
 			for _, k := range keys {
-				fileKeyMap[k.FileID] = k.EncryptedKey
+				keyMap[k.FileID] = k.EncryptedKey
 			}
 		}
 	}
-	var filesWithKeys []FileWithKey
-	for _, f := range files {
-		filesWithKeys = append(filesWithKeys, FileWithKey{File: f, EncryptedKey: fileKeyMap[f.ID]})
+	result := make([]FileWithKey, len(files))
+	for i, f := range files {
+		result[i] = FileWithKey{File: f, EncryptedKey: keyMap[f.ID]}
 	}
+	return result
+}
 
-	// 2. Folders
+func enrichFoldersWithKeys(ctx context.Context, db *bun.DB, parentFolderID int64, folders []pkg.Folder) []FolderWithKey {
 	var folderIDs []int64
 	for _, f := range folders {
 		folderIDs = append(folderIDs, f.ID)
 	}
-	folderKeyMap := make(map[int64]string)
+	keyMap := make(map[int64]string)
 	if len(folderIDs) > 0 {
 		var keys []pkg.FolderFolderKey
 		if err := db.NewSelect().Model(&keys).
-			Where("parent_folder_id = ?", rootFolderID).
+			Where("parent_folder_id = ?", parentFolderID).
 			Where("sub_folder_id IN (?)", bun.In(folderIDs)).
 			Scan(ctx); err == nil {
 			for _, k := range keys {
-				folderKeyMap[k.SubFolderID] = k.EncryptedKey
+				keyMap[k.SubFolderID] = k.EncryptedKey
 			}
 		}
 	}
-	var foldersWithKeys []FolderWithKey
-	for _, f := range folders {
-		foldersWithKeys = append(foldersWithKeys, FolderWithKey{Folder: f, EncryptedKey: folderKeyMap[f.ID]})
+	result := make([]FolderWithKey, len(folders))
+	for i, f := range folders {
+		result[i] = FolderWithKey{Folder: f, EncryptedKey: keyMap[f.ID]}
 	}
-
-	return FolderContentResponse{
-		Files:   filesWithKeys,
-		Folders: foldersWithKeys,
-	}
+	return result
 }

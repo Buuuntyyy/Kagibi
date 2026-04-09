@@ -84,7 +84,7 @@ func fetchAndProcessDirectFileShares(ctx context.Context, db *bun.DB, userID str
 	var response []ShareResponse
 	for _, fs := range fileShares {
 		var f pkg.File
-		if err := db.NewSelect().Model(&f).Where("id = ?", fs.FileID).Scan(ctx); err != nil {
+		if err := db.NewSelect().Model(&f).Where(queryIDEq, fs.FileID).Scan(ctx); err != nil {
 			continue
 		}
 
@@ -117,7 +117,7 @@ func fetchAndProcessDirectFolderShares(ctx context.Context, db *bun.DB, userID s
 	var response []ShareResponse
 	for _, fs := range folderShares {
 		var f pkg.Folder
-		if err := db.NewSelect().Model(&f).Where("id = ?", fs.FolderID).Scan(ctx); err != nil {
+		if err := db.NewSelect().Model(&f).Where(queryIDEq, fs.FolderID).Scan(ctx); err != nil {
 			continue
 		}
 
@@ -139,12 +139,12 @@ func fetchAndProcessDirectFolderShares(ctx context.Context, db *bun.DB, userID s
 func checkResourceExists(ctx context.Context, db *bun.DB, resType string, resID int64) (string, bool) {
 	if resType == "file" {
 		var f pkg.File
-		if err := db.NewSelect().Model(&f).Where("id = ?", resID).Scan(ctx); err == nil {
+		if err := db.NewSelect().Model(&f).Where(queryIDEq, resID).Scan(ctx); err == nil {
 			return f.Name, true
 		}
 	} else if resType == "folder" {
 		var f pkg.Folder
-		if err := db.NewSelect().Model(&f).Where("id = ?", resID).Scan(ctx); err == nil {
+		if err := db.NewSelect().Model(&f).Where(queryIDEq, resID).Scan(ctx); err == nil {
 			return f.Name, true
 		}
 	}
@@ -152,12 +152,12 @@ func checkResourceExists(ctx context.Context, db *bun.DB, resType string, resID 
 }
 
 func deleteOrphanedShareLink(id int64, db *bun.DB) {
-	db.NewDelete().Model((*pkg.ShareLink)(nil)).Where("id = ?", id).Exec(context.Background())
+	db.NewDelete().Model((*pkg.ShareLink)(nil)).Where(queryIDEq, id).Exec(context.Background())
 }
 
 func getFriendName(ctx context.Context, db *bun.DB, userID string) string {
 	var friend pkg.User
-	if err := db.NewSelect().Model(&friend).Where("id = ?", userID).Scan(ctx); err == nil {
+	if err := db.NewSelect().Model(&friend).Where(queryIDEq, userID).Scan(ctx); err == nil {
 		return friend.Name
 	}
 	return "Unknown"

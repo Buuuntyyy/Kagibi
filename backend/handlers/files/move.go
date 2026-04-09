@@ -23,6 +23,22 @@ type MoveRequest struct {
 	DestinationPath string `json:"destinationPath"` // Can be empty for root, or "/"
 }
 
+// updateFolderSizesOnMove adjusts folder sizes when an item is moved between directories.
+func updateFolderSizesOnMove(ctx context.Context, db *bun.DB, userID, oldPath, newPath string, itemSize int64) {
+	oldParent := filepath.ToSlash(filepath.Dir(oldPath))
+	newParent := filepath.ToSlash(filepath.Dir(newPath))
+	if oldParent == "." {
+		oldParent = "/"
+	}
+	if newParent == "." {
+		newParent = "/"
+	}
+	if oldParent != newParent {
+		_ = pkg.UpdateFolderSizesForFolderPath(ctx, db, userID, oldParent, -itemSize)
+		_ = pkg.UpdateFolderSizesForFolderPath(ctx, db, userID, newParent, itemSize)
+	}
+}
+
 func MoveHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 	var req MoveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -56,33 +72,11 @@ func MoveHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 		return
 	}
 
-	if req.Type == "file" && !isPreview && itemSize > 0 {
-		oldParent := filepath.ToSlash(filepath.Dir(oldPath))
-		newParent := filepath.ToSlash(filepath.Dir(newPath))
-		if oldParent == "." {
-			oldParent = "/"
-		}
-		if newParent == "." {
-			newParent = "/"
-		}
-		if oldParent != newParent {
-			_ = pkg.UpdateFolderSizesForFolderPath(c.Request.Context(), db, userID, oldParent, -itemSize)
-			_ = pkg.UpdateFolderSizesForFolderPath(c.Request.Context(), db, userID, newParent, itemSize)
-		}
-	}
-
-	if req.Type == "folder" && itemSize > 0 {
-		oldParent := filepath.ToSlash(filepath.Dir(oldPath))
-		newParent := filepath.ToSlash(filepath.Dir(newPath))
-		if oldParent == "." {
-			oldParent = "/"
-		}
-		if newParent == "." {
-			newParent = "/"
-		}
-		if oldParent != newParent {
-			_ = pkg.UpdateFolderSizesForFolderPath(c.Request.Context(), db, userID, oldParent, -itemSize)
-			_ = pkg.UpdateFolderSizesForFolderPath(c.Request.Context(), db, userID, newParent, itemSize)
+	if itemSize > 0 {
+		if req.Type == "file" && !isPreview {
+			updateFolderSizesOnMove(c.Request.Context(), db, userID, oldPath, newPath, itemSize)
+		} else if req.Type == "folder" {
+			updateFolderSizesOnMove(c.Request.Context(), db, userID, oldPath, newPath, itemSize)
 		}
 	}
 

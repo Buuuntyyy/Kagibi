@@ -27,8 +27,9 @@ const (
 	DownloadPresignTTL = 5 * time.Minute   // 5 minutes for downloads
 	MaxPartSize        = 100 * 1024 * 1024 // 100MB max per part
 	MinPartSize        = 5 * 1024 * 1024   // 5MB min (S3 requirement except last part)
-	errInvalidReq      = "Invalid request: "
-	userPrefixFormat   = "users/%s/"
+	errInvalidReq    = "Invalid request: "
+	userPrefixFormat = "users/%s/"
+	errAccessDenied  = "Access denied"
 )
 
 // InitiateMultipartRequest represents the request body for initiating multipart upload
@@ -82,6 +83,71 @@ type AbortMultipartRequest struct {
 	Key      string `json:"key" binding:"required"`
 }
 
+// ensureUserPlan returns the user's plan, creating a free plan if one does not exist.
+func ensureUserPlan(db *bun.DB, userID string) *pkg.UserPlan {
+	planState, err := pkg.FindUserPlanByUserID(db, userID)
+	if err != nil || planState == nil {
+		log.Printf("[Multipart] user_plans row missing for %s, creating free plan", userID)
+		planState = &pkg.UserPlan{
+			UserID:          userID,
+			Plan:            pkg.PlanFree,
+			StorageLimit:    pkg.StorageFree,
+			StorageUsed:     0,
+			P2PMaxExchanges: pkg.P2PLimitFree,
+		}
+		_ = pkg.UpsertUserPlan(db, planState)
+	}
+	return planState
+}
+
+// calcPartSize returns the per-part upload size clamped to S3 limits.
+func calcPartSize(totalSize int64, totalParts int) int64 {
+	partSize := (totalSize + int64(totalParts) - 1) / int64(totalParts)
+	if partSize < MinPartSize && totalParts > 1 {
+		partSize = MinPartSize
+	}
+	if partSize > MaxPartSize {
+		partSize = MaxPartSize
+	}
+	return partSize
+}
+
+// generatePresignedParts generates presigned PUT URLs for each part of a multipart upload.
+// On failure it aborts the multipart upload before returning.
+func generatePresignedParts(ctx context.Context, presigner *s3.PresignClient, s3Key, uploadID string, totalParts int, totalSize int64) ([]PresignedPart, error) {
+	partSize := calcPartSize(totalSize, totalParts)
+	remainingSize := totalSize
+	presignedURLs := make([]PresignedPart, 0, totalParts)
+
+	for i := 1; i <= totalParts; i++ {
+		thisPartSize := partSize
+		if remainingSize < partSize {
+			thisPartSize = remainingSize
+		}
+		remainingSize -= thisPartSize
+
+		presignReq, err := presigner.PresignUploadPart(ctx, &s3.UploadPartInput{
+			Bucket:     aws.String(s3storage.BucketName),
+			Key:        aws.String(s3Key),
+			UploadId:   aws.String(uploadID),
+			PartNumber: aws.Int32(int32(i)),
+		}, func(opts *s3.PresignOptions) {
+			opts.Expires = PresignTTL
+		})
+		if err != nil {
+			log.Printf("S3 PresignUploadPart error for part %d: %v", i, err)
+			_, _ = s3storage.Client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
+				Bucket:   aws.String(s3storage.BucketName),
+				Key:      aws.String(s3Key),
+				UploadId: aws.String(uploadID),
+			})
+			return nil, err
+		}
+		presignedURLs = append(presignedURLs, PresignedPart{PartNumber: i, URL: presignReq.URL})
+	}
+	return presignedURLs, nil
+}
+
 // InitiateMultipartHandler starts a multipart upload and returns presigned URLs
 func InitiateMultipartHandler(c *gin.Context, db *bun.DB) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
@@ -99,21 +165,7 @@ func InitiateMultipartHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// Validate user plan exists and check quota (auto-create free plan if missing)
-	planState, err := pkg.FindUserPlanByUserID(db, userID)
-	if err != nil || planState == nil {
-		log.Printf("[Multipart] user_plans row missing for %s, creating free plan", userID)
-		planState = &pkg.UserPlan{
-			UserID:          userID,
-			Plan:            pkg.PlanFree,
-			StorageLimit:    pkg.StorageFree,
-			StorageUsed:     0,
-			P2PMaxExchanges: pkg.P2PLimitFree,
-		}
-		_ = pkg.UpsertUserPlan(db, planState)
-	}
-
-	// Quota check
+	planState := ensureUserPlan(db, userID)
 	if planState.StorageUsed+req.TotalSize > planState.StorageLimit {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Storage quota exceeded"})
 		return
@@ -139,13 +191,11 @@ func InitiateMultipartHandler(c *gin.Context, db *bun.DB) {
 	}
 	s3Key := fmt.Sprintf("users/%s%s", userID, fullPathDB)
 
-	// Determine content type
 	contentType := req.ContentType
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
 
-	// Initiate multipart upload on S3
 	createOutput, err := s3storage.Client.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
 		Bucket:      aws.String(s3storage.BucketName),
 		Key:         aws.String(s3Key),
@@ -158,54 +208,12 @@ func InitiateMultipartHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	uploadID := *createOutput.UploadId
-
-	// Generate presigned URLs for each part
 	presigner := s3.NewPresignClient(s3storage.Client)
-	presignedURLs := make([]PresignedPart, 0, req.TotalParts)
 
-	// Calculate part sizes for Content-Length restriction
-	remainingSize := req.TotalSize
-	partSize := (req.TotalSize + int64(req.TotalParts) - 1) / int64(req.TotalParts)
-	if partSize < MinPartSize && req.TotalParts > 1 {
-		partSize = MinPartSize
-	}
-	if partSize > MaxPartSize {
-		partSize = MaxPartSize
-	}
-
-	for i := 1; i <= req.TotalParts; i++ {
-		// Calculate this part's expected size
-		thisPartSize := partSize
-		if remainingSize < partSize {
-			thisPartSize = remainingSize
-		}
-		remainingSize -= thisPartSize
-
-		presignReq, err := presigner.PresignUploadPart(ctx, &s3.UploadPartInput{
-			Bucket:     aws.String(s3storage.BucketName),
-			Key:        aws.String(s3Key),
-			UploadId:   aws.String(uploadID),
-			PartNumber: aws.Int32(int32(i)),
-		}, func(opts *s3.PresignOptions) {
-			opts.Expires = PresignTTL
-		})
-
-		if err != nil {
-			log.Printf("S3 PresignUploadPart error for part %d: %v", i, err)
-			// Abort the multipart upload on failure
-			_, _ = s3storage.Client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
-				Bucket:   aws.String(s3storage.BucketName),
-				Key:      aws.String(s3Key),
-				UploadId: aws.String(uploadID),
-			})
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate presigned URLs"})
-			return
-		}
-
-		presignedURLs = append(presignedURLs, PresignedPart{
-			PartNumber: i,
-			URL:        presignReq.URL,
-		})
+	presignedURLs, err := generatePresignedParts(ctx, presigner, s3Key, uploadID, req.TotalParts, req.TotalSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate presigned URLs"})
+		return
 	}
 
 	log.Printf("Multipart upload initiated - UserID: %s, Key: %s, UploadID: %s, Parts: %d",
@@ -216,6 +224,26 @@ func InitiateMultipartHandler(c *gin.Context, db *bun.DB) {
 		Key:           s3Key,
 		PresignedURLs: presignedURLs,
 	})
+}
+
+// buildCompletedParts converts CompletePart slice to S3 CompletedPart slice,
+// normalising ETags to quoted form and sorting by PartNumber as S3 requires.
+func buildCompletedParts(parts []CompletePart) []types.CompletedPart {
+	completedParts := make([]types.CompletedPart, 0, len(parts))
+	for _, p := range parts {
+		etag := p.ETag
+		if !strings.HasPrefix(etag, "\"") {
+			etag = "\"" + etag + "\""
+		}
+		completedParts = append(completedParts, types.CompletedPart{
+			PartNumber: aws.Int32(int32(p.PartNumber)),
+			ETag:       aws.String(etag),
+		})
+	}
+	sort.Slice(completedParts, func(i, j int) bool {
+		return *completedParts[i].PartNumber < *completedParts[j].PartNumber
+	})
+	return completedParts
 }
 
 // CompleteMultipartHandler assembles parts and creates DB record
@@ -239,13 +267,12 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 	expectedPrefix := fmt.Sprintf(userPrefixFormat, userID)
 	if !strings.HasPrefix(req.Key, expectedPrefix) {
 		log.Printf("SECURITY: User %s attempted to complete upload for key: %s", userID, req.Key)
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		c.JSON(http.StatusForbidden, gin.H{"error": errAccessDenied})
 		return
 	}
 
 	// Final quota check
 	if err := checkStorageQuota(ctx, db, userID, req.TotalSize); err != nil {
-		// Abort the upload since quota exceeded
 		_, _ = s3storage.Client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
 			Bucket:   aws.String(s3storage.BucketName),
 			Key:      aws.String(req.Key),
@@ -255,24 +282,7 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// Build completed parts for S3
-	completedParts := make([]types.CompletedPart, 0, len(req.Parts))
-	for _, p := range req.Parts {
-		etag := p.ETag
-		// S3 ETags should be quoted, ensure proper format
-		if !strings.HasPrefix(etag, "\"") {
-			etag = "\"" + etag + "\""
-		}
-		completedParts = append(completedParts, types.CompletedPart{
-			PartNumber: aws.Int32(int32(p.PartNumber)),
-			ETag:       aws.String(etag),
-		})
-	}
-
-	// Ensure parts are sorted by PartNumber (S3 requires ascending order)
-	sort.Slice(completedParts, func(i, j int) bool {
-		return *completedParts[i].PartNumber < *completedParts[j].PartNumber
-	})
+	completedParts := buildCompletedParts(req.Parts)
 
 	// Complete the multipart upload on S3
 	_, err := s3storage.Client.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
@@ -388,7 +398,7 @@ func AbortMultipartHandler(c *gin.Context, db *bun.DB) {
 	expectedPrefix := fmt.Sprintf(userPrefixFormat, userID)
 	if !strings.HasPrefix(req.Key, expectedPrefix) {
 		log.Printf("SECURITY: User %s attempted to abort upload for key: %s", userID, req.Key)
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		c.JSON(http.StatusForbidden, gin.H{"error": errAccessDenied})
 		return
 	}
 
@@ -513,7 +523,7 @@ func RefreshPresignedURLsHandler(c *gin.Context, db *bun.DB) {
 	expectedPrefix := fmt.Sprintf(userPrefixFormat, userID)
 	if !strings.HasPrefix(req.Key, expectedPrefix) {
 		log.Printf("SECURITY: User %s attempted to refresh URL for key: %s", userID, req.Key)
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		c.JSON(http.StatusForbidden, gin.H{"error": errAccessDenied})
 		return
 	}
 

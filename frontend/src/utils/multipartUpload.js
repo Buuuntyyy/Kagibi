@@ -157,29 +157,14 @@ export class MultipartUploadManager {
             })
             .catch(error => {
               activeTasks.delete(part.partNumber)
-              
-              if (this.state === UploadState.ABORTED) {
-                return // Silently ignore aborted parts
-              }
+              if (this.state === UploadState.ABORTED) return
 
               if (part.retryCount < MAX_RETRIES) {
-                // Retry with exponential backoff
                 part.retryCount++
                 part.state = UploadState.PENDING
                 const delay = INITIAL_RETRY_DELAY * Math.pow(2, part.retryCount - 1)
-                
                 console.warn(`Part ${part.partNumber} failed, retrying in ${delay}ms (attempt ${part.retryCount}/${MAX_RETRIES})`)
-                
-                setTimeout(() => {
-                  // Refresh presigned URL before retry
-                  this.refreshPartUrl(part).then(() => {
-                    pendingParts.unshift(part) // Add back to front
-                    processNext()
-                  }).catch(refreshError => {
-                    console.error('Failed to refresh URL:', refreshError)
-                    reject(new Error(`Part ${part.partNumber} failed after ${MAX_RETRIES} retries`))
-                  })
-                }, delay)
+                this.schedulePartRetry(part, delay, pendingParts, processNext, reject)
               } else {
                 part.state = UploadState.FAILED
                 this.state = UploadState.FAILED
@@ -193,6 +178,23 @@ export class MultipartUploadManager {
 
       processNext()
     })
+  }
+
+  /**
+   * Schedule a retry for a failed part after the given delay, refreshing its URL first.
+   */
+  schedulePartRetry(part, delay, pendingParts, processNext, reject) {
+    setTimeout(() => {
+      this.refreshPartUrl(part)
+        .then(() => {
+          pendingParts.unshift(part)
+          processNext()
+        })
+        .catch(refreshError => {
+          console.error('Failed to refresh URL:', refreshError)
+          reject(new Error(`Part ${part.partNumber} failed after ${MAX_RETRIES} retries`))
+        })
+    }, delay)
   }
 
   /**

@@ -52,6 +52,151 @@ function compressImageForPreview(blob) {
     });
 }
 
+/**
+ * Corrects a generic MIME type based on the file extension.
+ * Returns the original mimeType if no correction is needed.
+ */
+function correctMimeType(mimeType, fileName) {
+  if ((!mimeType || mimeType.includes('application/octet-stream')) && fileName) {
+    const ext = fileName.split('.').pop().toLowerCase();
+    const map = {
+      pdf: 'application/pdf',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      bmp: 'image/bmp',
+      svg: 'image/svg+xml',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      txt: 'text/plain',
+    };
+    if (map[ext]) return map[ext];
+  }
+  return mimeType;
+}
+
+/**
+ * Triggers a browser download for a given Blob.
+ */
+function triggerBlobDownload(blob, fileName) {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', fileName);
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => { link.remove(); window.URL.revokeObjectURL(url); }, 100);
+}
+
+/**
+ * Decrypts a file's encrypted key using a folder/shared key (AES-GCM).
+ * Returns the decrypted CryptoKey.
+ */
+async function decryptFileKeyWithFolderKey(encryptedKeyB64, folderKey) {
+  const encryptedBytes = sodium.from_base64(encryptedKeyB64);
+  const iv = encryptedBytes.slice(0, 12);
+  const data = encryptedBytes.slice(12);
+  const fileKeyRaw = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, folderKey, data);
+  return window.crypto.subtle.importKey('raw', fileKeyRaw, 'AES-GCM', true, ['decrypt']);
+}
+
+/**
+ * Builds a map of shareID → encryptedFileKey for all active shares on the given path.
+ */
+async function buildShareKeysMap(uploadPath, fileKey) {
+  const shareKeysMap = {};
+  try {
+    const shareRes = await api.get('/shares/check-path', { params: { path: uploadPath } });
+    const activeShares = shareRes.data.shares || [];
+    for (const share of activeShares) {
+      const shareKey = await deriveKeyFromToken(share.Token);
+      shareKeysMap[share.ID] = await wrapMasterKey(fileKey, shareKey);
+    }
+  } catch (e) {
+    console.error('Error checking active shares:', e);
+  }
+  return shareKeysMap;
+}
+
+/**
+ * Encrypts all file chunks using the worker-based AES-GCM encryption.
+ * Returns an array of encrypted Blobs and the total encrypted size.
+ * Updates uploadProgress (0–30%) via the provided setter.
+ */
+async function encryptFileChunks(file, fileKey, onProgress) {
+  const totalParts = Math.ceil(file.size / PART_SIZE);
+  const encryptedChunks = [];
+  let offset = 0;
+  let chunkIndex = 0;
+  while (offset < file.size) {
+    let chunkBlob = file.slice(offset, offset + PART_SIZE);
+    let chunkArrayBuffer = await chunkBlob.arrayBuffer();
+    const encryptedChunkBlob = await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex);
+    encryptedChunks.push(encryptedChunkBlob);
+    chunkArrayBuffer = null;
+    chunkBlob = null;
+    offset += PART_SIZE;
+    chunkIndex++;
+    if (onProgress) onProgress(Math.round((chunkIndex / totalParts) * 30));
+  }
+  const totalEncryptedSize = encryptedChunks.reduce((sum, chunk) => sum + (chunk.size || chunk.byteLength || 0), 0);
+  return { encryptedChunks, totalEncryptedSize };
+}
+
+/**
+ * Generates a URL-safe random token for share links.
+ */
+function generateShareToken() {
+  const tokenBytes = window.crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCodePoint(...tokenBytes))
+    .replaceAll('+', '-').replaceAll('/', '_').replaceAll(/=+$/g, '');
+}
+
+/**
+ * Encrypts the file key with a derived share key for a single-file share.
+ * Returns the encrypted key string, or "" on failure.
+ */
+async function prepareFileShareKey(file, masterKey, token) {
+  if (!file?.EncryptedKey) return '';
+  try {
+    const fileKey = await unwrapMasterKey(file.EncryptedKey, masterKey);
+    const shareKey = await deriveKeyFromToken(token);
+    return wrapMasterKey(fileKey, shareKey);
+  } catch (e) {
+    console.error('Encryption error for share:', e);
+    throw new Error('Failed to prepare encryption for share.');
+  }
+}
+
+/**
+ * Builds the fileKeys map for a folder share: encrypts each file's key with the share key.
+ * Returns the map { fileID: encryptedKey }.
+ */
+async function prepareFolderShareKeys(folder, masterKey, token) {
+  const fileKeys = {};
+  try {
+    const res = await api.get('/files/list-recursive', { params: { path: folder.Path } });
+    const filesInFolder = res.data.files || [];
+    const shareKey = await deriveKeyFromToken(token);
+    let missingKeysCount = 0;
+    for (const f of filesInFolder) {
+      if (f.EncryptedKey) {
+        const k = await unwrapMasterKey(f.EncryptedKey, masterKey);
+        fileKeys[f.ID] = await wrapMasterKey(k, shareKey);
+      } else {
+        missingKeysCount++;
+      }
+    }
+    if (missingKeysCount > 0) {
+      console.warn(`${missingKeysCount} files missing encryption keys.`);
+      alert(`Attention : ${missingKeysCount} fichiers dans ce dossier n'ont pas de clé de chiffrement (anciens fichiers ?). Ils ne seront pas lisibles via le partage.`);
+    }
+  } catch (e) {
+    console.error('Error preparing folder share:', e);
+  }
+  return fileKeys;
+}
+
 export const useFileStore = defineStore('files', {
   state: () => ({
     files: [],
@@ -397,236 +542,125 @@ export const useFileStore = defineStore('files', {
         this.fetchItems(newPath)
     },
 
-    async downloadFile(fileId, fileName, mimeType='application/octet-stream', preview = false, encryptedKey = null) {
-      const authStore = useAuthStore();
-      
-      // Start heartbeat to prevent session timeout during long downloads
-      if (!preview) {
-        this.startHeartbeat();
-      }
-      
-      // Attempt to correct MIME type based on extension if generic
-      if ((!mimeType || mimeType.includes('application/octet-stream')) && fileName) {
-          const ext = fileName.split('.').pop().toLowerCase();
-          if (ext === 'pdf') mimeType = 'application/pdf';
-          else if (['jpg', 'jpeg'].includes(ext)) mimeType = 'image/jpeg';
-          else if (ext === 'png') mimeType = 'image/png';
-          else if (ext === 'bmp') mimeType = 'image/bmp';
-          else if (ext === 'svg') mimeType = 'image/svg+xml';
-          else if (ext === 'gif') mimeType = 'image/gif';
-          else if (ext === 'webp') mimeType = 'image/webp';
-          else if (ext === 'txt') mimeType = 'text/plain';
-      }
+    /** Shared-mode download: decrypts the file key with the folder key, then downloads and decrypts. */
+    async _downloadSharedFile(fileId, fileName, mimeType, preview) {
+      await sodium.ready;
+      if (preview) this.preview.status = 'Récupération de la clé...';
+      const file = this.files.find(f => f.ID === fileId);
+      if (!file) { alert('Fichier introuvable.'); if (preview) this.preview.show = false; return; }
+      if (!this.sharedKey) { alert('Clé de déchiffrement manquante.'); if (preview) this.preview.show = false; return; }
+      if (!file.EncryptedKey) { alert('Clé de fichier manquante'); if (preview) this.preview.show = false; return; }
 
-      // Reset preview state if starting a new preview
-      if (preview) {
-        this.preview = { 
-            show: true, 
-            url: null, 
-            type: mimeType, 
-            name: fileName,
-            loading: true,
-            status: 'Initialisation...'
-        };
-      }
-
-      // SHARED MODE DOWNLOAD
-      if (this.viewMode === 'shared') {
-          await sodium.ready;
-          if (preview) this.preview.status = 'Récupération de la clé...';
-          const file = this.files.find(f => f.ID === fileId);
-          
-          if (!file) {
-             console.error("Shared file not found in store");
-             alert("Fichier introuvable.");
-             if (preview) this.preview.show = false;
-             return;
-          }
-           
-          if (!this.sharedKey) {
-             console.error("Shared key missing");
-             alert("Clé de déchiffrement manquante.");
-             if (preview) this.preview.show = false;
-             return;
-          }
-          
-          if (!file.EncryptedKey) {
-             alert("Clé de fichier manquante");
-             if (preview) this.preview.show = false;
-             return;
-          }
-
-          try {
-             // Decrypt File Key (using Folder Key)
-             const encryptedBytes = sodium.from_base64(file.EncryptedKey);
-             // Assume IV is first 12 bytes
-             const iv = encryptedBytes.slice(0, 12);
-             const data = encryptedBytes.slice(12);
-             
-             const fileKeyRaw = await window.crypto.subtle.decrypt(
-                { name: "AES-GCM", iv: iv },
-                this.sharedKey, // The Folder Key
-                data
-             );
-             
-             const fileKeyCrypto = await window.crypto.subtle.importKey("raw", fileKeyRaw, "AES-GCM", true, ["decrypt"]);
-             
-             // Download content
-             if (preview) this.preview.status = 'Téléchargement du fichier chiffré...';
-             const response = await api.get(`/files/download/${fileId}`, { responseType: 'blob' });
-             
-             // Decrypt content
-             if (preview) this.preview.status = 'Déchiffrement (Client-Side)...';
-             const encryptedFileBytes = await response.data.arrayBuffer();
-             const encryptedBlob = new Blob([encryptedFileBytes]);
-             const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, mimeType);
-             
-             // Save or Preview
-             const url = window.URL.createObjectURL(decryptedBlob);
-             if (preview) {
-                 this.preview = {
-                    show: true,
-                    url: url,
-                    type: mimeType,
-                    name: fileName,
-                    loading: false, // Done
-                    status: ''
-                 };
-             } else {
-                 const a = document.createElement('a');
-                 a.href = url;
-                 a.download = fileName;
-                 document.body.appendChild(a);
-                 a.click();
-                 window.URL.revokeObjectURL(url);
-                 document.body.removeChild(a);
-             }
-          } catch (e) {
-              console.error("Shared download error", e);
-              alert("Erreur téléchargement partagé: " + e.message);
-              if (preview) this.preview.show = false;
-          } finally {
-              // Stop heartbeat when download completes or fails
-              if (!preview) {
-                this.stopHeartbeat();
-              }
-          }
-          return;
-      }
-
-      if (!authStore.masterKey) {
-        console.error("MasterKey missing for download/preview");
-        alert("Erreur d'authentification (Clé manquante). Veuillez vous reconnecter.");
+      try {
+        const fileKeyCrypto = await decryptFileKeyWithFolderKey(file.EncryptedKey, this.sharedKey);
+        if (preview) this.preview.status = 'Téléchargement du fichier chiffré...';
+        const response = await api.get(`/files/download/${fileId}`, { responseType: 'blob' });
+        if (preview) this.preview.status = 'Déchiffrement (Client-Side)...';
+        const encryptedBlob = new Blob([await response.data.arrayBuffer()]);
+        const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, mimeType);
+        const url = window.URL.createObjectURL(decryptedBlob);
+        if (preview) {
+          this.preview = { show: true, url, type: mimeType, name: fileName, loading: false, status: '' };
+        } else {
+          const a = document.createElement('a');
+          a.href = url; a.download = fileName;
+          document.body.appendChild(a); a.click();
+          window.URL.revokeObjectURL(url); document.body.removeChild(a);
+        }
+      } catch (e) {
+        console.error('Shared download error', e);
+        alert('Erreur téléchargement partagé: ' + e.message);
         if (preview) this.preview.show = false;
+      }
+    },
+
+    /** Resolves which file ID, encrypted key and MIME type to use for a download/preview. */
+    _resolveDownloadTarget(fileId, mimeType, encryptedKey, preview) {
+      const file = this.files.find(f => f.ID === fileId);
+      let targetFileId = fileId;
+      let targetEncryptedKey = encryptedKey || (file ? file.EncryptedKey : null);
+      let finalMimeType = mimeType;
+      if (preview && file && file.preview) {
+        targetFileId = file.preview.ID;
+        targetEncryptedKey = file.preview.EncryptedKey;
+        finalMimeType = 'image/jpeg';
+      }
+      return { file, targetFileId, targetEncryptedKey, finalMimeType };
+    },
+
+    async downloadFile(fileId, fileName, mimeType = 'application/octet-stream', preview = false, encryptedKey = null) {
+      const authStore = useAuthStore();
+      if (!preview) this.startHeartbeat();
+
+      mimeType = correctMimeType(mimeType, fileName);
+
+      if (preview) {
+        this.preview = { show: true, url: null, type: mimeType, name: fileName, loading: true, status: 'Initialisation...' };
+      }
+
+      if (this.viewMode === 'shared') {
+        try {
+          await this._downloadSharedFile(fileId, fileName, mimeType, preview);
+        } finally {
+          if (!preview) this.stopHeartbeat();
+        }
         return;
       }
 
-      // Find the file in the store to get encrypted_key
-      const file = this.files.find(f => f.ID === fileId);
-      
-      // Determine target file (Original or Preview)
-      let targetFileId = fileId;
-      // Use provided encryptedKey if available (from search results), otherwise get from store
-      let targetEncryptedKey = encryptedKey || (file ? file.EncryptedKey : null);
-      let finalMimeType = mimeType;
-
-      // Prefer server-side preview if available and requested
-      if (preview && file && file.preview) {
-
-           targetFileId = file.preview.ID; 
-           targetEncryptedKey = file.preview.EncryptedKey;
-           // If it is a preview, it is ALWAYS an image (generated by frontend using canvas/jpeg)
-           // We override the mimetype to be an image so FilePreview knows it's an image
-           // even if the original filename is .pdf
-           finalMimeType = 'image/jpeg'; 
-           
-           /*
-           if (file.preview.MimeType) {
-               finalMimeType = file.preview.MimeType;
-           }
-           */
+      if (!authStore.masterKey) {
+        alert('Erreur d\'authentification (Clé manquante). Veuillez vous reconnecter.');
+        if (preview) this.preview.show = false;
+        if (!preview) this.stopHeartbeat();
+        return;
       }
 
-      let fileKey = authStore.masterKey; // Default to masterKey for old files
+      const { file, targetFileId, targetEncryptedKey, finalMimeType: resolvedMime } = this._resolveDownloadTarget(fileId, mimeType, encryptedKey, preview);
+      let finalMimeType = resolvedMime;
 
+      let fileKey = authStore.masterKey;
       if (targetEncryptedKey) {
-          // Decrypt the file key
-          if (preview) this.preview.status = 'Préparation de la clé...';
-          try {
-              fileKey = await unwrapMasterKey(targetEncryptedKey, authStore.masterKey);
-          } catch (e) {
-              console.error("Failed to decrypt file key", e);
-              alert("Erreur de déchiffrement de la clé du fichier.");
-              if (preview) this.preview.show = false;
-              return;
-          }
+        if (preview) this.preview.status = 'Préparation de la clé...';
+        try {
+          fileKey = await unwrapMasterKey(targetEncryptedKey, authStore.masterKey);
+        } catch (e) {
+          console.error('Failed to decrypt file key', e);
+          alert('Erreur de déchiffrement de la clé du fichier.');
+          if (preview) this.preview.show = false;
+          if (!preview) this.stopHeartbeat();
+          return;
+        }
       }
 
       try {
-        // 1. Télécharger le blob chiffré
         if (preview) this.preview.status = 'Téléchargement du contenu chiffré...';
-        // Use /files/preview endpoint if it's a preview, /files/download for regular files
         const endpoint = (preview && file && file.preview) ? `/files/preview/${targetFileId}` : `/files/download/${targetFileId}`;
         const response = await api.get(endpoint, { responseType: 'blob' });
-        
-        // 2. Déchiffrer via Worker
+
         if (preview) this.preview.status = 'Déchiffrement local...';
         let decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, finalMimeType);
 
-
-
-        // 3. Pour la preview d'images, compresser côté client pour réduire la mémoire
         if (preview && finalMimeType.startsWith('image/') && !finalMimeType.includes('svg')) {
-            this.preview.status = 'Optimisation pour affichage...';
-            try {
-                const compressedBlob = await compressImageForPreview(decryptedBlob);
-                if (compressedBlob) {
-                    decryptedBlob = compressedBlob;
-                    finalMimeType = 'image/jpeg';
-                }
-            } catch (e) {
-                console.warn("Image compression failed, using original", e);
-            }
+          this.preview.status = 'Optimisation pour affichage...';
+          try {
+            const compressedBlob = await compressImageForPreview(decryptedBlob);
+            if (compressedBlob) { decryptedBlob = compressedBlob; finalMimeType = 'image/jpeg'; }
+          } catch (e) { console.warn('Image compression failed, using original', e); }
         }
 
-        // 4. Sauvegarder ou Prévisualiser
         const url = window.URL.createObjectURL(decryptedBlob);
-        
         if (preview) {
-             this.preview = {
-                show: true,
-                url: url,
-                type: finalMimeType,
-                name: fileName,
-                loading: false,
-                status: ''
-             };
+          this.preview = { show: true, url, type: finalMimeType, name: fileName, loading: false, status: '' };
         } else {
-             const link = document.createElement('a');
-             link.href = url;
-             link.setAttribute('download', fileName);
-             document.body.appendChild(link);
-             link.click();
-             setTimeout(() => { link.remove(); window.URL.revokeObjectURL(url); }, 100);
+          triggerBlobDownload(decryptedBlob, fileName);
         }
 
-        // Add to history
-          this.addToHistory({ 
-              id: fileId, 
-              type: 'file', 
-              displayName: fileName,
-              MimeType: mimeType,
-              EncryptedKey: encryptedKey
-          });
+        this.addToHistory({ id: fileId, type: 'file', displayName: fileName, MimeType: mimeType, EncryptedKey: encryptedKey });
       } catch (error) {
-        console.error("Erreur download:", error);
-        alert("Erreur lors du téléchargement.");
+        console.error('Erreur download:', error);
+        alert('Erreur lors du téléchargement.');
         if (preview) this.preview.show = false;
       } finally {
-        // Stop heartbeat when download completes or fails
-        if (!preview) {
-          this.stopHeartbeat();
-        }
+        if (!preview) this.stopHeartbeat();
       }
     },
     async uploadFile(file, isPreview = false, previewID = null, previewPath = null) {
@@ -665,21 +699,7 @@ export const useFileStore = defineStore('files', {
       const encryptedFileKey = await wrapMasterKey(fileKey, authStore.masterKey);
 
       // Check for active shares on this path
-      let shareKeysMap = {};
-      try {
-          const shareRes = await api.get('/shares/check-path', { params: { path: uploadPath } });
-          const activeShares = shareRes.data.shares || [];
-          
-          for (const share of activeShares) {
-              // Derive Share Key from Token
-              const shareKey = await deriveKeyFromToken(share.Token);
-              // Encrypt File Key with Share Key
-              const encryptedForShare = await wrapMasterKey(fileKey, shareKey);
-              shareKeysMap[share.ID] = encryptedForShare;
-          }
-      } catch (e) {
-          console.error("Error checking active shares:", e);
-      }
+      const shareKeysMap = await buildShareKeysMap(uploadPath, fileKey);
 
       // Setup upload state
       this.isUploading = true;
@@ -734,37 +754,10 @@ export const useFileStore = defineStore('files', {
       this.currentUploadManager = uploadManager;
 
       try {
-        // Calculate total parts
-        const totalParts = Math.ceil(file.size / PART_SIZE);
-        
-        // Encrypt all chunks first (client-side ZK encryption)
-        const encryptedChunks = [];
-        let offset = 0;
-        let chunkIndex = 0;
-        
-        while (offset < file.size) {
-          let chunkBlob = file.slice(offset, offset + PART_SIZE);
-          let chunkArrayBuffer = await chunkBlob.arrayBuffer();
-          
-          // Encrypt using existing worker-based encryption
-          let encryptedChunkBlob = await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex);
-          encryptedChunks.push(encryptedChunkBlob);
-          
-          // Help GC
-          chunkArrayBuffer = null;
-          chunkBlob = null;
-          
-          offset += PART_SIZE;
-          chunkIndex++;
-          
-          // Update encryption progress (0-30% of total)
-          this.uploadProgress = Math.round((chunkIndex / totalParts) * 30);
-        }
-
-        // Calculate total encrypted size
-        const totalEncryptedSize = encryptedChunks.reduce((sum, chunk) => {
-          return sum + (chunk.size || chunk.byteLength || 0);
-        }, 0);
+        // Encrypt all chunks first (client-side ZK encryption), updating progress 0–30%
+        const { encryptedChunks, totalEncryptedSize } = await encryptFileChunks(
+          file, fileKey, (pct) => { this.uploadProgress = pct; }
+        );
 
         this.uploadState = 'uploading';
 
@@ -965,66 +958,19 @@ export const useFileStore = defineStore('files', {
     },
     async createShareLink(resourceId, resourceType, expiresAt = null) {
       const authStore = useAuthStore();
-      
-      // 1. Generate Token
-      const tokenBytes = window.crypto.getRandomValues(new Uint8Array(32));
-      const token = btoa(String.fromCodePoint(...tokenBytes))
-        .replaceAll('+', '-').replaceAll('/', '_').replaceAll(/=+$/g, '');
+      const token = generateShareToken();
 
-      let encryptedKeyForShare = "";
+      let encryptedKeyForShare = '';
       let fileKeys = {};
 
       if (resourceType === 'file') {
-          const file = this.files.find(f => f.ID === resourceId);
-          if (file && file.EncryptedKey) {
-              try {
-                  // 2. Decrypt File Key
-                  const fileKey = await unwrapMasterKey(file.EncryptedKey, authStore.masterKey);
-                  
-                  // 3. Derive Share Key from Token
-                  const shareKey = await deriveKeyFromToken(token);
-
-                  // 4. Encrypt File Key with Share Key
-                  encryptedKeyForShare = await wrapMasterKey(fileKey, shareKey);
-              } catch (e) {
-                  console.error("Encryption error for share:", e);
-                  throw new Error("Failed to prepare encryption for share.");
-              }
-          }
+        const file = this.files.find(f => f.ID === resourceId);
+        encryptedKeyForShare = await prepareFileShareKey(file, authStore.masterKey, token);
       } else if (resourceType === 'folder') {
-          const folder = this.folders.find(f => f.ID === resourceId);
-          if (folder) {
-              try {
-                  // Fetch ALL files in the folder recursively to get their keys
-                  //console.log(`Fetching recursive files for path: ${folder.Path}`);
-                  const res = await api.get(`/files/list-recursive`, { params: { path: folder.Path } });
-                  const filesInFolder = res.data.files || [];
-                  //console.log(`Found ${filesInFolder.length} files in folder.`);
-                  
-                  const shareKey = await deriveKeyFromToken(token);
-                  
-                  let missingKeysCount = 0;
-                  for (const f of filesInFolder) {
-                      //console.log(`Processing file ${f.ID} (${f.Name}). Has Key: ${!!f.EncryptedKey}`);
-                      if (f.EncryptedKey) {
-                          const k = await unwrapMasterKey(f.EncryptedKey, authStore.masterKey);
-                          const sk = await wrapMasterKey(k, shareKey);
-                          fileKeys[f.ID] = sk;
-                      } else {
-                          missingKeysCount++;
-                      }
-                  }
-                  //console.log(`Prepared keys for ${Object.keys(fileKeys).length} files.`);
-
-                  if (missingKeysCount > 0) {
-                      console.warn(`${missingKeysCount} files in this folder are missing encryption keys.`);
-                      alert(`Attention : ${missingKeysCount} fichiers dans ce dossier n'ont pas de clé de chiffrement (anciens fichiers ?). Ils ne seront pas lisibles via le partage.`);
-                  }
-              } catch (e) {
-                  console.error("Error preparing folder share:", e);
-                  // Continue anyway, maybe some files won't be readable
-              }
-          }
+        const folder = this.folders.find(f => f.ID === resourceId);
+        if (folder) {
+          fileKeys = await prepareFolderShareKeys(folder, authStore.masterKey, token);
+        }
       }
 
       try {
@@ -1032,14 +978,14 @@ export const useFileStore = defineStore('files', {
           resource_id: resourceId,
           resource_type: resourceType,
           expires_at: expiresAt,
-          token: token,
+          token,
           encrypted_key: encryptedKeyForShare,
-          file_keys: fileKeys
-        })
-        return response.data
+          file_keys: fileKeys,
+        });
+        return response.data;
       } catch (error) {
-        console.error('Error creating share link:', error)
-        throw error
+        console.error('Error creating share link:', error);
+        throw error;
       }
     },
     async searchFiles(query) {

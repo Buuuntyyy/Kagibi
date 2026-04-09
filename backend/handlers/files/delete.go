@@ -21,6 +21,12 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const (
+	queryUserIDEq    = "user_id = ?"
+	queryFolderIDIn  = "folder_id IN (?)"
+	s3UserPathFormat = "users/%s%s"
+)
+
 func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 	fileID, err := strconv.ParseInt(c.Param("fileID"), 10, 64)
 	if err != nil {
@@ -39,7 +45,7 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	// 2. Supprimer de S3
-	s3Key := fmt.Sprintf("users/%s%s", userID, file.Path)
+	s3Key := fmt.Sprintf(s3UserPathFormat, userID, file.Path)
 	log.Printf("Attempting to delete S3 object. Bucket: %s, Key: %s", s3storage.BucketName, s3Key)
 
 	_, err = s3storage.Client.DeleteObject(c.Request.Context(), &s3.DeleteObjectInput{
@@ -70,7 +76,7 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 
 	if _, err := tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
 		Set("storage_used = GREATEST(storage_used - ?, 0)", file.Size).
-		Where("user_id = ?", userID).
+		Where(queryUserIDEq, userID).
 		Exec(c.Request.Context()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la mise à jour du quota de stockage"})
 		return
@@ -130,6 +136,82 @@ func DeleteFolderHandler(c *gin.Context, db *bun.DB) {
 	c.JSON(http.StatusOK, gin.H{"message": "Dossier supprimé avec succès"})
 }
 
+// deleteFolderS3Objects removes all S3 objects for the given files and folder prefix.
+func deleteFolderS3Objects(ctx context.Context, userID, folderPath string, files []pkg.File) {
+	for _, file := range files {
+		s3Key := fmt.Sprintf(s3UserPathFormat, userID, file.Path)
+		if _, err := s3storage.Client.DeleteObject(ctx, &s3.DeleteObjectInput{
+			Bucket: aws.String(s3storage.BucketName),
+			Key:    aws.String(s3Key),
+		}); err != nil {
+			log.Printf("Error deleting file from S3: %v", err)
+		}
+	}
+	if s3storage.Client != nil {
+		prefix := fmt.Sprintf(s3UserPathFormat, userID, folderPath)
+		if !strings.HasSuffix(prefix, "/") {
+			prefix += "/"
+		}
+		if err := deleteS3Prefix(ctx, prefix); err != nil {
+			log.Printf("Error deleting folder prefix from S3: %v", err)
+		}
+	}
+}
+
+// deleteFolderFilesInTx deletes file records and their shares within a transaction.
+// Returns total size of deleted files.
+func deleteFolderFilesInTx(ctx context.Context, tx bun.Tx, userID string, files []pkg.File) (int64, error) {
+	var totalSize int64
+	for _, file := range files {
+		totalSize += file.Size
+	}
+	if len(files) == 0 {
+		return 0, nil
+	}
+	fileIDs := make([]int64, 0, len(files))
+	for _, f := range files {
+		fileIDs = append(fileIDs, f.ID)
+	}
+	_, _ = tx.NewDelete().Model((*pkg.ShareLink)(nil)).
+		Where("resource_type = ? AND resource_id IN (?)", "file", bun.In(fileIDs)).Exec(ctx)
+	_, _ = tx.NewDelete().Model((*pkg.FileShare)(nil)).
+		Where("file_id IN (?)", bun.In(fileIDs)).Exec(ctx)
+	_, _ = tx.NewDelete().Model((*pkg.ShareFileKey)(nil)).
+		Where("file_id IN (?)", bun.In(fileIDs)).Exec(ctx)
+	if _, err := tx.NewDelete().Model((*pkg.File)(nil)).
+		Where("id IN (?)", bun.In(fileIDs)).Where(queryUserIDEq, userID).Exec(ctx); err != nil {
+		return 0, fmt.Errorf("Erreur lors de la suppression des fichiers")
+	}
+	return totalSize, nil
+}
+
+// deleteFolderFoldersInTx deletes folder records and their shares within a transaction.
+func deleteFolderFoldersInTx(ctx context.Context, db *bun.DB, tx bun.Tx, userID, folderPath string, folders []pkg.Folder) error {
+	var allFolderIDs []int64
+	for _, f := range folders {
+		allFolderIDs = append(allFolderIDs, f.ID)
+	}
+	var parentFolder pkg.Folder
+	if err := db.NewSelect().Model(&parentFolder).Where("path = ? AND user_id = ?", folderPath, userID).Scan(ctx); err == nil {
+		allFolderIDs = append(allFolderIDs, parentFolder.ID)
+	}
+	if len(allFolderIDs) == 0 {
+		return nil
+	}
+	_, _ = tx.NewDelete().Model((*pkg.ShareLink)(nil)).
+		Where("resource_type = ? AND resource_id IN (?)", "folder", bun.In(allFolderIDs)).Exec(ctx)
+	_, _ = tx.NewDelete().Model((*pkg.FolderShare)(nil)).Where(queryFolderIDIn, bun.In(allFolderIDs)).Exec(ctx)
+	_, _ = tx.NewDelete().Model((*pkg.FolderFileKey)(nil)).Where(queryFolderIDIn, bun.In(allFolderIDs)).Exec(ctx)
+	_, _ = tx.NewDelete().Model((*pkg.FolderFolderKey)(nil)).
+		Where("parent_folder_id IN (?) OR sub_folder_id IN (?)", bun.In(allFolderIDs), bun.In(allFolderIDs)).Exec(ctx)
+	_, _ = tx.NewDelete().Model((*pkg.FolderSize)(nil)).Where(queryFolderIDIn, bun.In(allFolderIDs)).Exec(ctx)
+	if _, err := tx.NewDelete().Model((*pkg.Folder)(nil)).
+		Where("id IN (?)", bun.In(allFolderIDs)).Where(queryUserIDEq, userID).Exec(ctx); err != nil {
+		return fmt.Errorf("Erreur lors de la suppression des dossiers")
+	}
+	return nil
+}
+
 func deleteFolderRecursive(c *gin.Context, db *bun.DB, userID, folderPath string) error {
 	ctx := c.Request.Context()
 
@@ -138,112 +220,27 @@ func deleteFolderRecursive(c *gin.Context, db *bun.DB, userID, folderPath string
 		return fmt.Errorf("Erreur lors de la récupération du contenu du dossier")
 	}
 
-	// Delete files from S3
-	for _, file := range files {
-		s3Key := fmt.Sprintf("users/%s%s", userID, file.Path)
-		_, err = s3storage.Client.DeleteObject(ctx, &s3.DeleteObjectInput{
-			Bucket: aws.String(s3storage.BucketName),
-			Key:    aws.String(s3Key),
-		})
-		if err != nil {
-			log.Printf("Error deleting file from S3: %v", err)
-		}
-	}
+	deleteFolderS3Objects(ctx, userID, folderPath, files)
 
-	// Best-effort cleanup: remove any remaining objects under the folder prefix (including folder markers)
-	if s3storage.Client != nil {
-		prefix := fmt.Sprintf("users/%s%s", userID, folderPath)
-		if !strings.HasSuffix(prefix, "/") {
-			prefix += "/"
-		}
-		if err := deleteS3Prefix(ctx, prefix); err != nil {
-			log.Printf("Error deleting folder prefix from S3: %v", err)
-		}
-	}
-
-	// Delete DB records in a transaction
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("Erreur de transaction")
 	}
 	defer tx.Rollback()
 
-	var totalSize int64
-	for _, file := range files {
-		totalSize += file.Size
+	totalSize, err := deleteFolderFilesInTx(ctx, tx, userID, files)
+	if err != nil {
+		return err
 	}
 
-	if len(files) > 0 {
-		fileIDs := make([]int64, 0, len(files))
-		for _, f := range files {
-			fileIDs = append(fileIDs, f.ID)
-		}
-
-		_, _ = tx.NewDelete().Model((*pkg.ShareLink)(nil)).
-			Where("resource_type = ? AND resource_id IN (?)", "file", bun.In(fileIDs)).
-			Exec(ctx)
-		_, _ = tx.NewDelete().Model((*pkg.FileShare)(nil)).
-			Where("file_id IN (?)", bun.In(fileIDs)).
-			Exec(ctx)
-		_, _ = tx.NewDelete().Model((*pkg.ShareFileKey)(nil)).
-			Where("file_id IN (?)", bun.In(fileIDs)).
-			Exec(ctx)
-
-		_, err = tx.NewDelete().Model((*pkg.File)(nil)).
-			Where("id IN (?)", bun.In(fileIDs)).
-			Where("user_id = ?", userID).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("Erreur lors de la suppression des fichiers")
-		}
-	}
-
-	// Delete all subfolders + parent folder itself
-	var allFolderIDs []int64
-	if len(folders) > 0 {
-		for _, f := range folders {
-			allFolderIDs = append(allFolderIDs, f.ID)
-		}
-	}
-
-	// Get parent folder ID to include it in deletion
-	var parentFolder pkg.Folder
-	if err := db.NewSelect().Model(&parentFolder).Where("path = ? AND user_id = ?", folderPath, userID).Scan(ctx); err == nil {
-		allFolderIDs = append(allFolderIDs, parentFolder.ID)
-	}
-
-	if len(allFolderIDs) > 0 {
-		_, _ = tx.NewDelete().Model((*pkg.ShareLink)(nil)).
-			Where("resource_type = ? AND resource_id IN (?)", "folder", bun.In(allFolderIDs)).
-			Exec(ctx)
-		_, _ = tx.NewDelete().Model((*pkg.FolderShare)(nil)).
-			Where("folder_id IN (?)", bun.In(allFolderIDs)).
-			Exec(ctx)
-		_, _ = tx.NewDelete().Model((*pkg.FolderFileKey)(nil)).
-			Where("folder_id IN (?)", bun.In(allFolderIDs)).
-			Exec(ctx)
-		_, _ = tx.NewDelete().Model((*pkg.FolderFolderKey)(nil)).
-			Where("parent_folder_id IN (?) OR sub_folder_id IN (?)", bun.In(allFolderIDs), bun.In(allFolderIDs)).
-			Exec(ctx)
-		_, _ = tx.NewDelete().Model((*pkg.FolderSize)(nil)).
-			Where("folder_id IN (?)", bun.In(allFolderIDs)).
-			Exec(ctx)
-
-		_, err = tx.NewDelete().Model((*pkg.Folder)(nil)).
-			Where("id IN (?)", bun.In(allFolderIDs)).
-			Where("user_id = ?", userID).
-			Exec(ctx)
-		if err != nil {
-			return fmt.Errorf("Erreur lors de la suppression des dossiers")
-		}
+	if err := deleteFolderFoldersInTx(ctx, db, tx, userID, folderPath, folders); err != nil {
+		return err
 	}
 
 	if totalSize > 0 {
-		_, err = tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
+		if _, err = tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
 			Set("storage_used = GREATEST(storage_used - ?, 0)", totalSize).
-			Where("user_id = ?", userID).
-			Exec(ctx)
-		if err != nil {
+			Where(queryUserIDEq, userID).Exec(ctx); err != nil {
 			return fmt.Errorf("Erreur lors de la mise à jour du quota de stockage")
 		}
 	}

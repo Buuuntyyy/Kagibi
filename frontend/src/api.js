@@ -40,7 +40,7 @@ api.interceptors.response.use(
         return api(original)
       }
     }
-    return Promise.reject(error)
+    throw error
   }
 )
 

@@ -41,6 +41,27 @@ func generateFriendCode() string {
 	return "#" + string(code)
 }
 
+// normalizeAvatarURL ensures the avatar URL has a valid prefix.
+// Empty URLs fall back to the default avatar. Bare filenames are prefixed with /avatars/.
+func normalizeAvatarURL(raw string) string {
+	if raw == "" {
+		return "/avatars/default.png"
+	}
+	if !strings.HasPrefix(raw, "/avatars/") && !strings.HasPrefix(raw, "http") && !strings.Contains(raw, "/") {
+		return "/avatars/" + raw
+	}
+	return raw
+}
+
+// cleanupAuthProviderUser removes the auth provider user after a profile creation failure.
+func cleanupAuthProviderUser(provider authprovider.AuthProvider, userID string) {
+	if err := provider.DeleteUser(userID); err != nil {
+		log.Printf("[Register] Failed to cleanup auth provider user after profile creation failure: %v", err)
+	} else {
+		log.Printf("[Register] Cleaned up orphaned auth provider user %s", userID)
+	}
+}
+
 // RegisterHandler creates the Kagibi profile for a user already authenticated with the auth provider.
 // The user ID comes from the JWT (set by AuthMiddleware) and matches the ID in the auth provider.
 func RegisterHandler(c *gin.Context, db *bun.DB, provider authprovider.AuthProvider) {
@@ -61,22 +82,11 @@ func RegisterHandler(c *gin.Context, db *bun.DB, provider authprovider.AuthProvi
 		return
 	}
 
-	avatarURL := req.AvatarURL
-	if avatarURL == "" {
-		avatarURL = "/avatars/default.png"
-	} else {
-		if !strings.HasPrefix(avatarURL, "/avatars/") && !strings.HasPrefix(avatarURL, "http") {
-			if !strings.Contains(avatarURL, "/") {
-				avatarURL = "/avatars/" + avatarURL
-			}
-		}
-	}
-
 	user := &pkg.User{
 		ID:                         userID,
 		Name:                       req.Name,
 		Email:                      req.Email,
-		AvatarURL:                  avatarURL,
+		AvatarURL:                  normalizeAvatarURL(req.AvatarURL),
 		Salt:                       req.Salt,
 		EncryptedMasterKey:         req.EncryptedMasterKey,
 		EncryptedMasterKeyRecovery: req.EncryptedMasterKeyRecovery,
@@ -92,20 +102,12 @@ func RegisterHandler(c *gin.Context, db *bun.DB, provider authprovider.AuthProvi
 
 	if err := pkg.CreateUser(db, user); err != nil {
 		log.Printf("[Register] Error creating profile: %v", err)
-
 		if strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "duplicate key") {
 			c.JSON(http.StatusConflict, gin.H{"error": "Profil déjà existant"})
 			return
 		}
-
-		// Clean up the auth provider user to avoid orphaned accounts
 		log.Printf("[Register] Profile creation failed, cleaning up auth provider user %s", userID)
-		if cleanupErr := provider.DeleteUser(userID); cleanupErr != nil {
-			log.Printf("[Register] Failed to cleanup auth provider user after profile creation failure: %v", cleanupErr)
-		} else {
-			log.Printf("[Register] Cleaned up orphaned auth provider user %s", userID)
-		}
-
+		cleanupAuthProviderUser(provider, userID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la création du profil. Veuillez réessayer."})
 		return
 	}

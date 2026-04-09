@@ -71,87 +71,62 @@ func cleanupOrphansAndFailedDeletions(db *bun.DB) {
 	log.Println("[RGPD] Maintenance completed")
 }
 
+// deleteUserS3Files deletes all S3 objects for the user's files and then the entire user prefix.
+func deleteUserS3Files(ctx context.Context, userID string, files []pkg.File) {
+	for _, file := range files {
+		if s3storage.Client == nil || file.Path == "" {
+			continue
+		}
+		s3Key := fmt.Sprintf("users/%s%s", userID, file.Path)
+		if _, err := s3storage.Client.DeleteObject(ctx, &s3.DeleteObjectInput{
+			Bucket: aws.String(s3storage.BucketName),
+			Key:    aws.String(s3Key),
+		}); err != nil {
+			log.Printf("[RGPD] Failed to delete S3 file %s: %v", s3Key, err)
+		}
+	}
+	cleanupS3Prefix(ctx, userID)
+}
+
+// deleteUserDBRecords hard-deletes all DB rows belonging to a user.
+func deleteUserDBRecords(ctx context.Context, db *bun.DB, user pkg.User) {
+	userID := user.ID
+	models := []struct {
+		model    interface{}
+		name     string
+		extraFn  func() error
+	}{
+		{(*pkg.File)(nil), "files", nil},
+		{(*pkg.Folder)(nil), "folders", nil},
+		{(*pkg.Tag)(nil), "tags", nil},
+		{(*pkg.RecentActivity)(nil), "recent activities", nil},
+	}
+	for _, m := range models {
+		if _, err := db.NewDelete().Model(m.model).Where(whereUserID, userID).Exec(ctx); err != nil {
+			log.Printf("[RGPD] Failed to delete %s for user %s: %v", m.name, userID, err)
+		}
+	}
+	if _, err := db.NewDelete().Model(&user).Where("id = ?", userID).Exec(ctx); err != nil {
+		log.Printf("[RGPD] Failed to hard delete user %s: %v", userID, err)
+	} else {
+		log.Printf("[RGPD] Hard deleted account: %s", userID)
+	}
+}
+
 // cleanupUserData effectue le hard delete complet d'un utilisateur et de toutes ses données
 // Utilisé comme filet de sécurité si la suppression immédiate a échoué
 func cleanupUserData(ctx context.Context, db *bun.DB, user pkg.User) {
 	userID := user.ID
 	log.Printf("[RGPD] Emergency cleanup for user: %s", userID)
-	// 1. Récupérer tous les fichiers de l'utilisateur
-	var files []pkg.File
-	err := db.NewSelect().
-		Model(&files).
-		Where(whereUserID, userID).
-		Scan(ctx)
 
-	if err != nil {
+	var files []pkg.File
+	if err := db.NewSelect().Model(&files).Where(whereUserID, userID).Scan(ctx); err != nil {
 		log.Printf("[RGPD] Failed to fetch files for user %s: %v", userID, err)
 	} else {
-		// 2. Supprimer chaque fichier de S3
-		for _, file := range files {
-			if s3storage.Client != nil && file.Path != "" {
-				// S3 key is derived from user ID and file path
-				s3Key := fmt.Sprintf("users/%s%s", userID, file.Path)
-				_, err := s3storage.Client.DeleteObject(ctx, &s3.DeleteObjectInput{
-					Bucket: aws.String(s3storage.BucketName),
-					Key:    aws.String(s3Key),
-				})
-				if err != nil {
-					log.Printf("[RGPD] Failed to delete S3 file %s: %v", s3Key, err)
-				}
-			}
-		}
-
-		// 3. Nettoyer le préfixe S3 de l'utilisateur (sécurité supplémentaire)
-		cleanupS3Prefix(ctx, userID)
+		deleteUserS3Files(ctx, userID, files)
 	}
 
-	// 4. Hard delete des fichiers en DB
-	_, err = db.NewDelete().
-		Model((*pkg.File)(nil)).
-		Where(whereUserID, userID).
-		Exec(ctx)
-	if err != nil {
-		log.Printf("[RGPD] Failed to delete files for user %s: %v", userID, err)
-	}
-
-	// 5. Hard delete des dossiers
-	_, err = db.NewDelete().
-		Model((*pkg.Folder)(nil)).
-		Where(whereUserID, userID).
-		Exec(ctx)
-	if err != nil {
-		log.Printf("[RGPD] Failed to delete folders for user %s: %v", userID, err)
-	}
-
-	// 6. Hard delete des tags
-	_, err = db.NewDelete().
-		Model((*pkg.Tag)(nil)).
-		Where(whereUserID, userID).
-		Exec(ctx)
-	if err != nil {
-		log.Printf("[RGPD] Failed to delete tags for user %s: %v", userID, err)
-	}
-
-	// 7. Hard delete des activités récentes
-	_, err = db.NewDelete().
-		Model((*pkg.RecentActivity)(nil)).
-		Where(whereUserID, userID).
-		Exec(ctx)
-	if err != nil {
-		log.Printf("[RGPD] Failed to delete recent activities for user %s: %v", userID, err)
-	}
-
-	// 8. Hard delete de l'utilisateur
-	_, err = db.NewDelete().
-		Model(&user).
-		Where("id = ?", userID).
-		Exec(ctx)
-
-	if err != nil {
-		log.Printf("[RGPD] Failed to hard delete user %s: %v", userID, err)
-	} else {
-		log.Printf("[RGPD] Hard deleted account: %s", userID)
-	}
+	deleteUserDBRecords(ctx, db, user)
 }
 
 // cleanupOrphanFiles supprime les fichiers en DB dont l'utilisateur n'existe plus

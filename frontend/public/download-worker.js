@@ -158,70 +158,67 @@ function handleAddFile(sessionId, data, port) {
 }
 
 /**
+ * Get or create a ZIP entry for the given file path, closing any previous open entry.
+ */
+function getOrCreateZipEntry(session, relativePath) {
+  if (session.currentFile && session.currentFilePath !== relativePath) {
+    session.currentFile.push(new Uint8Array(0), true)
+    session.currentFile = null
+  }
+  if (!session.currentFile) {
+    session.currentFile = new fflate.ZipDeflate(relativePath, { level: 0 })
+    session.zipStream.add(session.currentFile)
+    session.currentFilePath = relativePath
+  }
+  return session.currentFile
+}
+
+/**
+ * Write a chunk to the ZIP and update session state when the file is complete.
+ */
+function writeChunkToZip(session, zipFile, chunk, isLast, relativePath, port) {
+  if (chunk && chunk.byteLength > 0) {
+    const uint8Chunk = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk)
+    zipFile.push(uint8Chunk, isLast)
+    session.bytesProcessed += uint8Chunk.length
+  } else if (isLast) {
+    zipFile.push(new Uint8Array(0), true)
+  }
+
+  if (isLast) {
+    session.processedFiles++
+    session.currentFile = null
+    session.currentFilePath = null
+    session.port?.postMessage({
+      type: 'PROGRESS',
+      processedFiles: session.processedFiles,
+      totalFiles: session.totalFiles,
+      bytesProcessed: session.bytesProcessed,
+      totalSize: session.totalSize,
+      percent: Math.round((session.bytesProcessed / session.totalSize) * 100)
+    })
+    port?.postMessage({ type: 'FILE_ADDED', relativePath })
+  }
+}
+
+/**
  * Process queued file chunks sequentially
  */
 async function processFileQueue(session) {
   if (session.isProcessing || session.aborted) return
   session.isProcessing = true
-  
+
   while (session.pendingFiles.length > 0 && !session.aborted) {
     const { relativePath, chunk, isLast, fileSize, port } = session.pendingFiles.shift()
-    
     try {
-      // Get or create file in ZIP
-      let zipFile = session.currentFile
-      
-      if (!zipFile || session.currentFilePath !== relativePath) {
-        // New file - create ZIP entry
-        if (zipFile) {
-          // Close previous file
-          zipFile.push(new Uint8Array(0), true)
-        }
-        
-        // Create new ZIP entry with streaming
-        zipFile = new fflate.ZipDeflate(relativePath, {
-          level: 0 // No compression for encrypted data (already incompressible)
-        })
-        
-        session.zipStream.add(zipFile)
-        session.currentFile = zipFile
-        session.currentFilePath = relativePath
-      }
-      
-      // Add chunk to ZIP
-      if (chunk && chunk.byteLength > 0) {
-        const uint8Chunk = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk)
-        zipFile.push(uint8Chunk, isLast)
-        session.bytesProcessed += uint8Chunk.length
-      } else if (isLast) {
-        zipFile.push(new Uint8Array(0), true)
-      }
-      
-      if (isLast) {
-        session.processedFiles++
-        session.currentFile = null
-        session.currentFilePath = null
-        
-        // Report progress
-        const progress = {
-          type: 'PROGRESS',
-          processedFiles: session.processedFiles,
-          totalFiles: session.totalFiles,
-          bytesProcessed: session.bytesProcessed,
-          totalSize: session.totalSize,
-          percent: Math.round((session.bytesProcessed / session.totalSize) * 100)
-        }
-        
-        session.port?.postMessage(progress)
-        port?.postMessage({ type: 'FILE_ADDED', relativePath })
-      }
-      
+      const zipFile = getOrCreateZipEntry(session, relativePath)
+      writeChunkToZip(session, zipFile, chunk, isLast, relativePath, port)
     } catch (error) {
       console.error(`[DownloadWorker] Error adding file ${relativePath}:`, error)
       port?.postMessage({ type: 'ERROR', error: error.message })
     }
   }
-  
+
   session.isProcessing = false
 }
 

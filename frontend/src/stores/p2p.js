@@ -75,58 +75,82 @@ export const useP2PStore = defineStore('p2p', {
             this.heartbeatInterval = null;
         }
     },
+    /** Builds the oniceconnectionstatechange handler for a peer connection. */
+    _makeIceStateHandler(pc, transferId) {
+        const uiStore = useUIStore();
+        return () => {
+            if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
+                this.activeTransfer.connectionInfo.iceState = pc.iceConnectionState;
+                if (pc.iceConnectionState === 'checking') {
+                    this.activeTransfer.connectionInfo.stage = 'Négociation de la connexion...';
+                } else if (pc.iceConnectionState === 'connected') {
+                    this.activeTransfer.connectionInfo.stage = 'Connecté';
+                    this.detectConnectionType(pc, transferId);
+                }
+            }
+            if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+                if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
+                    const isDone = this.activeTransfer.status === 'Done' || this.activeTransfer.status === 'Complete';
+                    if (!isDone) {
+                        console.error('ICE Connection Failed/Disconnected during active transfer');
+                        uiStore.showError(
+                            "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
+                            'Échec de Connexion'
+                        );
+                        this.activeTransfer.status = 'Error';
+                        this.activeTransfer.connectionInfo.stage = 'Échec de connexion';
+                    }
+                }
+            }
+        };
+    },
+
+    _handleOfferSignal(sender_id, data) {
+        this.incomingOffer = { senderId: sender_id, ...data.meta, sdp: data.sdp, transferId: data.transferId };
+        this.candidateQueue = [];
+    },
+
+    async _handleAnswerSignal(sender_id, data) {
+        if (!this.activeTransfer || this.activeTransfer.friendId !== sender_id) return;
+        if (data.transferId && this.activeTransfer.transferId && data.transferId !== this.activeTransfer.transferId) {
+            console.warn('Ignoring answer for old transfer session');
+            return;
+        }
+        const sdpInit = data.transferId ? data.sdp : data;
+        await this.activeTransfer.pc.setRemoteDescription(new RTCSessionDescription(sdpInit));
+    },
+
+    async _handleCandidateSignal(sender_id, data) {
+        const candidateTransferId = data.transferId;
+        const candidatePayload = candidateTransferId ? data.candidate : data;
+
+        if (this.activeTransfer && this.activeTransfer.friendId === sender_id) {
+            if (this.activeTransfer.transferId && candidateTransferId && this.activeTransfer.transferId !== candidateTransferId) {
+                console.warn('Ignoring candidate for old transfer session', candidateTransferId);
+                return;
+            }
+            try {
+                await this.activeTransfer.pc.addIceCandidate(new RTCIceCandidate(candidatePayload));
+            } catch (e) {
+                console.error('Error adding candidate', e);
+            }
+        } else if (this.incomingOffer && this.incomingOffer.senderId === sender_id) {
+            if (this.incomingOffer.transferId && candidateTransferId && this.incomingOffer.transferId !== candidateTransferId) {
+                console.warn('Ignoring queued candidate for mismatched session');
+                return;
+            }
+            this.candidateQueue.push(candidatePayload);
+        }
+    },
+
     async handleSignal(payload) {
         const { sender_id, type, data } = payload;
-        
         if (type === 'offer') {
-             this.incomingOffer = {
-                 senderId: sender_id,
-                 ...data.meta,
-                 sdp: data.sdp,
-                 transferId: data.transferId // New unique ID
-             };
-             // Clear queue for new offer
-             this.candidateQueue = []; 
+            this._handleOfferSignal(sender_id, data);
         } else if (type === 'answer') {
-             if (this.activeTransfer && this.activeTransfer.friendId === sender_id) {
-                 // Check transfer ID
-                 if (data.transferId && this.activeTransfer.transferId && data.transferId !== this.activeTransfer.transferId) {
-                      console.warn("Ignoring answer for old transfer session");
-                      return;
-                 }
-                 
-                 const sdpInit = data.transferId ? data.sdp : data;
-                 await this.activeTransfer.pc.setRemoteDescription(new RTCSessionDescription(sdpInit));
-             }
+            await this._handleAnswerSignal(sender_id, data);
         } else if (type === 'candidate') {
-            // Check if candidate belongs to the current session (Transfer ID Check)
-            const candidateTransferId = data.transferId;
-            const candidatePayload = candidateTransferId ? data.candidate : data;
-
-            if (this.activeTransfer && this.activeTransfer.friendId === sender_id) {
-                // Must match active transfer ID if we have one
-                if (this.activeTransfer.transferId && candidateTransferId && this.activeTransfer.transferId !== candidateTransferId) {
-                    console.warn("Ignoring candidate for old transfer session", candidateTransferId);
-                    return;
-                }
-                
-                // Active connection, add immediately
-                try {
-                    await this.activeTransfer.pc.addIceCandidate(new RTCIceCandidate(candidatePayload));
-                } catch(e) {
-                    console.error("Error adding candidate", e);
-                }
-            } else if (this.incomingOffer && this.incomingOffer.senderId === sender_id) {
-                 // Check against incoming offer ID
-                 if (this.incomingOffer.transferId && candidateTransferId && this.incomingOffer.transferId !== candidateTransferId) {
-                      console.warn("Ignoring queued candidate for mismatched session");
-                      return;
-                 }
-
-                 // Pending offer, queue candidate
-                 //console.log("Queuing candidate for pending offer");
-                 this.candidateQueue.push(candidatePayload);
-            }
+            await this._handleCandidateSignal(sender_id, data);
         }
     },
 
@@ -150,42 +174,11 @@ export const useP2PStore = defineStore('p2p', {
 
          const pc = new RTCPeerConnection(rtcConfig);
          const realtimeStore = useRealtimeStore();
-         const uiStore = useUIStore();
 
-         pc.oniceconnectionstatechange = () => {
-             //console.log("ICE Connection state:", pc.iceConnectionState);
-             if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
-                 this.activeTransfer.connectionInfo.iceState = pc.iceConnectionState;
-                 
-                 if (pc.iceConnectionState === 'checking') {
-                     this.activeTransfer.connectionInfo.stage = 'Négociation de la connexion...';
-                 } else if (pc.iceConnectionState === 'connected') {
-                     this.activeTransfer.connectionInfo.stage = 'Connecté';
-                     this.detectConnectionType(pc, transferId);
-                 }
-             }
-             
-             if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-                 // Only show error if transfer is NOT already complete
-                 if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
-                     const isDone = this.activeTransfer.status === 'Done' || this.activeTransfer.status === 'Complete';
-                     if (!isDone) {
-                         console.error("ICE Connection Failed/Disconnected during active transfer");
-                         uiStore.showError(
-                             "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
-                             "Échec de Connexion"
-                         );
-                         this.activeTransfer.status = 'Error';
-                         this.activeTransfer.connectionInfo.stage = 'Échec de connexion';
-                     } else {
-                         //console.log("ICE disconnected after successful transfer completion - ignoring");
-                     }
-                 }
-             }
-         };
-         
          // Generate unique transfer ID (Polyfill for older browsers)
          const transferId = (crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+
+         pc.oniceconnectionstatechange = this._makeIceStateHandler(pc, transferId);
 
          pc.onicecandidate = e => {
              if(e.candidate) {
@@ -280,37 +273,7 @@ export const useP2PStore = defineStore('p2p', {
         // Let's attach the same ID.
         const transferId = offerData.transferId;
 
-        pc.oniceconnectionstatechange = () => {
-             //console.log("ICE Connection state:", pc.iceConnectionState);
-             if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
-                 this.activeTransfer.connectionInfo.iceState = pc.iceConnectionState;
-                 
-                 if (pc.iceConnectionState === 'checking') {
-                     this.activeTransfer.connectionInfo.stage = 'Négociation de la connexion...';
-                 } else if (pc.iceConnectionState === 'connected') {
-                     this.activeTransfer.connectionInfo.stage = 'Connecté';
-                     this.detectConnectionType(pc, transferId);
-                 }
-             }
-             
-             if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-                 // Only show error if transfer is NOT already complete
-                 if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
-                     const isDone = this.activeTransfer.status === 'Done' || this.activeTransfer.status === 'Complete';
-                     if (!isDone) {
-                         console.error("ICE Connection Failed/Disconnected during active transfer");
-                         uiStore.showError(
-                             "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
-                             "Échec de Connexion"
-                         );
-                         this.activeTransfer.status = 'Error';
-                         this.activeTransfer.connectionInfo.stage = 'Échec de connexion';
-                     } else {
-                         //console.log("ICE disconnected after successful transfer completion - ignoring");
-                     }
-                 }
-             }
-        };
+        pc.oniceconnectionstatechange = this._makeIceStateHandler(pc, transferId);
 
         pc.onicecandidate = e => {
              if(e.candidate) {
