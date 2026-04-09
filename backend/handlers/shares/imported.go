@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	errShareNotFound       = "Share not found"
+	errShareNotFound     = "Share not found"
 	queryIDAndSharedWith = "id = ? AND shared_with_user_id = ?"
 )
 
