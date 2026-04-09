@@ -91,12 +91,11 @@ class SecurityMonitor {
         body: JSON.stringify(sanitizedEvent)
       });
 
-      if (response.ok) {
-        // Event reported successfully
-      } else if (response.status === 401) {
-        // Not authenticated yet, event cached locally
-      } else {
-        // Backend returned non-OK status
+      if (!response.ok) {
+        if (response.status !== 401) {
+          console.warn('[SecurityMonitor] Backend returned non-OK status:', response.status)
+        }
+        // 401 = not authenticated yet, event is cached locally
       }
     } catch (error) {
       // Cannot reach backend (normal before auth)
