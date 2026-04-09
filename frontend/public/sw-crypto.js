@@ -17,6 +17,7 @@ const ALLOWED_ORIGINS = [
 ];
 
 function isValidOrigin(origin) {
+  if (!origin) return false;
   return ALLOWED_ORIGINS.includes(origin);
 }
 
@@ -72,8 +73,8 @@ setInterval(() => {
 // Gestion des messages du thread principal
 self.addEventListener('message', (event) => {
   // SÉCURITÉ: Valider l'origine — rejeter tout message ne venant pas de la même origine
-  const messageOrigin = event.origin; // NOSONAR - explicit origin check performed below
-  if (messageOrigin && messageOrigin !== self.location.origin && !isValidOrigin(messageOrigin)) {
+  const messageOrigin = event.origin;
+  if (!isValidOrigin(messageOrigin)) {
     console.error('[SW-Crypto] Rejected message from invalid origin:', messageOrigin);
     return;
   }

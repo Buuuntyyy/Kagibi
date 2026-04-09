@@ -15,7 +15,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-const logStorageUpdateFailed = "Failed to emit storage_update event: %v"
+const logStorageUpdateFailed = "Failed to emit storage_update event"
 
 type CreateDirectShareRequest struct {
 	ResourceID       int64            `json:"resource_id"`   // File or Folder ID
@@ -89,11 +89,11 @@ func handleFolderShare(ctx context.Context, db *bun.DB, req CreateDirectShareReq
 	}
 
 	if err := upsertFolderFileKeys(ctx, db, req.ResourceID, req.FolderFileKeys); err != nil {
-		log.Printf("[shares] FolderFileKeys upsert error: %v", err)
+		log.Print("[shares] FolderFileKeys upsert error")
 	}
 
 	if err := upsertFolderSubFolderKeys(ctx, db, req.ResourceID, req.FolderFolderKeys); err != nil {
-		log.Printf("[shares] FolderFolderKeys upsert error: %v", err)
+		log.Print("[shares] FolderFolderKeys upsert error")
 	}
 	return nil
 }
@@ -143,13 +143,13 @@ func sendShareNotifications(c *gin.Context, db *bun.DB, friendID string) {
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, friendID, "storage_update", map[string]interface{}{
 		"action": "share_received",
 	}); err != nil {
-		log.Printf(logStorageUpdateFailed, err)
+		log.Print(logStorageUpdateFailed)
 	}
 	userID := c.GetString("user_id")
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, userID, "storage_update", map[string]interface{}{
 		"action": "share_created",
 	}); err != nil {
-		log.Printf(logStorageUpdateFailed, err)
+		log.Print(logStorageUpdateFailed)
 	}
 }
 
@@ -180,7 +180,7 @@ func RemoveDirectShareHandler(c *gin.Context, db *bun.DB) {
 		if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, friendID, "storage_update", map[string]interface{}{
 			"action": "share_revoked_by_owner",
 		}); err != nil {
-			log.Printf(logStorageUpdateFailed, err)
+			log.Print(logStorageUpdateFailed)
 		}
 	}
 
@@ -188,7 +188,7 @@ func RemoveDirectShareHandler(c *gin.Context, db *bun.DB) {
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, currentUserID, "storage_update", map[string]interface{}{
 		"action": "share_revoked",
 	}); err != nil {
-		log.Printf(logStorageUpdateFailed, err)
+		log.Print(logStorageUpdateFailed)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Share revoked"})
