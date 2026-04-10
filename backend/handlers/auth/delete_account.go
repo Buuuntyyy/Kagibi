@@ -75,6 +75,7 @@ func DeleteAccount(db *bun.DB, provider authprovider.AuthProvider) gin.HandlerFu
 
 		monitoring.UserDeletionsTotal.Inc()
 		log.Printf("[RGPD] COMPLETE DELETION: Account PERMANENTLY deleted: %s (email: %s)", userID, user.Email)
+		monitoring.RecordUserDeletion()
 		c.JSON(http.StatusOK, gin.H{
 			"success":      true,
 			"message":      "Votre compte a été DÉFINITIVEMENT supprimé. Toutes vos données sont IRRÉCUPÉRABLES.",

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"kagibi/backend/pkg/monitoring"
 	"kagibi/backend/pkg/s3storage"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -123,16 +124,20 @@ func processUploadTask(ctx context.Context, task S3Task) {
 	defer file.Close()
 
 	uploader := manager.NewUploader(s3storage.Client)
+	s3Start := time.Now()
 	_, err = uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s3storage.BucketName),
 		Key:         aws.String(task.DestKey),
 		Body:        file,
 		ContentType: aws.String(task.ContentType),
 	})
+	monitoring.RecordS3Duration("put", time.Since(s3Start))
 	if err != nil {
+		monitoring.RecordS3Request("put", false)
 		log.Printf("S3 Worker ERROR: Upload failed for %s: %v", task.DestKey, err)
 		return
 	}
+	monitoring.RecordS3Request("put", true)
 
 	file.Close()
 	if err := os.Remove(task.SrcKey); err != nil {

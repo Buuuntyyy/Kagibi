@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"time"
 
+	"kagibi/backend/pkg/monitoring"
+
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 )
@@ -83,6 +85,7 @@ func RateLimitMiddleware(redisClient *redis.Client) gin.HandlerFunc {
 		}
 
 		if count > limit {
+			monitoring.RecordRateLimitHit(path)
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error": "Too many requests",
 			})
