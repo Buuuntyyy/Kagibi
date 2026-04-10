@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/uptrace/bun"
 )
 
 // Server représente le serveur HTTP de métriques Prometheus
@@ -56,6 +57,45 @@ func StartSessionMonitor(redisClient *redis.Client) {
 			}
 
 			ActiveUsers.Set(float64(count))
+		}
+	}()
+}
+
+// StartDBMonitor lance une goroutine qui met à jour les jauges métier
+// depuis PostgreSQL toutes les minutes.
+func StartDBMonitor(db *bun.DB) {
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+
+		update := func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			// Nombre total d'utilisateurs
+			count, err := db.NewSelect().TableExpr("profiles").Count(ctx)
+			if err != nil {
+				log.Printf("[Monitoring] Failed to count users: %v", err)
+			} else {
+				TotalUsersGauge.Set(float64(count))
+			}
+
+			// Stockage total utilisé
+			var total struct{ Sum int64 }
+			err = db.NewSelect().
+				TableExpr("user_plans").
+				ColumnExpr("COALESCE(SUM(storage_used), 0) AS sum").
+				Scan(ctx, &total)
+			if err != nil {
+				log.Printf("[Monitoring] Failed to sum storage: %v", err)
+			} else {
+				TotalStorageUsedBytes.Set(float64(total.Sum))
+			}
+		}
+
+		update() // première collecte immédiate au démarrage
+		for range ticker.C {
+			update()
 		}
 	}()
 }

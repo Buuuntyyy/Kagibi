@@ -108,6 +108,57 @@ var (
 		},
 	)
 
+	// --- Métriques métier ---
+
+	// Counter: Inscriptions utilisateurs
+	UserRegistrationsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_user_registrations_total",
+			Help: "Nombre total de comptes créés avec succès",
+		},
+	)
+
+	// Counter: Suppressions de compte
+	UserDeletionsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_user_deletions_total",
+			Help: "Nombre total de comptes supprimés",
+		},
+	)
+
+	// Counter: Connexions réussies
+	UserLoginsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "kagibi_user_logins_total",
+			Help: "Nombre total de connexions",
+		},
+		[]string{"status"}, // "success", "failure"
+	)
+
+	// Counter: Transferts P2P initiés
+	P2PTransfersTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_p2p_transfers_total",
+			Help: "Nombre total de transferts P2P initiés",
+		},
+	)
+
+	// Gauge: Nombre total d'utilisateurs inscrits (mis à jour périodiquement)
+	TotalUsersGauge = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_users_total",
+			Help: "Nombre total de profils utilisateurs en base",
+		},
+	)
+
+	// Gauge: Stockage total utilisé (octets)
+	TotalStorageUsedBytes = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_storage_used_bytes_total",
+			Help: "Somme du stockage utilisé par tous les utilisateurs en octets",
+		},
+	)
+
 	// Counter: Requêtes vers S3
 	S3RequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
