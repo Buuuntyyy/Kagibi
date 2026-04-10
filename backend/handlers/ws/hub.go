@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"kagibi/backend/pkg/monitoring"
+
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
 )
@@ -154,6 +156,7 @@ func (h *Hub) Register(c *Client) {
 	h.clients[c.userID] = append(h.clients[c.userID], c)
 	log.Printf("[WS] Client registered: user=%s (total: %d)", c.userID, len(h.clients[c.userID]))
 	h.mu.Unlock()
+	monitoring.IncrementWSConnections()
 
 	// If there was a pending offline timer, cancel it — the user reconnected in time.
 	// The Redis subscription and presence key are still active, nothing else to do.
@@ -194,6 +197,7 @@ func (h *Hub) Unregister(c *Client) {
 	log.Printf("[WS] Client unregistered: user=%s (remaining: %d)", c.userID, len(h.clients[c.userID]))
 	h.mu.Unlock()
 
+	monitoring.DecrementWSConnections()
 	if !lastConn {
 		return
 	}

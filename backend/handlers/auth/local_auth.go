@@ -69,11 +69,13 @@ func LocalLoginHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 
 		au, err := lp.FindAuthUserByEmail(req.Email)
 		if err != nil {
+			monitoring.RecordUserLogin(false)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Identifiants invalides"})
 			return
 		}
 
 		if err := lp.CheckPassword(au.PasswordHash, req.Password); err != nil {
+			monitoring.RecordUserLogin(false)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Identifiants invalides"})
 			return
 		}
@@ -84,7 +86,11 @@ func LocalLoginHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 			return
 		}
 
+<<<<<<< Updated upstream
 		monitoring.UserLoginsTotal.WithLabelValues("success").Inc()
+=======
+		monitoring.RecordUserLogin(true)
+>>>>>>> Stashed changes
 		c.JSON(http.StatusOK, sessionResponse(token, au.ID, au.Email))
 	}
 }
