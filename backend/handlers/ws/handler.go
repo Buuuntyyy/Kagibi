@@ -1,3 +1,6 @@
+// Copyright (C) 2025-2026  Buuuntyyy
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 package ws
 
 import (
@@ -7,11 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"kagibi/backend/pkg/authprovider"
+
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
-	"kagibi/backend/pkg/authprovider"
 )
 
 const (

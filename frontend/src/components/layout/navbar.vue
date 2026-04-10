@@ -1,7 +1,10 @@
+<!-- Copyright (C) 2025-2026  Buuuntyyy -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+
 <template>
   <nav>
     <router-link to="/dashboard" class="brand">
-      <img src="/Logo.png" alt="SkyDrive Logo" class="brand-logo"/>
+      <img src="/Logo.png" alt="Kagibi Logo" class="brand-logo"/>
       <span>Kagibi</span>
     </router-link>
     <SearchBar v-if="authStore.isAuthenticated || !!authStore.user" />

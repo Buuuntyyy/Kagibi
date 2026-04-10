@@ -1,10 +1,14 @@
+// Copyright (C) 2025-2026  Buuuntyyy
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 package middleware
 
 import (
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"kagibi/backend/pkg/monitoring"
+
+	"github.com/gin-gonic/gin"
 )
 
 // MetricsMiddleware est un middleware Gin qui enregistre automatiquement

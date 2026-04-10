@@ -1,3 +1,6 @@
+// Copyright (C) 2025-2026  Buuuntyyy
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // RGPD Article 20 - Droit à la portabilité des données
 // Règlement (UE) 2016/679 - Article 20
 // Loi Informatique et Libertés (loi n°78-17) modifiée - Article 55

@@ -1,9 +1,12 @@
+<!-- Copyright (C) 2025-2026  Buuuntyyy -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+
 <template>
   <nav class="landing-nav">
     <div class="nav-container">
       <router-link to="/" class="nav-logo">
-        <img src="/Logo.png" alt="SkyDrive Logo" width="40rem"/>
-        <span>SkyDrive</span>
+        <img src="/Logo.png" alt="Kagibi Logo" width="40rem"/>
+        <span>Kagibi</span>
       </router-link>
       
       <div class="nav-links">
