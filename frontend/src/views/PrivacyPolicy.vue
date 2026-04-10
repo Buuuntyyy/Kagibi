@@ -15,7 +15,7 @@
 
       <section>
         <h2>2. Responsable de traitement</h2>
-        <p>Le responsable du traitement des données est [NOM DU RESPONSABLE OU DE L'ENTREPRISE], joignable à l'adresse suivante : [ADRESSE] ou par email à [EMAIL DE CONTACT].</p>
+        <p>Le responsable du traitement des données est Buuuntyyy, joignable à l'adresse suivante par email : contact@kagibi.cloud.</p>
       </section>
 
       <section>
@@ -63,7 +63,7 @@
           <li><strong>Droit d'opposition :</strong> Vous pouvez vous opposer au traitement de vos données pour des motifs légitimes.</li>
           <li><strong>Sort des données après la mort :</strong> Conformément à la loi "Informatique et Libertés", vous pouvez définir des directives relatives à la conservation, à l'effacement et à la communication de vos données après votre décès.</li>
         </ul>
-        <p>Pour exercer ces droits, vous pouvez nous contacter à l'adresse : [EMAIL DE CONTACT].</p>
+        <p>Pour exercer ces droits, vous pouvez nous contacter à l'adresse : contact@kagibi.cloud.</p>
         <p>Si vous estimez, après nous avoir contactés, que vos droits "Informatique et Libertés" ne sont pas respectés, vous pouvez adresser une réclamation à la CNIL.</p>
       </section>
 
@@ -86,6 +86,7 @@
 .legal-container {
   display: flex;
   justify-content: center;
+  align-items: flex-start;
   padding: 40px 20px;
   background-color: var(--background-color, #f5f7fa);
   min-height: 100vh;
