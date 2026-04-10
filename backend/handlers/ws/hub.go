@@ -4,11 +4,14 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
 )
 
@@ -21,6 +24,11 @@ const (
 	// presenceGracePeriod is how long we wait before broadcasting "offline" after a
 	// user's last connection drops. Reconnects within this window are transparent.
 	presenceGracePeriod = 8 * time.Second
+
+	redisChanPrefix     = "ws:user:"
+	redisPresencePrefix = "ws:presence:"
+	// presenceTTL must outlive the grace period so a pod crash doesn't leave stale keys forever.
+	presenceTTL = presenceGracePeriod + 30*time.Second
 )
 
 // Client represents a single WebSocket connection from an authenticated user.
@@ -32,9 +40,20 @@ type Client struct {
 }
 
 // Hub maintains the set of active clients and routes messages to them.
+//
+// Single-pod mode (rdb == nil): messages are delivered in-process only.
+// Multi-pod mode (InitRedis called): SendToUser publishes to Redis so every pod
+// can deliver the message to its locally connected clients, making the hub
+// horizontally scalable with no change to callers.
 type Hub struct {
 	mu      sync.RWMutex
-	clients map[string][]*Client // userID → slice of connections
+	clients map[string][]*Client // userID → local connections
+
+	// Redis fields — nil when running without Redis (single-pod / dev mode).
+	rdb        *redis.Client
+	pubsub     *redis.PubSub
+	subMu      sync.Mutex
+	subscribed map[string]struct{} // userIDs this pod is currently subscribed to
 }
 
 // GlobalHub is the singleton hub used throughout the application.
@@ -53,6 +72,81 @@ var ConnectHook func(userID string)
 // DisconnectHook is called when a user's LAST connection has been gone for presenceGracePeriod.
 var DisconnectHook func(userID string)
 
+// InitRedis wires up Redis Pub/Sub for cross-pod message delivery and cross-pod presence.
+// Must be called once at startup, before any clients connect.
+// Without this call the hub works in single-pod mode (zero regression).
+func (h *Hub) InitRedis(rdb *redis.Client) {
+	h.rdb = rdb
+	h.subscribed = make(map[string]struct{})
+	// Start with no channel subscriptions; channels are added dynamically as users connect.
+	h.pubsub = rdb.Subscribe(context.Background())
+	go h.redisListener()
+	log.Printf("[WS] Redis Pub/Sub enabled — hub is horizontally scalable")
+}
+
+// redisListener runs in its own goroutine and delivers incoming Redis messages
+// to the locally connected clients of the target user.
+func (h *Hub) redisListener() {
+	ch := h.pubsub.Channel()
+	for msg := range ch {
+		userID := strings.TrimPrefix(msg.Channel, redisChanPrefix)
+		if userID == msg.Channel {
+			continue // unrecognised channel prefix, skip
+		}
+		h.localSend(userID, []byte(msg.Payload))
+	}
+	log.Printf("[WS] Redis listener stopped")
+}
+
+// subscribeUser adds a Redis Pub/Sub subscription for userID on this pod.
+func (h *Hub) subscribeUser(userID string) {
+	h.subMu.Lock()
+	defer h.subMu.Unlock()
+	if _, ok := h.subscribed[userID]; ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := h.pubsub.Subscribe(ctx, redisChanPrefix+userID); err != nil {
+		log.Printf("[WS] Redis subscribe failed for user=%s: %v", userID, err)
+		return
+	}
+	h.subscribed[userID] = struct{}{}
+}
+
+// unsubscribeUser removes the Redis Pub/Sub subscription for userID on this pod.
+func (h *Hub) unsubscribeUser(userID string) {
+	h.subMu.Lock()
+	defer h.subMu.Unlock()
+	if _, ok := h.subscribed[userID]; !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := h.pubsub.Unsubscribe(ctx, redisChanPrefix+userID); err != nil {
+		log.Printf("[WS] Redis unsubscribe failed for user=%s: %v", userID, err)
+	}
+	delete(h.subscribed, userID)
+}
+
+// setPresence marks the user as online in Redis, visible to all pods.
+func (h *Hub) setPresence(userID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := h.rdb.Set(ctx, redisPresencePrefix+userID, "1", presenceTTL).Err(); err != nil {
+		log.Printf("[WS] Redis setPresence failed for user=%s: %v", userID, err)
+	}
+}
+
+// clearPresence removes the user's online marker from Redis.
+func (h *Hub) clearPresence(userID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := h.rdb.Del(ctx, redisPresencePrefix+userID).Err(); err != nil {
+		log.Printf("[WS] Redis clearPresence failed for user=%s: %v", userID, err)
+	}
+}
+
 // Register adds a client to the hub.
 func (h *Hub) Register(c *Client) {
 	h.mu.Lock()
@@ -62,16 +156,22 @@ func (h *Hub) Register(c *Client) {
 	h.mu.Unlock()
 
 	// If there was a pending offline timer, cancel it — the user reconnected in time.
-	// In that case we do NOT re-fire ConnectHook (we never fired DisconnectHook either).
+	// The Redis subscription and presence key are still active, nothing else to do.
 	if pendingTimer, wasPending := pendingDisconnects.LoadAndDelete(c.userID); wasPending {
 		pendingTimer.(*time.Timer).Stop()
 		log.Printf("[Presence] Reconnect within grace period for user=%s — no presence change", c.userID)
 		return
 	}
 
-	// Truly first connection: broadcast "online" to friends.
-	if firstConn && ConnectHook != nil {
-		go ConnectHook(c.userID)
+	// Truly first connection: set up Redis subscription + presence, then fire hook.
+	if firstConn {
+		if h.rdb != nil {
+			h.subscribeUser(c.userID)
+			h.setPresence(c.userID)
+		}
+		if ConnectHook != nil {
+			go ConnectHook(c.userID)
+		}
 	}
 }
 
@@ -94,23 +194,29 @@ func (h *Hub) Unregister(c *Client) {
 	log.Printf("[WS] Client unregistered: user=%s (remaining: %d)", c.userID, len(h.clients[c.userID]))
 	h.mu.Unlock()
 
-	if !lastConn || DisconnectHook == nil {
+	if !lastConn {
 		return
 	}
 
-	// Schedule the offline broadcast after the grace period.
+	// Schedule the offline cleanup after the grace period.
 	userID := c.userID
+	useRedis := h.rdb != nil
 	timer := time.AfterFunc(presenceGracePeriod, func() {
 		pendingDisconnects.Delete(userID)
 		log.Printf("[Presence] Grace period elapsed, broadcasting offline for user=%s", userID)
-		DisconnectHook(userID)
+		if useRedis {
+			h.unsubscribeUser(userID)
+			h.clearPresence(userID)
+		}
+		if DisconnectHook != nil {
+			DisconnectHook(userID)
+		}
 	})
 	pendingDisconnects.Store(userID, timer)
 }
 
-// SendToUser sends a raw JSON message to all connections belonging to userID.
-// It is safe to call from any goroutine.
-func (h *Hub) SendToUser(userID string, msg []byte) {
+// localSend delivers msg directly to all local connections of userID.
+func (h *Hub) localSend(userID string, msg []byte) {
 	h.mu.RLock()
 	clients := make([]*Client, len(h.clients[userID]))
 	copy(clients, h.clients[userID])
@@ -121,6 +227,22 @@ func (h *Hub) SendToUser(userID string, msg []byte) {
 			log.Printf("[WS] Send buffer full or channel closed for user=%s, dropping message", userID)
 		}
 	}
+}
+
+// SendToUser sends a raw JSON message to all connections belonging to userID.
+// In multi-pod mode the message is published to Redis so every pod delivers it locally.
+// Falls back to local delivery if Redis publish fails.
+func (h *Hub) SendToUser(userID string, msg []byte) {
+	if h.rdb != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := h.rdb.Publish(ctx, redisChanPrefix+userID, msg).Err(); err != nil {
+			log.Printf("[WS] Redis publish failed for user=%s: %v — falling back to local", userID, err)
+			h.localSend(userID, msg)
+		}
+		return
+	}
+	h.localSend(userID, msg)
 }
 
 // safeSend sends msg to ch without blocking, recovering from a panic if ch was
@@ -169,8 +291,18 @@ func (h *Hub) SendP2PSignalToUser(targetUserID, senderID, signalType string, pay
 	h.SendToUser(targetUserID, msg)
 }
 
-// IsConnected returns true if the user has at least one active WebSocket connection.
+// IsConnected returns true if the user has at least one active WebSocket connection
+// on any pod (Redis mode) or locally (single-pod mode).
 func (h *Hub) IsConnected(userID string) bool {
+	if h.rdb != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		exists, err := h.rdb.Exists(ctx, redisPresencePrefix+userID).Result()
+		if err == nil {
+			return exists > 0
+		}
+		log.Printf("[WS] Redis IsConnected check failed for user=%s: %v — falling back to local", userID, err)
+	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return len(h.clients[userID]) > 0

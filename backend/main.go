@@ -16,6 +16,7 @@ import (
 	"kagibi/backend/handlers/shares"
 	"kagibi/backend/handlers/tags"
 	"kagibi/backend/handlers/users"
+	"kagibi/backend/handlers/contact"
 	wshandler "kagibi/backend/handlers/ws"
 	"kagibi/backend/middleware"
 	"kagibi/backend/pkg"
@@ -56,6 +57,7 @@ func main() {
 	setupBillingProvider()
 
 	redisClient := initRedis()
+	wshandler.GlobalHub.InitRedis(redisClient)
 
 	// Start Workers
 	workers.StartWorker(redisClient)
@@ -168,7 +170,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	// Public auth routes (no JWT required)
 	authGroup := api.Group("/auth")
 	authGroup.POST("/login", auth.LocalLoginHandler(provider))
-	authGroup.POST("/signup", auth.LocalSignupHandler(provider))
+	authGroup.POST("/signup", auth.LocalSignupHandler(provider, db))
 	authGroup.POST("/refresh", auth.LocalRefreshHandler(provider, redisClient))
 	authGroup.POST("/recovery/init", func(c *gin.Context) { auth.RecoveryInitHandler(c, db) })
 	authGroup.POST("/recovery/finish", func(c *gin.Context) { auth.RecoveryFinishHandler(c, db, provider, redisClient) })

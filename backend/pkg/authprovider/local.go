@@ -159,6 +159,21 @@ func (p *LocalProvider) UpdateUserPasswordWithVerification(userID, oldPassword, 
 	return p.UpdateUserPassword(userID, newPassword)
 }
 
+// ReissueToken verifies the password for the given email and, if correct, returns
+// the user ID and a fresh JWT. Used during orphan-signup recovery so the caller
+// never needs to access the unexported authUser type directly.
+func (p *LocalProvider) ReissueToken(email, password string) (userID, token string, err error) {
+	au, err := p.FindAuthUserByEmail(email)
+	if err != nil {
+		return "", "", err
+	}
+	if err := p.CheckPassword(au.PasswordHash, password); err != nil {
+		return "", "", err
+	}
+	tok, err := p.GenerateToken(au.ID, email)
+	return au.ID, tok, err
+}
+
 // GetAuthUserByID returns the full auth_users row for the given user ID.
 func (p *LocalProvider) GetAuthUserByID(userID string) (*authUser, error) {
 	var au authUser

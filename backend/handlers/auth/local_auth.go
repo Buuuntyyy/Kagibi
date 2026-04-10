@@ -5,16 +5,19 @@ package auth
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/uptrace/bun"
 )
 
 type loginRequest struct {
@@ -86,7 +89,11 @@ func LocalLoginHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 
 // LocalSignupHandler handles POST /api/v1/auth/signup (public).
 // Creates only the auth_users record. Profile creation is done separately via POST /auth/register.
-func LocalSignupHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
+//
+// Orphan recovery: if auth_users already exists for this email but no profile was ever created
+// (e.g. the registration flow was interrupted), the handler verifies the password and returns
+// a fresh token so the client can retry POST /auth/register — instead of returning 409 forever.
+func LocalSignupHandler(provider authprovider.AuthProvider, db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		lp, ok := getLocalProvider(provider)
 		if !ok {
@@ -103,6 +110,13 @@ func LocalSignupHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 		userID, err := lp.CreateAuthUser(req.Email, req.Password)
 		if err != nil {
 			if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
+				// Check if this is an orphaned auth_users row (signup succeeded but
+				// profile creation failed). If so, let the user retry registration
+				// rather than blocking them with a permanent 409.
+				if token, id, recovered := recoverOrphanedSignup(lp, db, req.Email, req.Password); recovered {
+					c.JSON(http.StatusCreated, sessionResponse(token, id, req.Email))
+					return
+				}
 				c.JSON(http.StatusConflict, gin.H{"error": "Un compte avec cet email existe déjà"})
 				return
 			}
@@ -118,6 +132,24 @@ func LocalSignupHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 
 		c.JSON(http.StatusCreated, sessionResponse(token, userID, req.Email))
 	}
+}
+
+// recoverOrphanedSignup handles the case where auth_users exists but profiles does not.
+// It verifies the password, then returns a fresh token so registration can be completed.
+// Returns (token, userID, true) on success, ("", "", false) otherwise.
+func recoverOrphanedSignup(lp *authprovider.LocalProvider, db *bun.DB, email, password string) (string, string, bool) {
+	userID, token, err := lp.ReissueToken(email, password)
+	if err != nil {
+		return "", "", false
+	}
+
+	// Profile exists → real duplicate, not an orphan.
+	if _, err := pkg.FindUserByID(db, userID); err == nil {
+		return "", "", false
+	}
+
+	log.Printf("[Signup/local] Orphaned auth_users detected for email=%s — issuing recovery token", email)
+	return token, userID, true
 }
 
 // LocalRefreshHandler handles POST /api/v1/auth/refresh (public — current token in Authorization header).
