@@ -77,8 +77,8 @@
             <div class="security-note">
               <p>{{ t('auth.passwordManagerReco') }}</p>
               <ul class="pwd-manager-list">
-                <li><a href="https://keepass.info/help/base/first_steps.html" target="_blank" rel="noopener noreferrer">Tutoriel KeePass</a> (Gratuit & Local)</li>
-                <li><a href="https://bitwarden.com/help/" target="_blank" rel="noopener noreferrer">Tutoriel Bitwarden</a> (Cloud & Open Source)</li>
+                <li><a href="https://keepass.fr/tutoriel-pour-keepass-le-guide-complet/" target="_blank" rel="noopener noreferrer">Tutoriel KeePass</a> (Gratuit & Local)</li>
+                <li><a href="https://bitwarden.com/fr-fr/help/courses/password-manager-personal/" target="_blank" rel="noopener noreferrer">Tutoriel Bitwarden</a> (Cloud & Open Source)</li>
               </ul>
             </div>
 
