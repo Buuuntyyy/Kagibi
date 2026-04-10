@@ -1,12 +1,16 @@
+// Copyright (C) 2025-2026  Buuuntyyy
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 package files
 
 import (
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/uptrace/bun"
 	"kagibi/backend/pkg"
 	"net/http"
 	"strings"
+
+	"github.com/gin-gonic/gin"
+	"github.com/uptrace/bun"
 )
 
 func ListAllFilesRecursiveHandler(c *gin.Context, db *bun.DB) {

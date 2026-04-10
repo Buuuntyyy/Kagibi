@@ -1,3 +1,6 @@
+<!-- Copyright (C) 2025-2026  Buuuntyyy -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+
 <template>
   <div v-if="isOpen" class="modal-overlay" @click.self="cancel">
     <div class="modal-content">

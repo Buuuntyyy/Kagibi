@@ -1,3 +1,6 @@
+<!-- Copyright (C) 2025-2026  Buuuntyyy -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+
 <template>
   <Teleport to="body">
     <div v-if="visible" class="file-preview-modal" @mousedown="close" @click="close" @touchstart="close">

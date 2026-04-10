@@ -1,3 +1,6 @@
+<!-- Copyright (C) 2025-2026  Buuuntyyy -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+
 <template>
   <Transition name="slide-up">
     <div v-if="uploadStore.showManager && uploadStore.uploadList.length > 0" class="upload-manager">
