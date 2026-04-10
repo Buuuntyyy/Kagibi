@@ -16,7 +16,6 @@ import (
 	"kagibi/backend/handlers/shares"
 	"kagibi/backend/handlers/tags"
 	"kagibi/backend/handlers/users"
-	"kagibi/backend/handlers/contact"
 	wshandler "kagibi/backend/handlers/ws"
 	"kagibi/backend/middleware"
 	"kagibi/backend/pkg"
