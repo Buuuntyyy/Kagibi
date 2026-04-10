@@ -13,6 +13,7 @@ import (
 
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
+	"kagibi/backend/pkg/monitoring"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -83,6 +84,7 @@ func LocalLoginHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 			return
 		}
 
+		monitoring.UserLoginsTotal.WithLabelValues("success").Inc()
 		c.JSON(http.StatusOK, sessionResponse(token, au.ID, au.Email))
 	}
 }

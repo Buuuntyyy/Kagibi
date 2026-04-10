@@ -68,6 +68,7 @@ func main() {
 
 	metricsServer := monitoring.NewServer(9090)
 	monitoring.StartSessionMonitor(redisClient)
+	monitoring.StartDBMonitor(db)
 	if err := metricsServer.Start(); err != nil {
 		log.Printf("Warning: Failed to start metrics server: %v", err)
 	}
