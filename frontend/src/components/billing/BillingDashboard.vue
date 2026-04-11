@@ -48,7 +48,7 @@
                     <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
-                    <span>5 Go de stockage</span>
+                    <span>20 Go de stockage</span>
                  </div>
                  <div class="feature-item" v-if="currentPlan?.code === 'pro'">
                     <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
