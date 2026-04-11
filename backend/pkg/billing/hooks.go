@@ -173,14 +173,14 @@ func CheckUploadAllowed(ctx context.Context, userID string, fileSize int64) (boo
 func GetUserStorageLimit(ctx context.Context, userID string) int64 {
 	provider := GetProvider()
 	if provider == nil {
-		// Limite par défaut: 5 Go
-		return 5 * 1024 * 1024 * 1024
+		// Limite par défaut: 20 Go
+		return 20 * 1024 * 1024 * 1024
 	}
 
 	plan, err := provider.GetUserPlan(ctx, userID)
 	if err != nil {
 		log.Printf("[Billing] Error getting user plan: %v", err)
-		return 5 * 1024 * 1024 * 1024
+		return 20 * 1024 * 1024 * 1024
 	}
 
 	return plan.StorageLimitGB * 1024 * 1024 * 1024
