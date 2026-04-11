@@ -56,15 +56,6 @@ var (
 		},
 	)
 
-	// Histogram: Taille des fichiers uploadés
-	FileUploadSize = promauto.NewHistogram(
-		prometheus.HistogramOpts{
-			Name:    "kagibi_file_upload_size_bytes",
-			Help:    "Taille des fichiers uploadés en octets",
-			Buckets: []float64{1024, 10240, 102400, 1048576, 10485760, 104857600, 1073741824}, // 1KB, 10KB, 100KB, 1MB, 10MB, 100MB, 1GB
-		},
-	)
-
 	// Counter: Erreurs d'authentification
 	AuthErrorsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -239,9 +230,8 @@ func RecordDecryption(duration time.Duration) {
 }
 
 // RecordFileUpload enregistre un upload de fichier
-func RecordFileUpload(sizeBytes int64) {
+func RecordFileUpload() {
 	FileUploadsTotal.Inc()
-	FileUploadSize.Observe(float64(sizeBytes))
 }
 
 // RecordFileDownload enregistre un téléchargement de fichier

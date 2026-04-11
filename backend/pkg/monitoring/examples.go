@@ -17,12 +17,10 @@ import (
 // Exemple 1: Enregistrer un upload de fichier
 func ExampleRecordFileUpload() {
 	// Après un upload réussi
-	fileSizeBytes := int64(1024 * 500) // 500 KB
-	RecordFileUpload(fileSizeBytes)
+	RecordFileUpload()
 
 	// Les métriques suivantes seront automatiquement incrémentées :
 	// - kagibi_file_uploads_total +1
-	// - kagibi_file_upload_size_bytes observe 512000
 }
 
 // Exemple 2: Mesurer la latence d'une opération de chiffrement
@@ -91,8 +89,7 @@ func ExampleCompleteFileUploadHandler() {
 	RecordEncryption(time.Since(encryptStart))
 
 	// 3. Enregistrer l'upload du fichier
-	fileSizeBytes := int64(1024 * 1024 * 5) // 5 MB
-	RecordFileUpload(fileSizeBytes)
+	RecordFileUpload()
 
 	// 4. Enregistrer l'upload vers S3
 	s3Success := true
