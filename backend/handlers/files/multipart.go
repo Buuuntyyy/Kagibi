@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/monitoring"
 	"kagibi/backend/pkg/s3storage"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -370,6 +371,8 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 			}
 		}()
 	}
+
+	monitoring.FileUploadsTotal.Inc()
 
 	log.Printf("Multipart upload completed - UserID: %s, File: %s, Size: %d",
 		userID, fullPathDB, req.TotalSize)
