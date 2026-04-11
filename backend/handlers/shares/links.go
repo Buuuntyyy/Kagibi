@@ -91,6 +91,7 @@ func CreateShareLinkHandler(c *gin.Context, db *bun.DB) {
 		}
 	}
 
+	monitoring.RecordShareCreated()
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Link created",
 		"token":   shareLink.Token,
@@ -105,14 +106,17 @@ func GetShareLinkHandler(c *gin.Context, db *bun.DB) {
 
 	shareLink, err := getValidShareLink(c.Request.Context(), db, token)
 	if err != nil {
-		status := http.StatusNotFound
 		if err.Error() == errLinkExpired {
-			status = http.StatusGone
+			monitoring.RecordShareAccess("expired")
+			c.JSON(http.StatusGone, gin.H{"error": err.Error()})
+		} else {
+			monitoring.RecordShareAccess("not_found")
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		}
-		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 
+	monitoring.RecordShareAccess("success")
 	go incrementShareViews(context.Background(), db, shareLink.ID)
 
 	ownerEmail := getShareOwnerEmail(c.Request.Context(), db, shareLink.OwnerID)
@@ -330,13 +334,17 @@ func getSharedFile(ctx context.Context, db *bun.DB, resourceID int64) (*pkg.File
 
 func streamFileFromS3(c *gin.Context, ownerID string, file *pkg.File) error {
 	s3Key := fmt.Sprintf("users/%s%s", ownerID, file.Path)
+	s3Start := time.Now()
 	output, err := s3storage.Client.GetObject(c.Request.Context(), &s3.GetObjectInput{
 		Bucket: aws.String(s3storage.BucketName),
 		Key:    aws.String(s3Key),
 	})
+	monitoring.RecordS3Duration("get", time.Since(s3Start))
 	if err != nil {
+		monitoring.RecordS3Request("get", false)
 		return err
 	}
+	monitoring.RecordS3Request("get", true)
 	defer output.Body.Close()
 
 	c.Header("Content-Description", "File Transfer")

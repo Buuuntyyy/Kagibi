@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/monitoring"
 	"kagibi/backend/pkg/s3storage"
 	"kagibi/backend/utils"
 
@@ -94,6 +95,8 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la validation de la suppression"})
 		return
 	}
+
+	monitoring.RecordFileDeleted()
 
 	// Notify via Supabase Realtime about storage update
 	notifyStorageUpdate(c.Request.Context(), db, userID)

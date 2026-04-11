@@ -4,6 +4,7 @@
 package monitoring
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -55,15 +56,6 @@ var (
 		},
 	)
 
-	// Histogram: Taille des fichiers uploadés
-	FileUploadSize = promauto.NewHistogram(
-		prometheus.HistogramOpts{
-			Name:    "kagibi_file_upload_size_bytes",
-			Help:    "Taille des fichiers uploadés en octets",
-			Buckets: []float64{1024, 10240, 102400, 1048576, 10485760, 104857600, 1073741824}, // 1KB, 10KB, 100KB, 1MB, 10MB, 100MB, 1GB
-		},
-	)
-
 	// Counter: Erreurs d'authentification
 	AuthErrorsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -108,6 +100,57 @@ var (
 		},
 	)
 
+	// --- Métriques métier ---
+
+	// Counter: Inscriptions utilisateurs
+	UserRegistrationsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_user_registrations_total",
+			Help: "Nombre total de comptes créés avec succès",
+		},
+	)
+
+	// Counter: Suppressions de compte
+	UserDeletionsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_user_deletions_total",
+			Help: "Nombre total de comptes supprimés",
+		},
+	)
+
+	// Counter: Connexions réussies
+	UserLoginsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "kagibi_user_logins_total",
+			Help: "Nombre total de connexions",
+		},
+		[]string{"status"}, // "success", "failure"
+	)
+
+	// Counter: Transferts P2P initiés
+	P2PTransfersTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_p2p_transfers_total",
+			Help: "Nombre total de transferts P2P initiés",
+		},
+	)
+
+	// Gauge: Nombre total d'utilisateurs inscrits (mis à jour périodiquement)
+	TotalUsersGauge = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_users_total",
+			Help: "Nombre total de profils utilisateurs en base",
+		},
+	)
+
+	// Gauge: Stockage total utilisé (octets)
+	TotalStorageUsedBytes = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_storage_used_bytes_total",
+			Help: "Somme du stockage utilisé par tous les utilisateurs en octets",
+		},
+	)
+
 	// Counter: Requêtes vers S3
 	S3RequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -116,11 +159,72 @@ var (
 		},
 		[]string{"operation", "status"}, // operation: "put", "get", "delete", status: "success", "error"
 	)
+
+	// Histogram: Latence des opérations S3
+	S3OperationDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "kagibi_s3_operation_duration_seconds",
+			Help:    "Latence des opérations S3 en secondes",
+			Buckets: []float64{0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0},
+		},
+		[]string{"operation"}, // "put", "get", "delete"
+	)
+
+	// Counter: Erreurs serveur internes (5xx)
+	InternalErrorsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "kagibi_http_internal_errors_total",
+			Help: "Nombre total d'erreurs serveur internes (5xx)",
+		},
+		[]string{"method", "endpoint"},
+	)
+
+	// Counter: Hits du rate limiter
+	RateLimitHitsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "kagibi_rate_limit_hits_total",
+			Help: "Nombre de requêtes bloquées par le rate limiter",
+		},
+		[]string{"endpoint"},
+	)
+
+	// Counter: Tentatives d'accès aux liens de partage
+	ShareAccessAttemptsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "kagibi_share_access_attempts_total",
+			Help: "Tentatives d'accès aux liens de partage",
+		},
+		[]string{"result"}, // "success", "not_found", "expired", "forbidden"
+	)
+
+	// Counter: Liens de partage créés
+	SharesCreatedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_shares_created_total",
+			Help: "Nombre total de liens de partage créés",
+		},
+	)
+
+	// Counter: Fichiers supprimés
+	FilesDeletedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_files_deleted_total",
+			Help: "Nombre total de fichiers supprimés",
+		},
+	)
+
+	// Gauge: Connexions WebSocket actives
+	WSConnectionsActive = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_ws_connections_active",
+			Help: "Nombre de connexions WebSocket actives",
+		},
+	)
 )
 
 // RecordRequestMetrics enregistre les métriques pour une requête HTTP
 func RecordRequestMetrics(method, endpoint string, statusCode int, duration time.Duration) {
-	RequestsTotal.WithLabelValues(method, endpoint, string(rune(statusCode))).Inc()
+	RequestsTotal.WithLabelValues(method, endpoint, strconv.Itoa(statusCode)).Inc()
 	RequestDuration.WithLabelValues(method, endpoint).Observe(duration.Seconds())
 }
 
@@ -135,9 +239,8 @@ func RecordDecryption(duration time.Duration) {
 }
 
 // RecordFileUpload enregistre un upload de fichier
-func RecordFileUpload(sizeBytes int64) {
+func RecordFileUpload() {
 	FileUploadsTotal.Inc()
-	FileUploadSize.Observe(float64(sizeBytes))
 }
 
 // RecordFileDownload enregistre un téléchargement de fichier
@@ -166,6 +269,60 @@ func RecordS3Request(operation string, success bool) {
 		status = "success"
 	}
 	S3RequestsTotal.WithLabelValues(operation, status).Inc()
+}
+
+// RecordS3Duration enregistre la latence d'une opération S3
+func RecordS3Duration(operation string, duration time.Duration) {
+	S3OperationDuration.WithLabelValues(operation).Observe(duration.Seconds())
+}
+
+// RecordRateLimitHit enregistre un blocage du rate limiter
+func RecordRateLimitHit(endpoint string) {
+	RateLimitHitsTotal.WithLabelValues(endpoint).Inc()
+}
+
+// RecordShareAccess enregistre une tentative d'accès à un partage
+func RecordShareAccess(result string) {
+	ShareAccessAttemptsTotal.WithLabelValues(result).Inc()
+}
+
+// RecordShareCreated enregistre la création d'un lien de partage
+func RecordShareCreated() {
+	SharesCreatedTotal.Inc()
+}
+
+// RecordFileDeleted enregistre la suppression d'un fichier
+func RecordFileDeleted() {
+	FilesDeletedTotal.Inc()
+}
+
+// RecordUserRegistration enregistre une nouvelle inscription
+func RecordUserRegistration() {
+	UserRegistrationsTotal.Inc()
+}
+
+// RecordUserDeletion enregistre une suppression de compte
+func RecordUserDeletion() {
+	UserDeletionsTotal.Inc()
+}
+
+// RecordUserLogin enregistre une tentative de connexion
+func RecordUserLogin(success bool) {
+	status := "failure"
+	if success {
+		status = "success"
+	}
+	UserLoginsTotal.WithLabelValues(status).Inc()
+}
+
+// IncrementWSConnections incrémente le nombre de connexions WebSocket actives
+func IncrementWSConnections() {
+	WSConnectionsActive.Inc()
+}
+
+// DecrementWSConnections décrémente le nombre de connexions WebSocket actives
+func DecrementWSConnections() {
+	WSConnectionsActive.Dec()
 }
 
 // IncrementActiveConnections incrémente le nombre de connexions actives
