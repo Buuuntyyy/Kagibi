@@ -170,6 +170,15 @@ var (
 		[]string{"operation"}, // "put", "get", "delete"
 	)
 
+	// Counter: Erreurs serveur internes (5xx)
+	InternalErrorsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "kagibi_http_internal_errors_total",
+			Help: "Nombre total d'erreurs serveur internes (5xx)",
+		},
+		[]string{"method", "endpoint"},
+	)
+
 	// Counter: Hits du rate limiter
 	RateLimitHitsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{

@@ -4,6 +4,9 @@
 package middleware
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"log"
 	"time"
 
 	"kagibi/backend/pkg/monitoring"
@@ -11,29 +14,50 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func generateRequestID() string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 // MetricsMiddleware est un middleware Gin qui enregistre automatiquement
-// les métriques pour chaque requête HTTP
+// les métriques pour chaque requête HTTP et logue les erreurs 5xx
 func MetricsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Incrémenter les connexions actives
+		requestID := generateRequestID()
+		c.Set("request_id", requestID)
+		c.Header("X-Request-ID", requestID)
+
 		monitoring.IncrementActiveConnections()
 		defer monitoring.DecrementActiveConnections()
 
-		// Enregistrer le temps de début
 		start := time.Now()
-
-		// Traiter la requête
 		c.Next()
-
-		// Calculer la durée
 		duration := time.Since(start)
 
-		// Enregistrer les métriques
-		monitoring.RecordRequestMetrics(
-			c.Request.Method,
-			c.FullPath(), // Utilise le chemin de route (avec paramètres) au lieu de l'URL complète
-			c.Writer.Status(),
-			duration,
-		)
+		status := c.Writer.Status()
+		method := c.Request.Method
+		endpoint := c.FullPath()
+
+		monitoring.RecordRequestMetrics(method, endpoint, status, duration)
+
+		if status >= 500 {
+			monitoring.InternalErrorsTotal.WithLabelValues(method, endpoint).Inc()
+
+			userID := c.GetString("user_id")
+			if userID == "" {
+				userID = "unauthenticated"
+			}
+
+			log.Printf("[ERROR_500] request_id=%s method=%s endpoint=%s status=%d duration=%s user_id=%s ip=%s",
+				requestID,
+				method,
+				endpoint,
+				status,
+				duration.Round(time.Millisecond),
+				userID,
+				c.ClientIP(),
+			)
+		}
 	}
 }
