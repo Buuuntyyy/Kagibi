@@ -85,12 +85,8 @@ func LocalLoginHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la génération du token"})
 			return
 		}
-
-<<<<<<< Updated upstream
 		monitoring.UserLoginsTotal.WithLabelValues("success").Inc()
-=======
 		monitoring.RecordUserLogin(true)
->>>>>>> Stashed changes
 		c.JSON(http.StatusOK, sessionResponse(token, au.ID, au.Email))
 	}
 }
