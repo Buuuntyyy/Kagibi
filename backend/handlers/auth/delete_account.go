@@ -12,6 +12,7 @@ import (
 
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
+	"kagibi/backend/pkg/monitoring"
 	"kagibi/backend/pkg/s3storage"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -72,7 +73,9 @@ func DeleteAccount(db *bun.DB, provider authprovider.AuthProvider) gin.HandlerFu
 		// Hard delete all user data from PostgreSQL
 		deleteUserData(ctx, db, userID, &user)
 
+		monitoring.UserDeletionsTotal.Inc()
 		log.Printf("[RGPD] COMPLETE DELETION: Account PERMANENTLY deleted: %s (email: %s)", userID, user.Email)
+		monitoring.RecordUserDeletion()
 		c.JSON(http.StatusOK, gin.H{
 			"success":      true,
 			"message":      "Votre compte a été DÉFINITIVEMENT supprimé. Toutes vos données sont IRRÉCUPÉRABLES.",

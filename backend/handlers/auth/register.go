@@ -8,6 +8,7 @@ import (
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
 	"kagibi/backend/pkg/mailer"
+	"kagibi/backend/pkg/monitoring"
 	"log"
 	"math/big"
 	"net/http"
@@ -116,6 +117,11 @@ func RegisterHandler(c *gin.Context, db *bun.DB, provider authprovider.AuthProvi
 		return
 	}
 
+<<<<<<< Updated upstream
+	monitoring.UserRegistrationsTotal.Inc()
+=======
+	monitoring.RecordUserRegistration()
+>>>>>>> Stashed changes
 	mailer.SendWelcome(req.Email, req.Name)
 	c.JSON(http.StatusCreated, gin.H{"message": "Profil créé avec succès"})
 }
