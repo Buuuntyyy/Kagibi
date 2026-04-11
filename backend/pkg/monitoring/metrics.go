@@ -220,31 +220,6 @@ var (
 			Help: "Nombre de connexions WebSocket actives",
 		},
 	)
-
-	// Counter: Inscriptions utilisateurs
-	UserRegistrationsTotal = promauto.NewCounter(
-		prometheus.CounterOpts{
-			Name: "kagibi_user_registrations_total",
-			Help: "Nombre total d'inscriptions",
-		},
-	)
-
-	// Counter: Suppressions de compte
-	UserDeletionsTotal = promauto.NewCounter(
-		prometheus.CounterOpts{
-			Name: "kagibi_user_deletions_total",
-			Help: "Nombre total de suppressions de compte",
-		},
-	)
-
-	// Counter: Connexions utilisateurs
-	UserLoginsTotal = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "kagibi_user_logins_total",
-			Help: "Nombre total de tentatives de connexion",
-		},
-		[]string{"status"}, // "success", "failure"
-	)
 )
 
 // RecordRequestMetrics enregistre les métriques pour une requête HTTP
