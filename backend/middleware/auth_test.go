@@ -75,7 +75,6 @@ func TestAuthMiddleware(t *testing.T) {
 
 	t.Run("Valid Session", func(t *testing.T) {
 		client, mock := redismock.NewClientMock()
-		mock.ExpectGet("valid-session").SetVal(testUserID)
 		// No active revocation for this user
 		mock.ExpectGet("token_revoke:user-123").SetErr(redis.Nil)
 
