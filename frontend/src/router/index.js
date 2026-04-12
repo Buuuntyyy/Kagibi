@@ -38,6 +38,11 @@ const routes = [
     component: LandingTransfer,
   },
   {
+    path: '/compare',
+    name: 'Compare',
+    component: () => import('../views/landing/CompareView.vue'),
+  },
+  {
     path: '/login',
     name: 'Login',
     component: Login,
