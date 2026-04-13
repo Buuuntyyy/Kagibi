@@ -58,6 +58,12 @@ func RateLimitMiddleware(redisClient *redis.Client) gin.HandlerFunc {
 			return
 		}
 
+		// Fail open when no Redis client is configured (e.g. unit tests).
+		if redisClient == nil {
+			c.Next()
+			return
+		}
+
 		path := c.Request.URL.Path
 		ip := c.ClientIP()
 

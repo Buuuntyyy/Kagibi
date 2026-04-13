@@ -51,6 +51,10 @@ func TestCreateHandler(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		// Mock DB Expectations
+		// Expect SELECT count(*) from FolderExistsByPath check (folder must not exist)
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "folders"`).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
 		// Expect INSERT into folders and RETURNING id
 		mock.ExpectQuery(`INSERT INTO "folders"`).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
