@@ -75,7 +75,7 @@ func main() {
 
 	router := setupRouter(redisClient)
 	registerRoutes(router, db, redisClient, provider, friendHandler)
-	startServerWithGracefulShutdown(router, metricsServer)
+	startServerWithGracefulShutdown(router, metricsServer, redisClient)
 }
 
 func loadEnv() {
@@ -158,6 +158,7 @@ func setupRouter(redisClient *redis.Client) *gin.Engine {
 	router.Use(cors.New(config))
 
 	router.Use(middleware.SecureHeaders())
+	router.Use(middleware.MaintenanceMiddleware(redisClient))
 	router.Use(middleware.RateLimitMiddleware(redisClient))
 	router.Use(middleware.MetricsMiddleware())
 
@@ -476,7 +477,7 @@ func broadcastPresence(db *bun.DB, userID string, online bool) {
 	}
 }
 
-func startServerWithGracefulShutdown(router *gin.Engine, metricsServer *monitoring.Server) {
+func startServerWithGracefulShutdown(router *gin.Engine, metricsServer *monitoring.Server, redisClient *redis.Client) {
 	srv := &http.Server{
 		Addr:         ":8080",
 		Handler:      router,
@@ -496,6 +497,15 @@ func startServerWithGracefulShutdown(router *gin.Engine, metricsServer *monitori
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("\nSignal d'arrêt reçu, arrêt gracieux en cours...")
+
+	// Prévenir les clients WebSocket connectés à ce pod qu'ils vont être déconnectés
+	// (ils se reconnecteront automatiquement sur un autre réplica)
+	wshandler.GlobalHub.BroadcastToAll("reconnect", map[string]any{
+		"message": "Reconnexion en cours...",
+	})
+
+	// Laisser le temps aux clients de recevoir le message avant de couper
+	time.Sleep(2 * time.Second)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

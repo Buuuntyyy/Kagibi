@@ -29,6 +29,7 @@ const (
 
 	redisChanPrefix     = "ws:user:"
 	redisPresencePrefix = "ws:presence:"
+	redisBroadcastChan  = "ws:broadcast"
 	// presenceTTL must outlive the grace period so a pod crash doesn't leave stale keys forever.
 	presenceTTL = presenceGracePeriod + 30*time.Second
 )
@@ -81,7 +82,7 @@ func (h *Hub) InitRedis(rdb *redis.Client) {
 	h.rdb = rdb
 	h.subscribed = make(map[string]struct{})
 	// Start with no channel subscriptions; channels are added dynamically as users connect.
-	h.pubsub = rdb.Subscribe(context.Background())
+	h.pubsub = rdb.Subscribe(context.Background(), redisBroadcastChan)
 	go h.redisListener()
 	log.Printf("[WS] Redis Pub/Sub enabled — hub is horizontally scalable")
 }
@@ -91,6 +92,10 @@ func (h *Hub) InitRedis(rdb *redis.Client) {
 func (h *Hub) redisListener() {
 	ch := h.pubsub.Channel()
 	for msg := range ch {
+		if msg.Channel == redisBroadcastChan {
+			h.localBroadcast([]byte(msg.Payload))
+			continue
+		}
 		userID := strings.TrimPrefix(msg.Channel, redisChanPrefix)
 		if userID == msg.Channel {
 			continue // unrecognised channel prefix, skip
@@ -98,6 +103,40 @@ func (h *Hub) redisListener() {
 		h.localSend(userID, []byte(msg.Payload))
 	}
 	log.Printf("[WS] Redis listener stopped")
+}
+
+// localBroadcast delivers msg to every locally connected client.
+func (h *Hub) localBroadcast(msg []byte) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, clients := range h.clients {
+		for _, c := range clients {
+			safeSend(c.send, msg)
+		}
+	}
+}
+
+// BroadcastToAll sends a message to every connected client across all pods.
+func (h *Hub) BroadcastToAll(eventType string, payload map[string]any) {
+	msg, err := json.Marshal(map[string]any{
+		"type":    eventType,
+		"payload": payload,
+	})
+	if err != nil {
+		log.Printf("[WS] BroadcastToAll marshal error: %v", err)
+		return
+	}
+
+	if h.rdb != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := h.rdb.Publish(ctx, redisBroadcastChan, msg).Err(); err != nil {
+			log.Printf("[WS] BroadcastToAll Redis publish failed: %v — falling back to local", err)
+			h.localBroadcast(msg)
+		}
+		return
+	}
+	h.localBroadcast(msg)
 }
 
 // subscribeUser adds a Redis Pub/Sub subscription for userID on this pod.
