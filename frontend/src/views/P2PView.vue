@@ -430,4 +430,40 @@ const startTransfer = async () => {
     cursor: not-allowed;
     color: var(--secondary-text-color);
 }
+
+@media (max-width: 768px) {
+  .main-card {
+    width: 100%;
+    max-width: 100%;
+    padding: 1.5rem 1rem;
+  }
+
+  .p2p-container {
+    padding: 1rem;
+  }
+
+  .friends-grid {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .drop-area {
+    padding: 1.5rem 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .p2p-page {
+    padding-bottom: 80px; /* space for mobile bottom nav */
+  }
+
+  .card-header h2 {
+    font-size: 1.2rem;
+  }
+
+  .friend-chip {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.6rem;
+  }
+}
 </style>

@@ -193,5 +193,24 @@ onMounted(() => {
     align-items: flex-start;
     gap: 12px;
   }
+
+  .content-title {
+    font-size: clamp(1.2rem, 4vw, 2rem);
+  }
+}
+
+@media (max-width: 480px) {
+  .public-header {
+    padding: 0 12px;
+  }
+
+  .share-info-card {
+    padding: 12px;
+  }
+
+  .download-all-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 </style>

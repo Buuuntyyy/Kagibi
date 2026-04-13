@@ -842,4 +842,37 @@ onMounted(() => {
     transform: rotate(90deg);
   }
 }
+
+@media (max-width: 480px) {
+  .hero-title {
+    font-size: clamp(1.6rem, 7vw, 2.2rem);
+  }
+
+  .container {
+    padding: 0 1rem;
+  }
+
+  .hero-section {
+    padding: 4rem 0 2rem;
+  }
+
+  .step {
+    min-width: 0;
+    width: 100%;
+    padding: 1.25rem 1rem;
+  }
+
+  .stat-card {
+    min-width: 120px;
+  }
+
+  .cta-section {
+    padding: 3rem 0;
+  }
+
+  .features-grid,
+  .opensource-inner {
+    gap: 1rem;
+  }
+}
 </style>

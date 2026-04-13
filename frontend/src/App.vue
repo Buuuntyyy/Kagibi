@@ -97,4 +97,17 @@ body {
   min-height: 100vh;
   width: 100%;
 }
+
+/* Global mobile resets */
+@media (max-width: 768px) {
+  /* Prevent iOS from zooming on input focus — requires font-size >= 16px */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
 </style>

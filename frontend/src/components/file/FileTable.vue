@@ -571,4 +571,44 @@ input[type="checkbox"] {
 input[type="checkbox"]:hover {
   transform: scale(1.1);
 }
+
+@media (max-width: 768px) {
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .files-table {
+    font-size: 0.82rem;
+    min-width: 480px;
+  }
+
+  .name-wrapper {
+    max-width: 160px;
+  }
+
+  /* Hide less important columns on mobile */
+  th.col-path, td.col-path,
+  th.col-tags, td.col-tags,
+  th.col-created, td.col-created,
+  th.col-updated, td.col-updated {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .files-table {
+    font-size: 0.78rem;
+    min-width: 360px;
+  }
+
+  .name-wrapper {
+    max-width: 120px;
+  }
+
+  .icon-svg {
+    width: 16px;
+    height: 16px;
+  }
+}
 </style>
