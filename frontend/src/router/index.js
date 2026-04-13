@@ -16,6 +16,7 @@ import UsageDashboard from '../components/usage/UsageDashboard.vue'
 import LandingHome from '../views/landing/HomeView.vue'
 import LandingPricing from '../views/landing/PricingView.vue'
 import LandingTransfer from '../views/landing/TransferView.vue'
+import LandingSecurity from '../views/landing/SecurityView.vue'
 import { useAuthStore } from '../stores/auth'
 
 const isLocalAuthBypassEnabled =
@@ -41,6 +42,11 @@ const routes = [
     path: '/compare',
     name: 'Compare',
     component: () => import('../views/landing/CompareView.vue'),
+  },
+  {
+    path: '/security',
+    name: 'Security',
+    component: LandingSecurity,
   },
   {
     path: '/login',

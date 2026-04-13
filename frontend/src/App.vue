@@ -37,7 +37,7 @@ const route = useRoute()
 
 // Check if current route is a landing page
 const isLandingPage = computed(() => {
-  return ['LandingHome', 'Pricing', 'Transfer', 'Compare'].includes(route.name)
+  return ['LandingHome', 'Pricing', 'Transfer', 'Compare', 'Security'].includes(route.name)
 })
 
 // Connect Supabase Realtime and fetch billing status when authenticated.
