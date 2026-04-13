@@ -162,16 +162,17 @@ const closeMenu = () => {
   display: none;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 1rem 2rem;
+  padding: 0 2rem;
   background: var(--card-color);
-  border-top: 1px solid var(--border-color);
   max-height: 0;
   overflow: hidden;
-  transition: max-height 0.3s ease;
+  transition: max-height 0.3s ease, padding 0.3s ease;
 }
 
 .mobile-menu.open {
   max-height: 300px;
+  padding: 1rem 2rem;
+  border-top: 1px solid var(--border-color);
 }
 
 .mobile-link {

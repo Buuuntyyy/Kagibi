@@ -3,7 +3,7 @@
 
 <template>
   <nav>
-    <router-link to="/dashboard" class="brand">
+    <router-link :to="authStore.isAuthenticated ? '/dashboard' : '/'" class="brand">
       <img src="/Logo.png" alt="Kagibi Logo" class="brand-logo"/>
       <span>Kagibi</span>
     </router-link>
@@ -72,7 +72,7 @@ const router = useRouter()
 
 const showHelpDialog = ref(false)
 
-const buyMeACoffeeUrl = computed(() => {
+const ACoffeeUrl = computed(() => {
   const runtimeUrl = typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : ''
   return runtimeUrl || import.meta.env.VITE_BUY_ME_A_COFFEE_URL || ''
 })
