@@ -829,8 +829,8 @@ onMounted(() => {
   }
 
   .stat-card {
-    min-width: 140px;
-    flex: 1;
+    min-width: 0;
+    flex: 1 1 140px;
   }
 
   .steps-grid {
@@ -862,8 +862,14 @@ onMounted(() => {
     padding: 1.25rem 1rem;
   }
 
+  .opensource-stats {
+    flex-direction: column;
+  }
+
   .stat-card {
-    min-width: 120px;
+    min-width: 0;
+    width: 100%;
+    flex: none;
   }
 
   .cta-section {
