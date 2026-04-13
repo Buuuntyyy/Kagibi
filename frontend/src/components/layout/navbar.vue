@@ -238,4 +238,34 @@ nav {
   background: linear-gradient(135deg, var(--primary-color, #6B7FD7) 0%, var(--secondary-color, #9370DB) 100%);
   border-radius: 50%;
 }
+
+@media (max-width: 768px) {
+  .brand {
+    width: auto;
+    padding: 8px;
+    margin-left: 0;
+  }
+
+  .support-link {
+    display: none;
+  }
+
+  .nav-links {
+    gap: 0.4rem;
+  }
+
+  .nav-links a:not(.user-avatar-link) {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .brand span {
+    display: none; /* Keep only logo on very small screens */
+  }
+
+  .theme-toggle {
+    padding: 6px;
+  }
+}
 </style>

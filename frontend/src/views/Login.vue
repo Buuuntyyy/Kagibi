@@ -455,11 +455,58 @@ onMounted(() => {
   }
 
   .feature-item {
-    text-align: left; /* Keep features readable */
+    text-align: left;
   }
 
   .auth-interaction {
     margin: 0 auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .auth-layout {
+    max-width: 100%;
+    padding: 1.5rem 1rem;
+    gap: 2rem;
+  }
+
+  .auth-branding h1 {
+    font-size: clamp(1.6rem, 6vw, 2.5rem);
+  }
+
+  .auth-tagline {
+    font-size: clamp(1.1rem, 4vw, 2rem);
+  }
+
+  .auth-branding {
+    gap: 1rem;
+  }
+
+  .features-grid {
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+
+  .feature-item {
+    padding: 0.75rem;
+    gap: 0.75rem;
+  }
+
+  .feature-icon {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 400px) {
+  .auth-layout {
+    padding: 1rem 0.75rem;
+  }
+
+  .logo-placeholder {
+    width: 36px;
+    height: 36px;
   }
 }
 </style>

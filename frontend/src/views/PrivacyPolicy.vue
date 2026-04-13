@@ -150,4 +150,22 @@ ul {
 .btn-back:hover {
   opacity: 0.9;
 }
+
+@media (max-width: 600px) {
+  .legal-container {
+    padding: 20px 12px;
+  }
+
+  .legal-content {
+    padding: 20px 16px;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  h2 {
+    font-size: 1.15rem;
+  }
+}
 </style>

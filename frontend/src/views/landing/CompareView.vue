@@ -675,6 +675,28 @@ const rows = [
     padding: 4rem 0 2rem;
   }
 
+  .compare-hero h1 {
+    font-size: clamp(1.6rem, 5vw, 2.5rem);
+  }
+
+  .table-wrapper {
+    border-radius: 8px;
+  }
+
+  .compare-table th,
+  .compare-table td {
+    padding: 10px 8px;
+    font-size: 0.82rem;
+  }
+
+  .feature-cell {
+    min-width: 120px;
+  }
+
+  .tech-grid {
+    grid-template-columns: 1fr;
+  }
+
   .cta-buttons {
     flex-direction: column;
     align-items: center;
@@ -683,6 +705,26 @@ const rows = [
   .btn {
     width: 100%;
     justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 0 1rem;
+  }
+
+  .compare-table th,
+  .compare-table td {
+    padding: 8px 6px;
+    font-size: 0.75rem;
+  }
+
+  .th-brand {
+    font-size: 0.75rem;
+  }
+
+  .feature-hint {
+    display: none; /* hide tooltips on very small screens to save space */
   }
 }
 </style>

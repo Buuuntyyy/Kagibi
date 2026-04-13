@@ -943,6 +943,45 @@ const executeDeleteAccount = async () => {
   .content-grid {
     grid-template-columns: 1fr;
   }
+
+  .user-card {
+    position: static;
+  }
+}
+
+@media (max-width: 600px) {
+  .account-page {
+    padding: 1rem;
+  }
+
+  .page-header {
+    margin-bottom: 1.25rem;
+  }
+
+  .header-content h1 {
+    font-size: 1.4rem;
+  }
+
+  .content-grid {
+    gap: 1rem;
+  }
+
+  .user-card {
+    padding: 1.25rem;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .form-row button {
+    width: 100%;
+  }
+
+  .password-form {
+    gap: 0.75rem;
+  }
 }
 
 /* User Card */

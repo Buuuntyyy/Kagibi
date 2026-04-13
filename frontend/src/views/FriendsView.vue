@@ -604,4 +604,35 @@ const confirmRemove = (friend) => {
   border-style: solid;
   border-color: transparent transparent #333 transparent;
 }
+
+@media (max-width: 768px) {
+  .friends-container {
+    padding: 1rem;
+  }
+
+  .friends-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .add-form {
+    flex-direction: column;
+  }
+
+  .add-form input {
+    width: 100%;
+  }
+
+  .info-tooltip {
+    width: min(260px, 80vw);
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .friends-container {
+    padding: 0.75rem;
+  }
+}
 </style>

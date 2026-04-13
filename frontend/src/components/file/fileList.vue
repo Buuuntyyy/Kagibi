@@ -1881,4 +1881,50 @@ button {
     max-height: 0;
   }
 }
+
+@media (max-width: 768px) {
+  .toolbar {
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .btn-add-file,
+  .btn-rename,
+  .btn-download,
+  .btn-delete {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.75rem;
+    flex: 1;
+    min-width: 80px;
+  }
+
+  .breadcrumbs {
+    font-size: 0.85rem;
+    flex-wrap: wrap;
+  }
+
+  .selection-action-bar {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .path-banner {
+    padding: 0.5rem;
+  }
+
+  .breadcrumb-link {
+    font-size: 0.8rem;
+  }
+}
 </style>

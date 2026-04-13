@@ -183,4 +183,36 @@ onMounted(async () => {
 .stat-bar-fill.bar-warning { background: var(--warning-color); }
 .stat-bar-fill.bar-danger { background: var(--error-color); }
 
+@media (max-width: 768px) {
+  .account-page {
+    padding: 1.5rem 1rem;
+  }
+
+  .page-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .usage-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .section-body {
+    padding: 16px;
+  }
+
+  .section-header {
+    padding: 14px 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .account-page {
+    padding: 1rem 0.75rem;
+  }
+
+  .stat-card {
+    flex-direction: column;
+  }
+}
+
 </style>

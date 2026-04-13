@@ -815,4 +815,45 @@ const storageLimitGB = computed(() => {
 .left-bar.collapsed .storage-bar {
     display: none;
 }
+
+/* Hide sidebar entirely on mobile — replaced by bottom nav */
+@media (max-width: 768px) {
+  .left-bar-container {
+    display: none;
+  }
+}
+
+/* On tablets, auto-collapse the sidebar */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .left-bar {
+    width: 72px;
+    padding: 8px;
+  }
+
+  .left-bar .btn-new span,
+  .left-bar .menu-item span,
+  .left-bar .arrow-icon,
+  .left-bar .accordion-content,
+  .left-bar .storage-info {
+    display: none;
+  }
+
+  .left-bar .btn-new {
+    padding: 0;
+    justify-content: center;
+  }
+
+  .left-bar .plus-icon { margin: 0; }
+
+  .left-bar .menu-item {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .left-bar .icon-svg { margin: 0; }
+
+  .left-bar .storage-section {
+    padding: 6px;
+  }
+}
 </style>

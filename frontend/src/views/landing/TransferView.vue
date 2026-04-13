@@ -389,5 +389,31 @@ import LandingNav from '../../components/landing/LandingNav.vue'
   .cta-card {
     padding: 3rem 2rem;
   }
+
+  .transfer-hero {
+    padding: 3rem 1rem 2rem;
+  }
+
+  .transfer-hero h1 {
+    font-size: clamp(1.6rem, 5vw, 3rem);
+  }
+
+  .info-card {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .transfer-hero {
+    padding: 2rem 1rem;
+  }
+
+  .cta-card {
+    padding: 2rem 1rem;
+  }
+
+  .container {
+    padding: 0 1rem;
+  }
 }
 </style>
