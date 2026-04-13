@@ -298,6 +298,18 @@ func migrateBillingTables(ctx context.Context, db *bun.DB) error {
 		log.Printf("Warning: failed to create webhook_events table: %v", err)
 	}
 
+	// Colonnes ajoutées après la création initiale des tables — idempotentes via IF NOT EXISTS.
+	// stripe_customers.kagibi_user_id : absent des déploiements antérieurs au schéma courant.
+	// webhook_events.kagibi_user_id  : idem.
+	for _, alteration := range []string{
+		`ALTER TABLE "stripe_customers" ADD COLUMN IF NOT EXISTS "kagibi_user_id" TEXT`,
+		`ALTER TABLE "webhook_events"   ADD COLUMN IF NOT EXISTS "kagibi_user_id" TEXT`,
+	} {
+		if _, err := db.ExecContext(ctx, alteration); err != nil {
+			log.Printf("Warning: failed to alter billing table: %v", err)
+		}
+	}
+
 	// Stripe-related indices
 	for _, idx := range []string{
 		`CREATE INDEX IF NOT EXISTS idx_billing_invoices_user           ON billing_invoices (user_id)`,
