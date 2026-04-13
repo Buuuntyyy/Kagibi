@@ -141,8 +141,8 @@ func (m *MockProvider) getPlans() []Plan {
 	return []Plan{
 		{
 			Code: "free", Name: "Gratuit",
-			Description:    "5 Go de stockage, 5 partages P2P actifs",
-			StorageLimitGB: 5, P2PSharesLimit: 5,
+			Description:    "20 Go de stockage, 5 partages P2P actifs",
+			StorageLimitGB: 20, P2PSharesLimit: 5,
 			PriceMonthly: 0, PriceYearly: 0, Currency: "EUR",
 			Features: map[string]interface{}{"p2p_enabled": true},
 		},

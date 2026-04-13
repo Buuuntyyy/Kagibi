@@ -4,7 +4,15 @@
 <template>
   <div class="account-page">
     <div class="page-header">
-      <h1>{{ t('account.title') }}</h1>
+      <div class="header-content">
+        <button class="btn-back" @click="router.push('/dashboard')">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          Retour
+        </button>
+        <h1>{{ t('account.title') }}</h1>
+      </div>
       <p class="subtitle">{{ t('account.subtitle') }}</p>
     </div>
 
@@ -817,6 +825,15 @@ const executeDeleteAccount = async () => {
 .page-header {
   margin-bottom: 2rem;
 }
+
+.header-content { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+
+.btn-back {
+  background: none; border: none; display: flex; align-items: center; justify-content: center;
+  gap: 6px; color: var(--secondary-text-color); cursor: pointer; font-size: 0.9rem;
+  padding: 6px 12px; border-radius: 8px; transition: all 0.2s;
+}
+.btn-back:hover { background-color: var(--hover-background-color); color: var(--primary-color); }
 
 .page-header h1 {
   font-size: 2rem;

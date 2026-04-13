@@ -14,14 +14,14 @@
 
       <section>
         <h2>2. Mentions Légales</h2>
-        <p>L'édition du site Kagibi est assurée par [NOM DE L'ENTREPRISE OU DE L'INDIVIDU], dont le siège social est situé à [ADRESSE COMPLETE].</p>
-        <p>Adresse e-mail de contact : [EMAIL DE CONTACT]</p>
-        <p>L'hébergeur du Service est : [NOM DE L'HEBERGEUR, ex: AWS, OVH, Google Cloud], situé à [ADRESSE DE L'HEBERGEUR].</p>
+        <p>L'édition du site Kagibi est assurée par Buuuntyyy.</p>
+        <p>Adresse e-mail de contact : contact@kagibi.cloud</p>
+        <p>L'hébergeur du Service est : OVH France.</p>
       </section>
 
       <section>
         <h2>3. Accès au Service</h2>
-        <p>Le Service permet à l'Utilisateur un accès gratuit ou payant aux services suivants :</p>
+        <p>Le Service permet à l'Utilisateur un accès gratuit aux services suivants :</p>
         <ul>
           <li>Stockage de fichiers en ligne (Cloud) ;</li>
           <li>Partage de fichiers et de dossiers via des liens sécurisés ;</li>
@@ -77,6 +77,7 @@
 .legal-container {
   display: flex;
   justify-content: center;
+  align-items: flex-start;
   padding: 40px 20px;
   background-color: var(--background-color, #f5f7fa);
   min-height: 100vh;

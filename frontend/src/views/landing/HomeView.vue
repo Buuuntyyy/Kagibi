@@ -9,9 +9,9 @@
     <section class="hero">
       <div class="container">
         <div class="hero-content">
-          <div class="hero-eyebrow">Cloud souverain · Open Source · France</div>
+          <div class="hero-eyebrow">Cloud souverain · Open Source · Français</div>
           <h1 class="hero-title">
-            Le seul cloud qui<br>
+            Le cloud qui<br>
             <span class="highlight">ne peut pas lire vos données</span>
           </h1>
           <p class="hero-subtitle">
@@ -53,6 +53,84 @@
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
               </svg>
               Immunisé Cloud Act
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Open Source Section -->
+    <section class="opensource">
+      <div class="container">
+        <div class="opensource-inner">
+          <div class="opensource-text">
+            <div class="license-pill">AGPLv3</div>
+            <h2>Un projet 100% open source</h2>
+            <p>
+              Kagibi est publié sous licence <strong>GNU AGPLv3</strong> — la licence copyleft la plus forte.
+              Toute modification déployée en production doit être partagée publiquement.
+              Aucune version propriétaire cachée, aucun backdoor possible.
+            </p>
+            <p>
+              Le code est librement auditable, forçable et améliorable par tous.
+              Contribuez à la sécurité, signalez des bugs, proposez des fonctionnalités —
+              chaque Pull Request est la bienvenue.
+            </p>
+            <div class="opensource-actions">
+              <a
+                href="https://github.com/Buuuntyyy/Kagibi"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn-github"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+                </svg>
+                Voir le code source
+              </a>
+              <a
+                href="https://github.com/Buuuntyyy/Kagibi"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn-star"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+                Star on GitHub
+              </a>
+            </div>
+          </div>
+          <div class="opensource-stats">
+            <div class="stat-card">
+              <div class="stat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="16 18 22 12 16 6"></polyline>
+                  <polyline points="8 6 2 12 8 18"></polyline>
+                </svg>
+              </div>
+              <div class="stat-label">Licence</div>
+              <div class="stat-value">AGPLv3</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.07 4.93A10 10 0 0 0 4.93 19.07"></path>
+                  <path d="M2 12h2M20 12h2M12 2v2M12 20v2"></path>
+                </svg>
+              </div>
+              <div class="stat-label">Contributions</div>
+              <div class="stat-value">Ouvertes</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                </svg>
+              </div>
+              <div class="stat-label">Plateforme</div>
+              <div class="stat-value">GitHub</div>
             </div>
           </div>
         </div>
@@ -156,84 +234,6 @@
               Auditez vous-même ce que fait Kagibi de vos données.
               La confiance ne devrait pas être aveugle.
             </p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Open Source Section -->
-    <section class="opensource">
-      <div class="container">
-        <div class="opensource-inner">
-          <div class="opensource-text">
-            <div class="license-pill">AGPLv3</div>
-            <h2>Un projet 100% open source</h2>
-            <p>
-              Kagibi est publié sous licence <strong>GNU AGPLv3</strong> — la licence copyleft la plus forte.
-              Toute modification déployée en production doit être partagée publiquement.
-              Aucune version propriétaire cachée, aucun backdoor possible.
-            </p>
-            <p>
-              Le code est librement auditable, forçable et améliorable par tous.
-              Contribuez à la sécurité, signalez des bugs, proposez des fonctionnalités —
-              chaque Pull Request est la bienvenue.
-            </p>
-            <div class="opensource-actions">
-              <a
-                href="https://github.com/Buuuntyyy/Kagibi"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="btn-github"
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
-                </svg>
-                Voir le code source
-              </a>
-              <a
-                href="https://github.com/Buuuntyyy/Kagibi"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="btn-star"
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                </svg>
-                Star on GitHub
-              </a>
-            </div>
-          </div>
-          <div class="opensource-stats">
-            <div class="stat-card">
-              <div class="stat-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="16 18 22 12 16 6"></polyline>
-                  <polyline points="8 6 2 12 8 18"></polyline>
-                </svg>
-              </div>
-              <div class="stat-label">Licence</div>
-              <div class="stat-value">AGPLv3</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="3"></circle>
-                  <path d="M19.07 4.93A10 10 0 0 0 4.93 19.07"></path>
-                  <path d="M2 12h2M20 12h2M12 2v2M12 20v2"></path>
-                </svg>
-              </div>
-              <div class="stat-label">Contributions</div>
-              <div class="stat-value">Ouvertes</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
-                </svg>
-              </div>
-              <div class="stat-label">Plateforme</div>
-              <div class="stat-value">GitHub</div>
-            </div>
           </div>
         </div>
       </div>
