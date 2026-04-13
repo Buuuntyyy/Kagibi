@@ -357,10 +357,10 @@ const columns = computed(() => {
   }
 
   cols.push(
-    { key: 'tags', label: t('file.tags') },
-    { key: 'created', label: t('file.columnCreated') },
-    { key: 'updated', label: t('file.columnUpdated') },
-    { key: 'size', label: t('file.columnSize') }
+    { key: 'tags', label: t('file.tags'), headerClass: 'col-tags', cellClass: 'col-tags' },
+    { key: 'created', label: t('file.columnCreated'), headerClass: 'col-created', cellClass: 'col-created' },
+    { key: 'updated', label: t('file.columnUpdated'), headerClass: 'col-updated', cellClass: 'col-updated' },
+    { key: 'size', label: t('file.columnSize'), headerClass: 'col-size', cellClass: 'col-size' }
   );
   return cols;
 })

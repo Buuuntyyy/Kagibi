@@ -182,6 +182,18 @@ const newFriendId = ref('')
 const showLeftInfo = ref(false)
 const isCollapsed = ref(false)
 
+const isTablet = () => window.innerWidth >= 769 && window.innerWidth <= 1024
+
+const syncCollapsedState = () => {
+  if (isTablet()) {
+    isCollapsed.value = true
+  } else if (window.innerWidth > 1024 && isCollapsed.value) {
+    // Only auto-expand if it was auto-collapsed (not manually collapsed)
+    // We can't distinguish, so only restore if we're back to desktop range
+    isCollapsed.value = false
+  }
+}
+
 const closeAddFriendMenu = () => {
     if (showAddFriendMenu.value) {
         showAddFriendMenu.value = false
@@ -204,10 +216,13 @@ const toggleAddFriendMenu = () => {
 
 onMounted(() => {
     window.addEventListener('click', closeAddFriendMenu)
+    syncCollapsedState()
+    window.addEventListener('resize', syncCollapsedState)
 })
 
 onUnmounted(() => {
     window.removeEventListener('click', closeAddFriendMenu)
+    window.removeEventListener('resize', syncCollapsedState)
 })
 
 const addFriend = async () => {
@@ -854,6 +869,11 @@ const storageLimitGB = computed(() => {
 
   .left-bar .storage-section {
     padding: 6px;
+  }
+
+  /* Hide the manual toggle — sidebar is auto-collapsed by breakpoint */
+  .collapse-toggle {
+    display: none;
   }
 }
 </style>

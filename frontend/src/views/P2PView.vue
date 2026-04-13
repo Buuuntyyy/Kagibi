@@ -118,6 +118,8 @@
     </div>
     </div>
     </div>
+    <!-- Mobile Bottom Navigation -->
+    <MobileBottomNav />
   </div>
 </template>
 
@@ -128,6 +130,7 @@ import { useFriendStore } from '../stores/friends'
 import { useAuthStore } from '../stores/auth'
 import { useP2PStore } from '../stores/p2p'
 import LeftBar from '../components/bar/leftBar.vue'
+import MobileBottomNav from '../components/bar/MobileBottomNav.vue'
 
 const { t } = useI18n()
 const friendStore = useFriendStore()
@@ -452,9 +455,15 @@ const startTransfer = async () => {
   }
 }
 
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding-bottom: 64px; /* space for bottom nav */
+  }
+}
+
 @media (max-width: 480px) {
   .p2p-page {
-    padding-bottom: 80px; /* space for mobile bottom nav */
+    padding-bottom: 0;
   }
 
   .card-header h2 {
