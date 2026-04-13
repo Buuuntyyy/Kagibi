@@ -29,6 +29,8 @@ docker/.ovhkeys
 docker/dump_inserts.sql
 frontend/.env
 
+scripts/k8s-rclone-cronjob.yaml
+
 # Dependencies
 node_modules/*
 frontend/node_modules/
