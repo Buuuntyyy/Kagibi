@@ -54,19 +54,21 @@ realtimeStore.onEvent('p2p_signal', (payload) => {
   });
 });
 
-// Watch presence changes and update friend online status
+// Sync presenceState → friend.online, but ONLY for users we have received
+// a WS presence update for. Never override with the default false when
+// presenceState has no entry — that would clobber the correct value from
+// the initial HTTP /friends response before the WS bootstrap arrives.
 setInterval(() => {
   const friendStore = useFriendStore(pinia);
   if (friendStore.friends.length > 0) {
     friendStore.friends.forEach(friend => {
-      const wasOnline = friend.online;
-      const isOnline = realtimeStore.isUserOnline(friend.id);
-      if (wasOnline !== isOnline) {
-        friend.online = isOnline;
+      const entry = realtimeStore.presenceState[friend.id];
+      if (entry !== undefined && friend.online !== entry.online) {
+        friend.online = entry.online;
       }
     });
   }
-}, 2000); // Check every 2 seconds
+}, 2000);
 
 // Initialiser le monitoring de sécurité
 initSecurityMonitoring();
