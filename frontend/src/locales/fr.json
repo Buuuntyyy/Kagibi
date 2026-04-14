@@ -229,7 +229,7 @@
     "sendFile": "Envoyer le fichier",
     "selectFriendAndFile": "Sélectionnez un ami et un fichier",
     "transferRejected": "Transfert refusé par votre ami",
-    "keepWindowActive": "Gardez cette fenêtre active pendant le transfert, ne rafraîchissez pas et ne fermez pas l'onglet.",
+    "keepWindowActive": "Gardez cette fenêtre active pendant le transfert, ne rafraîchissez pas et ne fermez pas l'onglet."
   },
   "home": {
     "welcome": "Bienvenue sur votre Stockage Sécurisé",
