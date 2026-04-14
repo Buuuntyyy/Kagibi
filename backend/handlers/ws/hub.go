@@ -335,9 +335,13 @@ func (h *Hub) SendEventToUser(userID, eventType string, id int64, payload map[st
 }
 
 // SendP2PSignalToUser delivers a P2P signal over WebSocket.
-func (h *Hub) SendP2PSignalToUser(targetUserID, senderID, signalType string, payload map[string]any) {
+// signalID is the database ID of the signal — the frontend uses it to deduplicate
+// against the polling fallback so that a WS-delivered signal is not processed again
+// 2.5 s later when the polling loop also picks it up.
+func (h *Hub) SendP2PSignalToUser(targetUserID, senderID, signalType string, signalID int64, payload map[string]any) {
 	msg, err := json.Marshal(map[string]any{
 		"type":        "p2p_signal",
+		"id":          signalID,
 		"from":        senderID,
 		"signal_type": signalType,
 		"payload":     payload,

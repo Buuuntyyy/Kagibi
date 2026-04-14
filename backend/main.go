@@ -336,7 +336,7 @@ func p2pSignalHandler(db *bun.DB) gin.HandlerFunc {
 			c.JSON(500, gin.H{"error": "Failed to send signal"})
 			return
 		}
-		wshandler.GlobalHub.SendP2PSignalToUser(req.TargetUserID, userID.(string), req.SignalType, req.Payload)
+		wshandler.GlobalHub.SendP2PSignalToUser(req.TargetUserID, userID.(string), req.SignalType, signal.ID, req.Payload)
 		c.JSON(200, gin.H{"status": "sent", "signal_id": signal.ID})
 	}
 }

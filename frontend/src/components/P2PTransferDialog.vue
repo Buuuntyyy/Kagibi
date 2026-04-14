@@ -119,8 +119,9 @@ const reject = () => p2pStore.rejectTransfer();
 const cancel = () => p2pStore.cancelTransfer();
 const close = () => {
     if(p2pStore.incomingOffer) p2pStore.rejectTransfer();
+    else if(p2pStore.rejectedTransfer) p2pStore.rejectedTransfer = null;
     else if(p2pStore.activeTransfer && isDone.value) p2pStore.activeTransfer = null;
-    else p2pStore.cancelTransfer(); 
+    else p2pStore.cancelTransfer();
 };
 </script>
 
