@@ -52,6 +52,12 @@ type Hub struct {
 	mu      sync.RWMutex
 	clients map[string][]*Client // userID → local connections
 
+	// localPresence tracks users that are considered online in single-pod mode.
+	// It is set on first connect and cleared only when the grace-period timer fires,
+	// so IsConnected returns true during the reconnect grace window even though
+	// h.clients is temporarily empty after Unregister.
+	localPresence map[string]struct{}
+
 	// Redis fields — nil when running without Redis (single-pod / dev mode).
 	rdb        *redis.Client
 	pubsub     *redis.PubSub
@@ -61,7 +67,8 @@ type Hub struct {
 
 // GlobalHub is the singleton hub used throughout the application.
 var GlobalHub = &Hub{
-	clients: make(map[string][]*Client),
+	clients:       make(map[string][]*Client),
+	localPresence: make(map[string]struct{}),
 }
 
 // pendingDisconnects holds timers that fire the DisconnectHook after the grace period.
@@ -205,11 +212,15 @@ func (h *Hub) Register(c *Client) {
 		return
 	}
 
-	// Truly first connection: set up Redis subscription + presence, then fire hook.
+	// Truly first connection: set up presence, then fire hook.
 	if firstConn {
 		if h.rdb != nil {
 			h.subscribeUser(c.userID)
 			h.setPresence(c.userID)
+		} else {
+			h.mu.Lock()
+			h.localPresence[c.userID] = struct{}{}
+			h.mu.Unlock()
 		}
 		if ConnectHook != nil {
 			go ConnectHook(c.userID)
@@ -250,6 +261,10 @@ func (h *Hub) Unregister(c *Client) {
 		if useRedis {
 			h.unsubscribeUser(userID)
 			h.clearPresence(userID)
+		} else {
+			h.mu.Lock()
+			delete(h.localPresence, userID)
+			h.mu.Unlock()
 		}
 		if DisconnectHook != nil {
 			DisconnectHook(userID)
@@ -336,6 +351,8 @@ func (h *Hub) SendP2PSignalToUser(targetUserID, senderID, signalType string, pay
 
 // IsConnected returns true if the user has at least one active WebSocket connection
 // on any pod (Redis mode) or locally (single-pod mode).
+// In single-pod mode, returns true during the reconnect grace period even if
+// h.clients is temporarily empty after Unregister.
 func (h *Hub) IsConnected(userID string) bool {
 	if h.rdb != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -348,7 +365,8 @@ func (h *Hub) IsConnected(userID string) bool {
 	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return len(h.clients[userID]) > 0
+	_, present := h.localPresence[userID]
+	return present
 }
 
 // writePump pumps messages from the send channel to the WebSocket connection.
