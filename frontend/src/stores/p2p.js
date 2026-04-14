@@ -58,8 +58,8 @@ export const useP2PStore = defineStore('p2p', {
             }
             
             try {
-                const token = localStorage.getItem('token');
-                await axios.get(`${API_BASE_URL}/heartbeat`, {
+                const token = await authClient.getToken();
+                await axios.get(`${API_BASE_URL}heartbeat`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 //console.log('[P2P] Session heartbeat sent');
@@ -84,20 +84,41 @@ export const useP2PStore = defineStore('p2p', {
                 this.activeTransfer.connectionInfo.iceState = pc.iceConnectionState;
                 if (pc.iceConnectionState === 'checking') {
                     this.activeTransfer.connectionInfo.stage = 'Négociation de la connexion...';
-                } else if (pc.iceConnectionState === 'connected') {
-                    this.activeTransfer.connectionInfo.stage = 'Connecté';
-                    this.detectConnectionType(pc, transferId);
+                } else if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                    this.activeTransfer.connectionInfo.wasConnected = true;
+                    if (pc.iceConnectionState === 'connected') {
+                        this.activeTransfer.connectionInfo.stage = 'Connecté';
+                        this.detectConnectionType(pc, transferId);
+                    }
                 }
             }
-            if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+            if (pc.iceConnectionState === 'disconnected') {
+                // 'disconnected' is a transient state — WebRTC may recover automatically.
+                // Only update the stage label; never show an error dialog here.
                 if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
                     const isDone = this.activeTransfer.status === 'Done' || this.activeTransfer.status === 'Complete';
                     if (!isDone) {
-                        console.error('ICE Connection Failed/Disconnected during active transfer');
-                        uiStore.showError(
-                            "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
-                            'Échec de Connexion'
-                        );
+                        this.activeTransfer.connectionInfo.stage = 'Reconnexion en cours...';
+                    }
+                }
+            } else if (pc.iceConnectionState === 'failed') {
+                if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
+                    const isDone = this.activeTransfer.status === 'Done' || this.activeTransfer.status === 'Complete';
+                    if (!isDone) {
+                        const wasConnected = this.activeTransfer.connectionInfo.wasConnected;
+                        if (wasConnected) {
+                            console.error('ICE Connection Failed — remote peer likely disconnected');
+                            uiStore.showError(
+                                "Le contact distant s'est déconnecté pendant le transfert. Le fichier n'a pas été transféré complètement.",
+                                'Contact déconnecté'
+                            );
+                        } else {
+                            console.error('ICE Connection Failed — could not establish connection');
+                            uiStore.showError(
+                                "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
+                                'Échec de Connexion'
+                            );
+                        }
                         this.activeTransfer.status = 'Error';
                         this.activeTransfer.connectionInfo.stage = 'Échec de connexion';
                     }
@@ -149,7 +170,12 @@ export const useP2PStore = defineStore('p2p', {
         if (data?.transferId && this.activeTransfer.transferId && data.transferId !== this.activeTransfer.transferId) return;
 
         const fileName = this.activeTransfer.fileName;
-        this.activeTransfer.pc.close();
+        // Null out all handlers before closing to prevent stale callbacks
+        const pc = this.activeTransfer.pc;
+        pc.onicecandidate = null;
+        pc.oniceconnectionstatechange = null;
+        pc.ondatachannel = null;
+        pc.close();
         this.activeTransfer = null;
         this.stopHeartbeat();
 
@@ -222,10 +248,11 @@ export const useP2PStore = defineStore('p2p', {
                  stage: 'Initialisation...',
                  iceState: 'new',
                  connectionType: null,
-                 usingTurn: false
+                 usingTurn: false,
+                 wasConnected: false
              }
          };
-         
+
          // Start heartbeat to prevent session timeout
          this.startHeartbeat();
 
@@ -318,10 +345,11 @@ export const useP2PStore = defineStore('p2p', {
                  stage: 'Initialisation...',
                  iceState: 'new',
                  connectionType: null,
-                 usingTurn: false
+                 usingTurn: false,
+                 wasConnected: false
              }
         };
-        
+
         // Start heartbeat to prevent session timeout
         this.startHeartbeat();
 
@@ -362,6 +390,7 @@ export const useP2PStore = defineStore('p2p', {
             transferId: this.incomingOffer.transferId
         });
         this.incomingOffer = null;
+        this.candidateQueue = [];
     },
 
     cancelTransfer() {

@@ -15,7 +15,7 @@ import (
 // It is set at startup by main.go to avoid an import cycle.
 type WSHub interface {
 	SendEventToUser(userID, eventType string, id int64, payload map[string]any)
-	SendP2PSignalToUser(targetUserID, senderID, signalType string, payload map[string]any)
+	SendP2PSignalToUser(targetUserID, senderID, signalType string, signalID int64, payload map[string]any)
 }
 
 // wsHub is the global hub instance injected at startup.
@@ -60,7 +60,7 @@ type UserPlan struct {
 	Plan             string    `bun:"plan,notnull,default:'free'" json:"plan"`
 	StorageLimit     int64     `bun:"storage_limit,notnull,default:21474836480" json:"storage_limit"`
 	StorageUsed      int64     `bun:"storage_used,notnull,default:0" json:"storage_used"`
-	P2PMaxExchanges  int       `bun:"p2p_max_exchanges,notnull,default:5" json:"p2p_max_exchanges"`
+	P2PMaxExchanges  int       `bun:"p2p_max_exchanges,notnull,default:-1" json:"p2p_max_exchanges"`
 	P2PExchangesUsed int       `bun:"p2p_exchanges_used,notnull,default:0" json:"p2p_exchanges_used"`
 	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt        time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
