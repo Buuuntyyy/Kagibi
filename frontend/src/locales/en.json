@@ -227,7 +227,9 @@
     "noOnlineFriends": "No online friends",
     "addFriends": "Add friends to exchange files",
     "sendFile": "Send file",
-    "selectFriendAndFile": "Select a friend and a file"
+    "selectFriendAndFile": "Select a friend and a file",
+    "transferRejected": "Transfer declined by your friend",
+    "keepWindowActive": "Keep this window active during the transfer, don't refresh or close the tab."
   },
   "home": {
     "welcome": "Welcome to your Secured Storage",

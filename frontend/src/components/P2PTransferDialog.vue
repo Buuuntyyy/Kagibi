@@ -32,6 +32,20 @@
          </div>
       </div>
 
+      <!-- REJECTED BY RECIPIENT -->
+      <div v-else-if='p2pStore.rejectedTransfer' class='notification-body'>
+        <div class='rejected-notice'>
+          <svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'></circle><line x1='15' y1='9' x2='9' y2='15'></line><line x1='9' y1='9' x2='15' y2='15'></line></svg>
+          <div>
+            <p class='rejected-title'>{{ t('p2p.transferRejected') }}</p>
+            <p class='rejected-file'>{{ p2pStore.rejectedTransfer.fileName }}</p>
+          </div>
+        </div>
+        <div class='actions-grid single'>
+          <button @click='p2pStore.rejectedTransfer = null' class='btn btn-secondary'>{{ t('common.close') }}</button>
+        </div>
+      </div>
+
       <!-- ACTIVE TRANSFER -->
       <div v-else-if='p2pStore.activeTransfer' class='notification-body'>
          <div class='status-header'>
@@ -43,6 +57,12 @@
          </div>
          <p class='filename-display' :title='p2pStore.activeTransfer.fileName'>{{ p2pStore.activeTransfer.fileName }}</p>
          
+         <!-- Keep window active warning -->
+         <div v-if='!isDone' class='keep-active-notice'>
+           <svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'></path><line x1='12' y1='9' x2='12' y2='13'></line><line x1='12' y1='17' x2='12.01' y2='17'></line></svg>
+           {{ t('p2p.keepWindowActive') }}
+         </div>
+
          <!-- Connection Info -->
          <div v-if='p2pStore.activeTransfer.connectionInfo' class='connection-info'>
              <div class='info-row'>
@@ -77,9 +97,9 @@ const { t } = useI18n();
 
 const p2pStore = useP2PStore();
 
-const visible = computed(() => !!p2pStore.incomingOffer || !!p2pStore.activeTransfer);
+const visible = computed(() => !!p2pStore.incomingOffer || !!p2pStore.activeTransfer || !!p2pStore.rejectedTransfer);
 const isDone = computed(() => p2pStore.activeTransfer?.status === 'Done' || p2pStore.activeTransfer?.status === 'Complete');
-const canClose = computed(() => isDone.value || !!p2pStore.incomingOffer);
+const canClose = computed(() => isDone.value || !!p2pStore.incomingOffer || !!p2pStore.rejectedTransfer);
 
 const statusText = computed(() => {
     if (!p2pStore.activeTransfer) return '';
@@ -312,5 +332,45 @@ const close = () => {
 
 .info-value.turn-relay {
     color: var(--warning-color, #f39c12);
+}
+
+.rejected-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: var(--error-bg-color, #fdf0f0);
+    border: 1px solid var(--error-color, #e74c3c);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+    color: var(--error-color, #e74c3c);
+}
+.rejected-notice svg { flex-shrink: 0; margin-top: 2px; }
+.rejected-title {
+    margin: 0 0 4px 0;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.rejected-file {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--secondary-text-color, #888);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 240px;
+}
+
+.keep-active-notice {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--warning-color, #f39c12);
+    background: var(--warning-bg-color, #fffbf0);
+    border: 1px solid var(--warning-color, #f39c12);
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin-bottom: 10px;
 }
 </style>

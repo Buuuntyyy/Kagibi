@@ -39,8 +39,9 @@ async function fetchICEConfig() {
 
 export const useP2PStore = defineStore('p2p', {
   state: () => ({
-    incomingOffer: null, 
-    activeTransfer: null, 
+    incomingOffer: null,
+    activeTransfer: null,
+    rejectedTransfer: null, // Info shown to initiator when recipient rejects
     candidateQueue: [], // Store candidates that arrive before acceptance
     heartbeatInterval: null // Interval for session maintenance
   }),
@@ -143,6 +144,20 @@ export const useP2PStore = defineStore('p2p', {
         }
     },
 
+    _handleRejectSignal(sender_id, data) {
+        if (!this.activeTransfer || this.activeTransfer.friendId !== sender_id) return;
+        if (data?.transferId && this.activeTransfer.transferId && data.transferId !== this.activeTransfer.transferId) return;
+
+        const fileName = this.activeTransfer.fileName;
+        this.activeTransfer.pc.close();
+        this.activeTransfer = null;
+        this.stopHeartbeat();
+
+        this.rejectedTransfer = { friendId: sender_id, fileName };
+        // Auto-dismiss after 6 seconds
+        setTimeout(() => { this.rejectedTransfer = null; }, 6000);
+    },
+
     async handleSignal(payload) {
         const { sender_id, type, data } = payload;
         if (type === 'offer') {
@@ -151,6 +166,8 @@ export const useP2PStore = defineStore('p2p', {
             await this._handleAnswerSignal(sender_id, data);
         } else if (type === 'candidate') {
             await this._handleCandidateSignal(sender_id, data);
+        } else if (type === 'reject') {
+            this._handleRejectSignal(sender_id, data);
         }
     },
 
@@ -339,8 +356,12 @@ export const useP2PStore = defineStore('p2p', {
     },
 
     rejectTransfer() {
+        if (!this.incomingOffer) return;
+        const realtimeStore = useRealtimeStore();
+        realtimeStore.sendP2PSignal(this.incomingOffer.senderId, 'reject', {
+            transferId: this.incomingOffer.transferId
+        });
         this.incomingOffer = null;
-        // Should send 'reject' signal ideally
     },
 
     cancelTransfer() {
