@@ -5,7 +5,7 @@
   <div class="account-page">
     <div class="page-header">
       <div class="header-content">
-        <button class="btn-back" @click="router.push('/dashboard')">
+        <button class="btn-back" @click="router.go(-1)">
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M19 12H5M12 19l-7-7 7-7"/>
           </svg>
