@@ -22,7 +22,8 @@
     "storage": "Stockage",
     "billing": "Facturation",
     "home": "Accueil",
-    "transfer": "Transfert P2P"
+    "transfer": "Transfert P2P",
+    "myDrive": "Mon Drive"
   },
   "file": {
     "upload": "Ajouter un fichier",

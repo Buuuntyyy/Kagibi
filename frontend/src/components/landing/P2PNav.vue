@@ -15,6 +15,7 @@
         <a href="https://kagibi.cloud/security" class="nav-link">{{ t('nav.security') }}</a>
 
         <template v-if="authStore.isAuthenticated">
+          <router-link to="/dashboard/home" class="nav-btn">{{ t('nav.myDrive') }}</router-link>
           <router-link to="/account" class="user-avatar-link" :title="authStore.user?.name || t('nav.myAccount')">
             <div class="user-avatar">
               <img
@@ -56,6 +57,7 @@
       <a href="https://kagibi.cloud/transfer" class="mobile-link" @click="closeMenu">{{ t('nav.transfer') }}</a>
       <a href="https://kagibi.cloud/security" class="mobile-link" @click="closeMenu">{{ t('nav.security') }}</a>
       <template v-if="authStore.isAuthenticated">
+        <router-link to="/dashboard/home" class="mobile-btn" @click="closeMenu">{{ t('nav.myDrive') }}</router-link>
         <router-link to="/account" class="mobile-link" @click="closeMenu">{{ t('nav.myAccount') }}</router-link>
         <a href="#" class="mobile-link" @click.prevent="logout; closeMenu()">{{ t('nav.logout') }}</a>
       </template>
