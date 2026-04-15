@@ -84,7 +84,14 @@
     "zeroKnowledge": "Zero-Knowledge",
     "zeroKnowledgeDesc": "Nous ne connaissons que votre adresse email, votre pseudo et votre avatar. Aucune pub, aucun cookie, aucun suivi.",
     "secureSharing": "Partages Sécurisés, Directs et Confidentiels",
-    "secureSharingDesc": "Échangez vos fichiers en P2P chiffré, sans serveur intermédiaire, avec contrôle d'accès et expiration."
+    "secureSharingDesc": "Échangez vos fichiers en P2P chiffré, sans serveur intermédiaire, avec contrôle d'accès et expiration.",
+    "p2pTagline": "Envoyez vos fichiers directement, sans serveur intermédiaire.",
+    "p2pFeature1": "Transfert direct",
+    "p2pFeature1Desc": "Vos fichiers transitent directement de votre navigateur à celui du destinataire. Aucun stockage intermédiaire.",
+    "p2pFeature2": "Chiffrement de bout en bout",
+    "p2pFeature2Desc": "Le fichier est chiffré avant l'envoi. Ni nous, ni personne d'autre ne peut en lire le contenu.",
+    "p2pFeature3": "Entre amis uniquement",
+    "p2pFeature3Desc": "Vous ne pouvez transférer qu'à vos contacts approuvés. Aucun lien public, aucune fuite accidentelle."
   },
   "common": {
     "cancel": "Annuler",

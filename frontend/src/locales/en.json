@@ -84,7 +84,14 @@
     "zeroKnowledge": "Zero-Knowledge",
     "zeroKnowledgeDesc": "We only know your email address, username and avatar. No ads, no cookies, no tracking.",
     "secureSharing": "Secure, Direct and Confidential Sharing",
-    "secureSharingDesc": "Exchange your files in encrypted P2P, without intermediate server, with access control and expiration."
+    "secureSharingDesc": "Exchange your files in encrypted P2P, without intermediate server, with access control and expiration.",
+    "p2pTagline": "Send files directly, with no intermediate server.",
+    "p2pFeature1": "Direct transfer",
+    "p2pFeature1Desc": "Files travel directly from your browser to the recipient's. No intermediate storage.",
+    "p2pFeature2": "End-to-end encryption",
+    "p2pFeature2Desc": "The file is encrypted before sending. Neither we nor anyone else can read its content.",
+    "p2pFeature3": "Friends only",
+    "p2pFeature3Desc": "You can only transfer to approved contacts. No public links, no accidental leaks."
   },
   "common": {
     "cancel": "Cancel",
