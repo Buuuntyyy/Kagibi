@@ -22,7 +22,8 @@
     "storage": "Storage",
     "billing": "Billing",
     "home": "Home",
-    "transfer": "P2P Transfer"
+    "transfer": "P2P Transfer",
+    "myDrive": "My Drive"
   },
   "file": {
     "upload": "Upload file",
