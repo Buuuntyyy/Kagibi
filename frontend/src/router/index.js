@@ -18,6 +18,7 @@ import LandingPricing from '../views/landing/PricingView.vue'
 import LandingTransfer from '../views/landing/TransferView.vue'
 import LandingSecurity from '../views/landing/SecurityView.vue'
 import { useAuthStore } from '../stores/auth'
+import { isP2PSubdomain } from '../composables/useSubdomain'
 
 const isLocalAuthBypassEnabled =
   import.meta.env.DEV && String(import.meta.env.VITE_LOCAL_BYPASS_AUTH).toLowerCase() === 'true'
@@ -26,7 +27,10 @@ const routes = [
   {
     path: '/',
     name: 'LandingHome',
-    component: LandingHome,
+    component: isP2PSubdomain
+      ? () => import('../views/p2p/P2PSubdomainView.vue')
+      : LandingHome,
+    meta: isP2PSubdomain ? { requiresAuth: true } : {},
   },
   {
     path: '/pricing',
@@ -127,10 +131,7 @@ const routes = [
     name: 'PublicBrowse',
     component: PublicBrowse,
   },
-  {
-    path: '/',
-    redirect: '/dashboard/home',
-  },
+  ...(!isP2PSubdomain ? [{ path: '/', redirect: '/dashboard/home' }] : []),
 ]
 
 const router = createRouter({
@@ -161,7 +162,7 @@ router.beforeEach(async (to, from, next) => {
   if (to.meta.requiresAuth && !isAuthenticated) {
     next('/login')
   } else if (to.name === 'Login' && isAuthenticated) {
-    next('/dashboard/home')
+    next(isP2PSubdomain ? '/' : '/dashboard/home')
   } else {
     next()
   }

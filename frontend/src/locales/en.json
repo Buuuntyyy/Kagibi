@@ -20,7 +20,9 @@
     "myFriends": "My Friends",
     "addFriend": "Add friend",
     "storage": "Storage",
-    "billing": "Billing"
+    "billing": "Billing",
+    "home": "Home",
+    "transfer": "P2P Transfer"
   },
   "file": {
     "upload": "Upload file",

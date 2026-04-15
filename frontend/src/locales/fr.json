@@ -20,7 +20,9 @@
     "myFriends": "Mes Amis",
     "addFriend": "Ajouter un ami",
     "storage": "Stockage",
-    "billing": "Facturation"
+    "billing": "Facturation",
+    "home": "Accueil",
+    "transfer": "Transfert P2P"
   },
   "file": {
     "upload": "Ajouter un fichier",
