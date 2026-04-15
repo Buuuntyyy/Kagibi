@@ -224,9 +224,11 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
     _connectWS()
 
-    // P2P polling fallback — catches signals during WS reconnect gaps
+    // P2P polling fallback — catches signals during WS reconnect gaps only
     if (!_pollP2PTimer) {
-      _pollP2PTimer = setInterval(() => pollP2PSignals(), 2500)
+      _pollP2PTimer = setInterval(() => {
+        if (!isConnected.value) pollP2PSignals()
+      }, 2500)
     }
   }
 
