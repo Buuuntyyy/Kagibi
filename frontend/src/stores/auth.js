@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import api from '../api'
 import router from '../router'
 import { authClient, IS_POCKETBASE } from '../auth-client'
+import { isP2PSubdomain } from '../composables/useSubdomain'
 import { useFriendStore } from './friends'
 import {
   deriveKeyFromPassword, generateSalt, wrapMasterKey, unwrapMasterKey,
@@ -124,7 +125,7 @@ export const useAuthStore = defineStore('auth', {
           }
         }
 
-        router.push({ name: 'Home' })
+        router.push(isP2PSubdomain ? '/' : { name: 'Home' })
         return true
       } catch (error) {
         console.error('Login failed:', error)

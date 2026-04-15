@@ -3,15 +3,22 @@
 
 <template>
   <div class="app-container">
-    <Navbar v-if="!isLandingPage" />
-    <main :class="isLandingPage ? 'landing-content' : 'content'">
-      <router-view />
-    </main>
-    <P2PTransferDialog v-if="!isLandingPage" />
-    <WarnDialog v-if="!isLandingPage" />
-    <DeleteConfirmDialog v-if="!isLandingPage" />
-    <UploadManager v-if="!isLandingPage" />
-    <DownloadManager v-if="!isLandingPage" />
+    <template v-if="!isP2PSubdomain">
+      <Navbar v-if="!isLandingPage" />
+      <main :class="isLandingPage ? 'landing-content' : 'content'">
+        <router-view />
+      </main>
+      <P2PTransferDialog v-if="!isLandingPage" />
+      <WarnDialog v-if="!isLandingPage" />
+      <DeleteConfirmDialog v-if="!isLandingPage" />
+      <UploadManager v-if="!isLandingPage" />
+      <DownloadManager v-if="!isLandingPage" />
+    </template>
+    <template v-else>
+      <main class="landing-content">
+        <router-view />
+      </main>
+    </template>
   </div>
 </template>
 
@@ -28,6 +35,7 @@ import { useBillingStore } from './stores/billing'
 import { useRealtimeStore } from './stores/realtime'
 import { watch, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { isP2PSubdomain } from './composables/useSubdomain'
 
 const themeStore = useThemeStore()
 const authStore = useAuthStore()
