@@ -2,7 +2,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 
 <template>
-  <div v-if="isOpen" class="modal-overlay" @click.self="close">
+  <div class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <div class="modal-header">
         <h3>{{ t('dialogs.move.title') }}</h3>
@@ -18,7 +18,10 @@
           <div v-if="loading" class="loading-spinner">Chargement...</div>
           <div v-else-if="folders.length === 0 && currentPath !== '/'">Aucun sous-dossier.</div>
           <div v-for="folder in folders" :key="folder.ID" class="folder-item" @click="navigateTo(folder.Name)">
-            📁 {{ folder.Name }}
+            <svg class="folder-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="#5f6368"/>
+            </svg>
+            {{ folder.Name }}
           </div>
         </div>
       </div>
@@ -174,6 +177,15 @@ const close = () => {
   padding: 8px;
   cursor: pointer;
   border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.folder-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .folder-item:hover {
