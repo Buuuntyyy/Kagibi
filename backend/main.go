@@ -229,6 +229,7 @@ func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	g.POST("/auth/logout", func(c *gin.Context) { auth.LogoutHandler(c, redisClient) })
 	g.POST("/auth/ws-token", auth.WsTokenHandler(redisClient))
 	g.POST("/auth/update-password", auth.LocalUpdatePasswordHandler(provider, redisClient))
+	g.PUT("/auth/update-email", auth.LocalUpdateEmailHandler(provider, db, redisClient))
 	g.DELETE("/auth/account", auth.DeleteAccount(db, provider))
 
 	usersG := g.Group("/users")

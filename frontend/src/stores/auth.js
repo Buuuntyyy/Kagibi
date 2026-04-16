@@ -464,6 +464,20 @@ export const useAuthStore = defineStore('auth', {
         console.error('Failed to update avatar:', error)
         throw error
       }
+    },
+
+    async updateEmail(newEmail, password) {
+      try {
+        const data = await authClient.updateEmail(newEmail, password)
+        if (this.user) {
+          this.user.email = data.email
+          this.persistUserToStorage()
+        }
+        return data
+      } catch (error) {
+        console.error('Email update failed:', error)
+        throw error
+      }
     }
   },
 })
