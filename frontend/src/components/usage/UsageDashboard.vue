@@ -13,7 +13,7 @@
         </button>
         <h1>Mon Utilisation</h1>
       </div>
-      <p class="subtitle">Consultez en temps réel l'utilisation de votre espace et vos transferts P2P.</p>
+      <p class="subtitle">Consultez l'utilisation de votre espace de stockage.</p>
     </div>
 
     <!-- Loading State -->
@@ -46,33 +46,6 @@
                       </div>
                   </div>
                   
-                  <div class="stat-card">
-                       <div class="stat-icon">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                              <path d="M2 17l10 5 10-5"/>
-                              <path d="M2 12l10 5 10-5"/>
-                          </svg>
-                      </div>
-                      <div class="stat-info">
-                          <span class="stat-label">Bande passante consommée</span>
-                          <span class="stat-value">{{ billingStore.bandwidthUsageGB.toFixed(2) }} <small>Go</small></span>
-                      </div>
-                  </div>
-
-                  <div class="stat-card">
-                       <div class="stat-icon">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <polyline points="16 16 12 12 8 16"></polyline>
-                              <line x1="12" y1="12" x2="12" y2="21"></line>
-                              <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path>
-                          </svg>
-                      </div>
-                      <div class="stat-info">
-                          <span class="stat-label">Taille max par fichier (+ Partages)</span>
-                          <span class="stat-value">{{ maxFileSizeText }} </span>
-                      </div>
-                  </div>
               </div>
           </div>
       </section>
@@ -93,12 +66,6 @@ const currentPlan = computed(() => billingStore.currentPlan)
 
 const maxStorageGB = computed(() => {
   return currentPlan.value?.storage_limit_gb || Number(import.meta.env.VITE_DEFAULT_STORAGE_GB) || 20;
-})
-
-const maxFileSizeText = computed(() => {
-   const val = currentPlan.value?.features?.max_file_size_mb || 1024;
-   if(val >= 1024) return (val/1024) + ' Go';
-   return val + ' Mo';
 })
 
 const storagePercent = computed(() => {
