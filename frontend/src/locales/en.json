@@ -239,7 +239,13 @@
     "sendFile": "Send file",
     "selectFriendAndFile": "Select a friend and a file",
     "transferRejected": "Transfer declined by your friend",
-    "keepWindowActive": "Keep this window active during the transfer, don't refresh or close the tab."
+    "transferTimedOut": "No response — the transfer request has expired.",
+    "keepWindowActive": "Keep this window active during the transfer, don't refresh or close the tab.",
+    "pingNotify": "Re-notify",
+    "pingLimitReached": "Limit reached",
+    "pingsLeft": "{count} ping(s) left",
+    "pingNotification": "P2P transfer reminder",
+    "pingNotificationBody": "Your friend is nudging you about the pending file transfer."
   },
   "home": {
     "welcome": "Welcome to your Secured Storage",

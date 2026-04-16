@@ -239,7 +239,13 @@
     "sendFile": "Envoyer le fichier",
     "selectFriendAndFile": "Sélectionnez un ami et un fichier",
     "transferRejected": "Transfert refusé par votre ami",
-    "keepWindowActive": "Gardez cette fenêtre active pendant le transfert, ne rafraîchissez pas et ne fermez pas l'onglet."
+    "transferTimedOut": "Aucune réponse — le transfert a expiré.",
+    "keepWindowActive": "Gardez cette fenêtre active pendant le transfert, ne rafraîchissez pas et ne fermez pas l'onglet.",
+    "pingNotify": "Re-notifier",
+    "pingLimitReached": "Limite atteinte",
+    "pingsLeft": "{count} ping(s) restant(s)",
+    "pingNotification": "Rappel de transfert P2P",
+    "pingNotificationBody": "Votre ami vous relance pour le transfert de fichier en attente."
   },
   "home": {
     "welcome": "Bienvenue sur votre Stockage Sécurisé",
