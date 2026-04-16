@@ -54,9 +54,9 @@
 
     <!-- Selection Action Bar / Security Tip Bar -->
     <div class="selection-gap" :class="{ 'has-content': selectedItems.length > 0 || (!loadingSecuritySettings && !mfaSettings.mfa_enabled) }">
-      <Transition name="selection-bar">
+      <Transition name="selection-bar" mode="out-in">
         <!-- Selection Actions -->
-        <div v-if="selectedItems.length > 0" class="selection-action-bar">
+        <div v-if="selectedItems.length > 0" key="selection-bar" class="selection-action-bar">
           <div class="selection-actions">
             <button class="action-btn download-action" @click.stop="downloadSelectedFiles" :title="t('file.download')">
             <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
@@ -75,7 +75,7 @@
         </div>
 
         <!-- Security Tip Bar (shown when no items selected) -->
-        <div v-else-if="!loadingSecuritySettings && !mfaSettings.mfa_enabled" class="security-tip-bar" @click="navigateToSecurity">
+        <div v-else-if="!loadingSecuritySettings && !mfaSettings.mfa_enabled" key="tip-warning" class="security-tip-bar" @click="navigateToSecurity">
           <div class="tip-content">
             <svg class="tip-icon" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor">
               <path d="M0 0h24v24H0V0z" fill="none"/>
@@ -89,7 +89,7 @@
           </svg>
         </div>
 
-        <div v-else-if="!loadingSecuritySettings && mfaSettings.mfa_enabled" class="security-tip-bar success">
+        <div v-else-if="!loadingSecuritySettings && mfaSettings.mfa_enabled" key="tip-success" class="security-tip-bar success">
           <div class="tip-content">
             <svg class="tip-icon" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor">
               <path d="M0 0h24v24H0V0z" fill="none"/>
@@ -1859,13 +1859,11 @@ button {
 @keyframes slideDown {
   from {
     opacity: 0;
-    transform: translateY(-10px);
-    max-height: 0;
+    transform: translateY(-8px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
-    max-height: 60px;
   }
 }
 
@@ -1873,12 +1871,10 @@ button {
   from {
     opacity: 1;
     transform: translateY(0);
-    max-height: 60px;
   }
   to {
     opacity: 0;
-    transform: translateY(-10px);
-    max-height: 0;
+    transform: translateY(-8px);
   }
 }
 

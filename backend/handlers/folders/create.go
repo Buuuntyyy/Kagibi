@@ -18,7 +18,9 @@ import (
 	"github.com/uptrace/bun"
 )
 
-var validNameRegex = regexp.MustCompile(`^[a-zA-Z0-9\s\-\._]+$`)
+// \p{L} matches any Unicode letter (covers accented and non-Latin characters).
+// \p{N} matches any Unicode number. The remaining chars are safe punctuation.
+var validNameRegex = regexp.MustCompile(`^[\p{L}\p{N}\s\-\._]+$`)
 
 type CreateFolderRequest struct {
 	Name string `json:"name" binding:"required" validate:"required,foldername"`

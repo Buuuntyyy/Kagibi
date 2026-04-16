@@ -5,24 +5,25 @@
   <div v-if="isOpen" class="modal-overlay" @click.self="cancel">
     <div class="modal-content">
       <h3>{{ title }}</h3>
-      <input 
+      <input
         ref="inputRef"
-        v-model="inputValue" 
-        :placeholder="placeholder" 
+        v-model="inputValue"
+        :placeholder="placeholder"
+        :class="['modal-input', { 'input-error': validationError }]"
         @keyup.enter="confirm"
         @keyup.esc="cancel"
-        class="modal-input"
       />
+      <p v-if="validationError" class="error-label">{{ validationError }}</p>
       <div class="modal-actions">
         <button @click="cancel" class="btn-cancel">{{ t('common.cancel') }}</button>
-        <button @click="confirm" class="btn-confirm">{{ t('common.confirm') }}</button>
+        <button @click="confirm" class="btn-confirm" :disabled="!!validationError">{{ t('common.confirm') }}</button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps({
@@ -38,6 +39,17 @@ const { t } = useI18n()
 const inputValue = ref('')
 const inputRef = ref(null)
 
+// Mirrors the backend regex: Unicode letters, numbers, spaces, - . _
+// The `u` flag enables Unicode property escapes (\p{L}, \p{N}).
+const VALID_NAME_RE = /^[\p{L}\p{N}\s\-\._]+$/u
+
+const validationError = computed(() => {
+  const v = inputValue.value
+  if (!v.trim()) return null // empty is handled by backend required binding
+  if (!VALID_NAME_RE.test(v)) return t('dialogs.rename.invalidName')
+  return null
+})
+
 watch(() => props.isOpen, (newVal) => {
   if (newVal) {
     inputValue.value = props.defaultValue || ''
@@ -49,6 +61,7 @@ watch(() => props.isOpen, (newVal) => {
 })
 
 const confirm = () => {
+  if (validationError.value) return
   emit('confirm', inputValue.value)
   emit('update:isOpen', false)
 }
@@ -90,11 +103,24 @@ h3 {
 .modal-input {
   width: 100%;
   padding: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 6px;
   border: 1px solid #ccc;
   border-radius: 4px;
   box-sizing: border-box;
   font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.modal-input.input-error {
+  border-color: #e53935;
+  outline-color: #e53935;
+}
+
+.error-label {
+  margin: 0 0 14px 0;
+  font-size: 0.82rem;
+  color: #e53935;
+  line-height: 1.4;
 }
 
 .modal-actions {
@@ -125,7 +151,12 @@ button {
   color: white;
 }
 
-.btn-confirm:hover {
+.btn-confirm:hover:not(:disabled) {
   background-color: #3aa876;
+}
+
+.btn-confirm:disabled {
+  background-color: #a5d6bc;
+  cursor: not-allowed;
 }
 </style>

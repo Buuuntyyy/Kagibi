@@ -410,7 +410,8 @@
       "title": "Entrez le nouveau nom :",
       "placeholder": "Nouveau nom",
       "newFolderTitle": "Entrez le nom du nouveau dossier :",
-      "newFolderPlaceholder": "Nom du dossier"
+      "newFolderPlaceholder": "Nom du dossier",
+      "invalidName": "Seuls les lettres, chiffres, espaces, tirets ( - ), points ( . ) et underscores ( _ ) sont autorisés."
     },
     "tag": {
       "title": "Gérer les tags",

@@ -31,15 +31,11 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
 
 const { t } = useI18n();
-
-const props = defineProps({
-  isOpen: Boolean,
-});
 
 const emit = defineEmits(['close', 'move-to']);
 
@@ -47,10 +43,15 @@ const loading = ref(false);
 const currentPath = ref('/');
 const folders = ref([]);
 
+// Encode each path segment independently so accented characters and spaces
+// are properly percent-encoded in the URL, while the slash separators are preserved.
+const encodePath = (path) =>
+  path.split('/').map(seg => encodeURIComponent(seg)).join('/');
+
 const fetchFolders = async (path) => {
   loading.value = true;
   try {
-    const response = await api.get(`/files/list${path}`);
+    const response = await api.get(`/files/list${encodePath(path)}`);
     folders.value = response.data.folders || [];
   } catch (error) {
     console.error('Error fetching folders:', error);
@@ -60,11 +61,11 @@ const fetchFolders = async (path) => {
   }
 };
 
-watch(() => props.isOpen, (newVal) => {
-  if (newVal) {
-    currentPath.value = '/';
-    fetchFolders('/');
-  }
+// The component is mounted by v-if in the parent, so onMounted fires exactly
+// when the dialog opens — no prop watcher needed.
+onMounted(() => {
+  currentPath.value = '/';
+  fetchFolders('/');
 });
 
 const navigateTo = (folderName) => {
