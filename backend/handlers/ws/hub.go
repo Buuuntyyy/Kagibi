@@ -31,7 +31,9 @@ const (
 	redisPresencePrefix = "ws:presence:"
 	redisBroadcastChan  = "ws:broadcast"
 	// presenceTTL must outlive the grace period so a pod crash doesn't leave stale keys forever.
-	presenceTTL = presenceGracePeriod + 30*time.Second
+	// It must also be longer than pingPeriod (54 s) so the key is still alive when renewPresence
+	// is called from the pong handler. 5 minutes gives plenty of headroom.
+	presenceTTL = 5 * time.Minute
 )
 
 // Client represents a single WebSocket connection from an authenticated user.
@@ -192,6 +194,19 @@ func (h *Hub) clearPresence(userID string) {
 	defer cancel()
 	if err := h.rdb.Del(ctx, redisPresencePrefix+userID).Err(); err != nil {
 		log.Printf("[WS] Redis clearPresence failed for user=%s: %v", userID, err)
+	}
+}
+
+// renewPresence resets the TTL of the user's presence key so it doesn't expire
+// while the WebSocket connection is still alive. Called on every pong received.
+func (h *Hub) renewPresence(userID string) {
+	if h.rdb == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := h.rdb.Expire(ctx, redisPresencePrefix+userID, presenceTTL).Err(); err != nil {
+		log.Printf("[WS] Redis renewPresence failed for user=%s: %v", userID, err)
 	}
 }
 
@@ -413,6 +428,7 @@ func (c *Client) readPump() {
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		c.hub.renewPresence(c.userID)
 		return nil
 	})
 
