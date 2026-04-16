@@ -190,6 +190,21 @@ export const authClient = {
     return {}
   },
 
+  async updateEmail(newEmail, password) {
+    const token = _localGetToken()
+    const headers = { 'Content-Type': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    const res = await fetch(`${_apiBase}/auth/update-email`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ new_email: newEmail, password }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+    if (data.access_token) _localSaveToken(data.access_token)
+    return data
+  },
+
   async refreshSession() {
     const token = _localGetToken()
     if (!token) return false

@@ -159,6 +159,23 @@ func (p *LocalProvider) UpdateUserPasswordWithVerification(userID, oldPassword, 
 	return p.UpdateUserPassword(userID, newPassword)
 }
 
+// UpdateUserEmailWithVerification verifies the current password before updating the email.
+// Returns an error if the password is wrong or the new email is already taken.
+func (p *LocalProvider) UpdateUserEmailWithVerification(userID, password, newEmail string) error {
+	var au authUser
+	if err := p.db.NewSelect().Model(&au).Where(queryIDEq, userID).Scan(context.Background()); err != nil {
+		return fmt.Errorf("user not found")
+	}
+	if err := p.CheckPassword(au.PasswordHash, password); err != nil {
+		return fmt.Errorf("invalid current password")
+	}
+	_, err := p.db.NewUpdate().Model((*authUser)(nil)).
+		Set("email = ?", newEmail).
+		Where(queryIDEq, userID).
+		Exec(context.Background())
+	return err
+}
+
 // ReissueToken verifies the password for the given email and, if correct, returns
 // the user ID and a fresh JWT. Used during orphan-signup recovery so the caller
 // never needs to access the unexported authUser type directly.
