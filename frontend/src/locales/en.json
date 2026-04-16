@@ -410,7 +410,8 @@
       "title": "Enter the new name:",
       "placeholder": "New name",
       "newFolderTitle": "Enter the name of the new folder:",
-      "newFolderPlaceholder": "Folder name"
+      "newFolderPlaceholder": "Folder name",
+      "invalidName": "Only letters, numbers, spaces, hyphens ( - ), dots ( . ) and underscores ( _ ) are allowed."
     },
     "tag": {
       "title": "Manage tags",
