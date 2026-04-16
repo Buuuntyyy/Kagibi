@@ -43,7 +43,11 @@ export const useP2PStore = defineStore('p2p', {
     activeTransfer: null,
     rejectedTransfer: null, // Info shown to initiator when recipient rejects
     candidateQueue: [], // Store candidates that arrive before acceptance
-    heartbeatInterval: null // Interval for session maintenance
+    heartbeatInterval: null, // Interval for session maintenance
+    pingCount: 0, // Number of pings sent for current transfer
+    pingCooldownUntil: null, // Timestamp until which pings are throttled
+    isShaking: false, // Triggers shake animation on the receiver dialog
+    connectingTimeout: null // Timeout that dismisses a stuck Connecting... state
   }),
   actions: {
     startHeartbeat() {
@@ -85,6 +89,7 @@ export const useP2PStore = defineStore('p2p', {
                 if (pc.iceConnectionState === 'checking') {
                     this.activeTransfer.connectionInfo.stage = 'Négociation de la connexion...';
                 } else if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                    this._clearConnectingTimeout(); // Connection established — no longer waiting
                     this.activeTransfer.connectionInfo.wasConnected = true;
                     if (pc.iceConnectionState === 'connected') {
                         this.activeTransfer.connectionInfo.stage = 'Connecté';
@@ -132,6 +137,21 @@ export const useP2PStore = defineStore('p2p', {
         this.candidateQueue = [];
     },
 
+    _handlePingSignal() {
+        this.isShaking = true;
+        setTimeout(() => { this.isShaking = false; }, 700);
+    },
+
+    sendPing(friendId, transferId) {
+        const now = Date.now();
+        if (this.pingCount >= 3) return;
+        if (this.pingCooldownUntil && now < this.pingCooldownUntil) return;
+        const realtimeStore = useRealtimeStore();
+        realtimeStore.sendP2PSignal(friendId, 'p2p_ping', { transferId });
+        this.pingCount++;
+        this.pingCooldownUntil = now + 30000;
+    },
+
     async _handleAnswerSignal(sender_id, data) {
         if (!this.activeTransfer || this.activeTransfer.friendId !== sender_id) return;
         if (data.transferId && this.activeTransfer.transferId && data.transferId !== this.activeTransfer.transferId) {
@@ -165,9 +185,20 @@ export const useP2PStore = defineStore('p2p', {
         }
     },
 
+    _clearConnectingTimeout() {
+        if (this.connectingTimeout) { clearTimeout(this.connectingTimeout); this.connectingTimeout = null; }
+    },
+
     _handleRejectSignal(sender_id, data) {
-        if (!this.activeTransfer || this.activeTransfer.friendId !== sender_id) return;
+        // Only the sender side has type='send'; the receiver has no activeTransfer yet.
+        if (!this.activeTransfer || this.activeTransfer.type !== 'send') return;
+        // If both sides carry a transferId it must match — prevents stale/wrong-session signals.
         if (data?.transferId && this.activeTransfer.transferId && data.transferId !== this.activeTransfer.transferId) return;
+        // Sender must be our intended recipient
+        if (this.activeTransfer.friendId !== sender_id) {
+            console.warn('[P2P] Reject signal ignored — sender_id mismatch:', sender_id, 'expected:', this.activeTransfer.friendId);
+            return;
+        }
 
         const fileName = this.activeTransfer.fileName;
         // Null out all handlers before closing to prevent stale callbacks
@@ -176,6 +207,7 @@ export const useP2PStore = defineStore('p2p', {
         pc.oniceconnectionstatechange = null;
         pc.ondatachannel = null;
         pc.close();
+        this._clearConnectingTimeout();
         this.activeTransfer = null;
         this.stopHeartbeat();
 
@@ -194,6 +226,8 @@ export const useP2PStore = defineStore('p2p', {
             await this._handleCandidateSignal(sender_id, data);
         } else if (type === 'reject') {
             this._handleRejectSignal(sender_id, data);
+        } else if (type === 'p2p_ping') {
+            this._handlePingSignal();
         }
     },
 
@@ -236,6 +270,10 @@ export const useP2PStore = defineStore('p2p', {
          dc.binaryType = "arraybuffer";
          dc.onopen = () => this.sendFileData(file, fileKey, dc);
          
+         this.pingCount = 0;
+         this.pingCooldownUntil = null;
+         if (this.connectingTimeout) { clearTimeout(this.connectingTimeout); this.connectingTimeout = null; }
+
          this.activeTransfer = {
              friendId: friend.id,
              type: 'send',
@@ -269,6 +307,19 @@ export const useP2PStore = defineStore('p2p', {
                  fileKeyEncrypted: keyEncryptedBase64
              }
          });
+
+         // Auto-dismiss the waiting state after 3 minutes with no response
+         this.connectingTimeout = setTimeout(() => {
+             if (this.activeTransfer && this.activeTransfer.status === 'Connecting...') {
+                 const pc = this.activeTransfer.pc;
+                 if (pc) { pc.onicecandidate = null; pc.oniceconnectionstatechange = null; pc.close(); }
+                 this.activeTransfer = null;
+                 this.stopHeartbeat();
+                 this.rejectedTransfer = { friendId: friend.id, fileName: file.name, timedOut: true };
+                 setTimeout(() => { this.rejectedTransfer = null; }, 8000);
+             }
+             this.connectingTimeout = null;
+         }, 3 * 60 * 1000);
     },
 
     async acceptTransfer() {
@@ -383,17 +434,24 @@ export const useP2PStore = defineStore('p2p', {
         });
     },
 
-    rejectTransfer() {
+    async rejectTransfer() {
         if (!this.incomingOffer) return;
         const realtimeStore = useRealtimeStore();
-        realtimeStore.sendP2PSignal(this.incomingOffer.senderId, 'reject', {
-            transferId: this.incomingOffer.transferId
-        });
+        const senderId = this.incomingOffer.senderId;
+        const transferId = this.incomingOffer.transferId;
+        // Clear local state immediately so the UI updates right away
         this.incomingOffer = null;
         this.candidateQueue = [];
+        // Send the reject signal — best-effort, errors are logged but don't block the UI
+        try {
+            await realtimeStore.sendP2PSignal(senderId, 'reject', { transferId });
+        } catch (err) {
+            console.error('[P2P] Failed to send reject signal:', err);
+        }
     },
 
     cancelTransfer() {
+        this._clearConnectingTimeout();
         if (this.activeTransfer) {
             this.activeTransfer.pc.close();
             this.activeTransfer = null;
