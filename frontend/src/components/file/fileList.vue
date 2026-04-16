@@ -1848,34 +1848,21 @@ button {
 }
 
 /* Selection Bar Animation */
-.selection-bar-enter-active {
-  animation: slideDown 0.2s ease-out;
-}
-
+.selection-bar-enter-active,
 .selection-bar-leave-active {
-  animation: slideUp 0.15s ease-in;
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.selection-bar-enter-from,
+.selection-bar-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
+.selection-bar-enter-to,
+.selection-bar-leave-from {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 @media (max-width: 768px) {
