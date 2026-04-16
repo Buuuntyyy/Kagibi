@@ -338,6 +338,16 @@ func p2pSignalHandler(db *bun.DB) gin.HandlerFunc {
 			return
 		}
 		wshandler.GlobalHub.SendP2PSignalToUser(req.TargetUserID, userID.(string), req.SignalType, signal.ID, req.Payload)
+
+		// If the target is currently connected the signal was just delivered over WS.
+		// Mark it consumed immediately so it won't be replayed by the polling fallback.
+		if wshandler.GlobalHub.IsConnected(req.TargetUserID) {
+			db.NewUpdate().Model((*pkg.P2PSignal)(nil)).
+				Set("consumed = true").
+				Where("id = ?", signal.ID).
+				Exec(c.Request.Context())
+		}
+
 		c.JSON(200, gin.H{"status": "sent", "signal_id": signal.ID})
 	}
 }
@@ -348,7 +358,7 @@ func p2pFetchSignalsHandler(db *bun.DB) gin.HandlerFunc {
 		var signals []pkg.P2PSignal
 		if err := db.NewSelect().
 			Model(&signals).
-			Where("target_id = ? AND consumed = false", userID).
+			Where("target_id = ? AND consumed = false AND created_at > NOW() - INTERVAL '2 minutes'", userID).
 			Order("created_at ASC").
 			Scan(c.Request.Context()); err != nil {
 			c.JSON(500, gin.H{"error": "Failed to fetch signals"})
