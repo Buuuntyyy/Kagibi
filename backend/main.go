@@ -339,9 +339,13 @@ func p2pSignalHandler(db *bun.DB) gin.HandlerFunc {
 		}
 		wshandler.GlobalHub.SendP2PSignalToUser(req.TargetUserID, userID.(string), req.SignalType, signal.ID, req.Payload)
 
-		// If the target is currently connected the signal was just delivered over WS.
-		// Mark it consumed immediately so it won't be replayed by the polling fallback.
-		if wshandler.GlobalHub.IsConnected(req.TargetUserID) {
+		// Only mark high-volume signals (offer/answer/candidate) consumed immediately
+		// when the target is connected via WS — this prevents the polling fallback from
+		// replaying them. For reject and p2p_ping the polling fallback is intentionally
+		// kept active as a reliability net: WS delivery is best-effort and these signals
+		// are critical to the user experience.
+		criticalForPolling := req.SignalType == "reject" || req.SignalType == "p2p_ping"
+		if !criticalForPolling && wshandler.GlobalHub.IsConnected(req.TargetUserID) {
 			db.NewUpdate().Model((*pkg.P2PSignal)(nil)).
 				Set("consumed = true").
 				Where("id = ?", signal.ID).

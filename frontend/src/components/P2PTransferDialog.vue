@@ -15,7 +15,7 @@
       <!-- INCOMING REQUEST -->
       <div v-if='p2pStore.incomingOffer' class='notification-body'>
          <p class='request-text'>
-            {{ t('p2p.incomingRequest', { sender: p2pStore.incomingOffer.senderId.substring(0,8) }) }}
+            {{ t('p2p.incomingRequest', { sender: senderName }) }}
          </p>
          <div class='file-preview'>
             <div class='file-icon-box'>
@@ -105,10 +105,19 @@
 import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useP2PStore } from '../stores/p2p';
+import { useFriendStore } from '../stores/friends';
 
 const { t } = useI18n();
 
 const p2pStore = useP2PStore();
+const friendStore = useFriendStore();
+
+const senderName = computed(() => {
+    const offer = p2pStore.incomingOffer;
+    if (!offer) return '';
+    const friend = friendStore.friends.find(f => f.id === offer.senderId);
+    return friend?.name || offer.senderId.substring(0, 8);
+});
 
 const visible = computed(() => !!p2pStore.incomingOffer || !!p2pStore.activeTransfer || !!p2pStore.rejectedTransfer);
 const isDone = computed(() => p2pStore.activeTransfer?.status === 'Done' || p2pStore.activeTransfer?.status === 'Complete');
@@ -166,19 +175,19 @@ function showBrowserNotification(title, body) {
 watch(() => p2pStore.incomingOffer, (offer) => {
     if (offer) {
         playPingSound();
-        showBrowserNotification(t('p2p.title'), t('p2p.incomingRequest', { sender: offer.senderId.substring(0, 8) }));
+        showBrowserNotification(t('p2p.title'), t('p2p.incomingRequest', { sender: senderName.value }));
         setTimeout(triggerShake, 300);
     }
 });
 
-// Trigger on p2p_ping signal from sender
-watch(() => p2pStore.isShaking, (shaking) => {
-    if (shaking) {
-        triggerShake();
-        playPingSound();
-        if (p2pStore.incomingOffer) {
-            showBrowserNotification(t('p2p.pingNotification'), t('p2p.pingNotificationBody'));
-        }
+// Trigger on p2p_ping signal from sender — pingSeq increments on every ping,
+// so the watcher always fires regardless of any previous state.
+watch(() => p2pStore.pingSeq, (seq) => {
+    if (seq === 0) return; // initial mount, not an actual ping
+    triggerShake();
+    playPingSound();
+    if (p2pStore.incomingOffer) {
+        showBrowserNotification(t('p2p.pingNotification'), t('p2p.pingNotificationBody'));
     }
 });
 
