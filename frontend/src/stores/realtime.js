@@ -224,11 +224,14 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
     _connectWS()
 
-    // P2P polling fallback — catches signals during WS reconnect gaps only
+    // P2P polling — runs always as a delivery fallback.
+    // When WS is connected, most signals arrive via WS; polling deduplicates via
+    // _seenSignalIds so signals are never processed twice. When WS is down,
+    // polling is the only delivery path.
     if (!_pollP2PTimer) {
       _pollP2PTimer = setInterval(() => {
-        if (!isConnected.value) pollP2PSignals()
-      }, 2500)
+        pollP2PSignals()
+      }, 5000)
     }
   }
 

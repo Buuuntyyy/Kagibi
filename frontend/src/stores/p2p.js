@@ -46,7 +46,7 @@ export const useP2PStore = defineStore('p2p', {
     heartbeatInterval: null, // Interval for session maintenance
     pingCount: 0, // Number of pings sent for current transfer
     pingCooldownUntil: null, // Timestamp until which pings are throttled
-    isShaking: false, // Triggers shake animation on the receiver dialog
+    pingSeq: 0, // Incremented on every received ping — watcher always fires
     connectingTimeout: null // Timeout that dismisses a stuck Connecting... state
   }),
   actions: {
@@ -138,8 +138,7 @@ export const useP2PStore = defineStore('p2p', {
     },
 
     _handlePingSignal() {
-        this.isShaking = true;
-        setTimeout(() => { this.isShaking = false; }, 700);
+        this.pingSeq++;
     },
 
     sendPing(friendId, transferId) {
