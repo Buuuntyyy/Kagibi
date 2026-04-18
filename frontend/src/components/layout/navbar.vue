@@ -7,7 +7,7 @@
       <img src="/Logo.png" alt="Kagibi Logo" class="brand-logo"/>
       <span>Kagibi</span>
     </router-link>
-    <SearchBar v-if="authStore.isAuthenticated || !!authStore.user" />
+    <SearchBar v-if="authStore.isAuthenticated" />
     <div class="nav-links">
       <a
         v-if="buyMeACoffeeUrl"

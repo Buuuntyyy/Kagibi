@@ -115,11 +115,13 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useFileStore } from '../../stores/files'
 import { useAuthStore } from '../../stores/auth'
 import api from '../../api'
 import { debounce } from 'lodash';
 
+const { t } = useI18n()
 const router = useRouter();
 const fileStore = useFileStore();
 const authStore = useAuthStore();
@@ -259,12 +261,12 @@ onUnmounted(() => {
 
 <style scoped>
 .search-bar {
-  flex-grow: 1;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   justify-content: center;
   margin: 0 2rem;
   max-width: 720px;
-  width: 100%;
   position: relative; /* Pour le positionnement du dropdown */
 }
 
@@ -272,11 +274,12 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   background-color: var(--hover-background-color);
+  border: 1px solid var(--border-color);
   border-radius: 24px;
   padding: 0 8px;
   width: 100%;
   max-width: 700px;
-  transition: background-color 0.1s, box-shadow 0.1s;
+  transition: background-color 0.1s, box-shadow 0.1s, border-color 0.1s;
   height: 40px;
 }
 
@@ -299,6 +302,7 @@ onUnmounted(() => {
 .search-wrapper.focused,
 .search-wrapper:focus-within {
   background-color: var(--card-color);
+  border-color: var(--primary-color);
   box-shadow: 0 1px 1px 0 rgba(65,69,73,0.3), 0 1px 3px 1px rgba(65,69,73,0.15);
 }
 
