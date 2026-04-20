@@ -27,10 +27,12 @@ func SetWSHub(h WSHub) { wsHub = h }
 type User struct {
 	bun.BaseModel `bun:"table:profiles,alias:p"`
 
-	ID        string `bun:"id,pk"`
-	Name      string `bun:"name,notnull"`
-	Email     string `bun:"email,unique,notnull"`
-	AvatarURL string `bun:"avatar_url,notnull,default:'/avatars/default.png'" json:"avatar_url"`
+	ID             string `bun:"id,pk"`
+	Name           string `bun:"name,notnull"`
+	EmailHash      string `bun:"email_hash,notnull" json:"-"`
+	EmailEncrypted string `bun:"email_encrypted,notnull" json:"-"`
+	Email          string `bun:"-" json:"email"` // virtual: populated by DecryptUserEmail after any DB load
+	AvatarURL      string `bun:"avatar_url,notnull,default:'/avatars/default.png'" json:"avatar_url"`
 	// PasswordHash removed as it is handled by Supabase
 	Salt                       string     `bun:"salt,notnull" json:"salt"`
 	EncryptedMasterKey         string     `bun:"encrypted_master_key,notnull" json:"encrypted_master_key"`
@@ -224,11 +226,12 @@ type P2PInvite struct {
 	bun.BaseModel `bun:"table:p2p_invites"`
 
 	ID             int64      `bun:"id,pk,autoincrement" json:"id"`
-	Token          string     `bun:"token,unique,notnull" json:"token"`
-	SenderID       string     `bun:"sender_id,notnull" json:"sender_id"`
-	SenderName     string     `bun:"sender_name,notnull" json:"sender_name"`
-	RecipientEmail string     `bun:"recipient_email" json:"recipient_email"` // empty for guest invites
-	RecipientID    string     `bun:"recipient_id,notnull" json:"recipient_id"`
+	Token                   string     `bun:"token,unique,notnull" json:"token"`
+	SenderID                string     `bun:"sender_id,notnull" json:"sender_id"`
+	SenderName              string     `bun:"sender_name,notnull" json:"sender_name"`
+	RecipientEmailEncrypted string     `bun:"recipient_email_encrypted" json:"-"` // AES-256-GCM encrypted, nullable
+	RecipientEmail          string     `bun:"-" json:"recipient_email"`            // virtual: decrypted from RecipientEmailEncrypted
+	RecipientID             string     `bun:"recipient_id,notnull" json:"recipient_id"`
 	TransferID     string     `bun:"transfer_id,notnull" json:"transfer_id"`
 	FileName       string     `bun:"file_name,notnull" json:"file_name"`
 	FileSize       int64      `bun:"file_size,notnull" json:"file_size"`

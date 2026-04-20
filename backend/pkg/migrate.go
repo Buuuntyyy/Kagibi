@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log"
 
+	"kagibi/backend/pkg/emailcrypto"
+
 	"github.com/uptrace/bun"
 )
 
@@ -31,6 +33,9 @@ func Migrate(db *bun.DB) error {
 		return err
 	}
 	if err := migrateUserSettings(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateEmailEncryption(ctx, db); err != nil {
 		return err
 	}
 
@@ -438,4 +443,132 @@ func migrateUserSettings(ctx context.Context, db *bun.DB) error {
 	}
 
 	return nil
+}
+
+// migrateEmailEncryption adds email_hash / email_encrypted columns, migrates existing
+// plaintext emails from auth_users and profiles, adds UNIQUE indexes on the hash
+// columns, then nullifies the legacy plaintext email columns.
+//
+// Idempotent: safe to run on every startup. Rows that already have email_hash set
+// are skipped. The old email column is kept (nullable) for rollback convenience.
+func migrateEmailEncryption(ctx context.Context, db *bun.DB) error {
+	// 1. Add new columns (nullable so existing rows don't immediately violate NOT NULL).
+	for _, stmt := range []string{
+		`ALTER TABLE "auth_users" ADD COLUMN IF NOT EXISTS "email_hash"      VARCHAR(64)`,
+		`ALTER TABLE "auth_users" ADD COLUMN IF NOT EXISTS "email_encrypted" TEXT`,
+		`ALTER TABLE "profiles"   ADD COLUMN IF NOT EXISTS "email_hash"      VARCHAR(64)`,
+		`ALTER TABLE "profiles"   ADD COLUMN IF NOT EXISTS "email_encrypted" TEXT`,
+		`ALTER TABLE "p2p_invites" ADD COLUMN IF NOT EXISTS "recipient_email_encrypted" TEXT`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateEmailEncryption add column: %v", err)
+		}
+	}
+
+	// 2. Migrate existing plaintext emails to hash + encrypted form.
+	migrateEmailRows(ctx, db, "auth_users")
+	migrateEmailRows(ctx, db, "profiles")
+	migrateP2PInviteEmails(ctx, db)
+
+	// 3. Add partial UNIQUE indexes on email_hash (partial so NULL rows are not indexed).
+	for _, stmt := range []string{
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_users_email_hash ON auth_users (email_hash) WHERE email_hash IS NOT NULL`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email_hash   ON profiles   (email_hash) WHERE email_hash IS NOT NULL`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateEmailEncryption create index: %v", err)
+		}
+	}
+
+	// 4. Relax legacy email column constraints so Go code can INSERT without the old column.
+	//    These are best-effort: fail silently if the column/constraint doesn't exist (new installs).
+	for _, stmt := range []string{
+		`ALTER TABLE "auth_users" ALTER COLUMN "email" DROP NOT NULL`,
+		`ALTER TABLE "auth_users" DROP CONSTRAINT IF EXISTS "auth_users_email_key"`,
+		`DROP INDEX IF EXISTS idx_auth_users_email`,
+		`ALTER TABLE "profiles"   ALTER COLUMN "email" DROP NOT NULL`,
+		`ALTER TABLE "profiles"   DROP CONSTRAINT IF EXISTS "profiles_email_key"`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateEmailEncryption relax constraints: %v", err)
+		}
+	}
+
+	// 5. Nullify plaintext email data for rows that have been encrypted successfully.
+	for _, stmt := range []string{
+		`UPDATE "auth_users"  SET "email" = NULL WHERE "email_hash" IS NOT NULL AND "email" IS NOT NULL`,
+		`UPDATE "profiles"    SET "email" = NULL WHERE "email_hash" IS NOT NULL AND "email" IS NOT NULL`,
+		`UPDATE "p2p_invites" SET "recipient_email" = NULL WHERE "recipient_email_encrypted" IS NOT NULL AND "recipient_email" IS NOT NULL`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateEmailEncryption nullify plaintext: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// migrateEmailRows encrypts plaintext emails in the given table (auth_users or profiles).
+// Only rows where email_hash IS NULL and email IS NOT NULL are processed.
+func migrateEmailRows(ctx context.Context, db *bun.DB, table string) {
+	type row struct {
+		ID    string `bun:"id"`
+		Email string `bun:"email"`
+	}
+	var rows []row
+	if err := db.NewSelect().TableExpr(table).
+		Column("id", "email").
+		Where("email IS NOT NULL AND email_hash IS NULL").
+		Scan(ctx, &rows); err != nil {
+		log.Printf("Warning: migrateEmailRows fetch %s: %v", table, err)
+		return
+	}
+	if len(rows) == 0 {
+		return
+	}
+	log.Printf("[migrate] Encrypting %d email(s) in %s…", len(rows), table)
+	for _, r := range rows {
+		h := emailcrypto.Hash(r.Email)
+		enc, err := emailcrypto.Encrypt(r.Email)
+		if err != nil {
+			log.Printf("Warning: migrateEmailRows encrypt %s id=%s: %v", table, r.ID, err)
+			continue
+		}
+		q := fmt.Sprintf(`UPDATE "%s" SET email_hash = ?, email_encrypted = ? WHERE id = ?`, table)
+		if _, err := db.ExecContext(ctx, q, h, enc, r.ID); err != nil {
+			log.Printf("Warning: migrateEmailRows update %s id=%s: %v", table, r.ID, err)
+		}
+	}
+}
+
+// migrateP2PInviteEmails encrypts plaintext recipient_email in p2p_invites.
+func migrateP2PInviteEmails(ctx context.Context, db *bun.DB) {
+	type row struct {
+		ID             int64  `bun:"id"`
+		RecipientEmail string `bun:"recipient_email"`
+	}
+	var rows []row
+	if err := db.NewSelect().TableExpr("p2p_invites").
+		Column("id", "recipient_email").
+		Where("recipient_email IS NOT NULL AND recipient_email_encrypted IS NULL").
+		Scan(ctx, &rows); err != nil {
+		log.Printf("Warning: migrateP2PInviteEmails fetch: %v", err)
+		return
+	}
+	if len(rows) == 0 {
+		return
+	}
+	log.Printf("[migrate] Encrypting %d P2P invite recipient email(s)…", len(rows))
+	for _, r := range rows {
+		enc, err := emailcrypto.Encrypt(r.RecipientEmail)
+		if err != nil {
+			log.Printf("Warning: migrateP2PInviteEmails encrypt id=%d: %v", r.ID, err)
+			continue
+		}
+		if _, err := db.ExecContext(ctx,
+			`UPDATE "p2p_invites" SET recipient_email_encrypted = ? WHERE id = ?`, enc, r.ID,
+		); err != nil {
+			log.Printf("Warning: migrateP2PInviteEmails update id=%d: %v", r.ID, err)
+		}
+	}
 }

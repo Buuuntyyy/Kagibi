@@ -21,6 +21,7 @@ import (
 	"kagibi/backend/middleware"
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
+	"kagibi/backend/pkg/emailcrypto"
 	"kagibi/backend/pkg/monitoring"
 	"kagibi/backend/pkg/s3storage"
 	"kagibi/backend/pkg/workers"
@@ -42,6 +43,7 @@ import (
 
 func main() {
 	loadEnv()
+	emailcrypto.Init()
 
 	// DB must be initialized before auth so LocalProvider can access auth_users
 	db := pkg.NewDB()
