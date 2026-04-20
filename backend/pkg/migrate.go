@@ -153,6 +153,19 @@ func migrateSchemaAlterations(ctx context.Context, db *bun.DB) error {
 	if err != nil {
 		return fmt.Errorf("failed to update existing paths in share_links: %w", err)
 	}
+
+	// The original p2p_signals_signal_type_check constraint omitted 'reject' and 'p2p_ping'.
+	// Drop it and replace with the full allowed set so reject signals can be stored.
+	_, err = db.ExecContext(ctx, `ALTER TABLE "p2p_signals" DROP CONSTRAINT IF EXISTS "p2p_signals_signal_type_check"`)
+	if err != nil {
+		log.Printf("Warning: failed to drop p2p_signals_signal_type_check: %v", err)
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE "p2p_signals" ADD CONSTRAINT "p2p_signals_signal_type_check"
+		CHECK (signal_type IN ('offer', 'answer', 'candidate', 'reject', 'p2p_ping'))`)
+	if err != nil {
+		log.Printf("Warning: failed to recreate p2p_signals_signal_type_check: %v", err)
+	}
+
 	return nil
 }
 
