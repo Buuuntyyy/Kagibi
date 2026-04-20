@@ -19,9 +19,9 @@
             <router-link to="/dashboard" class="btn btn-primary">
               {{ t('landing.home.ctaDrive') }}
             </router-link>
-            <router-link to="/transfer" class="btn btn-secondary">
+            <a :href="sendBaseUrl" class="btn btn-secondary">
               {{ t('landing.home.ctaP2P') }}
-            </router-link>
+            </a>
           </div>
           <div class="trust-badges">
             <div class="badge">
@@ -223,9 +223,9 @@
           <router-link to="/login" class="btn btn-primary btn-large">
             {{ t('landing.home.ctaCreate') }}
           </router-link>
-          <router-link to="/transfer" class="btn btn-outline btn-large">
+          <a :href="sendBaseUrl" class="btn btn-outline btn-large">
             {{ t('landing.home.ctaTryP2P') }}
-          </router-link>
+          </a>
         </div>
       </div>
     </section>
@@ -236,6 +236,7 @@
 import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LandingNav from '../../components/landing/LandingNav.vue'
+import { sendBaseUrl } from '../../composables/useSubdomain'
 
 const { t } = useI18n()
 
