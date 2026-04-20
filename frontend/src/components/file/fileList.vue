@@ -124,6 +124,43 @@
         </div>
       </div>
     </div>
+    <!-- Filter chips bar (extensions + tags) -->
+    <div class="ext-filter-bar" v-if="availableExtensions.length >= 2 || availableTags.length >= 1">
+      <!-- Extensions group -->
+      <template v-if="availableExtensions.length >= 2">
+        <button
+          class="ext-chip"
+          :class="{ active: activeExtensions.length === 0 }"
+          @click.stop="activeExtensions = []"
+        >Tous</button>
+        <button
+          v-for="{ ext, count } in availableExtensions"
+          :key="'ext-' + ext"
+          class="ext-chip"
+          :class="{ active: activeExtensions.includes(ext) }"
+          @click.stop="toggleExtension(ext)"
+        >.{{ ext }} <span class="ext-count">{{ count }}</span></button>
+      </template>
+
+      <!-- Separator -->
+      <span v-if="availableExtensions.length >= 2 && availableTags.length >= 1" class="filter-separator" />
+
+      <!-- Tags group -->
+      <template v-if="availableTags.length >= 1">
+        <button
+          v-for="tag in availableTags"
+          :key="'tag-' + tag.name"
+          class="ext-chip tag-chip"
+          :class="{ active: activeTags.includes(tag.name) }"
+          :style="activeTags.includes(tag.name) ? { background: tag.color, borderColor: tag.color } : { borderColor: tag.color, color: tag.color }"
+          @click.stop="toggleTag(tag.name)"
+        >
+          <span class="tag-dot" :style="{ background: activeTags.includes(tag.name) ? '#fff' : tag.color }" />
+          {{ tag.name }}
+        </button>
+      </template>
+    </div>
+
     <FileTable
       :folders="filteredFolders"
       :files="filteredFiles"
@@ -301,6 +338,57 @@ const deselectAll = () => {
 const currentSortKey = ref('name');
 const currentSortDirection = ref('asc');
 
+// Extension filter
+const activeExtensions = ref([])
+
+const availableExtensions = computed(() => {
+  const counts = {}
+  for (const file of fileStore.files) {
+    const name = file.Name || ''
+    const dot = name.lastIndexOf('.')
+    if (dot > 0) {
+      const ext = name.slice(dot + 1).toLowerCase()
+      counts[ext] = (counts[ext] || 0) + 1
+    }
+  }
+  return Object.entries(counts)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ext, count]) => ({ ext, count }))
+})
+
+const toggleExtension = (ext) => {
+  const idx = activeExtensions.value.indexOf(ext)
+  if (idx >= 0) activeExtensions.value.splice(idx, 1)
+  else activeExtensions.value.push(ext)
+}
+
+// Tag filter
+const activeTags = ref([])
+
+const availableTags = computed(() => {
+  const nameSet = new Set()
+  for (const file of fileStore.files) {
+    if (file.Tags) file.Tags.forEach(t => nameSet.add(t))
+  }
+  for (const folder of fileStore.folders) {
+    if (folder.Tags) folder.Tags.forEach(t => nameSet.add(t))
+  }
+  return [...nameSet]
+    .map(name => tagStore.tags.find(t => t.name === name) || { name, color: 'var(--secondary-text-color)' })
+    .sort((a, b) => a.name.localeCompare(b.name))
+})
+
+const toggleTag = (name) => {
+  const idx = activeTags.value.indexOf(name)
+  if (idx >= 0) activeTags.value.splice(idx, 1)
+  else activeTags.value.push(name)
+}
+
+watch(() => fileStore.currentPath, () => {
+  activeExtensions.value = []
+  activeTags.value = []
+})
+
 const handleSortChange = (key) => {
   if (currentSortKey.value === key) {
     currentSortDirection.value = currentSortDirection.value === 'asc' ? 'desc' : 'asc';
@@ -371,6 +459,12 @@ const filteredFolders = computed(() => {
     const query = fileStore.searchQuery.toLowerCase()
     folders = folders.filter(folder => folder.Name.toLowerCase().includes(query))
   }
+  if (activeTags.value.length > 0) {
+    folders = folders.filter(folder => {
+      const tags = folder.Tags || []
+      return activeTags.value.every(t => tags.includes(t))
+    })
+  }
   return sortItems(folders);
 })
 
@@ -379,6 +473,20 @@ const filteredFiles = computed(() => {
   if (fileStore.searchQuery) {
     const query = fileStore.searchQuery.toLowerCase()
     files = files.filter(file => file.Name.toLowerCase().includes(query))
+  }
+  if (activeExtensions.value.length > 0) {
+    files = files.filter(file => {
+      const name = file.Name || ''
+      const dot = name.lastIndexOf('.')
+      const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
+      return activeExtensions.value.includes(ext)
+    })
+  }
+  if (activeTags.value.length > 0) {
+    files = files.filter(file => {
+      const tags = file.Tags || []
+      return activeTags.value.every(t => tags.includes(t))
+    })
   }
   return sortItems(files);
 })
@@ -1909,5 +2017,70 @@ button {
   .breadcrumb-link {
     font-size: 0.8rem;
   }
+}
+
+/* ===== Extension filter bar ===== */
+.ext-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 1rem 0.6rem;
+  align-items: center;
+}
+
+.ext-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--hover-background-color);
+  color: var(--secondary-text-color);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.ext-chip:hover {
+  background: var(--card-color);
+  border-color: var(--primary-color);
+  color: var(--main-text-color);
+}
+
+.ext-chip.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+}
+
+.ext-chip.active .ext-count {
+  opacity: 0.8;
+}
+
+.ext-count {
+  font-size: 0.72rem;
+  opacity: 0.65;
+}
+
+.filter-separator {
+  width: 1px;
+  height: 18px;
+  background: var(--border-color);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.tag-chip {
+  font-weight: 500;
+}
+
+.tag-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 </style>

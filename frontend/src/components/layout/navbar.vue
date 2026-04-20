@@ -245,6 +245,13 @@ nav {
   border-radius: 50%;
 }
 
+.search-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
 @media (max-width: 768px) {
   .brand {
     width: auto;
