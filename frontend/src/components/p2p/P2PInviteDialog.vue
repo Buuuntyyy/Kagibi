@@ -37,11 +37,18 @@
             <span>{{ t('p2p.invite.sendEmailOption') }}</span>
           </label>
 
+          <label class="legal-consent-toggle">
+            <input type="checkbox" v-model="legalConsent" />
+            <span>
+              Je certifie que le fichier partagé est légal, ne contient pas de contenu illicite, et j'accepte d'en être seul responsable conformément aux <router-link to="/terms" target="_blank" class="legal-link">CGU</router-link>.
+            </span>
+          </label>
+
           <p v-if="error" class="invite-error">{{ error }}</p>
 
           <div class="invite-actions">
             <button class="btn-secondary" @click="close" :disabled="loading">{{ t('common.cancel') }}</button>
-            <button class="btn-primary" @click="create" :disabled="loading">
+            <button class="btn-primary" @click="create" :disabled="loading || !legalConsent">
               <span v-if="loading" class="spinner"></span>
               {{ loading ? t('common.loading') : t('p2p.invite.generate') }}
             </button>
@@ -108,6 +115,7 @@ const loading = ref(false)
 const copied = ref(false)
 const emailSent = ref(false)
 const sendEmailOption = ref(false)
+const legalConsent = ref(false)
 
 const inviteToken = ref('')
 const recipientName = ref('')
@@ -403,6 +411,36 @@ function close() {
   height: 15px;
   cursor: pointer;
   accent-color: var(--primary-color);
+}
+
+.legal-consent-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-bottom: 1rem;
+  user-select: none;
+  line-height: 1.4;
+  padding: 0.6rem 0.8rem;
+  background: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.legal-consent-toggle input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.legal-link {
+  color: var(--primary-color);
+  text-decoration: underline;
 }
 
 .email-sent-notice {
