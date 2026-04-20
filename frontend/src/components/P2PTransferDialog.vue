@@ -2,16 +2,29 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 
 <template>
-  <div v-if='visible' class='p2p-notification-container'>
+  <div v-if='visible' class='p2p-notification-container' :class="{ minimized: isMinimized }">
     <div class='p2p-card' :class="{ shaking: shakeCard }">
-      <div class='card-header'>
+      <div class='card-header' @click.self="isMinimized && (isMinimized = false)">
         <h3 class='header-title'>
           <svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'></circle><line x1='2' y1='12' x2='22' y2='12'></line><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'></path></svg>
           {{ t('p2p.title') }}
+          <!-- Compact progress shown when minimized -->
+          <span v-if="isMinimized && p2pStore.activeTransfer" class="mini-progress">
+            {{ p2pStore.activeTransfer.progress }}%
+          </span>
         </h3>
-        <button v-if='canClose' @click='close' class='close-icon'>&times;</button>
+        <div class="header-actions">
+          <button class='minimize-icon' @click='isMinimized = !isMinimized' :title="isMinimized ? 'Agrandir' : 'Réduire'">
+            <svg v-if="isMinimized" xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='18 15 12 9 6 15'></polyline></svg>
+            <svg v-else xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>
+          </button>
+          <button v-if='canClose' @click='close' class='close-icon'>&times;</button>
+        </div>
       </div>
       
+      <!-- Card body hidden when minimized -->
+      <template v-if="!isMinimized">
+
       <!-- INCOMING REQUEST -->
       <div v-if='p2pStore.incomingOffer' class='notification-body'>
          <p class='request-text'>
@@ -97,6 +110,8 @@
              <span class='ping-count'>{{ t('p2p.pingsLeft', { count: pingsLeft }) }}</span>
          </div>
       </div>
+
+      </template><!-- end v-if="!isMinimized" -->
     </div>
   </div>
 </template>
@@ -130,6 +145,8 @@ const statusText = computed(() => {
     if (!p2pStore.activeTransfer) return '';
     return p2pStore.activeTransfer.status;
 });
+
+const isMinimized = ref(false);
 
 // --- Shake card ---
 const shakeCard = ref(false);
@@ -174,6 +191,7 @@ function showBrowserNotification(title, body) {
 // Trigger on incoming offer
 watch(() => p2pStore.incomingOffer, (offer) => {
     if (offer) {
+        isMinimized.value = false; // Always expand on new offer
         playPingSound();
         showBrowserNotification(t('p2p.title'), t('p2p.incomingRequest', { sender: senderName.value }));
         setTimeout(triggerShake, 300);
@@ -539,5 +557,59 @@ const close = () => {
     border-radius: 6px;
     padding: 6px 10px;
     margin-bottom: 10px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.minimize-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--secondary-text-color, #888);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+.minimize-icon:hover { color: var(--main-text-color, #333); }
+
+.mini-progress {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--primary-color, #3498db);
+    margin-left: 8px;
+}
+
+@media (max-width: 768px) {
+    .p2p-notification-container {
+        bottom: 72px; /* above mobile nav */
+        right: 8px;
+        left: 8px;
+    }
+
+    .p2p-card {
+        width: 100%;
+    }
+
+    /* Minimized: just a compact pill at bottom-right */
+    .p2p-notification-container.minimized {
+        left: auto;
+        right: 8px;
+        width: auto;
+    }
+
+    .p2p-notification-container.minimized .p2p-card {
+        width: auto;
+        min-width: 160px;
+    }
+
+    .p2p-notification-container.minimized .card-header {
+        cursor: pointer;
+    }
 }
 </style>

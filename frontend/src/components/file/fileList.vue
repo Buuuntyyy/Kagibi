@@ -330,6 +330,16 @@ watch(
   }
 )
 
+watch(
+  () => uiStore.pendingMobileAction,
+  (action) => {
+    if (!action) return
+    uiStore.pendingMobileAction = null
+    if (action === 'upload') triggerFileInput()
+    else if (action === 'createFolder') createNewFolder()
+  }
+)
+
 const deselectAll = () => {
     selectedItems.value = [];
     lastClickedIndex.value = -1;

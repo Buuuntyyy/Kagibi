@@ -2,15 +2,24 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 
 <template>
-  <nav>
-    <router-link :to="authStore.isAuthenticated ? '/dashboard' : '/'" class="brand">
+  <nav :class="{ 'mobile-search-open': mobileSearchOpen }">
+    <router-link v-show="!mobileSearchOpen" :to="authStore.isAuthenticated ? '/dashboard' : '/'" class="brand">
       <img src="/Logo.png" alt="Kagibi Logo" class="brand-logo"/>
       <span>Kagibi</span>
     </router-link>
     <div class="search-wrap">
       <SearchBar v-if="authStore.isAuthenticated" />
     </div>
-    <div class="nav-links">
+    <!-- Mobile search overlay -->
+    <div v-if="mobileSearchOpen" class="mobile-search-overlay">
+      <button class="mobile-search-back" @click="mobileSearchOpen = false" aria-label="Fermer la recherche">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+          <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+        </svg>
+      </button>
+      <SearchBar v-if="authStore.isAuthenticated" class="mobile-search-bar" />
+    </div>
+    <div class="nav-links" v-show="!mobileSearchOpen">
       <a
         v-if="buyMeACoffeeUrl"
         :href="buyMeACoffeeUrl"
@@ -54,6 +63,12 @@
         </router-link>
         <a @click.prevent="logout" href="#" class="logout-link">{{ t('nav.logout') }}</a>
       </template>
+      <!-- Search icon for mobile (only shown when not in search mode) -->
+      <button v-if="authStore.isAuthenticated" class="mobile-search-btn" @click="mobileSearchOpen = true" aria-label="Rechercher">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+          <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+        </svg>
+      </button>
     </div>
     <HelpDialog v-model:isOpen="showHelpDialog" />
   </nav>
@@ -77,6 +92,7 @@ const themeStore = useThemeStore()
 const router = useRouter()
 
 const showHelpDialog = ref(false)
+const mobileSearchOpen = ref(false)
 
 const ACoffeeUrl = computed(() => {
   const runtimeUrl = typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : ''
@@ -252,6 +268,11 @@ nav {
   align-items: center;
 }
 
+/* Mobile search button — hidden on desktop */
+.mobile-search-btn {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .brand {
     width: auto;
@@ -259,7 +280,7 @@ nav {
     margin-left: 0;
   }
 
-  /* Hide search bar — too wide for mobile navbar */
+  /* Hide desktop search bar on mobile (replaced by overlay) */
   .search-wrap {
     display: none;
   }
@@ -275,6 +296,50 @@ nav {
 
   .nav-links {
     gap: 0.25rem;
+  }
+
+  .mobile-search-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--main-text-color);
+    padding: 8px;
+    border-radius: 50%;
+  }
+
+  .mobile-search-btn:hover {
+    background: var(--hover-background-color);
+  }
+
+  /* Full-width search overlay inside navbar */
+  .mobile-search-overlay {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    padding: 0 8px;
+  }
+
+  .mobile-search-back {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--main-text-color);
+    padding: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .mobile-search-bar {
+    flex: 1;
+    margin: 0 !important;
+    max-width: none !important;
   }
 }
 
