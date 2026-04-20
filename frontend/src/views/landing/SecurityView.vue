@@ -8,15 +8,12 @@
     <!-- Hero -->
     <section class="sec-hero">
       <div class="container">
-        <div class="hero-eyebrow">Architecture Zero-Knowledge</div>
+        <div class="hero-eyebrow">{{ t('landing.security.eyebrow') }}</div>
         <h1>
-          Pourquoi Kagibi<br>
-          <span class="highlight">ne peut pas lire vos données</span>
+          {{ t('landing.security.title1') }}<br>
+          <span class="highlight">{{ t('landing.security.titleHighlight') }}</span>
         </h1>
-        <p class="hero-sub">
-          Ce n'est pas une promesse commerciale — c'est une contrainte mathématique.
-          Voici, concrètement, ce qui se passe sur votre appareil et ce que le serveur ne voit jamais.
-        </p>
+        <p class="hero-sub">{{ t('landing.security.heroSub') }}</p>
         <div class="hero-pill-row">
           <span class="pill green">AES-256-GCM</span>
           <span class="pill blue">Argon2id</span>
@@ -31,7 +28,7 @@
     <aside class="toc-sidebar">
       <div class="toc-panel" :class="{ folded: !tocNavOpen }">
         <div class="toc-title" @click="tocNavOpen = !tocNavOpen">
-          Sommaire
+          {{ t('landing.security.toc') }}
           <svg class="toc-chevron" :class="{ open: tocNavOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
         <div class="toc-nav-wrapper" :class="{ hidden: !tocNavOpen }">
@@ -54,54 +51,50 @@
     <!-- Principe ZK -->
     <section id="principe" class="section">
       <div class="container">
-        <div class="section-label">Le principe</div>
-        <h2>Le serveur stocke des données qu'il ne peut pas lire</h2>
-        <p class="section-sub">
-          Chaque fois que vous chiffrez un fichier, toute la cryptographie se passe dans votre navigateur,
-          jamais côté serveur. Le serveur reçoit uniquement des octets chiffrés.
-          Sans votre mot de passe — qu'il ne connaît pas — il ne peut rien en faire.
-        </p>
+        <div class="section-label">{{ t('landing.security.sec1Label') }}</div>
+        <h2>{{ t('landing.security.sec1Title') }}</h2>
+        <p class="section-sub">{{ t('landing.security.sec1Sub') }}</p>
 
         <div class="zk-comparison">
           <div class="cmp-card bad">
             <div class="cmp-header">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              Cloud classique (Google Drive, etc.)
+              {{ t('landing.security.cmpBadCloud') }}
             </div>
             <div class="cmp-flow">
-              <div class="cmp-node user-node">Votre fichier</div>
+              <div class="cmp-node user-node">{{ t('landing.security.cmpYourFile') }}</div>
               <div class="cmp-arrow bad-arrow">
-                <span class="arrow-label">Fichier en clair</span>
+                <span class="arrow-label">{{ t('landing.security.cmpFilePlain') }}</span>
                 <svg viewBox="0 0 60 20"><path d="M0 10 L50 10" stroke="#ef4444" stroke-width="2"/><polygon points="50,5 60,10 50,15" fill="#ef4444"/></svg>
               </div>
-              <div class="cmp-node server-bad">Serveur<br><small>(lit tout)</small></div>
+              <div class="cmp-node server-bad">{{ t('landing.security.cmpServerBad') }}<br><small>{{ t('landing.security.cmpServerBadSub') }}</small></div>
               <div class="cmp-arrow bad-arrow">
                 <svg viewBox="0 0 60 20"><path d="M0 10 L50 10" stroke="#ef4444" stroke-width="2"/><polygon points="50,5 60,10 50,15" fill="#ef4444"/></svg>
               </div>
-              <div class="cmp-node">Stockage</div>
+              <div class="cmp-node">{{ t('landing.security.cmpStorage') }}</div>
             </div>
-            <p class="cmp-note">Le serveur chiffre lui-même → il détient la clé → il peut tout lire, tout livrer à la justice, tout pirater.</p>
+            <p class="cmp-note">{{ t('landing.security.cmpBadNote') }}</p>
           </div>
 
           <div class="cmp-card good">
             <div class="cmp-header">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-              Kagibi — Zero-Knowledge
+              {{ t('landing.security.cmpGoodCloud') }}
             </div>
             <div class="cmp-flow">
-              <div class="cmp-node user-node">Votre fichier</div>
+              <div class="cmp-node user-node">{{ t('landing.security.cmpYourFile') }}</div>
               <div class="cmp-arrow good-arrow">
-                <span class="arrow-label arrow-label-top">Chiffrement local</span>
+                <span class="arrow-label arrow-label-top">{{ t('landing.security.cmpLocalEnc') }}</span>
                 <svg viewBox="0 0 60 20"><path d="M0 10 L50 10" stroke="#22c55e" stroke-width="2"/><polygon points="50,5 60,10 50,15" fill="#22c55e"/></svg>
               </div>
-              <div class="cmp-node encrypted-node">🔒 Chiffré<br><small>(AES-256)</small></div>
+              <div class="cmp-node encrypted-node">{{ t('landing.security.cmpEncrypted') }}<br><small>(AES-256)</small></div>
               <div class="cmp-arrow good-arrow">
-                <span class="arrow-label">Octets opaques</span>
+                <span class="arrow-label">{{ t('landing.security.cmpOpaqueBytes') }}</span>
                 <svg viewBox="0 0 60 20"><path d="M0 10 L50 10" stroke="#22c55e" stroke-width="2"/><polygon points="50,5 60,10 50,15" fill="#22c55e"/></svg>
               </div>
-              <div class="cmp-node server-good">Serveur<br><small>(ne voit rien)</small></div>
+              <div class="cmp-node server-good">{{ t('landing.security.cmpServerGood') }}<br><small>{{ t('landing.security.cmpServerGoodSub') }}</small></div>
             </div>
-            <p class="cmp-note">Le serveur ne reçoit que du chiffré. Sans votre mot de passe, il est mathématiquement incapable de déchiffrer.</p>
+            <p class="cmp-note">{{ t('landing.security.cmpGoodNote') }}</p>
           </div>
         </div>
       </div>
@@ -110,12 +103,9 @@
     <!-- Hiérarchie des clés -->
     <section id="hierarchie" class="section dark-section">
       <div class="container">
-        <div class="section-label">Architecture</div>
-        <h2>La hiérarchie des clés</h2>
-        <p class="section-sub">
-          Toutes vos données sont protégées par une chaîne de clés imbriquées.
-          Chaque clé en chiffre une autre — seul votre mot de passe permet de tout débloquer.
-        </p>
+        <div class="section-label">{{ t('landing.security.sec2Label') }}</div>
+        <h2>{{ t('landing.security.sec2Title') }}</h2>
+        <p class="section-sub">{{ t('landing.security.sec2Sub') }}</p>
 
         <div class="key-hierarchy">
           <!-- Niveau 0: Mot de passe -->
@@ -206,9 +196,9 @@
     <!-- Inscription animée -->
     <section id="inscription" class="section">
       <div class="container">
-        <div class="section-label">Flux 1 · Inscription</div>
-        <h2>Ce qui se passe quand vous créez un compte</h2>
-        <p class="section-sub">Toute la cryptographie est réalisée dans votre navigateur avant qu'un seul octet soit envoyé.</p>
+        <div class="section-label">{{ t('landing.security.sec3Label') }}</div>
+        <h2>{{ t('landing.security.sec3Title') }}</h2>
+        <p class="section-sub">{{ t('landing.security.sec3Sub') }}</p>
 
         <div class="flow-container">
           <div class="flow-steps">
@@ -389,9 +379,9 @@
         </div>
 
         <div class="step-nav">
-          <button class="step-btn" @click="regStep = Math.max(0, regStep - 1)" :disabled="regStep === 0">← Précédent</button>
+          <button class="step-btn" @click="regStep = Math.max(0, regStep - 1)" :disabled="regStep === 0">{{ t('landing.security.regPrev') }}</button>
           <span class="step-counter">{{ regStep + 1 }} / {{ registrationSteps.length }}</span>
-          <button class="step-btn" @click="regStep = Math.min(registrationSteps.length - 1, regStep + 1)" :disabled="regStep === registrationSteps.length - 1">Suivant →</button>
+          <button class="step-btn" @click="regStep = Math.min(registrationSteps.length - 1, regStep + 1)" :disabled="regStep === registrationSteps.length - 1">{{ t('landing.security.regNext') }}</button>
         </div>
       </div>
     </section>
@@ -399,12 +389,9 @@
     <!-- Upload fichier animé -->
     <section id="upload" class="section dark-section">
       <div class="container">
-        <div class="section-label">Flux 2 · Upload</div>
-        <h2>Chiffrement d'un fichier en chunks</h2>
-        <p class="section-sub">
-          Les fichiers sont découpés en blocs de 10 Mo, chaque bloc est chiffré indépendamment
-          avec un nonce unique (déterministe par numéro de chunk). Jamais de texte clair sur le réseau.
-        </p>
+        <div class="section-label">{{ t('landing.security.sec4Label') }}</div>
+        <h2>{{ t('landing.security.sec4Title') }}</h2>
+        <p class="section-sub">{{ t('landing.security.sec4Sub') }}</p>
 
         <div class="upload-demo">
           <div class="upload-file-bar">
@@ -422,10 +409,10 @@
                 </div>
               </div>
               <div class="chunk-legend">
-                <span class="legend-dot plain"></span>En attente
-                <span class="legend-dot encrypting"></span>Chiffrement AES-GCM
-                <span class="legend-dot encrypted"></span>Chiffré
-                <span class="legend-dot uploaded"></span>Uploadé sur S3
+                <span class="legend-dot plain"></span>{{ t('landing.security.uploadWaiting') }}
+                <span class="legend-dot encrypting"></span>{{ t('landing.security.uploadEncrypting') }}
+                <span class="legend-dot encrypted"></span>{{ t('landing.security.uploadEncrypted') }}
+                <span class="legend-dot uploaded"></span>{{ t('landing.security.uploadUploaded') }}
               </div>
             </div>
           </div>
@@ -433,13 +420,13 @@
           <div class="upload-pipeline">
             <div class="pipeline-stage" :class="{ active: uploadPhase === 'reading' || uploadPhase === 'encrypting' }">
               <div class="stage-icon">💾</div>
-              <div class="stage-label">Lecture locale</div>
+              <div class="stage-label">{{ t('landing.security.uploadLocalRead') }}</div>
               <div class="stage-sub">FileReader API</div>
             </div>
             <div class="pipeline-arrow" :class="{ active: uploadPhase === 'encrypting' }">→</div>
             <div class="pipeline-stage" :class="{ active: uploadPhase === 'encrypting' }">
               <div class="stage-icon">⚙️</div>
-              <div class="stage-label">Web Worker</div>
+              <div class="stage-label">{{ t('landing.security.uploadWorker') }}</div>
               <div class="stage-sub">crypto.worker.js</div>
               <div class="nonce-box" v-if="uploadPhase === 'encrypting'">
                 <span class="nonce-label">Nonce chunk {{ uploadStep + 1 }}</span>
@@ -450,12 +437,12 @@
             <div class="pipeline-stage" :class="{ active: uploadPhase === 'upload' }">
               <div class="stage-icon">☁️</div>
               <div class="stage-label">OVH S3</div>
-              <div class="stage-sub">Octets chiffrés uniquement</div>
+              <div class="stage-sub">{{ t('landing.security.uploadOvh') }}</div>
             </div>
           </div>
 
           <div class="chunk-detail" v-if="uploadPhase === 'encrypting'">
-            <div class="chunk-detail-title">Structure du chunk {{ uploadStep + 1 }} chiffré</div>
+            <div class="chunk-detail-title">{{ t('landing.security.uploadChunkDetail', { n: uploadStep + 1 }) }}</div>
             <div class="chunk-bytes">
               <div class="byte-block nonce-block">Nonce<br>12 octets</div>
               <div class="byte-block cipher-block">Ciphertext AES-256-GCM<br>~10 Mo</div>
@@ -467,15 +454,15 @@
             <button class="step-btn primary" @click="advanceUpload" :disabled="uploadPhase === 'done'">
               {{ uploadBtnLabel }}
             </button>
-            <button class="step-btn" @click="resetUpload" :disabled="uploadPhase === 'idle'">Réinitialiser</button>
+            <button class="step-btn" @click="resetUpload" :disabled="uploadPhase === 'idle'">{{ t('landing.security.uploadReset') }}</button>
           </div>
           <div class="upload-progress-hint" v-if="uploadPhase !== 'idle' && uploadPhase !== 'done'">
             Chunk {{ uploadStep + 1 }} / {{ chunks.length }} —
-            <span v-if="uploadPhase === 'encrypting'">chiffrement AES-256-GCM en cours…</span>
-            <span v-else>upload vers OVH S3…</span>
+            <span v-if="uploadPhase === 'encrypting'">{{ t('landing.security.uploadEncProgress') }}</span>
+            <span v-else>{{ t('landing.security.uploadS3Progress') }}</span>
           </div>
           <div class="upload-done-msg" v-if="uploadPhase === 'done'">
-            ✓ {{ chunks.length }} chunks chiffrés et uploadés — aucun octet en clair n'a transité
+            {{ t('landing.security.uploadDone', { n: chunks.length }) }}
           </div>
         </div>
       </div>
@@ -484,18 +471,15 @@
     <!-- Partage RSA -->
     <section id="partage" class="section">
       <div class="container">
-        <div class="section-label">Flux 3 · Partage</div>
-        <h2>Partager un fichier sans que le serveur voit la clé</h2>
-        <p class="section-sub">
-          Quand Alice partage un fichier avec Bob, la clé de fichier est chiffrée avec la clé publique RSA de Bob.
-          Le serveur ne peut pas la déchiffrer — seul Bob, avec sa clé privée, peut le faire.
-        </p>
+        <div class="section-label">{{ t('landing.security.sec5Label') }}</div>
+        <h2>{{ t('landing.security.sec5Title') }}</h2>
+        <p class="section-sub">{{ t('landing.security.sec5Sub') }}</p>
 
         <div class="share-flow">
           <div class="share-actor alice">
             <div class="actor-avatar">👩</div>
             <div class="actor-name">Alice</div>
-            <div class="actor-device">Son navigateur</div>
+            <div class="actor-device">{{ t('landing.security.actorBrowser') }}</div>
           </div>
 
           <div class="share-steps-col">
@@ -507,23 +491,23 @@
             >
               <div class="share-step-num">{{ i + 1 }}</div>
               <div class="share-step-body">
-                <div class="share-step-actor" :class="step.actor">{{ step.actor === 'alice' ? '👩 Alice' : step.actor === 'server' ? '🖥️ Serveur' : '👨 Bob' }}</div>
+                <div class="share-step-actor" :class="step.actor">{{ step.actor === 'alice' ? t('landing.security.actorAlice') : step.actor === 'server' ? t('landing.security.actorServer') : t('landing.security.actorBob') }}</div>
                 <div class="share-step-action">{{ step.action }}</div>
                 <div class="share-step-data">{{ step.data }}</div>
               </div>
             </div>
 
             <div class="share-nav">
-              <button class="step-btn" @click="shareStep = Math.max(0, shareStep - 1)" :disabled="shareStep === 0">← Précédent</button>
+              <button class="step-btn" @click="shareStep = Math.max(0, shareStep - 1)" :disabled="shareStep === 0">{{ t('landing.security.sharePrev') }}</button>
               <span class="step-counter">{{ shareStep + 1 }} / {{ shareSteps.length }}</span>
-              <button class="step-btn" @click="shareStep = Math.min(shareSteps.length - 1, shareStep + 1)" :disabled="shareStep === shareSteps.length - 1">Suivant →</button>
+              <button class="step-btn" @click="shareStep = Math.min(shareSteps.length - 1, shareStep + 1)" :disabled="shareStep === shareSteps.length - 1">{{ t('landing.security.shareNext') }}</button>
             </div>
           </div>
 
           <div class="share-actor bob">
             <div class="actor-avatar">👨</div>
             <div class="actor-name">Bob</div>
-            <div class="actor-device">Son navigateur</div>
+            <div class="actor-device">{{ t('landing.security.actorBrowser') }}</div>
           </div>
         </div>
 
@@ -531,31 +515,31 @@
           <div class="share-visual" v-if="shareStep === 0">
             <div class="sv-node">
               <div class="sv-icon">📄</div>
-              <div class="sv-label">Fichier (chiffré)</div>
+              <div class="sv-label">{{ t('landing.security.svFileCrypted') }}</div>
             </div>
             <div class="sv-plus">+</div>
             <div class="sv-node highlight-node">
               <div class="sv-icon">🔑</div>
-              <div class="sv-label">Clé de fichier d'Alice</div>
-              <div class="sv-sub">AES-256 · en mémoire</div>
+              <div class="sv-label">{{ t('landing.security.svAliceKey') }}</div>
+              <div class="sv-sub">{{ t('landing.security.svAliceKeyMem') }}</div>
             </div>
           </div>
           <div class="share-visual" v-else-if="shareStep === 1">
             <div class="sv-node">
               <div class="sv-icon">🖥️</div>
-              <div class="sv-label">Serveur</div>
+              <div class="sv-label">{{ t('landing.security.svServer') }}</div>
             </div>
             <div class="sv-arrow">→</div>
             <div class="sv-node highlight-node">
               <div class="sv-icon">🔓</div>
-              <div class="sv-label">Clé publique de Bob</div>
+              <div class="sv-label">{{ t('landing.security.svBobPubKey') }}</div>
               <div class="sv-sub">RSA-OAEP 4096 bits</div>
             </div>
           </div>
           <div class="share-visual" v-else-if="shareStep === 2">
             <div class="sv-node">
               <div class="sv-icon">🔑</div>
-              <div class="sv-label">Clé de fichier</div>
+              <div class="sv-label">{{ t('landing.security.svFileKey') }}</div>
             </div>
             <div class="sv-pipe">
               <div class="sv-algo">RSA-OAEP encrypt<br>avec clé publique Bob</div>
@@ -563,22 +547,22 @@
             </div>
             <div class="sv-node highlight-node">
               <div class="sv-icon">🔒</div>
-              <div class="sv-label">Clé chiffrée pour Bob</div>
-              <div class="sv-sub">Seul Bob peut déchiffrer</div>
+              <div class="sv-label">{{ t('landing.security.svEncForBob') }}</div>
+              <div class="sv-sub">{{ t('landing.security.svEncForBobSub') }}</div>
             </div>
           </div>
           <div class="share-visual" v-else-if="shareStep === 3">
             <div class="sv-node">
               <div class="sv-icon">🖥️</div>
-              <div class="sv-label">Serveur stocke</div>
-              <div class="sv-sub">Clé chiffrée RSA<br>+ Fichier chiffré AES</div>
+              <div class="sv-label">{{ t('landing.security.svServerStores') }}</div>
+              <div class="sv-sub">{{ t('landing.security.svServerStoresSub') }}</div>
             </div>
-            <div class="sv-note">Le serveur ne peut rien déchiffrer — il ne détient ni la clé privée de Bob, ni la Master Key d'Alice.</div>
+            <div class="sv-note">{{ t('landing.security.svServerNote') }}</div>
           </div>
           <div class="share-visual" v-else-if="shareStep === 4">
             <div class="sv-node">
               <div class="sv-icon">🔒</div>
-              <div class="sv-label">Clé chiffrée RSA</div>
+              <div class="sv-label">{{ t('landing.security.svEncRsa') }}</div>
             </div>
             <div class="sv-pipe">
               <div class="sv-algo">RSA-OAEP decrypt<br>clé privée de Bob</div>
@@ -586,8 +570,8 @@
             </div>
             <div class="sv-node highlight-node success-node">
               <div class="sv-icon">🔑</div>
-              <div class="sv-label">Clé de fichier récupérée</div>
-              <div class="sv-sub">Bob déchiffre le fichier ✓</div>
+              <div class="sv-label">{{ t('landing.security.svBobDecrypts') }}</div>
+              <div class="sv-sub">{{ t('landing.security.svBobDecryptsSub') }}</div>
             </div>
           </div>
         </div>
@@ -597,44 +581,41 @@
     <!-- Service Worker -->
     <section id="session" class="section dark-section">
       <div class="container">
-        <div class="section-label">Protection en session</div>
-        <h2>La Master Key n'est jamais exposée au JavaScript</h2>
-        <p class="section-sub">
-          Même si une extension malveillante ou une faille XSS injecte du JavaScript dans la page,
-          elle ne peut pas voler votre Master Key. Voici pourquoi.
-        </p>
+        <div class="section-label">{{ t('landing.security.sec6Label') }}</div>
+        <h2>{{ t('landing.security.sec6Title') }}</h2>
+        <p class="section-sub">{{ t('landing.security.sec6Sub') }}</p>
 
         <div class="sw-diagram">
           <div class="sw-zone page-zone">
-            <div class="sw-zone-label">Page (contexte JS normal)</div>
+            <div class="sw-zone-label">{{ t('landing.security.swPageZone') }}</div>
             <div class="sw-items">
-              <div class="sw-item">Code de l'application</div>
-              <div class="sw-item bad-item">⚠️ Extensions navigateur</div>
-              <div class="sw-item bad-item">⚠️ Potentiel XSS</div>
+              <div class="sw-item">{{ t('landing.security.swAppCode') }}</div>
+              <div class="sw-item bad-item">{{ t('landing.security.swExtensions') }}</div>
+              <div class="sw-item bad-item">{{ t('landing.security.swXss') }}</div>
               <div class="sw-item">
-                <div class="sw-request">Demande : "donne-moi la Master Key"</div>
+                <div class="sw-request">{{ t('landing.security.swRequest') }}</div>
               </div>
             </div>
           </div>
 
           <div class="sw-barrier">
             <div class="barrier-line"></div>
-            <div class="barrier-label">Frontière Service Worker</div>
+            <div class="barrier-label">{{ t('landing.security.swBarrier') }}</div>
             <div class="barrier-line"></div>
           </div>
 
           <div class="sw-zone worker-zone">
-            <div class="sw-zone-label">Service Worker (contexte isolé)</div>
+            <div class="sw-zone-label">{{ t('landing.security.swWorkerZone') }}</div>
             <div class="sw-items">
               <div class="sw-item key-item">
                 🏛️ Master Key
                 <div class="sw-badge">extractable: false</div>
               </div>
               <div class="sw-item">
-                <div class="sw-response">✓ Utilise la clé pour chiffrer/déchiffrer<br>✗ Ne l'exporte JAMAIS</div>
+                <div class="sw-response">{{ t('landing.security.swWorkerResponse') }}</div>
               </div>
               <div class="sw-item timeout-item">
-                ⏱️ Timeout 30 min → clé effacée
+                {{ t('landing.security.swTimeout') }}
               </div>
             </div>
           </div>
@@ -643,18 +624,18 @@
         <div class="sw-props">
           <div class="sw-prop">
             <div class="prop-icon">🔒</div>
-            <div class="prop-title">Non-extractable</div>
-            <div class="prop-desc">La WebCrypto API interdit l'export de la clé. <code>crypto.subtle.exportKey()</code> retourne une erreur.</div>
+            <div class="prop-title">{{ t('landing.security.swProp1Title') }}</div>
+            <div class="prop-desc">{{ t('landing.security.swProp1Desc') }}</div>
           </div>
           <div class="sw-prop">
             <div class="prop-icon">⏱️</div>
-            <div class="prop-title">Timeout d'inactivité</div>
-            <div class="prop-desc">30 minutes sans activité → Master Key effacée du Service Worker → déconnexion automatique.</div>
+            <div class="prop-title">{{ t('landing.security.swProp2Title') }}</div>
+            <div class="prop-desc">{{ t('landing.security.swProp2Desc') }}</div>
           </div>
           <div class="sw-prop">
             <div class="prop-icon">👁️</div>
-            <div class="prop-title">Détection XSS</div>
-            <div class="prop-desc">Un MutationObserver surveille les scripts injectés dans le DOM. Les handlers <code>onerror</code> sont bloqués.</div>
+            <div class="prop-title">{{ t('landing.security.swProp3Title') }}</div>
+            <div class="prop-desc">{{ t('landing.security.swProp3Desc') }}</div>
           </div>
         </div>
       </div>
@@ -663,42 +644,42 @@
     <!-- Ce que le serveur voit/ne voit pas -->
     <section id="serveur" class="section">
       <div class="container">
-        <div class="section-label">Résumé</div>
-        <h2>Ce que le serveur voit — et ne voit pas</h2>
+        <div class="section-label">{{ t('landing.security.sec7Label') }}</div>
+        <h2>{{ t('landing.security.sec7Title') }}</h2>
 
         <div class="visibility-grid">
           <div class="vis-col vis-sees">
             <div class="vis-header sees-header">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              Ce que le serveur <strong>voit</strong>
+              {{ t('landing.security.seesTitle') }}
             </div>
             <div class="vis-items">
-              <div class="vis-item neutral">Email / identifiant</div>
-              <div class="vis-item neutral">Salt Argon2 (public par nature)</div>
-              <div class="vis-item neutral">encrypted_master_key (chiffré, inutilisable)</div>
-              <div class="vis-item neutral">encrypted_private_key (chiffré)</div>
-              <div class="vis-item neutral">Clé publique RSA (publique)</div>
-              <div class="vis-item neutral">recovery_hash (SHA-256, irréversible)</div>
-              <div class="vis-item neutral">Métadonnées fichier (nom chiffré si activé, taille, MIME)</div>
-              <div class="vis-item neutral">Fichiers chiffrés AES-256-GCM</div>
-              <div class="vis-item neutral">Clés de fichier chiffrées</div>
+              <div class="vis-item neutral">{{ t('landing.security.sees1') }}</div>
+              <div class="vis-item neutral">{{ t('landing.security.sees2') }}</div>
+              <div class="vis-item neutral">{{ t('landing.security.sees3') }}</div>
+              <div class="vis-item neutral">{{ t('landing.security.sees4') }}</div>
+              <div class="vis-item neutral">{{ t('landing.security.sees5') }}</div>
+              <div class="vis-item neutral">{{ t('landing.security.sees6') }}</div>
+              <div class="vis-item neutral">{{ t('landing.security.sees7') }}</div>
+              <div class="vis-item neutral">{{ t('landing.security.sees8') }}</div>
+              <div class="vis-item neutral">{{ t('landing.security.sees9') }}</div>
             </div>
           </div>
 
           <div class="vis-col vis-not">
             <div class="vis-header not-header">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-              Ce que le serveur ne voit <strong>jamais</strong>
+              {{ t('landing.security.neverTitle') }}
             </div>
             <div class="vis-items">
-              <div class="vis-item never-item">🚫 Votre mot de passe</div>
-              <div class="vis-item never-item">🚫 La KEK dérivée</div>
-              <div class="vis-item never-item">🚫 La Master Key en clair</div>
-              <div class="vis-item never-item">🚫 La clé privée RSA en clair</div>
-              <div class="vis-item never-item">🚫 Le code de récupération</div>
-              <div class="vis-item never-item">🚫 Les clés de dossier / fichier en clair</div>
-              <div class="vis-item never-item">🚫 Le contenu de vos fichiers</div>
-              <div class="vis-item never-item">🚫 Les noms de fichiers (si chiffrement activé)</div>
+              <div class="vis-item never-item">{{ t('landing.security.never1') }}</div>
+              <div class="vis-item never-item">{{ t('landing.security.never2') }}</div>
+              <div class="vis-item never-item">{{ t('landing.security.never3') }}</div>
+              <div class="vis-item never-item">{{ t('landing.security.never4') }}</div>
+              <div class="vis-item never-item">{{ t('landing.security.never5') }}</div>
+              <div class="vis-item never-item">{{ t('landing.security.never6') }}</div>
+              <div class="vis-item never-item">{{ t('landing.security.never7') }}</div>
+              <div class="vis-item never-item">{{ t('landing.security.never8') }}</div>
             </div>
           </div>
         </div>
@@ -708,14 +689,14 @@
     <!-- Footer CTA -->
     <section class="sec-cta">
       <div class="container">
-        <h2>Une architecture auditée, un code ouvert</h2>
-        <p>Le code source complet est disponible sous licence AGPLv3. Tout peut être vérifié, audité, forké.</p>
+        <h2>{{ t('landing.security.ctaTitle') }}</h2>
+        <p>{{ t('landing.security.ctaSubtitle') }}</p>
         <div class="cta-row">
           <a href="https://github.com/Bunnntyyy/SaferCloud" target="_blank" rel="noopener" class="btn btn-primary">
             <svg viewBox="0 0 24 24" fill="currentColor" width="18"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
-            Voir le code source
+            {{ t('landing.security.ctaViewCode') }}
           </a>
-          <router-link to="/dashboard" class="btn btn-secondary">Créer un compte</router-link>
+          <router-link to="/dashboard" class="btn btn-secondary">{{ t('landing.security.ctaCreate') }}</router-link>
         </div>
       </div>
     </section>
@@ -724,21 +705,24 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import LandingNav from '../../components/landing/LandingNav.vue'
+
+const { t } = useI18n()
 
 // ── TOC ────────────────────────────────────────────────────────────
 const tocNavOpen = ref(true)
 const activeSection = ref('')
 
-const tocItems = [
-  { id: 'principe',   num: '01', label: 'Le principe' },
-  { id: 'hierarchie', num: '02', label: 'Hiérarchie des clés' },
-  { id: 'inscription',num: '03', label: 'Flux inscription' },
-  { id: 'upload',     num: '04', label: 'Chiffrement fichier' },
-  { id: 'partage',    num: '05', label: 'Partage RSA' },
-  { id: 'session',    num: '06', label: 'Protection session' },
-  { id: 'serveur',    num: '07', label: 'Ce que voit le serveur' },
-]
+const tocItems = computed(() => [
+  { id: 'principe',   num: '01', label: t('landing.security.toc01') },
+  { id: 'hierarchie', num: '02', label: t('landing.security.toc02') },
+  { id: 'inscription',num: '03', label: t('landing.security.toc03') },
+  { id: 'upload',     num: '04', label: t('landing.security.toc04') },
+  { id: 'partage',    num: '05', label: t('landing.security.toc05') },
+  { id: 'session',    num: '06', label: t('landing.security.toc06') },
+  { id: 'serveur',    num: '07', label: t('landing.security.toc07') },
+])
 
 function scrollTo(id) {
   const el = document.getElementById(id)
@@ -762,7 +746,7 @@ onMounted(() => {
     },
     { root: document.querySelector('.security-page'), rootMargin: '-30% 0px -60% 0px', threshold: 0 }
   )
-  tocItems.forEach(item => {
+  tocItems.value.forEach(item => {
     const el = document.getElementById(item.id)
     if (el) observer.observe(el)
   })
@@ -776,22 +760,22 @@ const activeKey = ref(null)
 const regStep = ref(0)
 const shareStep = ref(0)
 
-const registrationSteps = [
-  { title: 'Dérivation de clé (KEK)', desc: 'Votre mot de passe est passé à Argon2id dans un Web Worker. Le résultat (KEK) ne quitte jamais le navigateur.' },
-  { title: 'Génération de la Master Key', desc: 'Une clé AES-256 aléatoire est générée via CSPRNG. Elle sera stockée dans le Service Worker avec extractable: false.' },
-  { title: 'Wrapping de la Master Key', desc: 'La Master Key est chiffrée (wrapped) avec la KEK via AES-GCM. Ce chiffré est envoyé au serveur.' },
-  { title: 'Paire de clés RSA', desc: 'Une paire RSA-OAEP 4096 bits est générée. La clé publique va au serveur. La clé privée est chiffrée par la Master Key.' },
-  { title: 'Code de récupération', desc: '32 octets aléatoires. Un hash SHA-256 va au serveur pour vérification. La Master Key est aussi wrapped avec ce code.' },
-  { title: 'Ce qui est envoyé au serveur', desc: 'Uniquement des données chiffrées ou publiques. Jamais votre mot de passe, la KEK ou la Master Key en clair.' },
-]
+const registrationSteps = computed(() => [
+  { title: t('landing.security.regStep1Title'), desc: t('landing.security.regStep1Desc') },
+  { title: t('landing.security.regStep2Title'), desc: t('landing.security.regStep2Desc') },
+  { title: t('landing.security.regStep3Title'), desc: t('landing.security.regStep3Desc') },
+  { title: t('landing.security.regStep4Title'), desc: t('landing.security.regStep4Desc') },
+  { title: t('landing.security.regStep5Title'), desc: t('landing.security.regStep5Desc') },
+  { title: t('landing.security.regStep6Title'), desc: t('landing.security.regStep6Desc') },
+])
 
-const shareSteps = [
-  { actor: 'alice', action: 'Récupère sa clé de fichier en mémoire', data: 'fileKey (AES-256) — non-extractable dans le SW' },
-  { actor: 'server', action: 'Retourne la clé publique RSA de Bob', data: 'bob_public_key (RSA-OAEP 4096 bits, stockée en clair)' },
-  { actor: 'alice', action: 'Chiffre la clé de fichier avec la clé publique de Bob', data: 'RSA-OAEP.encrypt(fileKey, bob_public_key) → encrypted_file_key_for_bob' },
-  { actor: 'server', action: 'Stocke la clé chiffrée RSA', data: 'Ne peut pas la déchiffrer (pas de clé privée de Bob)' },
-  { actor: 'bob', action: 'Déchiffre la clé de fichier avec sa clé privée RSA', data: 'RSA-OAEP.decrypt(encrypted_key, bob_private_key) → fileKey → déchiffre le fichier' },
-]
+const shareSteps = computed(() => [
+  { actor: 'alice', action: t('landing.security.shareStep1Action'), data: t('landing.security.shareStep1Data') },
+  { actor: 'server', action: t('landing.security.shareStep2Action'), data: t('landing.security.shareStep2Data') },
+  { actor: 'alice', action: t('landing.security.shareStep3Action'), data: t('landing.security.shareStep3Data') },
+  { actor: 'server', action: t('landing.security.shareStep4Action'), data: t('landing.security.shareStep4Data') },
+  { actor: 'bob', action: t('landing.security.shareStep5Action'), data: t('landing.security.shareStep5Data') },
+])
 
 // Upload demo — step by step
 const chunks = ref(Array(4).fill(null).map((_, i) => ({ id: i })))
@@ -806,10 +790,10 @@ function generateNonce(chunkIndex) {
 }
 
 const uploadBtnLabel = computed(() => {
-  if (uploadPhase.value === 'idle') return '▶ Démarrer'
-  if (uploadPhase.value === 'encrypting') return '→ Envoyer vers S3'
-  if (uploadPhase.value === 'uploading') return uploadStep.value < chunks.value.length - 1 ? '→ Chunk suivant' : '→ Terminer'
-  return '✓ Terminé'
+  if (uploadPhase.value === 'idle') return t('landing.security.uploadStart')
+  if (uploadPhase.value === 'encrypting') return t('landing.security.uploadSendS3')
+  if (uploadPhase.value === 'uploading') return uploadStep.value < chunks.value.length - 1 ? t('landing.security.uploadNextChunk') : t('landing.security.uploadFinish')
+  return t('landing.security.uploadComplete')
 })
 
 function advanceUpload() {

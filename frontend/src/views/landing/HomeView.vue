@@ -9,22 +9,18 @@
     <section class="hero">
       <div class="container">
         <div class="hero-content">
-          <div class="hero-eyebrow">Cloud souverain · Open Source · Français</div>
+          <div class="hero-eyebrow">{{ t('landing.home.eyebrow') }}</div>
           <h1 class="hero-title">
-            Le cloud qui<br>
-            <span class="highlight">ne peut pas lire vos données</span>
+            {{ t('landing.home.titleLine1') }}<br>
+            <span class="highlight">{{ t('landing.home.titleHighlight') }}</span>
           </h1>
-          <p class="hero-subtitle">
-            Kagibi chiffre vos fichiers sur votre appareil avant tout envoi.
-            Ni nous, ni personne ne peut y accéder — mathématiquement.
-            Hébergé en France, conforme RGPD, immunisé au Cloud Act.
-          </p>
+          <p class="hero-subtitle">{{ t('landing.home.subtitle') }}</p>
           <div class="hero-cta">
             <router-link to="/dashboard" class="btn btn-primary">
-              Accéder au Drive
+              {{ t('landing.home.ctaDrive') }}
             </router-link>
             <router-link to="/transfer" class="btn btn-secondary">
-              Transfert P2P instantané
+              {{ t('landing.home.ctaP2P') }}
             </router-link>
           </div>
           <div class="trust-badges">
@@ -32,27 +28,27 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
               </svg>
-              Hébergé en France
+              {{ t('landing.home.badgeFrance') }}
             </div>
             <div class="badge">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="16 18 22 12 16 6"></polyline>
                 <polyline points="8 6 2 12 8 18"></polyline>
               </svg>
-              Open Source AGPLv3
+              {{ t('landing.home.badgeOpenSource') }}
             </div>
             <div class="badge">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
               </svg>
-              Zero-Knowledge
+              {{ t('landing.home.badgeZK') }}
             </div>
             <div class="badge">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
               </svg>
-              Immunisé Cloud Act
+              {{ t('landing.home.badgeCloudAct') }}
             </div>
           </div>
         </div>
@@ -65,17 +61,9 @@
         <div class="opensource-inner">
           <div class="opensource-text">
             <div class="license-pill">AGPLv3</div>
-            <h2>Un projet 100% open source</h2>
-            <p>
-              Kagibi est publié sous licence <strong>GNU AGPLv3</strong> — la licence copyleft la plus forte.
-              Toute modification déployée en production doit être partagée publiquement.
-              Aucune version propriétaire cachée, aucun backdoor possible.
-            </p>
-            <p>
-              Le code est librement auditable, forçable et améliorable par tous.
-              Contribuez à la sécurité, signalez des bugs, proposez des fonctionnalités —
-              chaque Pull Request est la bienvenue.
-            </p>
+            <h2>{{ t('landing.home.ossTitle') }}</h2>
+            <p>{{ t('landing.home.ossPara1') }}</p>
+            <p>{{ t('landing.home.ossPara2') }}</p>
             <div class="opensource-actions">
               <a
                 href="https://github.com/Buuuntyyy/Kagibi"
@@ -86,7 +74,7 @@
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
                 </svg>
-                Voir le code source
+                {{ t('landing.home.ossViewCode') }}
               </a>
               <a
                 href="https://github.com/Buuuntyyy/Kagibi"
@@ -109,7 +97,7 @@
                   <polyline points="8 6 2 12 8 18"></polyline>
                 </svg>
               </div>
-              <div class="stat-label">Licence</div>
+              <div class="stat-label">{{ t('landing.home.ossLicenceLabel') }}</div>
               <div class="stat-value">AGPLv3</div>
             </div>
             <div class="stat-card">
@@ -120,8 +108,8 @@
                   <path d="M2 12h2M20 12h2M12 2v2M12 20v2"></path>
                 </svg>
               </div>
-              <div class="stat-label">Contributions</div>
-              <div class="stat-value">Ouvertes</div>
+              <div class="stat-label">{{ t('landing.home.ossContribLabel') }}</div>
+              <div class="stat-value">{{ t('landing.home.ossContribValue') }}</div>
             </div>
             <div class="stat-card">
               <div class="stat-icon">
@@ -129,7 +117,7 @@
                   <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
                 </svg>
               </div>
-              <div class="stat-label">Plateforme</div>
+              <div class="stat-label">{{ t('landing.home.ossPlatformLabel') }}</div>
               <div class="stat-value">GitHub</div>
             </div>
           </div>
@@ -140,13 +128,13 @@
     <!-- How it works -->
     <section class="how-it-works">
       <div class="container">
-        <h2 class="section-title">Comment ça fonctionne ?</h2>
-        <p class="section-subtitle">Trois étapes, zéro compromis sur la vie privée.</p>
+        <h2 class="section-title">{{ t('landing.home.howTitle') }}</h2>
+        <p class="section-subtitle">{{ t('landing.home.howSubtitle') }}</p>
         <div class="steps-grid">
           <div class="step">
             <div class="step-number">1</div>
-            <h3>Chiffrement local</h3>
-            <p>Vos fichiers sont chiffrés avec AES-256-GCM directement dans votre navigateur. La clé ne quitte jamais votre appareil.</p>
+            <h3>{{ t('landing.home.step1Title') }}</h3>
+            <p>{{ t('landing.home.step1Desc') }}</p>
           </div>
           <div class="step-arrow">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -156,8 +144,8 @@
           </div>
           <div class="step">
             <div class="step-number">2</div>
-            <h3>Stockage sécurisé</h3>
-            <p>Seul le flux chiffré arrive sur nos serveurs en France. Même avec un accès complet à l'infrastructure, personne ne peut déchiffrer vos fichiers.</p>
+            <h3>{{ t('landing.home.step2Title') }}</h3>
+            <p>{{ t('landing.home.step2Desc') }}</p>
           </div>
           <div class="step-arrow">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -167,8 +155,8 @@
           </div>
           <div class="step">
             <div class="step-number">3</div>
-            <h3>Accès exclusif</h3>
-            <p>Seul vous pouvez déchiffrer et lire vos données. Partagez en toute sécurité via liens chiffrés ou transfert P2P direct.</p>
+            <h3>{{ t('landing.home.step3Title') }}</h3>
+            <p>{{ t('landing.home.step3Desc') }}</p>
           </div>
         </div>
       </div>
@@ -177,8 +165,8 @@
     <!-- Features Section -->
     <section class="features">
       <div class="container">
-        <h2 class="section-title">Tout ce dont vous avez besoin</h2>
-        <p class="section-subtitle">Une plateforme complète, construite sur des fondations cryptographiques solides.</p>
+        <h2 class="section-title">{{ t('landing.home.featTitle') }}</h2>
+        <p class="section-subtitle">{{ t('landing.home.featSubtitle') }}</p>
         <div class="features-grid">
           <div class="feature-card">
             <div class="feature-icon">
@@ -187,11 +175,8 @@
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
               </svg>
             </div>
-            <h3>Zero-Knowledge garanti</h3>
-            <p>
-              Chiffrement AES-256-GCM côté client. Vos clés ne quittent jamais votre appareil.
-              Nos serveurs ne voient que du bruit chiffré — impossible autrement.
-            </p>
+            <h3>{{ t('landing.home.feat1Title') }}</h3>
+            <p>{{ t('landing.home.feat1Desc') }}</p>
           </div>
 
           <div class="feature-card">
@@ -201,11 +186,8 @@
                 <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
               </svg>
             </div>
-            <h3>Transfert P2P jusqu'à 10 Go</h3>
-            <p>
-              Envoyez de gros fichiers en direct, de navigateur à navigateur.
-              Aucun stockage intermédiaire, vitesse maximale, aucune trace sur nos serveurs.
-            </p>
+            <h3>{{ t('landing.home.feat2Title') }}</h3>
+            <p>{{ t('landing.home.feat2Desc') }}</p>
           </div>
 
           <div class="feature-card">
@@ -214,11 +196,8 @@
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
               </svg>
             </div>
-            <h3>Souveraineté numérique</h3>
-            <p>
-              Infrastructure 100% OVH France (Gravelines). Hors juridiction américaine.
-              Conformité RGPD stricte. Vos données ne quittent jamais l'Europe.
-            </p>
+            <h3>{{ t('landing.home.feat3Title') }}</h3>
+            <p>{{ t('landing.home.feat3Desc') }}</p>
           </div>
 
           <div class="feature-card">
@@ -228,12 +207,8 @@
                 <polyline points="8 6 2 12 8 18"></polyline>
               </svg>
             </div>
-            <h3>100% vérifiable</h3>
-            <p>
-              Code source intégralement publié sous licence AGPLv3.
-              Auditez vous-même ce que fait Kagibi de vos données.
-              La confiance ne devrait pas être aveugle.
-            </p>
+            <h3>{{ t('landing.home.feat4Title') }}</h3>
+            <p>{{ t('landing.home.feat4Desc') }}</p>
           </div>
         </div>
       </div>
@@ -242,14 +217,14 @@
     <!-- Final CTA -->
     <section class="final-cta">
       <div class="container">
-        <h2>Prêt à reprendre le contrôle ?</h2>
-        <p>Rejoignez Kagibi et stockez vos fichiers sans jamais compromettre votre vie privée.</p>
+        <h2>{{ t('landing.home.ctaTitle') }}</h2>
+        <p>{{ t('landing.home.ctaSubtitle') }}</p>
         <div class="cta-buttons">
           <router-link to="/login" class="btn btn-primary btn-large">
-            Créer mon compte gratuitement
+            {{ t('landing.home.ctaCreate') }}
           </router-link>
           <router-link to="/transfer" class="btn btn-outline btn-large">
-            Essayer le transfert P2P
+            {{ t('landing.home.ctaTryP2P') }}
           </router-link>
         </div>
       </div>
@@ -259,7 +234,10 @@
 
 <script setup>
 import { onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import LandingNav from '../../components/landing/LandingNav.vue'
+
+const { t } = useI18n()
 
 onMounted(() => {
   const observerOptions = {
