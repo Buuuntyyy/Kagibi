@@ -89,6 +89,7 @@ func migrateCoreModels(ctx context.Context, db *bun.DB) error {
 		(*FolderFolderKey)(nil),
 		(*RecentActivity)(nil),
 		(*P2PSignal)(nil),
+		(*P2PInvite)(nil),
 		(*RealtimeEvent)(nil),
 	}
 
@@ -154,6 +155,17 @@ func migrateSchemaAlterations(ctx context.Context, db *bun.DB) error {
 		return fmt.Errorf("failed to update existing paths in share_links: %w", err)
 	}
 
+	// Guest invite columns — added when the invite flow was extended to support
+	// users without a Kagibi account (guest auto-auth via ephemeral JWT).
+	for _, col := range []string{
+		`ALTER TABLE "p2p_invites" ADD COLUMN IF NOT EXISTS "is_guest" BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE "p2p_invites" ALTER COLUMN "recipient_email" DROP NOT NULL`,
+	} {
+		if _, err := db.ExecContext(ctx, col); err != nil {
+			log.Printf("Warning: failed to apply p2p_invites guest column: %v", err)
+		}
+	}
+
 	// The original p2p_signals_signal_type_check constraint omitted 'reject' and 'p2p_ping'.
 	// Drop it and replace with the full allowed set so reject signals can be stored.
 	_, err = db.ExecContext(ctx, `ALTER TABLE "p2p_signals" DROP CONSTRAINT IF EXISTS "p2p_signals_signal_type_check"`)
@@ -161,7 +173,7 @@ func migrateSchemaAlterations(ctx context.Context, db *bun.DB) error {
 		log.Printf("Warning: failed to drop p2p_signals_signal_type_check: %v", err)
 	}
 	_, err = db.ExecContext(ctx, `ALTER TABLE "p2p_signals" ADD CONSTRAINT "p2p_signals_signal_type_check"
-		CHECK (signal_type IN ('offer', 'answer', 'candidate', 'reject', 'p2p_ping'))`)
+		CHECK (signal_type IN ('offer', 'answer', 'candidate', 'reject', 'p2p_ping', 'invite_accepted'))`)
 	if err != nil {
 		log.Printf("Warning: failed to recreate p2p_signals_signal_type_check: %v", err)
 	}

@@ -6,7 +6,43 @@
     <P2PNav />
 
     <main class="p2p-main">
-      <div class="p2p-container">
+
+      <!-- Guest mode overlay — shown when arriving via an invite link -->
+      <div v-if="isGuestMode" class="guest-overlay">
+        <div class="guest-card">
+          <!-- File info header -->
+          <div v-if="guestInviteInfo" class="guest-file-info">
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+            <div>
+              <p class="guest-filename">{{ guestInviteInfo.file_name }}</p>
+              <p class="guest-filesender">{{ t('p2p.invite.incomingDesc', { sender: guestInviteInfo.sender_name, fileName: '', size: formatSize(guestInviteInfo.file_size) }).trim() }}</p>
+            </div>
+          </div>
+
+          <!-- State indicator -->
+          <div class="guest-state" :class="{ 'is-error': guestState === 'error', 'is-done': guestState === 'done' }">
+            <div v-if="guestState !== 'error' && guestState !== 'done'" class="guest-spinner"></div>
+            <svg v-else-if="guestState === 'done'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            <span>{{ guestStateLabel }}</span>
+          </div>
+
+          <!-- Progress bar while transferring -->
+          <div v-if="guestState === 'transferring' && p2pStore.activeTransfer" class="guest-progress-wrap">
+            <div class="guest-progress-track">
+              <div class="guest-progress-fill" :style="{ width: p2pStore.activeTransfer.progress + '%' }"></div>
+            </div>
+            <span class="guest-pct">{{ p2pStore.activeTransfer.progress }}%</span>
+          </div>
+
+          <p class="guest-privacy-note">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            End-to-end encrypted · No account required · Powered by Kagibi
+          </p>
+        </div>
+      </div>
+
+      <div v-else class="p2p-container">
         <div class="main-card">
           <div class="card-header">
             <h2>{{ t('p2p.pageTitle') }}</h2>
@@ -15,42 +51,55 @@
 
           <div class="transfer-flow">
             <!-- STEP 1: DESTINATAIRE -->
-            <div class="flow-step" :class="{ active: !selectedFriend, completed: selectedFriend }">
+            <div class="flow-step" :class="{ active: !selectedFriend && !inviteMode, completed: selectedFriend || inviteMode }">
               <div class="step-icon">1</div>
               <div class="step-content">
                 <h3>{{ t('p2p.selectFriend') }}</h3>
-                <div v-if="!selectedFriend">
+
+                <!-- Selection not made yet: show friends + invite option -->
+                <div v-if="!selectedFriend && !inviteMode">
                   <p class="secondary-text">{{ t('p2p.selectFriendDesc') }}</p>
-                  <div class="friend-selector">
-                    <div v-if="onlineFriends.length === 0" class="no-friends">
-                      {{ t('p2p.noOnlineFriends') }}
-                    </div>
-                    <div v-else class="friends-grid">
-                      <div
-                        v-for="friend in onlineFriends"
-                        :key="friend.id"
-                        class="friend-chip"
-                        @click="selectedFriend = friend"
-                      >
-                        <div class="avatar-mini-wrapper">
-                          <div class="avatar-mini">
-                            <img
-                              v-if="normalizeAvatarUrl(friend.avatar_url)"
-                              :src="normalizeAvatarUrl(friend.avatar_url)"
-                              :alt="friend.name"
-                              class="avatar-image"
-                              @error="(e) => e.target.style.display = 'none'"
-                            />
-                            <span v-else class="avatar-initials-mini">{{ getInitials(friend.name) }}</span>
-                          </div>
-                          <span class="status-dot-mini"></span>
-                        </div>
-                        <span>{{ friend.name }}</span>
+                  <div class="recipient-options">
+                    <!-- Online friends -->
+                    <div class="friends-grid">
+                      <div v-if="onlineFriends.length === 0" class="no-friends">
+                        {{ t('p2p.noOnlineFriends') }}
                       </div>
+                      <template v-else>
+                        <div
+                          v-for="friend in onlineFriends"
+                          :key="friend.id"
+                          class="friend-chip"
+                          @click="selectedFriend = friend"
+                        >
+                          <div class="avatar-mini-wrapper">
+                            <div class="avatar-mini">
+                              <img
+                                v-if="normalizeAvatarUrl(friend.avatar_url)"
+                                :src="normalizeAvatarUrl(friend.avatar_url)"
+                                :alt="friend.name"
+                                class="avatar-image"
+                                @error="(e) => e.target.style.display = 'none'"
+                              />
+                              <span v-else class="avatar-initials-mini">{{ getInitials(friend.name) }}</span>
+                            </div>
+                            <span class="status-dot-mini"></span>
+                          </div>
+                          <span>{{ friend.name }}</span>
+                        </div>
+                      </template>
+                    </div>
+
+                    <!-- Invite option -->
+                    <div class="invite-option-chip" @click="inviteMode = true">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                      {{ t('p2p.invite.title') }}
                     </div>
                   </div>
                 </div>
-                <div v-else class="selected-friend-display" style="width: fit-content">
+
+                <!-- Friend selected -->
+                <div v-else-if="selectedFriend" class="selected-friend-display" style="width: fit-content">
                   <div class="friend-chip selected">
                     <div class="avatar-mini-wrapper">
                       <div class="avatar-mini">
@@ -69,25 +118,33 @@
                     <button class="close-btn" @click="selectedFriend = null">×</button>
                   </div>
                 </div>
+
+                <!-- Invite mode selected -->
+                <div v-else class="invite-mode-display">
+                  <div class="invite-option-chip selected">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    {{ t('p2p.invite.title') }}
+                  </div>
+                  <button class="close-mode-btn" @click="inviteMode = false">×</button>
+                </div>
+
               </div>
             </div>
 
             <!-- STEP 2: FICHIER -->
-            <div class="flow-step" :class="{ active: selectedFriend && !selectedFile, completed: selectedFile, disabled: !selectedFriend }">
+            <div class="flow-step" :class="{ active: !selectedFile, completed: selectedFile }">
               <div class="step-icon">2</div>
               <div class="step-content">
                 <h3>{{ t('p2p.selectFile') }}</h3>
                 <input type="file" id="p2p-file-input" @change="handleFileSelect" style="display: none" />
 
                 <div v-if="!selectedFile"
-                     class="drop-area"
-                     :class="{ 'pulse': selectedFriend && !selectedFile }"
-                     @click="selectedFriend && triggerFileSelect()"
+                     class="drop-area pulse"
+                     @click="triggerFileSelect()"
                      @dragover.prevent
                      @drop.prevent="handleDrop"
                 >
-                  <span v-if="!selectedFriend">{{ t('p2p.selectFriendDesc') }}</span>
-                  <span v-else>{{ t('p2p.dropFile') }}</span>
+                  <span>{{ t('p2p.dropFile') }}</span>
                 </div>
 
                 <div v-else class="file-display">
@@ -105,11 +162,20 @@
 
             <!-- STEP 3: ACTION -->
             <div class="flow-step action-step">
-              <button class="send-big-btn" :disabled="!canSend" @click="startTransfer">
+              <!-- Direct transfer mode -->
+              <button v-if="!inviteMode" class="send-big-btn" :disabled="!canSend" @click="startTransfer">
                 <span v-if="!canSend">{{ t('p2p.selectFriendAndFile') }}</span>
                 <span v-else>
                   {{ t('p2p.sendFile') }}
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:8px;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </span>
+              </button>
+              <!-- Invite mode -->
+              <button v-else class="send-big-btn invite-send-btn" :disabled="!selectedFile" @click="openInviteDialog">
+                <span v-if="!selectedFile">{{ t('p2p.selectFile') }}</span>
+                <span v-else>
+                  {{ t('p2p.invite.generate') }}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:8px;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                 </span>
               </button>
             </div>
@@ -119,33 +185,173 @@
     </main>
 
     <P2PTransferDialog />
+    <P2PInviteDialog
+      :visible="showInviteDialog"
+      :file="selectedFile"
+      :transfer-id="inviteTransferId"
+      @close="showInviteDialog = false"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useFriendStore } from '../../stores/friends'
 import { useP2PStore } from '../../stores/p2p'
+import { useRealtimeStore } from '../../stores/realtime'
+import { useAuthStore } from '../../stores/auth'
+import { authClient } from '../../auth-client'
+import { API_BASE_URL } from '../../api'
+import { generateRSAKeyPair, exportKeyToPEM } from '../../utils/crypto'
 import P2PNav from '../../components/landing/P2PNav.vue'
 import P2PTransferDialog from '../../components/P2PTransferDialog.vue'
+import P2PInviteDialog from '../../components/p2p/P2PInviteDialog.vue'
 
 const { t } = useI18n()
+const route = useRoute()
 const friendStore = useFriendStore()
 const p2pStore = useP2PStore()
+const realtimeStore = useRealtimeStore()
+const authStore = useAuthStore()
 
 const selectedFriend = ref(null)
 const selectedFile = ref(null)
+const inviteMode = ref(false)
+const showInviteDialog = ref(false)
+const inviteTransferId = ref('')
+
+// Guest flow state
+const isGuestMode = ref(false)
+const guestState = ref('') // 'authenticating' | 'generating-keys' | 'connecting' | 'waiting' | 'transferring' | 'done' | 'error'
+const guestError = ref('')
+const guestInviteInfo = ref(null) // { sender_name, file_name, file_size }
+
+// Non-guest invite acceptance state (kept for backward compat)
+const incomingInvite = ref(null)
+const inviteError = ref('')
+const inviteAccepted = ref(false)
+const inviteLoading = ref(false)
 
 const onlineFriends = computed(() => {
   return friendStore.acceptedFriends.filter(f => f.online)
 })
 
-const canSend = computed(() => !!selectedFriend.value && !!selectedFile.value)
+const canSend = computed(() => !!selectedFriend.value && !!selectedFile.value && !inviteMode.value)
 
-onMounted(() => {
-  friendStore.fetchFriends()
+const guestStateLabel = computed(() => {
+  switch (guestState.value) {
+    case 'authenticating':    return t('p2p.invite.guest.authenticating')
+    case 'generating-keys':   return t('p2p.invite.guest.generatingKeys')
+    case 'connecting':        return t('p2p.invite.guest.connecting')
+    case 'waiting':           return t('p2p.invite.guest.waiting')
+    case 'transferring':      return t('p2p.invite.guest.transferring')
+    case 'done':              return t('p2p.invite.guest.done')
+    case 'error':             return guestError.value || t('p2p.invite.guest.error')
+    default:                  return t('common.loading')
+  }
 })
+
+onMounted(async () => {
+  const inviteToken = route.query.invite
+  if (inviteToken) {
+    isGuestMode.value = true
+    await guestAutoAuth(inviteToken)
+  } else {
+    friendStore.fetchFriends()
+  }
+})
+
+// Close invite dialog automatically when the recipient accepted and transfer started
+watch(() => p2pStore.inviteReady, (ready) => {
+  if (ready && showInviteDialog.value) showInviteDialog.value = false
+})
+
+// Watch for active transfer starting (guest flow: auto-accept offer)
+watch(() => p2pStore.incomingOffer, async (offer) => {
+  if (!isGuestMode.value || !offer) return
+  guestState.value = 'transferring'
+  await p2pStore.acceptTransfer()
+})
+
+// Watch for transfer completing (guest flow: redirect)
+watch(() => p2pStore.activeTransfer?.status, (status) => {
+  if (!isGuestMode.value) return
+  if (status === 'Complete' || status === 'Done') {
+    guestState.value = 'done'
+    setTimeout(() => {
+      authClient.clearGuestToken()
+      window.location.href = 'https://kagibi.cloud'
+    }, 3000)
+  }
+})
+
+async function guestAutoAuth(inviteToken) {
+  guestError.value = ''
+  try {
+    // Step 1: Get guest JWT
+    guestState.value = 'authenticating'
+    const authRes = await fetch(`${API_BASE_URL}p2p/guest-auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: inviteToken }),
+    })
+    let authData
+    try { authData = await authRes.json() } catch { authData = {} }
+    if (!authRes.ok) {
+      guestError.value = authRes.status === 410 ? t('p2p.invite.expired') : (authData.error || t('p2p.invite.guest.error'))
+      guestState.value = 'error'
+      return
+    }
+    authClient.setGuestToken(authData.jwt)
+    guestInviteInfo.value = {
+      sender_name: authData.sender_name,
+      file_name: authData.file_name,
+      file_size: authData.file_size,
+    }
+
+    // Step 2: Generate RSA keypair for this session
+    guestState.value = 'generating-keys'
+    const keyPair = await generateRSAKeyPair()
+    const publicKeyPEM = await exportKeyToPEM(keyPair.publicKey, 'spki')
+    // Inject private key into auth store so p2pStore.acceptTransfer() can decrypt the file key
+    authStore.privateKey = keyPair.privateKey
+
+    // Step 3: Connect WebSocket with guest JWT
+    guestState.value = 'connecting'
+    await realtimeStore.connect()
+
+    // Step 4: Accept the invite, send public key
+    const acceptRes = await fetch(`${API_BASE_URL}p2p/invite/${inviteToken}/accept`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authData.jwt}`,
+      },
+      body: JSON.stringify({ public_key: publicKeyPEM }),
+    })
+    let acceptData
+    try { acceptData = await acceptRes.json() } catch { acceptData = {} }
+    if (!acceptRes.ok) {
+      guestError.value = acceptData.error || t('p2p.invite.guest.error')
+      guestState.value = 'error'
+      return
+    }
+
+    // Step 5: Wait for sender to start the transfer (handled by watch above)
+    guestState.value = 'waiting'
+  } catch (e) {
+    console.error('[Guest] Auto-auth failed:', e)
+    guestError.value = e.message || t('p2p.invite.guest.error')
+    guestState.value = 'error'
+  }
+}
+
+async function openInviteDialog() {
+  inviteTransferId.value = crypto.randomUUID()
+  showInviteDialog.value = true
+}
 
 const getInitials = (name) => {
   if (!name) return '?'
@@ -179,7 +385,6 @@ const handleFileSelect = (e) => {
 }
 
 const handleDrop = (e) => {
-  if (!selectedFriend.value) return
   if (e.dataTransfer.files.length > 0) {
     selectedFile.value = e.dataTransfer.files[0]
   }
@@ -407,8 +612,243 @@ const startTransfer = async () => {
   color: var(--secondary-text-color);
 }
 
+.recipient-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.invite-option-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.8rem;
+  background: var(--hover-background-color);
+  border: 1px dashed var(--border-color);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  color: var(--text-secondary, var(--secondary-text-color));
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.invite-option-chip:hover { border-color: var(--primary-color); color: var(--primary-color); }
+.invite-option-chip.selected {
+  background: var(--primary-color);
+  color: #fff;
+  border-style: solid;
+  border-color: var(--primary-color);
+}
+
+.invite-mode-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.close-mode-btn {
+  background: transparent;
+  border: none;
+  color: var(--secondary-text-color);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0 0.2rem;
+  line-height: 1;
+}
+
+.invite-send-btn {
+  background: var(--primary-color) !important;
+  box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3) !important;
+}
+
+.invite-banner-wrap {
+  padding: 0.75rem 1rem;
+}
+
+.invite-banner {
+  max-width: 600px;
+  margin: 0 auto;
+  background: var(--card-color);
+  border: 1px solid var(--primary-color);
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+}
+
+.invite-banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.invite-banner-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+  color: var(--text-color);
+}
+
+.invite-banner-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.invite-btn-accept {
+  padding: 0.4rem 1rem;
+  background: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.invite-btn-accept:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.invite-btn-decline {
+  padding: 0.4rem 1rem;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.invite-btn-decline:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.invite-banner-text {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.invite-banner-error {
+  font-size: 0.9rem;
+  color: var(--error-color, #ef4444);
+}
+
+.guest-overlay {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.guest-card {
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  width: 440px;
+  max-width: 100%;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.guest-file-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: var(--text-color);
+}
+
+.guest-filename {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+}
+
+.guest-filesender {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary, var(--secondary-text-color));
+}
+
+.guest-state {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.95rem;
+  color: var(--text-color);
+  background: var(--hover-background-color, var(--background-color));
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+}
+
+.guest-state.is-error {
+  color: var(--error-color, #ef4444);
+  border-color: var(--error-color, #ef4444);
+}
+
+.guest-state.is-done {
+  color: var(--success-color, #27ae60);
+  border-color: var(--success-color, #27ae60);
+}
+
+.guest-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.guest-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.guest-progress-track {
+  flex: 1;
+  height: 6px;
+  background: var(--border-color);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.guest-progress-fill {
+  height: 100%;
+  background: var(--primary-color);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.guest-pct {
+  font-size: 0.85rem;
+  color: var(--text-secondary, var(--secondary-text-color));
+  min-width: 36px;
+  text-align: right;
+}
+
+.guest-privacy-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--text-secondary, var(--secondary-text-color));
+  margin: 0;
+  opacity: 0.7;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
 @media (max-width: 768px) {
   .main-card { padding: 1.5rem 1rem; }
   .p2p-container { padding: 1rem; align-items: flex-start; }
+  .invite-banner-content { flex-direction: column; align-items: flex-start; }
+  .guest-card { padding: 1.5rem 1rem; }
 }
 </style>

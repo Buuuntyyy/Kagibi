@@ -186,7 +186,11 @@ export const useRealtimeStore = defineStore('realtime', () => {
       const token = await authClient.getToken()
       if (!token) return []
 
-      const response = await fetch('/api/v1/p2p/signals', {
+      const apiBase = (
+        typeof window !== 'undefined' && window.__APP_CONFIG__?.apiUrl
+      ) ? window.__APP_CONFIG__.apiUrl.replace(/\/$/, '') : (import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1').replace(/\/$/, '')
+
+      const response = await fetch(`${apiBase}/p2p/signals`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       if (!response.ok) return []
@@ -249,7 +253,10 @@ export const useRealtimeStore = defineStore('realtime', () => {
   async function sendP2PSignal(targetUserId, signalType, payload) {
     try {
       const token = await authClient.getToken()
-      const response = await fetch('/api/v1/p2p/signal', {
+      const apiBase = (
+        typeof window !== 'undefined' && window.__APP_CONFIG__?.apiUrl
+      ) ? window.__APP_CONFIG__.apiUrl.replace(/\/$/, '') : (import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1').replace(/\/$/, '')
+      const response = await fetch(`${apiBase}/p2p/signal`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

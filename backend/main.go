@@ -12,6 +12,7 @@ import (
 	"kagibi/backend/handlers/folders"
 	"kagibi/backend/handlers/friends"
 	"kagibi/backend/handlers/keys"
+	p2phandlers "kagibi/backend/handlers/p2p"
 	"kagibi/backend/handlers/security"
 	"kagibi/backend/handlers/shares"
 	"kagibi/backend/handlers/tags"
@@ -206,6 +207,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	registerSecurityRoutes(protected)
 	registerBillingRoutes(api, protected, authMW, db)
 	registerP2PRoutes(protected, db)
+	registerPublicP2PRoutes(api, db, provider)
 	registerEventRoutes(protected, db)
 
 	// WebSocket endpoint — authenticated via Authorization header or Sec-WebSocket-Protocol trick.
@@ -420,6 +422,13 @@ func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 	p2pG.POST("/signal", p2pSignalHandler(db))
 	p2pG.GET("/signals", p2pFetchSignalsHandler(db))
 	p2pG.GET("ice-config", p2pIceConfigHandler())
+	p2pG.POST("/invite", p2phandlers.CreateInviteHandler(db))
+	p2pG.GET("/invite/:token", p2phandlers.GetInviteHandler(db))
+	p2pG.POST("/invite/:token/accept", p2phandlers.AcceptInviteHandler(db, wshandler.GlobalHub))
+}
+
+func registerPublicP2PRoutes(api *gin.RouterGroup, db *bun.DB, provider authprovider.AuthProvider) {
+	api.POST("/p2p/guest-auth", p2phandlers.GuestAuthHandler(db, provider))
 }
 
 // registerEventRoutes adds a polling endpoint for realtime events.
