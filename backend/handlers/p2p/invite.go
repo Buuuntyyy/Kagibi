@@ -160,6 +160,25 @@ func GuestAuthHandler(db *bun.DB, provider authprovider.AuthProvider) gin.Handle
 			return
 		}
 
+		// Atomic single-use claim: set guest_authed_at only if it is still NULL.
+		// This prevents a second caller (who intercepted the link) from obtaining
+		// a guest JWT after the legitimate recipient has already authenticated.
+		now := time.Now()
+		result, err := db.NewUpdate().
+			Model((*pkg.P2PInvite)(nil)).
+			Set("guest_authed_at = ?", now).
+			Where("token = ? AND guest_authed_at IS NULL", req.Token).
+			Exec(c.Request.Context())
+		if err != nil {
+			log.Printf("[P2P] guest_authed_at claim failed token=%s: %v", req.Token, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to claim invite"})
+			return
+		}
+		if rows, _ := result.RowsAffected(); rows == 0 {
+			c.JSON(http.StatusGone, gin.H{"error": "This invite has already been used"})
+			return
+		}
+
 		jwt, err := issuer.GenerateGuestToken(invite.RecipientID, invite.ExpiresAt)
 		if err != nil {
 			log.Printf("[P2P] Failed to generate guest token: %v", err)

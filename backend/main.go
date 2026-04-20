@@ -193,10 +193,11 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	mfaGroup.POST("/verify", auth.MFAVerifyHandler(provider))
 	mfaGroup.DELETE("/unenroll", auth.MFAUnenrollHandler(provider, redisClient))
 
-	// Protected routes (JWT required)
+	// Protected routes (JWT required, guest tokens rejected)
 	authMW := middleware.AuthMiddleware(provider, redisClient)
 	protected := api.Group("")
 	protected.Use(authMW)
+	protected.Use(middleware.BlockGuest())
 
 	registerUserRoutes(protected, db, redisClient, provider)
 	registerFileRoutes(protected, db, redisClient)
@@ -207,6 +208,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	registerSecurityRoutes(protected)
 	registerBillingRoutes(api, protected, authMW, db)
 	registerP2PRoutes(protected, db)
+	registerP2PGuestRoutes(api, db, authMW)
 	registerPublicP2PRoutes(api, db, provider)
 	registerEventRoutes(protected, db)
 
@@ -417,12 +419,22 @@ func p2pIceConfigHandler() gin.HandlerFunc {
 	}
 }
 
+// registerP2PRoutes registers endpoints that require a full (non-guest) auth session.
+// Creating an invite is restricted to registered users only.
 func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 	p2pG := g.Group("/p2p")
+	p2pG.POST("/invite", p2phandlers.CreateInviteHandler(db))
+}
+
+// registerP2PGuestRoutes registers P2P endpoints that are accessible to both
+// regular users and ephemeral guest sessions (aal=guest).
+// These are mounted directly on the api group with authMW but without BlockGuest.
+func registerP2PGuestRoutes(api *gin.RouterGroup, db *bun.DB, authMW gin.HandlerFunc) {
+	p2pG := api.Group("/p2p")
+	p2pG.Use(authMW)
 	p2pG.POST("/signal", p2pSignalHandler(db))
 	p2pG.GET("/signals", p2pFetchSignalsHandler(db))
-	p2pG.GET("ice-config", p2pIceConfigHandler())
-	p2pG.POST("/invite", p2phandlers.CreateInviteHandler(db))
+	p2pG.GET("/ice-config", p2pIceConfigHandler())
 	p2pG.GET("/invite/:token", p2phandlers.GetInviteHandler(db))
 	p2pG.POST("/invite/:token/accept", p2phandlers.AcceptInviteHandler(db, wshandler.GlobalHub))
 }

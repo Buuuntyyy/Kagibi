@@ -234,6 +234,7 @@ type P2PInvite struct {
 	FileSize       int64      `bun:"file_size,notnull" json:"file_size"`
 	IsGuest        bool       `bun:"is_guest,notnull,default:false" json:"is_guest"`
 	ExpiresAt      time.Time  `bun:"expires_at,notnull" json:"expires_at"`
+	GuestAuthedAt  *time.Time `bun:"guest_authed_at" json:"guest_authed_at,omitempty"`
 	AcceptedAt     *time.Time `bun:"accepted_at" json:"accepted_at,omitempty"`
 	CreatedAt      time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }

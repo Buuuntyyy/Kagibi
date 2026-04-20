@@ -160,6 +160,8 @@ func migrateSchemaAlterations(ctx context.Context, db *bun.DB) error {
 	for _, col := range []string{
 		`ALTER TABLE "p2p_invites" ADD COLUMN IF NOT EXISTS "is_guest" BOOLEAN NOT NULL DEFAULT false`,
 		`ALTER TABLE "p2p_invites" ALTER COLUMN "recipient_email" DROP NOT NULL`,
+		// Single-use guard: set atomically on first guest-auth call to prevent token reuse.
+		`ALTER TABLE "p2p_invites" ADD COLUMN IF NOT EXISTS "guest_authed_at" TIMESTAMPTZ`,
 	} {
 		if _, err := db.ExecContext(ctx, col); err != nil {
 			log.Printf("Warning: failed to apply p2p_invites guest column: %v", err)
