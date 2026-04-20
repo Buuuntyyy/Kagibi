@@ -334,7 +334,17 @@ func p2pSignalHandler(db *bun.DB) gin.HandlerFunc {
 			Payload:    req.Payload,
 		}
 		if _, err := db.NewInsert().Model(signal).Exec(c.Request.Context()); err != nil {
-			c.JSON(500, gin.H{"error": "Failed to send signal"})
+			log.Printf("[P2P] Insert failed type=%s sender=%s target=%s: %v",
+				req.SignalType, userID.(string), req.TargetUserID, err)
+			// For reject signals, best-effort WS delivery even when the DB is unavailable:
+			// the initiator must learn about the refusal. Signal ID 0 is intentionally
+			// skipped by the frontend deduplication guard (only truthy IDs are tracked).
+			if req.SignalType == "reject" {
+				wshandler.GlobalHub.SendP2PSignalToUser(req.TargetUserID, userID.(string), req.SignalType, 0, req.Payload)
+				c.JSON(200, gin.H{"status": "sent", "signal_id": 0})
+			} else {
+				c.JSON(500, gin.H{"error": "Failed to send signal"})
+			}
 			return
 		}
 		wshandler.GlobalHub.SendP2PSignalToUser(req.TargetUserID, userID.(string), req.SignalType, signal.ID, req.Payload)
