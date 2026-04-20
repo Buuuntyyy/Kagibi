@@ -112,10 +112,10 @@
           <div class="kh-level">
             <div class="kh-node kh-password" :class="{ active: activeKey === 'password' }" @mouseenter="activeKey = 'password'" @mouseleave="activeKey = null">
               <div class="kh-icon">🔑</div>
-              <div class="kh-label">Mot de passe</div>
-              <div class="kh-sub">Jamais envoyé au serveur</div>
+              <div class="kh-label">{{ t('landing.security.khPasswordLabel') }}</div>
+              <div class="kh-sub">{{ t('landing.security.khPasswordSub') }}</div>
               <div class="kh-tooltip">
-                <strong>Mot de passe</strong> — Passé à Argon2id dans un Web Worker séparé, il n'est jamais sérialisé, jamais envoyé au serveur. Le hash produit est la KEK.
+                <strong>{{ t('landing.security.khPasswordLabel') }}</strong> — {{ t('landing.security.khPasswordTooltipBody') }}
               </div>
             </div>
             <div class="kh-connector">
@@ -129,9 +129,9 @@
             <div class="kh-node kh-kek" :class="{ active: activeKey === 'kek' }" @mouseenter="activeKey = 'kek'" @mouseleave="activeKey = null">
               <div class="kh-icon">🗝️</div>
               <div class="kh-label">KEK</div>
-              <div class="kh-sub">Key Encryption Key · 256 bits</div>
+              <div class="kh-sub">{{ t('landing.security.khKekSub') }}</div>
               <div class="kh-tooltip">
-                <strong>KEK (Key Encryption Key)</strong> — Dérivée de votre mot de passe via Argon2id (64 MB RAM, 4 passes). Elle sert uniquement à chiffrer/déchiffrer la Master Key. Elle n'est jamais stockée.
+                <strong>KEK (Key Encryption Key)</strong> — {{ t('landing.security.khKekTooltipBody') }}
               </div>
             </div>
             <div class="kh-connector">
@@ -145,9 +145,9 @@
             <div class="kh-node kh-master" :class="{ active: activeKey === 'master' }" @mouseenter="activeKey = 'master'" @mouseleave="activeKey = null">
               <div class="kh-icon">🏛️</div>
               <div class="kh-label">Master Key</div>
-              <div class="kh-sub">AES-256 · Générée aléatoirement · Service Worker</div>
+              <div class="kh-sub">{{ t('landing.security.khMasterSub') }}</div>
               <div class="kh-tooltip">
-                <strong>Master Key</strong> — Clé AES-256 générée aléatoirement à l'inscription. Stockée chiffrée (par la KEK) sur le serveur. En session dans le Service Worker avec <code>extractable: false</code> — le JS ne peut pas l'exporter.
+                <strong>Master Key</strong> — {{ t('landing.security.khMasterTooltipBody1') }}<code>extractable: false</code>{{ t('landing.security.khMasterTooltipBody2') }}
               </div>
             </div>
             <div class="kh-branches">
@@ -158,10 +158,10 @@
                   <div class="kh-line-short animated-line"></div>
                   <div class="kh-node kh-rsa" :class="{ active: activeKey === 'rsa' }" @mouseenter="activeKey = 'rsa'" @mouseleave="activeKey = null">
                     <div class="kh-icon small">🔐</div>
-                    <div class="kh-label small">Clé privée RSA</div>
-                    <div class="kh-sub">RSA-OAEP 4096 bits<br>Pour le partage</div>
+                    <div class="kh-label small">{{ t('landing.security.khRsaLabel') }}</div>
+                    <div class="kh-sub">{{ t('landing.security.khRsaSub1') }}<br>{{ t('landing.security.khRsaSub2') }}</div>
                     <div class="kh-tooltip kh-tooltip-left">
-                      <strong>Clé privée RSA-OAEP 4096</strong> — Générée à l'inscription, chiffrée par la Master Key avant envoi au serveur. Utilisée pour le partage : l'expéditeur chiffre une clé de fichier avec votre clé publique.
+                      <strong>{{ t('landing.security.khRsaTooltipTitle') }}</strong> — {{ t('landing.security.khRsaTooltipBody') }}
                     </div>
                   </div>
                 </div>
@@ -170,19 +170,19 @@
                   <div class="kh-line-short animated-line"></div>
                   <div class="kh-node kh-folder" :class="{ active: activeKey === 'folder' }" @mouseenter="activeKey = 'folder'" @mouseleave="activeKey = null">
                     <div class="kh-icon small">📁</div>
-                    <div class="kh-label small">Clé de dossier</div>
-                    <div class="kh-sub">AES-256 par dossier<br>Chiffrée par la Master Key</div>
+                    <div class="kh-label small">{{ t('landing.security.khFolderLabel') }}</div>
+                    <div class="kh-sub">{{ t('landing.security.khFolderSub1') }}<br>{{ t('landing.security.khFolderSub2') }}</div>
                     <div class="kh-tooltip">
-                      <strong>Clé de dossier</strong> — Chaque dossier a sa propre clé AES-256, chiffrée par la Master Key. Partager un dossier = partager cette clé chiffrée par la clé publique RSA du destinataire.
+                      <strong>{{ t('landing.security.khFolderTooltipTitle') }}</strong> — {{ t('landing.security.khFolderTooltipBody') }}
                     </div>
                   </div>
                   <div class="kh-line-short animated-line"></div>
                   <div class="kh-node kh-file" :class="{ active: activeKey === 'file' }" @mouseenter="activeKey = 'file'" @mouseleave="activeKey = null">
                     <div class="kh-icon small">📄</div>
-                    <div class="kh-label small">Clé de fichier</div>
-                    <div class="kh-sub">AES-256 par fichier<br>Chiffrée par la clé dossier</div>
+                    <div class="kh-label small">{{ t('landing.security.khFileLabel') }}</div>
+                    <div class="kh-sub">{{ t('landing.security.khFileSub1') }}<br>{{ t('landing.security.khFileSub2') }}</div>
                     <div class="kh-tooltip">
-                      <strong>Clé de fichier</strong> — Chaque fichier a sa propre clé AES-256, chiffrée par la clé de dossier. Permet la rotation des clés et la révocation granulaire par fichier.
+                      <strong>{{ t('landing.security.khFileTooltipTitle') }}</strong> — {{ t('landing.security.khFileTooltipBody') }}
                     </div>
                   </div>
                 </div>
@@ -222,18 +222,18 @@
             <div v-if="regStep === 0" class="anim-scene">
               <div class="anim-node input-node">
                 <div class="node-icon">⌨️</div>
-                <div class="node-label">mot_de_passe</div>
-                <div class="node-sub">Saisi dans le navigateur</div>
+                <div class="node-label">{{ t('landing.security.rfInputLabel') }}</div>
+                <div class="node-sub">{{ t('landing.security.rfInputSub') }}</div>
               </div>
               <div class="anim-pipe">
                 <div class="pipe-label">Web Worker</div>
                 <div class="anim-packet pw-packet" :class="{ flowing: regStep === 0 }">pw</div>
-                <div class="pipe-algo">Argon2id<br>64 MB · 4 passes<br>sel 16 octets (CSPRNG)</div>
+                <div class="pipe-algo">Argon2id<br>64 MB · 4 passes<br>{{ t('landing.security.rfArgonSalt') }}</div>
               </div>
               <div class="anim-node kek-node">
                 <div class="node-icon">🗝️</div>
                 <div class="node-label">KEK</div>
-                <div class="node-sub">256 bits · en mémoire seulement</div>
+                <div class="node-sub">{{ t('landing.security.rfKekSub') }}</div>
               </div>
             </div>
 
@@ -246,12 +246,12 @@
               </div>
               <div class="anim-pipe">
                 <div class="anim-packet mk-packet" :class="{ flowing: regStep === 1 }">256b</div>
-                <div class="pipe-algo">Génération aléatoire<br>non-extractable</div>
+                <div class="pipe-algo">{{ t('landing.security.rfMkGenLine1') }}<br>non-extractable</div>
               </div>
               <div class="anim-node master-node">
                 <div class="node-icon">🏛️</div>
                 <div class="node-label">Master Key</div>
-                <div class="node-sub">AES-256-GCM · Service Worker</div>
+                <div class="node-sub">{{ t('landing.security.rfMkSub') }}</div>
               </div>
             </div>
 
@@ -274,7 +274,7 @@
               <div class="anim-node encrypted-master-node">
                 <div class="node-icon">🔒</div>
                 <div class="node-label">encrypted_master_key</div>
-                <div class="node-sub">Stocké sur le serveur · inutilisable sans KEK</div>
+                <div class="node-sub">{{ t('landing.security.rfEncMkSub') }}</div>
               </div>
             </div>
 
@@ -291,13 +291,13 @@
               <div class="rsa-split">
                 <div class="anim-node pub-node">
                   <div class="node-icon">🔓</div>
-                  <div class="node-label">Clé publique</div>
-                  <div class="node-sub">→ serveur (en clair)</div>
+                  <div class="node-label">{{ t('landing.security.rfPubKeyLabel') }}</div>
+                  <div class="node-sub">{{ t('landing.security.rfPubKeySub') }}</div>
                 </div>
                 <div class="anim-node priv-node">
                   <div class="node-icon">🔐</div>
-                  <div class="node-label">Clé privée</div>
-                  <div class="node-sub">→ chiffrée par Master Key<br>→ serveur</div>
+                  <div class="node-label">{{ t('landing.security.rfPrivKeyLabel') }}</div>
+                  <div class="node-sub">{{ t('landing.security.rfPrivKeySub1') }}<br>{{ t('landing.security.rfPrivKeySub2') }}</div>
                 </div>
               </div>
             </div>
@@ -306,8 +306,8 @@
             <div v-if="regStep === 4" class="anim-scene">
               <div class="anim-node rng-node">
                 <div class="node-icon">🎲</div>
-                <div class="node-label">Code de récupération</div>
-                <div class="node-sub">32 octets aléatoires</div>
+                <div class="node-label">{{ t('landing.security.rfRecoveryLabel') }}</div>
+                <div class="node-sub">{{ t('landing.security.rfRecoverySub') }}</div>
               </div>
               <div class="recovery-split">
                 <div class="rec-branch">
@@ -315,7 +315,7 @@
                   <div class="anim-node hash-node">
                     <div class="node-icon">🔏</div>
                     <div class="node-label">recovery_hash</div>
-                    <div class="node-sub">→ serveur pour vérification</div>
+                    <div class="node-sub">{{ t('landing.security.rfRecoveryHashSub') }}</div>
                   </div>
                 </div>
                 <div class="rec-branch">
@@ -323,7 +323,7 @@
                   <div class="anim-node enc-rec-node">
                     <div class="node-icon">🔒</div>
                     <div class="node-label">encrypted_master_key_recovery</div>
-                    <div class="node-sub">→ serveur · déverrouillable par le code</div>
+                    <div class="node-sub">{{ t('landing.security.rfRecoveryEncSub') }}</div>
                   </div>
                 </div>
               </div>
@@ -338,7 +338,7 @@
                 </div>
                 <div class="send-item safe">
                   <span class="send-icon">✅</span>
-                  <span>sel Argon2 (public)</span>
+                  <span>{{ t('landing.security.rfSaltLabel') }}</span>
                 </div>
                 <div class="send-item safe">
                   <span class="send-icon">✅</span>
@@ -358,21 +358,21 @@
                 </div>
                 <div class="send-item never">
                   <span class="send-icon">🚫</span>
-                  <span>mot de passe → JAMAIS</span>
+                  <span>{{ t('landing.security.rfNeverPassword') }}</span>
                 </div>
                 <div class="send-item never">
                   <span class="send-icon">🚫</span>
-                  <span>Master Key en clair → JAMAIS</span>
+                  <span>{{ t('landing.security.rfNeverMk') }}</span>
                 </div>
                 <div class="send-item never">
                   <span class="send-icon">🚫</span>
-                  <span>KEK → JAMAIS</span>
+                  <span>{{ t('landing.security.rfNeverKek') }}</span>
                 </div>
               </div>
               <div class="server-box">
                 <div class="server-icon">🖥️</div>
-                <div class="server-label">Serveur Kagibi</div>
-                <div class="server-note">Stocke des chiffrés.<br>Ne peut rien déchiffrer.</div>
+                <div class="server-label">{{ t('landing.security.rfServerLabel') }}</div>
+                <div class="server-note">{{ t('landing.security.rfServerNote1') }}<br>{{ t('landing.security.rfServerNote2') }}</div>
               </div>
             </div>
           </div>
@@ -444,9 +444,9 @@
           <div class="chunk-detail" v-if="uploadPhase === 'encrypting'">
             <div class="chunk-detail-title">{{ t('landing.security.uploadChunkDetail', { n: uploadStep + 1 }) }}</div>
             <div class="chunk-bytes">
-              <div class="byte-block nonce-block">Nonce<br>12 octets</div>
-              <div class="byte-block cipher-block">Ciphertext AES-256-GCM<br>~10 Mo</div>
-              <div class="byte-block tag-block">Auth Tag<br>16 octets</div>
+              <div class="byte-block nonce-block">Nonce<br>{{ t('landing.security.uploadNonceSize') }}</div>
+              <div class="byte-block cipher-block">Ciphertext AES-256-GCM<br>{{ t('landing.security.uploadCipherSize') }}</div>
+              <div class="byte-block tag-block">Auth Tag<br>{{ t('landing.security.uploadTagSize') }}</div>
             </div>
           </div>
 
@@ -457,7 +457,7 @@
             <button class="step-btn" @click="resetUpload" :disabled="uploadPhase === 'idle'">{{ t('landing.security.uploadReset') }}</button>
           </div>
           <div class="upload-progress-hint" v-if="uploadPhase !== 'idle' && uploadPhase !== 'done'">
-            Chunk {{ uploadStep + 1 }} / {{ chunks.length }} —
+            {{ t('landing.security.uploadChunkProgress', { n: uploadStep + 1, total: chunks.length }) }}
             <span v-if="uploadPhase === 'encrypting'">{{ t('landing.security.uploadEncProgress') }}</span>
             <span v-else>{{ t('landing.security.uploadS3Progress') }}</span>
           </div>
