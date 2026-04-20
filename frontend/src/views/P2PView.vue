@@ -151,6 +151,13 @@
 
             <!-- STEP 3: ACTION -->
             <div class="flow-step action-step">
+                <!-- Legal consent for direct transfer -->
+                <label v-if="!inviteMode && selectedFriend && selectedFile" class="direct-consent-toggle">
+                  <input type="checkbox" v-model="directLegalConsent" />
+                  <span>
+                    Je certifie que ce fichier est légal et j'en assume l'entière responsabilité conformément aux <router-link to="/terms" target="_blank">CGU</router-link>.
+                  </span>
+                </label>
                 <!-- Direct transfer mode -->
                 <button v-if="!inviteMode" class="send-big-btn" :disabled="!canSend" @click="startTransfer">
                     <span v-if="!canSend">{{ t('p2p.selectFriendAndFile') }}</span>
@@ -220,7 +227,8 @@ const onlineFriends = computed(() => {
   return friendStore.acceptedFriends.filter(f => f.online)
 })
 
-const canSend = computed(() => !!selectedFriend.value && !!selectedFile.value && !inviteMode.value)
+const directLegalConsent = ref(false)
+const canSend = computed(() => !!selectedFriend.value && !!selectedFile.value && !inviteMode.value && directLegalConsent.value)
 
 watch(() => p2pStore.inviteReady, (ready) => {
   if (ready && showInviteDialog.value) showInviteDialog.value = false
@@ -538,6 +546,31 @@ const startTransfer = async () => {
 .fsize { font-size: 0.85rem; color: var(--secondary-text-color); }
 .change-file-btn { font-size: 0.8rem; padding: 0.2rem 0.6rem; }
 .close-btn { background:transparent; border:none; color:white; font-size:1.2rem; margin-left:0.5rem; cursor:pointer;}
+
+.direct-consent-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    line-height: 1.4;
+    padding: 0.6rem 0.8rem;
+    background: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+}
+
+.direct-consent-toggle input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: var(--primary-color);
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+}
 
 .send-big-btn {
     width: 100%;

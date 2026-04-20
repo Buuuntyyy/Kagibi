@@ -10,35 +10,75 @@
       <!-- Guest mode overlay — shown when arriving via an invite link -->
       <div v-if="isGuestMode" class="guest-overlay">
         <div class="guest-card">
-          <!-- File info header -->
-          <div v-if="guestInviteInfo" class="guest-file-info">
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-            <div>
-              <p class="guest-filename">{{ guestInviteInfo.file_name }}</p>
-              <p class="guest-filesender">{{ t('p2p.invite.incomingDesc', { sender: guestInviteInfo.sender_name, fileName: '', size: formatSize(guestInviteInfo.file_size) }).trim() }}</p>
+
+          <!-- Consent screen — shown before auth starts -->
+          <template v-if="guestState === 'consent'">
+            <div class="guest-consent-header">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+              <div>
+                <p class="guest-consent-title">Réception d'un fichier</p>
+                <p class="guest-consent-subtitle">Quelqu'un souhaite vous envoyer un fichier via Kagibi P2P</p>
+              </div>
             </div>
-          </div>
 
-          <!-- State indicator -->
-          <div class="guest-state" :class="{ 'is-error': guestState === 'error', 'is-done': guestState === 'done' }">
-            <div v-if="guestState !== 'error' && guestState !== 'done'" class="guest-spinner"></div>
-            <svg v-else-if="guestState === 'done'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-            <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-            <span>{{ guestStateLabel }}</span>
-          </div>
-
-          <!-- Progress bar while transferring -->
-          <div v-if="guestState === 'transferring' && p2pStore.activeTransfer" class="guest-progress-wrap">
-            <div class="guest-progress-track">
-              <div class="guest-progress-fill" :style="{ width: p2pStore.activeTransfer.progress + '%' }"></div>
+            <div class="guest-consent-info">
+              <p>Le fichier sera transféré <strong>directement</strong> entre les appareils, chiffré de bout en bout. Kagibi n'a aucun accès au contenu.</p>
             </div>
-            <span class="guest-pct">{{ p2pStore.activeTransfer.progress }}%</span>
-          </div>
 
-          <p class="guest-privacy-note">
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            End-to-end encrypted · No account required · Powered by Kagibi
-          </p>
+            <label class="guest-consent-check">
+              <input type="checkbox" v-model="guestLegalConsent" />
+              <span>
+                Je confirme que la réception de ce fichier est légale et j'accepte les
+                <a href="/terms" target="_blank" class="guest-legal-link">Conditions d'Utilisation</a>.
+              </span>
+            </label>
+
+            <button class="guest-accept-btn" :disabled="!guestLegalConsent" @click="startGuestAuth">
+              Accepter et télécharger
+            </button>
+            <button class="guest-decline-btn" @click="isGuestMode = false">
+              Refuser
+            </button>
+
+            <p class="guest-privacy-note">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              End-to-end encrypted · No account required · Powered by Kagibi
+            </p>
+          </template>
+
+          <!-- Transfer in progress -->
+          <template v-else>
+            <!-- File info header -->
+            <div v-if="guestInviteInfo" class="guest-file-info">
+              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+              <div>
+                <p class="guest-filename">{{ guestInviteInfo.file_name }}</p>
+                <p class="guest-filesender">{{ t('p2p.invite.incomingDesc', { sender: guestInviteInfo.sender_name, fileName: '', size: formatSize(guestInviteInfo.file_size) }).trim() }}</p>
+              </div>
+            </div>
+
+            <!-- State indicator -->
+            <div class="guest-state" :class="{ 'is-error': guestState === 'error', 'is-done': guestState === 'done' }">
+              <div v-if="guestState !== 'error' && guestState !== 'done'" class="guest-spinner"></div>
+              <svg v-else-if="guestState === 'done'" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              <span>{{ guestStateLabel }}</span>
+            </div>
+
+            <!-- Progress bar while transferring -->
+            <div v-if="guestState === 'transferring' && p2pStore.activeTransfer" class="guest-progress-wrap">
+              <div class="guest-progress-track">
+                <div class="guest-progress-fill" :style="{ width: p2pStore.activeTransfer.progress + '%' }"></div>
+              </div>
+              <span class="guest-pct">{{ p2pStore.activeTransfer.progress }}%</span>
+            </div>
+
+            <p class="guest-privacy-note">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              End-to-end encrypted · No account required · Powered by Kagibi
+            </p>
+          </template>
+
         </div>
       </div>
 
@@ -224,9 +264,11 @@ const inviteTransferId = ref('')
 
 // Guest flow state
 const isGuestMode = ref(false)
-const guestState = ref('') // 'authenticating' | 'generating-keys' | 'connecting' | 'waiting' | 'transferring' | 'done' | 'error'
+const guestState = ref('') // 'consent' | 'authenticating' | 'generating-keys' | 'connecting' | 'waiting' | 'transferring' | 'done' | 'error'
 const guestError = ref('')
 const guestInviteInfo = ref(null) // { sender_name, file_name, file_size }
+const guestLegalConsent = ref(false)
+let pendingGuestToken = ''
 
 // Non-guest invite acceptance state (kept for backward compat)
 const incomingInvite = ref(null)
@@ -242,6 +284,7 @@ const canSend = computed(() => !!selectedFriend.value && !!selectedFile.value &&
 
 const guestStateLabel = computed(() => {
   switch (guestState.value) {
+    case 'consent':           return ''
     case 'authenticating':    return t('p2p.invite.guest.authenticating')
     case 'generating-keys':   return t('p2p.invite.guest.generatingKeys')
     case 'connecting':        return t('p2p.invite.guest.connecting')
@@ -257,11 +300,17 @@ onMounted(async () => {
   const inviteToken = route.query.invite
   if (inviteToken) {
     isGuestMode.value = true
-    await guestAutoAuth(inviteToken)
+    pendingGuestToken = inviteToken
+    guestState.value = 'consent'
   } else {
     friendStore.fetchFriends()
   }
 })
+
+async function startGuestAuth() {
+  if (!guestLegalConsent.value || !pendingGuestToken) return
+  await guestAutoAuth(pendingGuestToken)
+}
 
 // Close invite dialog automatically when the recipient accepted and transfer started
 watch(() => p2pStore.inviteReady, (ready) => {
@@ -841,6 +890,89 @@ const startTransfer = async () => {
   color: var(--text-secondary, var(--secondary-text-color));
   margin: 0;
   opacity: 0.7;
+}
+
+.guest-consent-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: var(--text-color);
+}
+
+.guest-consent-title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.guest-consent-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary, var(--secondary-text-color));
+}
+
+.guest-consent-info {
+  font-size: 0.88rem;
+  color: var(--text-secondary, var(--secondary-text-color));
+  background: var(--hover-background-color, var(--background-color));
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  line-height: 1.5;
+}
+
+.guest-consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary, var(--secondary-text-color));
+  cursor: pointer;
+  user-select: none;
+  line-height: 1.4;
+}
+
+.guest-consent-check input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+}
+
+.guest-legal-link {
+  color: var(--primary-color);
+  text-decoration: underline;
+}
+
+.guest-accept-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.guest-accept-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.guest-decline-btn {
+  width: 100%;
+  padding: 0.6rem;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary, var(--secondary-text-color));
+  border-radius: 10px;
+  font-size: 0.88rem;
+  cursor: pointer;
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
