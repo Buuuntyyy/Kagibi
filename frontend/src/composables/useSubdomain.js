@@ -15,6 +15,14 @@ const DRIVE_BASE_URLS = {
 
 export const driveBaseUrl = DRIVE_BASE_URLS[hostname] ?? null
 
+// Base URL of the P2P send app — used to redirect to it from the main domain
+const SEND_BASE_URLS = {
+  'kagibi.cloud':     'https://send.kagibi.cloud',
+  'dev.kagibi.cloud': 'https://send-dev.kagibi.cloud',
+}
+
+export const sendBaseUrl = SEND_BASE_URLS[hostname] ?? 'https://send.kagibi.cloud'
+
 export function useSubdomain() {
-  return { isP2PSubdomain, driveBaseUrl }
+  return { isP2PSubdomain, driveBaseUrl, sendBaseUrl }
 }
