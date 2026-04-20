@@ -128,7 +128,8 @@
     "refuse": "Refuse",
     "accept": "Accept",
     "state": "State",
-    "type": "Type"
+    "type": "Type",
+    "optional": "optional"
   },
   "share": {
     "shareWith": "Share with",
@@ -245,7 +246,38 @@
     "pingLimitReached": "Limit reached",
     "pingsLeft": "{count} ping(s) left",
     "pingNotification": "P2P transfer reminder",
-    "pingNotificationBody": "Your friend is nudging you about the pending file transfer."
+    "pingNotificationBody": "Your friend is nudging you about the pending file transfer.",
+    "invite": {
+      "title": "Invite by link",
+      "subtitle": "Anyone who receives this link can receive the file — no account required.",
+      "recipientEmail": "Recipient email",
+      "emailPlaceholder": "friend{'@'}example.com",
+      "emailHint": "Optional — used only to send a notification email with the link.",
+      "file": "File to send",
+      "generate": "Generate link",
+      "readyTitle": "Link ready",
+      "readyDesc": "Share this link with {name}. The transfer will start automatically when they open it.",
+      "sendEmailOption": "Send a notification email with the link",
+      "emailSent": "Notification email sent",
+      "waitingNotice": "Waiting for the recipient to open the link…",
+      "createError": "Failed to create invite. Please try again.",
+      "incomingTitle": "File transfer invitation",
+      "incomingDesc": "{sender} wants to send you {fileName} ({size})",
+      "accept": "Accept",
+      "decline": "Decline",
+      "expired": "This invitation has expired.",
+      "notForYou": "This invitation is not valid.",
+      "accepted": "Connected — waiting for the transfer to start…",
+      "guest": {
+        "authenticating": "Establishing secure connection…",
+        "generatingKeys": "Generating encryption keys…",
+        "connecting": "Connecting to the network…",
+        "waiting": "Waiting for the sender to start the transfer…",
+        "transferring": "Transfer in progress…",
+        "done": "Transfer complete! Redirecting…",
+        "error": "An error occurred. Please try the link again."
+      }
+    }
   },
   "home": {
     "welcome": "Welcome to your Secured Storage",

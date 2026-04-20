@@ -157,6 +157,13 @@ router.beforeEach(async (to, from, next) => {
     return
   }
 
+  // Guest P2P invite links carry ?invite=TOKEN and self-authenticate on mount —
+  // skip the auth gate so the view can run its guest-auth flow.
+  if (isP2PSubdomain && to.query.invite) {
+    next()
+    return
+  }
+
   const isAuthenticated = await authStore.checkAuth()
 
   if (to.meta.requiresAuth && !isAuthenticated) {

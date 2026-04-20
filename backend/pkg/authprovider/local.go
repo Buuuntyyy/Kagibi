@@ -6,7 +6,6 @@ package authprovider
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -48,10 +47,8 @@ type LocalProvider struct {
 func NewLocalProvider(db *bun.DB) *LocalProvider {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		b := make([]byte, 32)
-		_, _ = rand.Read(b)
-		secret = hex.EncodeToString(b)
-		log.Printf("[LocalAuth] WARNING: JWT_SECRET not set — using random secret. Tokens will be invalidated on restart.")
+		log.Fatalf("[LocalAuth] FATAL: JWT_SECRET environment variable is not set. " +
+			"Set a stable secret (e.g. openssl rand -hex 32) so tokens survive restarts.")
 	}
 	return &LocalProvider{secret: []byte(secret), db: db}
 }
@@ -299,6 +296,20 @@ func (p *LocalProvider) SyncMFAStatus(userID string, enabled bool) error {
 		      mfa_verified = EXCLUDED.mfa_verified
 	`, userID, enabled, enabled)
 	return err
+}
+
+// GenerateGuestToken issues a short-lived HS256 JWT for a P2P guest session.
+// The token expires at expiresAt (matches the invite expiry) and carries is_guest=true
+// so middleware can distinguish guest sessions from full accounts.
+func (p *LocalProvider) GenerateGuestToken(guestUserID string, expiresAt time.Time) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub":      guestUserID,
+		"is_guest": true,
+		"aal":      "guest",
+		"exp":      expiresAt.Unix(),
+		"iat":      time.Now().Unix(),
+	})
+	return token.SignedString(p.secret)
 }
 
 // DisableTOTP removes all TOTP data for the user.

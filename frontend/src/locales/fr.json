@@ -128,7 +128,8 @@
     "refuse": "Refuser",
     "accept": "Accepter",
     "state": "Etat",
-    "type": "Type"
+    "type": "Type",
+    "optional": "optionnel"
   },
   "share": {
     "shareWith": "Partager avec",
@@ -245,7 +246,38 @@
     "pingLimitReached": "Limite atteinte",
     "pingsLeft": "{count} ping(s) restant(s)",
     "pingNotification": "Rappel de transfert P2P",
-    "pingNotificationBody": "Votre ami vous relance pour le transfert de fichier en attente."
+    "pingNotificationBody": "Votre ami vous relance pour le transfert de fichier en attente.",
+    "invite": {
+      "title": "Inviter par lien",
+      "subtitle": "N'importe qui peut recevoir le fichier via ce lien — aucun compte n'est requis.",
+      "recipientEmail": "E-mail du destinataire",
+      "emailPlaceholder": "ami{'@'}example.com",
+      "emailHint": "Optionnel — utilisé uniquement pour envoyer un e-mail de notification avec le lien.",
+      "file": "Fichier à envoyer",
+      "generate": "Générer le lien",
+      "readyTitle": "Lien prêt",
+      "readyDesc": "Partagez ce lien avec {name}. Le transfert démarrera automatiquement quand il l'ouvrira.",
+      "sendEmailOption": "Envoyer un e-mail de notification avec le lien",
+      "emailSent": "E-mail de notification envoyé",
+      "waitingNotice": "En attente que le destinataire ouvre le lien…",
+      "createError": "Impossible de créer l'invitation. Veuillez réessayer.",
+      "incomingTitle": "Invitation de transfert de fichier",
+      "incomingDesc": "{sender} souhaite vous envoyer {fileName} ({size})",
+      "accept": "Accepter",
+      "decline": "Refuser",
+      "expired": "Cette invitation a expiré.",
+      "notForYou": "Cette invitation n'est pas valide.",
+      "accepted": "Connecté — en attente du démarrage du transfert…",
+      "guest": {
+        "authenticating": "Établissement de la connexion sécurisée…",
+        "generatingKeys": "Génération des clés de chiffrement…",
+        "connecting": "Connexion au réseau…",
+        "waiting": "En attente que l'expéditeur démarre le transfert…",
+        "transferring": "Transfert en cours…",
+        "done": "Transfert terminé ! Redirection…",
+        "error": "Une erreur est survenue. Veuillez réessayer via le lien."
+      }
+    }
   },
   "home": {
     "welcome": "Bienvenue sur votre Stockage Sécurisé",

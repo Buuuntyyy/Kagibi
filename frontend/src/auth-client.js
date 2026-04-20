@@ -23,6 +23,11 @@ const _apiBase = (() => {
   return url.replace(/\/$/, '')
 })()
 
+// ── Guest token (in-memory, never persisted) ──────────────────────────────────
+// Set during a P2P guest session. Takes priority over localStorage token.
+
+let _guestToken = null
+
 // ── Token storage ─────────────────────────────────────────────────────────────
 
 const LOCAL_TOKEN_KEY = 'kagibi_local_token'
@@ -32,11 +37,18 @@ function _localSaveToken(token) {
   else localStorage.removeItem(LOCAL_TOKEN_KEY)
 }
 
+function _b64urlDecode(str) {
+  // JWT uses base64url: replace URL-safe chars and restore padding
+  const b64 = str.replace(/-/g, '+').replace(/_/g, '/')
+  const pad = (4 - b64.length % 4) % 4
+  return atob(b64 + '='.repeat(pad))
+}
+
 function _localGetToken() {
   const token = localStorage.getItem(LOCAL_TOKEN_KEY)
   if (!token) return null
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]))
+    const payload = JSON.parse(_b64urlDecode(token.split('.')[1]))
     if (payload.exp * 1000 < Date.now()) {
       localStorage.removeItem(LOCAL_TOKEN_KEY)
       return null
@@ -50,7 +62,7 @@ function _localGetToken() {
 
 function _localDecodeUser(token) {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]))
+    const payload = JSON.parse(_b64urlDecode(token.split('.')[1]))
     return { id: payload.sub, email: payload.email, aal: payload.aal || 'aal1' }
   } catch {
     return null
@@ -161,7 +173,7 @@ export const authClient = {
   },
 
   async getSession() {
-    const token = _localGetToken()
+    const token = _guestToken || _localGetToken()
     if (!token) return { data: { session: null } }
     const user = _localDecodeUser(token)
     return {
@@ -175,7 +187,20 @@ export const authClient = {
   },
 
   async getToken() {
+    if (_guestToken) return _guestToken
     return _localGetToken()
+  },
+
+  setGuestToken(token) {
+    _guestToken = token
+  },
+
+  clearGuestToken() {
+    _guestToken = null
+  },
+
+  isGuestSession() {
+    return _guestToken !== null
   },
 
   async updateUser(updates) {

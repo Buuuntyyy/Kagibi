@@ -4,6 +4,7 @@
 package mailer
 
 import (
+	"fmt"
 	"log"
 )
 
@@ -21,6 +22,47 @@ func SendWelcome(toEmail, name string) {
 			log.Printf("[Mailer] Welcome email sent to %s", toEmail)
 		}
 	}()
+}
+
+// SendP2PInvite notifies a registered user that someone wants to send them a file.
+func SendP2PInvite(toEmail, senderName, fileName string, fileSize int64, token string) error {
+	return Send(Message{
+		To:      toEmail,
+		Subject: senderName + " wants to send you a file on Kagibi",
+		Body:    p2pInviteBody(toEmail, senderName, fileName, fileSize, token),
+	})
+}
+
+func p2pInviteBody(toEmail, senderName, fileName string, fileSize int64, token string) string {
+	sizeStr := formatBytes(fileSize)
+	link := "https://kagibi.cloud/p2p?invite=" + token
+	return "Hello,\n\n" +
+		senderName + " wants to send you a file securely via Kagibi:\n\n" +
+		"  File: " + fileName + " (" + sizeStr + ")\n\n" +
+		"Click the link below to receive it. You will need to be logged in to your Kagibi account:\n\n" +
+		"  " + link + "\n\n" +
+		"This link expires in 24 hours. Once you open it, " + senderName + " will need to be online\n" +
+		"to start the transfer — the file is sent directly between your browsers (P2P).\n\n" +
+		"Kagibi never sees the content of your files.\n\n" +
+		"---\n" +
+		"The Kagibi team\n" +
+		"https://kagibi.cloud\n\n" +
+		"---\n" +
+		"You received this email because " + senderName + " used your address (" + toEmail + ") to send a file invite.\n" +
+		"If you were not expecting this, you can safely ignore it.\n"
+}
+
+func formatBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
 func welcomeBody(name string) string {
