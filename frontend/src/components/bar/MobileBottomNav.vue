@@ -15,11 +15,15 @@
       </svg>
       <span>Fichiers</span>
     </button>
-    <button class="mobile-nav-fab" @click="navigateTo('/dashboard/files')">
-      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="28" height="28">
+
+    <!-- FAB -->
+    <button class="mobile-nav-fab" @click="toggleFabMenu">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="28" height="28"
+           :style="{ transform: showFabMenu ? 'rotate(45deg)' : 'none', transition: 'transform 0.2s' }">
         <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"/>
       </svg>
     </button>
+
     <button class="mobile-nav-item" :class="{ active: isActive('/dashboard/shares') }" @click="navigateTo('/dashboard/shares')">
       <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="mobile-nav-icon">
         <path d="M15 8c0-1.42-.5-2.73-1.33-3.76.42-.14.86-.24 1.33-.24 2.21 0 4 1.79 4 4s-1.79 4-4 4c-.43 0-.84-.09-1.23-.21-.03-.01-.06-.02-.1-.03A5.98 5.98 0 0 0 15 8zm1.66 5.13C18.03 14.06 19 15.32 19 17v3h4v-3c0-2.18-3.57-3.47-6.34-3.87zM9 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2m0 9c-2.7 0-5.8 1.29-6 4.02V21h12v-1.98c-.2-2.72-3.3-4.02-6-4.02z" fill="currentColor"/>
@@ -32,17 +36,69 @@
       </svg>
       <span>Amis</span>
     </button>
+
+    <!-- FAB backdrop -->
+    <Transition name="fab-backdrop">
+      <div v-if="showFabMenu" class="fab-backdrop" @click="showFabMenu = false" />
+    </Transition>
+
+    <!-- FAB menu -->
+    <Transition name="fab-menu">
+      <div v-if="showFabMenu" class="fab-menu">
+        <button class="fab-menu-item" @click="triggerUpload">
+          <div class="fab-menu-icon upload-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+            </svg>
+          </div>
+          <span>Importer un fichier</span>
+        </button>
+        <button class="fab-menu-item" @click="triggerCreateFolder">
+          <div class="fab-menu-icon folder-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/>
+            </svg>
+          </div>
+          <span>Créer un dossier</span>
+        </button>
+      </div>
+    </Transition>
   </nav>
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useUIStore } from '../../stores/ui'
 
 const router = useRouter()
 const route = useRoute()
+const uiStore = useUIStore()
+
+const showFabMenu = ref(false)
 
 const navigateTo = (path) => router.push(path)
 const isActive = (path) => route.path.startsWith(path)
+
+const toggleFabMenu = () => {
+  showFabMenu.value = !showFabMenu.value
+}
+
+const triggerUpload = async () => {
+  showFabMenu.value = false
+  if (!route.path.startsWith('/dashboard/files')) {
+    await router.push('/dashboard/files')
+  }
+  uiStore.pendingMobileAction = 'upload'
+}
+
+const triggerCreateFolder = async () => {
+  showFabMenu.value = false
+  if (!route.path.startsWith('/dashboard/files')) {
+    await router.push('/dashboard/files')
+  }
+  uiStore.pendingMobileAction = 'createFolder'
+}
 </script>
 
 <style scoped>
@@ -109,10 +165,93 @@ const isActive = (path) => route.path.startsWith(path)
     margin-bottom: 8px;
     flex-shrink: 0;
     transition: transform 0.2s, box-shadow 0.2s;
+    z-index: 910;
+    position: relative;
   }
 
   .mobile-nav-fab:active {
     transform: scale(0.95);
+  }
+
+  /* Backdrop */
+  .fab-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 905;
+  }
+
+  .fab-backdrop-enter-active,
+  .fab-backdrop-leave-active {
+    transition: opacity 0.2s;
+  }
+  .fab-backdrop-enter-from,
+  .fab-backdrop-leave-to {
+    opacity: 0;
+  }
+
+  /* FAB menu */
+  .fab-menu {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 910;
+    width: 220px;
+  }
+
+  .fab-menu-enter-active,
+  .fab-menu-leave-active {
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .fab-menu-enter-from,
+  .fab-menu-leave-to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(16px);
+  }
+
+  .fab-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--card-color);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 14px 18px;
+    cursor: pointer;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--main-text-color);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    transition: background 0.15s;
+    text-align: left;
+  }
+
+  .fab-menu-item:active {
+    background: var(--hover-background-color);
+  }
+
+  .fab-menu-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .upload-icon {
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--primary-color);
+  }
+
+  .folder-icon {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
   }
 }
 </style>
