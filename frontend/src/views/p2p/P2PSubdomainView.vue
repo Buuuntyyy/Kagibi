@@ -846,8 +846,24 @@ const startTransfer = async () => {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 768px) {
+  .p2p-subdomain {
+    height: 100dvh;
+    height: 100svh; /* fallback for older Safari */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .p2p-main {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex: none;
+    min-height: 0;
+  }
+  .p2p-container {
+    padding: 1rem 1rem 2rem;
+    align-items: flex-start;
+    flex: none;
+  }
   .main-card { padding: 1.5rem 1rem; }
-  .p2p-container { padding: 1rem; align-items: flex-start; }
   .invite-banner-content { flex-direction: column; align-items: flex-start; }
   .guest-card { padding: 1.5rem 1rem; }
 }
