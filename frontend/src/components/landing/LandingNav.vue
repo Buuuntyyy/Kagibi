@@ -10,11 +10,12 @@
       </router-link>
       
       <div class="nav-links">
-        <router-link to="/" class="nav-link">Accueil</router-link>
-        <router-link to="/transfer" class="nav-link">Transfert P2P</router-link>
-        <router-link to="/compare" class="nav-link">Comparatif</router-link>
-        <router-link to="/security" class="nav-link">Zéro-knowledge</router-link>
-        <router-link to="/login" class="nav-btn">Connexion</router-link>
+        <router-link to="/" class="nav-link">{{ t('landing.nav.home') }}</router-link>
+        <router-link to="/transfer" class="nav-link">{{ t('landing.nav.transfer') }}</router-link>
+        <router-link to="/compare" class="nav-link">{{ t('landing.nav.compare') }}</router-link>
+        <router-link to="/security" class="nav-link">{{ t('landing.nav.security') }}</router-link>
+        <router-link to="/login" class="nav-btn">{{ t('landing.nav.login') }}</router-link>
+        <LanguageSwitcher />
       </div>
 
       <!-- Mobile Menu Button -->
@@ -33,18 +34,22 @@
 
     <!-- Mobile Menu -->
     <div class="mobile-menu" :class="{ open: isMenuOpen }">
-      <router-link to="/" class="mobile-link" @click="closeMenu">Accueil</router-link>
-      <router-link to="/transfer" class="mobile-link" @click="closeMenu">Transfert P2P</router-link>
-      <router-link to="/compare" class="mobile-link" @click="closeMenu">Comparatif</router-link>
-      <router-link to="/security" class="mobile-link" @click="closeMenu">Zéro-knowledge</router-link>
-      <router-link to="/login" class="mobile-btn" @click="closeMenu">Connexion</router-link>
+      <router-link to="/" class="mobile-link" @click="closeMenu">{{ t('landing.nav.home') }}</router-link>
+      <router-link to="/transfer" class="mobile-link" @click="closeMenu">{{ t('landing.nav.transfer') }}</router-link>
+      <router-link to="/compare" class="mobile-link" @click="closeMenu">{{ t('landing.nav.compare') }}</router-link>
+      <router-link to="/security" class="mobile-link" @click="closeMenu">{{ t('landing.nav.security') }}</router-link>
+      <router-link to="/login" class="mobile-btn" @click="closeMenu">{{ t('landing.nav.login') }}</router-link>
+      <LanguageSwitcher />
     </div>
   </nav>
 </template>
 
 <script setup>
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import LanguageSwitcher from '../LanguageSwitcher.vue'
 
+const { t } = useI18n()
 const isMenuOpen = ref(false)
 
 const toggleMenu = () => {
