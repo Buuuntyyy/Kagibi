@@ -14,6 +14,7 @@ import (
 
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
+	"kagibi/backend/pkg/emailcrypto"
 	"kagibi/backend/pkg/mailer"
 
 	"github.com/gin-gonic/gin"
@@ -69,6 +70,10 @@ func CreateInviteHandler(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender profile"})
 			return
 		}
+		if err := pkg.DecryptUserEmail(&sender); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load sender profile"})
+			return
+		}
 		if req.RecipientEmail != "" && strings.EqualFold(sender.Email, req.RecipientEmail) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "You cannot invite yourself"})
 			return
@@ -90,16 +95,23 @@ func CreateInviteHandler(db *bun.DB) gin.HandlerFunc {
 		}
 
 		invite := &pkg.P2PInvite{
-			Token:          token,
-			SenderID:       senderID.(string),
-			SenderName:     sender.Name,
-			RecipientEmail: req.RecipientEmail,
-			RecipientID:    guestID,
-			TransferID:     req.TransferID,
-			FileName:       req.FileName,
-			FileSize:       req.FileSize,
-			IsGuest:        true,
-			ExpiresAt:      time.Now().Add(24 * time.Hour),
+			Token:       token,
+			SenderID:    senderID.(string),
+			SenderName:  sender.Name,
+			RecipientID: guestID,
+			TransferID:  req.TransferID,
+			FileName:    req.FileName,
+			FileSize:    req.FileSize,
+			IsGuest:     true,
+			ExpiresAt:   time.Now().Add(24 * time.Hour),
+		}
+		if req.RecipientEmail != "" {
+			enc, err := emailcrypto.Encrypt(req.RecipientEmail)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process recipient email"})
+				return
+			}
+			invite.RecipientEmailEncrypted = enc
 		}
 
 		if _, err := db.NewInsert().Model(invite).Exec(c.Request.Context()); err != nil {

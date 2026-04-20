@@ -15,6 +15,7 @@ import (
 
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
+	"kagibi/backend/pkg/emailcrypto"
 	"kagibi/backend/pkg/monitoring"
 
 	"github.com/gin-gonic/gin"
@@ -346,9 +347,16 @@ func LocalUpdateEmailHandler(provider authprovider.AuthProvider, db *bun.DB, red
 			return
 		}
 
-		// Update profiles.email to keep tables in sync
+		// Update profiles.email_hash and email_encrypted to keep tables in sync
+		newEmailHash := emailcrypto.Hash(newEmail)
+		newEmailEnc, encErr := emailcrypto.Encrypt(newEmail)
+		if encErr != nil {
+			log.Printf("ERROR: Failed to encrypt new email for user %s: %v", userID, encErr)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la mise à jour du profil"})
+			return
+		}
 		if _, err := db.NewUpdate().TableExpr("profiles").
-			Set("email = ?", newEmail).
+			Set("email_hash = ?, email_encrypted = ?", newEmailHash, newEmailEnc).
 			Where("id = ?", userID).
 			Exec(c.Request.Context()); err != nil {
 			log.Printf("ERROR: Failed to update profile email for user %s: %v", userID, err)
