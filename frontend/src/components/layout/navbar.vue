@@ -7,7 +7,9 @@
       <img src="/Logo.png" alt="Kagibi Logo" class="brand-logo"/>
       <span>Kagibi</span>
     </router-link>
-    <SearchBar v-if="authStore.isAuthenticated" />
+    <div class="search-wrap">
+      <SearchBar v-if="authStore.isAuthenticated" />
+    </div>
     <div class="nav-links">
       <a
         v-if="buyMeACoffeeUrl"
@@ -18,10 +20,14 @@
       >
         {{ t('file.supportProject') }}
       </a>
-      <button @click="showHelpDialog = true" class="theme-toggle" title="Aide & Support">
-        <HelpCircle class="icon-svg" :size="24" :stroke-width="2" />
-      </button>
-      <LanguageSwitcher />
+      <span class="help-wrap">
+        <button @click="showHelpDialog = true" class="theme-toggle" title="Aide & Support">
+          <HelpCircle class="icon-svg" :size="24" :stroke-width="2" />
+        </button>
+      </span>
+      <span class="lang-wrap">
+        <LanguageSwitcher />
+      </span>
       <button @click="themeStore.toggleTheme" class="theme-toggle" :title="themeStore.theme === 'light' ? t('nav.darkMode') : t('nav.lightMode')">
         <svg v-if="themeStore.theme === 'light'" class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.02-.9-.02-1.36-.02z" fill="currentColor"/>
@@ -46,7 +52,7 @@
             </div>
           </div>
         </router-link>
-        <a @click.prevent="logout" href="#">{{ t('nav.logout') }}</a>
+        <a @click.prevent="logout" href="#" class="logout-link">{{ t('nav.logout') }}</a>
       </template>
     </div>
     <HelpDialog v-model:isOpen="showHelpDialog" />
@@ -246,26 +252,38 @@ nav {
     margin-left: 0;
   }
 
+  /* Hide search bar — too wide for mobile navbar */
+  .search-wrap {
+    display: none;
+  }
+
+  /* Hide logout text — user can logout from account page via avatar */
+  .logout-link {
+    display: none !important;
+  }
+
   .support-link {
     display: none;
   }
 
   .nav-links {
-    gap: 0.4rem;
-  }
-
-  .nav-links a:not(.user-avatar-link) {
-    font-size: 0.85rem;
+    gap: 0.25rem;
   }
 }
 
 @media (max-width: 480px) {
   .brand span {
-    display: none; /* Keep only logo on very small screens */
+    display: none;
   }
 
   .theme-toggle {
     padding: 6px;
+  }
+
+  /* On very small screens, hide language switcher and help button */
+  .lang-wrap,
+  .help-wrap {
+    display: none;
   }
 }
 </style>

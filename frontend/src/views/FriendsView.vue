@@ -628,11 +628,53 @@ const confirmRemove = (friend) => {
     right: 0;
     transform: none;
   }
+
+  /* Code box wraps on narrow screens */
+  .my-code-box {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+  }
+
+  .code {
+    font-size: 1.1rem;
+    letter-spacing: 1px;
+    word-break: break-all;
+    text-align: center;
+  }
+
+  /* Tabs more compact */
+  .tabs {
+    gap: 0;
+  }
+
+  .tabs button {
+    padding: 0.7rem 0.9rem;
+    font-size: 0.88rem;
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* Request items stack on small screens */
+  .request-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
 }
 
 @media (max-width: 480px) {
   .friends-container {
     padding: 0.75rem;
+  }
+
+  .tabs button {
+    padding: 0.6rem 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .header h2 {
+    font-size: 1.4rem;
   }
 }
 </style>
