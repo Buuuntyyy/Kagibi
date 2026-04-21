@@ -14,8 +14,8 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'libsodium': ['libsodium-wrappers-sumo'],
+        manualChunks: (id) => {
+          if (id.includes('libsodium-wrappers-sumo')) return 'libsodium'
         },
       },
     },
