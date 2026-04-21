@@ -5,7 +5,7 @@
   <div class="legal-container">
     <div class="legal-content">
       <h1>Conditions Générales d'Utilisation (CGU)</h1>
-      <p class="last-updated">Dernière mise à jour : 20 Avril 2026</p>
+      <p class="last-updated">Dernière mise à jour : 21 Avril 2026</p>
 
       <section>
         <h2>1. Objet</h2>
@@ -91,8 +91,9 @@
       </section>
 
       <section>
-        <h2>9. Données Personnelles</h2>
+        <h2>9. Données Personnelles et Mesure d'Audience</h2>
         <p>L'Utilisateur dispose de droits d'opposition, d'accès, de rectification et de suppression portant sur les données personnelles le concernant, conformément à la Politique de Confidentialité du site.</p>
+        <p>Kagibi utilise l'outil de mesure d'audience <strong>Umami</strong>, auto-hébergé sur sa propre infrastructure. Umami ne dépose aucun cookie et collecte uniquement des données anonymisées (pages visitées, navigateur, pays approximatif). Aucune donnée permettant d'identifier personnellement un Utilisateur n'est collectée à cette fin, et aucun transfert vers un service tiers n'est effectué. Pour plus de détails, consulter la <a @click.prevent="$router.push('/privacy')" href="#">Politique de Confidentialité</a>.</p>
       </section>
 
       <section>
