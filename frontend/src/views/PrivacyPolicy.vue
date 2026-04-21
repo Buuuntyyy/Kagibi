@@ -5,7 +5,7 @@
   <div class="legal-container">
     <div class="legal-content">
       <h1>Politique de Confidentialité</h1>
-      <p class="last-updated">Dernière mise à jour : 20 Avril 2026</p>
+      <p class="last-updated">Dernière mise à jour : 21 Avril 2026</p>
 
       <section>
         <h2>1. Introduction</h2>
@@ -28,6 +28,7 @@
           <li><strong>Données de signalisation P2P :</strong> Lors d'un transfert P2P, Kagibi enregistre temporairement les métadonnées nécessaires à la mise en relation technique : identifiant de l'expéditeur, email ou identifiant du destinataire (si renseigné), nom et taille du fichier, jeton d'invitation.</li>
           <li><strong>Flux TURN :</strong> Lorsque la connexion directe entre appareils n'est pas possible, le flux de données chiffré transite par le serveur TURN de Kagibi. Ce flux n'est <strong>jamais stocké</strong> : il est commuté en mémoire en temps réel entre les deux parties. Le contenu des fichiers reste chiffré de bout en bout (AES-256-GCM) et Kagibi ne dispose d'aucune clé permettant de le déchiffrer.</li>
           <li><strong>Données de facturation :</strong> En cas d'abonnement payant, les données de paiement sont traitées par notre prestataire Stripe (Stripe Inc.) et ne sont pas stockées par Kagibi.</li>
+          <li><strong>Données de mesure d'audience :</strong> Kagibi utilise l'outil d'analyse Umami, hébergé sur sa propre infrastructure (sans transfert vers des tiers). Umami collecte des données anonymisées : pages visitées, URL de provenance (referrer), type de navigateur, système d'exploitation, résolution d'écran, et pays déduit de l'adresse IP par hachage irréversible. <strong>Aucune adresse IP brute n'est conservée et aucun cookie de traçage n'est déposé.</strong></li>
         </ul>
       </section>
 
@@ -39,12 +40,13 @@
           <li>Sécurité du service et prévention de la fraude.</li>
           <li>Communication avec les utilisateurs (support technique, notifications importantes).</li>
           <li>Respect des obligations légales et réglementaires, notamment la conservation des données de connexion imposée par la LCEN.</li>
+          <li>Mesure d'audience anonyme : compréhension de l'utilisation du service à des fins d'amélioration, sans identification des utilisateurs.</li>
         </ul>
       </section>
 
       <section>
         <h2>5. Destinataires des données</h2>
-        <p>Les données collectées sont destinées aux équipes techniques de Kagibi. Elles peuvent être transmises aux sous-traitants auxquels Kagibi fait appel dans le cadre de l'exécution de ses services (hébergeur OVH France, prestataire de paiement Stripe).</p>
+        <p>Les données collectées sont destinées aux équipes techniques de Kagibi. Elles peuvent être transmises aux sous-traitants auxquels Kagibi fait appel dans le cadre de l'exécution de ses services (hébergeur OVH France, prestataire de paiement Stripe). L'outil de mesure d'audience Umami est auto-hébergé sur l'infrastructure de Kagibi : aucune donnée d'audience n'est transmise à un tiers.</p>
         <p>Les données de connexion (logs, adresses IP) peuvent être communiquées aux autorités judiciaires ou administratives compétentes sur réquisition légale, conformément à la LCEN et au Code de procédure pénale.</p>
         <p>Kagibi ne vend ni ne loue vos données personnelles à des tiers à des fins de marketing.</p>
       </section>
@@ -93,8 +95,9 @@
       </section>
 
       <section>
-        <h2>10. Cookies</h2>
+        <h2>10. Cookies et mesure d'audience</h2>
         <p>Le site utilise des cookies techniques strictement nécessaires au fonctionnement du service (maintien de la session connectée). Ces cookies ne nécessitent pas de consentement préalable au sens de la directive ePrivacy.</p>
+        <p>Pour la mesure d'audience, Kagibi utilise <strong>Umami</strong>, un outil d'analyse web respectueux de la vie privée, auto-hébergé sur son propre serveur. Umami ne dépose <strong>aucun cookie</strong> et ne collecte aucune donnée permettant d'identifier personnellement un visiteur. Les données collectées (pages vues, navigateur, pays approximatif) sont entièrement anonymisées et agrégées. Aucun transfert vers un service tiers n'est effectué. Ce traitement est fondé sur l'intérêt légitime de l'éditeur (art. 6.1.f RGPD) et est dispensé de consentement conformément aux recommandations de la CNIL relatives aux outils de mesure d'audience exemptés.</p>
       </section>
       
       <button @click="$router.go(-1)" class="btn-back">Retour</button>
