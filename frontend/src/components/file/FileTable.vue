@@ -23,8 +23,9 @@
       </thead>
       <tbody>
         <!-- Folders -->
-        <tr v-for="folder in folders" :key="folder.ID" 
-             class="list-item folder-item" 
+        <tr v-for="folder in folders" :key="folder.ID"
+             :data-item-id="folder.ID"
+             class="list-item folder-item"
              :class="{ selected: isSelected(folder, 'folder') }"
              @click.stop="$emit('select-item', folder, 'folder', $event)"
              @dblclick="$emit('open-folder', folder)"
@@ -108,7 +109,8 @@
         </tr>
 
         <!-- Files -->
-        <tr v-for="file in files" :key="file.ID" 
+        <tr v-for="file in files" :key="file.ID"
+            :data-item-id="file.ID"
             class="list-item"
             :class="{ selected: isSelected(file, 'file') }"
             @click.stop="$emit('select-item', file, 'file', $event)"

@@ -228,11 +228,15 @@ export const useFileStore = defineStore('files', {
     },
 
     searchQuery: '',
+    searchFilterExtensions: [], // active extension filters during search
+    searchFilterTags: [],       // active tag filters during search
+    searchFilterType: null,     // 'file', 'folder', or null for all
     shareUpdateTrigger: 0,
     recentFolders: [],
     recentFiles: [],
     // Used to coordinate navigation from Suggestions
     pendingNavigatePath: null,
+    pendingHighlight: null,     // { id, type } — item to select after navigation
     // Maps encrypted folder path → decrypted display name (populated when encrypt_filenames=true)
     folderNameCache: {},
   }),
@@ -321,7 +325,18 @@ export const useFileStore = defineStore('files', {
     
         setSearchQuery(query) {
         this.searchQuery = query;
+        if (!query) {
+            this.searchFilterExtensions = [];
+            this.searchFilterTags = [];
+            this.searchFilterType = null;
+        }
         this.searchFiles(query);
+    },
+    clearSearch() {
+        this.searchQuery = '';
+        this.searchFilterExtensions = [];
+        this.searchFilterTags = [];
+        this.searchFilterType = null;
     },
     async fetchItems(path) {
       const preferenceStore = usePreferencesStore()

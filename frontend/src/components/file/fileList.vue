@@ -468,12 +468,21 @@ const filteredFolders = computed(() => {
   if (fileStore.searchQuery) {
     const query = fileStore.searchQuery.toLowerCase()
     folders = folders.filter(folder => folder.Name.toLowerCase().includes(query))
-  }
-  if (activeTags.value.length > 0) {
-    folders = folders.filter(folder => {
-      const tags = folder.Tags || []
-      return activeTags.value.every(t => tags.includes(t))
-    })
+    // Search-specific tag filter
+    if (fileStore.searchFilterTags.length > 0) {
+      folders = folders.filter(folder => {
+        const tags = folder.Tags || []
+        return fileStore.searchFilterTags.every(t => tags.includes(t))
+      })
+    }
+  } else {
+    // Per-folder tag filter (non-search mode)
+    if (activeTags.value.length > 0) {
+      folders = folders.filter(folder => {
+        const tags = folder.Tags || []
+        return activeTags.value.every(t => tags.includes(t))
+      })
+    }
   }
   return sortItems(folders);
 })
@@ -483,20 +492,38 @@ const filteredFiles = computed(() => {
   if (fileStore.searchQuery) {
     const query = fileStore.searchQuery.toLowerCase()
     files = files.filter(file => file.Name.toLowerCase().includes(query))
-  }
-  if (activeExtensions.value.length > 0) {
-    files = files.filter(file => {
-      const name = file.Name || ''
-      const dot = name.lastIndexOf('.')
-      const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
-      return activeExtensions.value.includes(ext)
-    })
-  }
-  if (activeTags.value.length > 0) {
-    files = files.filter(file => {
-      const tags = file.Tags || []
-      return activeTags.value.every(t => tags.includes(t))
-    })
+    // Search-specific extension filter
+    if (fileStore.searchFilterExtensions.length > 0) {
+      files = files.filter(file => {
+        const name = file.Name || ''
+        const dot = name.lastIndexOf('.')
+        const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
+        return fileStore.searchFilterExtensions.includes(ext)
+      })
+    }
+    // Search-specific tag filter
+    if (fileStore.searchFilterTags.length > 0) {
+      files = files.filter(file => {
+        const tags = file.Tags || []
+        return fileStore.searchFilterTags.every(t => tags.includes(t))
+      })
+    }
+  } else {
+    // Per-folder filters (non-search mode)
+    if (activeExtensions.value.length > 0) {
+      files = files.filter(file => {
+        const name = file.Name || ''
+        const dot = name.lastIndexOf('.')
+        const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
+        return activeExtensions.value.includes(ext)
+      })
+    }
+    if (activeTags.value.length > 0) {
+      files = files.filter(file => {
+        const tags = file.Tags || []
+        return activeTags.value.every(t => tags.includes(t))
+      })
+    }
   }
   return sortItems(files);
 })
@@ -752,8 +779,21 @@ const navigateToSecurity = () => {
   router.push({ name: 'Account' })
 }
 
-watch(() => fileStore.currentPath, () => {
+watch(() => fileStore.currentPath, async () => {
   selectedItems.value = []
+  if (!fileStore.pendingHighlight) return
+  const { id, type } = fileStore.pendingHighlight
+  fileStore.pendingHighlight = null
+  await nextTick()
+  const item = type === 'folder'
+    ? fileStore.folders.find(f => f.ID === id)
+    : fileStore.files.find(f => f.ID === id)
+  if (!item) return
+  selectedItems.value = [{ ...item, type }]
+  nextTick(() => {
+    const row = document.querySelector(`[data-item-id="${id}"]`)
+    if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
 })
 
 onUnmounted(() => {
@@ -1013,8 +1053,23 @@ const isSelected = (item, type) => {
   return selectedItems.value.some(i => i.ID === item.ID && i.type === type);
 }
 
+const getParentPath = (path) => {
+  if (!path || path === '/') return '/'
+  const p = path.replace(/\/$/, '')
+  const idx = p.lastIndexOf('/')
+  return idx <= 0 ? '/' : p.slice(0, idx + 1)
+}
+
 const openFolder = (folder) => {
   const folderName = folder.Name || folder.name;
+
+  if (fileStore.searchQuery) {
+    const parentPath = getParentPath(folder.Path || folder.path)
+    fileStore.pendingHighlight = { id: folder.ID, type: 'folder' }
+    fileStore.clearSearch()
+    fileStore.fetchItems(parentPath)
+    return
+  }
 
   if (fileStore.viewMode === 'shared') {
       fileStore.navigateShared(folder.ID, folderName);
@@ -1203,6 +1258,14 @@ const updateTags = async () => {
 }
 
 const downloadFile = async (file) => {
+  if (fileStore.searchQuery) {
+    const parentPath = getParentPath(file.Path || file.path)
+    fileStore.pendingHighlight = { id: file.ID, type: 'file' }
+    fileStore.clearSearch()
+    fileStore.fetchItems(parentPath)
+    return
+  }
+
   fileStore.addToHistory({ ...file, type: 'file' });
 
   const previewTypes = [
