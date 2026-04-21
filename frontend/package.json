@@ -11,10 +11,10 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",
-    "axios": "^1.13.2",
+    "axios": "^1.15.1",
     "fflate": "^0.8.2",
     "libsodium-wrappers-sumo": "^0.7.15",
-    "lodash": "^4.17.21",
+    "lodash": "^4.18.1",
     "lucide-vue-next": "^1.0.0",
     "pdfjs-dist": "^5.4.530",
     "pinia": "^3.0.4",
@@ -27,11 +27,11 @@
     "vue-router": "^4.6.3"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.2",
-    "@vitest/coverage-v8": "^1.6.1",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "@vitest/coverage-v8": "^4.1.4",
     "@vue/test-utils": "^2.4.3",
     "jsdom": "^23.0.0",
-    "vite": "^7.2.4",
-    "vitest": "^1.6.1"
+    "vite": "^8.0.9",
+    "vitest": "^4.1.4"
   }
 }
