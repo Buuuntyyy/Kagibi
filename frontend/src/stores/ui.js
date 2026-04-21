@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export const useUIStore = defineStore('ui', () => {
+    const pendingMobileAction = ref(null) // 'upload' | 'createFolder' | null
+
     const alert = ref({
         visible: false,
         title: '',
@@ -68,6 +70,7 @@ export const useUIStore = defineStore('ui', () => {
 
     return {
         alert,
+        pendingMobileAction,
         deleteDialog, // Export state
         showError,
         showWarning,

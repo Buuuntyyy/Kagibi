@@ -18,10 +18,11 @@ const (
 )
 
 // P2P share limits (max simultaneous active shares)
+// -1 means unlimited
 const (
-	P2PLimitFree     = 5
-	P2PLimitPro      = 50
-	P2PLimitBusiness = 200
+	P2PLimitFree     = -1
+	P2PLimitPro      = -1
+	P2PLimitBusiness = -1
 )
 
 // Pricing in euro cents

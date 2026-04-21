@@ -23,8 +23,9 @@
       </thead>
       <tbody>
         <!-- Folders -->
-        <tr v-for="folder in folders" :key="folder.ID" 
-             class="list-item folder-item" 
+        <tr v-for="folder in folders" :key="folder.ID"
+             :data-item-id="folder.ID"
+             class="list-item folder-item"
              :class="{ selected: isSelected(folder, 'folder') }"
              @click.stop="$emit('select-item', folder, 'folder', $event)"
              @dblclick="$emit('open-folder', folder)"
@@ -108,7 +109,8 @@
         </tr>
 
         <!-- Files -->
-        <tr v-for="file in files" :key="file.ID" 
+        <tr v-for="file in files" :key="file.ID"
+            :data-item-id="file.ID"
             class="list-item"
             :class="{ selected: isSelected(file, 'file') }"
             @click.stop="$emit('select-item', file, 'file', $event)"
@@ -570,5 +572,45 @@ input[type="checkbox"] {
 
 input[type="checkbox"]:hover {
   transform: scale(1.1);
+}
+
+@media (max-width: 768px) {
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .files-table {
+    font-size: 0.82rem;
+    min-width: 480px;
+  }
+
+  .name-wrapper {
+    max-width: 160px;
+  }
+
+  /* Hide less important columns on mobile */
+  th.col-path, td.col-path,
+  th.col-tags, td.col-tags,
+  th.col-created, td.col-created,
+  th.col-updated, td.col-updated {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .files-table {
+    font-size: 0.78rem;
+    min-width: 360px;
+  }
+
+  .name-wrapper {
+    max-width: 120px;
+  }
+
+  .icon-svg {
+    width: 16px;
+    height: 16px;
+  }
 }
 </style>

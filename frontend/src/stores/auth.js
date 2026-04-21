@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import api from '../api'
 import router from '../router'
 import { authClient, IS_POCKETBASE } from '../auth-client'
+import { isP2PSubdomain } from '../composables/useSubdomain'
 import { useFriendStore } from './friends'
 import {
   deriveKeyFromPassword, generateSalt, wrapMasterKey, unwrapMasterKey,
@@ -22,7 +23,7 @@ const localDevBypassUser = {
   storage_used: 0,
   storage_limit: 20 * 1024 * 1024 * 1024,
   plan: 'free',
-  p2p_max_exchanges: 5,
+  p2p_max_exchanges: -1,
   p2p_exchanges_used: 0,
 }
 
@@ -124,7 +125,7 @@ export const useAuthStore = defineStore('auth', {
           }
         }
 
-        router.push({ name: 'Home' })
+        router.push(isP2PSubdomain ? '/' : { name: 'Home' })
         return true
       } catch (error) {
         console.error('Login failed:', error)
@@ -461,6 +462,20 @@ export const useAuthStore = defineStore('auth', {
         }
       } catch (error) {
         console.error('Failed to update avatar:', error)
+        throw error
+      }
+    },
+
+    async updateEmail(newEmail, password) {
+      try {
+        const data = await authClient.updateEmail(newEmail, password)
+        if (this.user) {
+          this.user.email = data.email
+          this.persistUserToStorage()
+        }
+        return data
+      } catch (error) {
+        console.error('Email update failed:', error)
         throw error
       }
     }

@@ -39,10 +39,18 @@ async function fetchICEConfig() {
 
 export const useP2PStore = defineStore('p2p', {
   state: () => ({
-    incomingOffer: null, 
-    activeTransfer: null, 
+    incomingOffer: null,
+    activeTransfer: null,
+    rejectedTransfer: null, // Info shown to initiator when recipient rejects
     candidateQueue: [], // Store candidates that arrive before acceptance
-    heartbeatInterval: null // Interval for session maintenance
+    heartbeatInterval: null, // Interval for session maintenance
+    pingCount: 0, // Number of pings sent for current transfer
+    pingCooldownUntil: null, // Timestamp until which pings are throttled
+    pingSeq: 0, // Incremented on every received ping — watcher always fires
+    connectingTimeout: null, // Timeout that dismisses a stuck Connecting... state
+    // Invite system: sender keeps the file + key in memory while waiting for the recipient
+    pendingInvite: null, // { transferId, file, fileKey, recipientId, recipientPublicKey, recipientName }
+    inviteReady: false,  // true once the recipient accepted → sender can start transfer
   }),
   actions: {
     startHeartbeat() {
@@ -57,8 +65,8 @@ export const useP2PStore = defineStore('p2p', {
             }
             
             try {
-                const token = localStorage.getItem('token');
-                await axios.get(`${API_BASE_URL}/heartbeat`, {
+                const token = await authClient.getToken();
+                await axios.get(`${API_BASE_URL}heartbeat`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 //console.log('[P2P] Session heartbeat sent');
@@ -83,20 +91,42 @@ export const useP2PStore = defineStore('p2p', {
                 this.activeTransfer.connectionInfo.iceState = pc.iceConnectionState;
                 if (pc.iceConnectionState === 'checking') {
                     this.activeTransfer.connectionInfo.stage = 'Négociation de la connexion...';
-                } else if (pc.iceConnectionState === 'connected') {
-                    this.activeTransfer.connectionInfo.stage = 'Connecté';
-                    this.detectConnectionType(pc, transferId);
+                } else if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                    this._clearConnectingTimeout(); // Connection established — no longer waiting
+                    this.activeTransfer.connectionInfo.wasConnected = true;
+                    if (pc.iceConnectionState === 'connected') {
+                        this.activeTransfer.connectionInfo.stage = 'Connecté';
+                        this.detectConnectionType(pc, transferId);
+                    }
                 }
             }
-            if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+            if (pc.iceConnectionState === 'disconnected') {
+                // 'disconnected' is a transient state — WebRTC may recover automatically.
+                // Only update the stage label; never show an error dialog here.
                 if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
                     const isDone = this.activeTransfer.status === 'Done' || this.activeTransfer.status === 'Complete';
                     if (!isDone) {
-                        console.error('ICE Connection Failed/Disconnected during active transfer');
-                        uiStore.showError(
-                            "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
-                            'Échec de Connexion'
-                        );
+                        this.activeTransfer.connectionInfo.stage = 'Reconnexion en cours...';
+                    }
+                }
+            } else if (pc.iceConnectionState === 'failed') {
+                if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
+                    const isDone = this.activeTransfer.status === 'Done' || this.activeTransfer.status === 'Complete';
+                    if (!isDone) {
+                        const wasConnected = this.activeTransfer.connectionInfo.wasConnected;
+                        if (wasConnected) {
+                            console.error('ICE Connection Failed — remote peer likely disconnected');
+                            uiStore.showError(
+                                "Le contact distant s'est déconnecté pendant le transfert. Le fichier n'a pas été transféré complètement.",
+                                'Contact déconnecté'
+                            );
+                        } else {
+                            console.error('ICE Connection Failed — could not establish connection');
+                            uiStore.showError(
+                                "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
+                                'Échec de Connexion'
+                            );
+                        }
                         this.activeTransfer.status = 'Error';
                         this.activeTransfer.connectionInfo.stage = 'Échec de connexion';
                     }
@@ -108,6 +138,20 @@ export const useP2PStore = defineStore('p2p', {
     _handleOfferSignal(sender_id, data) {
         this.incomingOffer = { senderId: sender_id, ...data.meta, sdp: data.sdp, transferId: data.transferId };
         this.candidateQueue = [];
+    },
+
+    _handlePingSignal() {
+        this.pingSeq++;
+    },
+
+    sendPing(friendId, transferId) {
+        const now = Date.now();
+        if (this.pingCount >= 3) return;
+        if (this.pingCooldownUntil && now < this.pingCooldownUntil) return;
+        const realtimeStore = useRealtimeStore();
+        realtimeStore.sendP2PSignal(friendId, 'p2p_ping', { transferId });
+        this.pingCount++;
+        this.pingCooldownUntil = now + 30000;
     },
 
     async _handleAnswerSignal(sender_id, data) {
@@ -143,6 +187,37 @@ export const useP2PStore = defineStore('p2p', {
         }
     },
 
+    _clearConnectingTimeout() {
+        if (this.connectingTimeout) { clearTimeout(this.connectingTimeout); this.connectingTimeout = null; }
+    },
+
+    _handleRejectSignal(sender_id, data) {
+        // Only the sender side has type='send'; the receiver has no activeTransfer yet.
+        if (!this.activeTransfer || this.activeTransfer.type !== 'send') return;
+        // If both sides carry a transferId it must match — prevents stale/wrong-session signals.
+        if (data?.transferId && this.activeTransfer.transferId && data.transferId !== this.activeTransfer.transferId) return;
+        // Sender must be our intended recipient
+        if (this.activeTransfer.friendId !== sender_id) {
+            console.warn('[P2P] Reject signal ignored — sender_id mismatch:', sender_id, 'expected:', this.activeTransfer.friendId);
+            return;
+        }
+
+        const fileName = this.activeTransfer.fileName;
+        // Null out all handlers before closing to prevent stale callbacks
+        const pc = this.activeTransfer.pc;
+        pc.onicecandidate = null;
+        pc.oniceconnectionstatechange = null;
+        pc.ondatachannel = null;
+        pc.close();
+        this._clearConnectingTimeout();
+        this.activeTransfer = null;
+        this.stopHeartbeat();
+
+        this.rejectedTransfer = { friendId: sender_id, fileName };
+        // Auto-dismiss after 6 seconds
+        setTimeout(() => { this.rejectedTransfer = null; }, 6000);
+    },
+
     async handleSignal(payload) {
         const { sender_id, type, data } = payload;
         if (type === 'offer') {
@@ -151,18 +226,59 @@ export const useP2PStore = defineStore('p2p', {
             await this._handleAnswerSignal(sender_id, data);
         } else if (type === 'candidate') {
             await this._handleCandidateSignal(sender_id, data);
+        } else if (type === 'reject') {
+            this._handleRejectSignal(sender_id, data);
+        } else if (type === 'p2p_ping') {
+            this._handlePingSignal();
+        } else if (type === 'invite_accepted') {
+            await this._handleInviteAcceptedSignal(sender_id, data);
         }
     },
 
-    async startTransfer(friend, file) {
+    // Called when the recipient opens the invite link and accepts.
+    // If the pendingInvite matches the transfer_id, kick off the WebRTC handshake.
+    async _handleInviteAcceptedSignal(sender_id, data) {
+        if (!this.pendingInvite) return;
+        if (data?.transfer_id && data.transfer_id !== this.pendingInvite.transferId) return;
+        if (sender_id !== this.pendingInvite.recipientId) return;
+
+        this.inviteReady = true;
+        const { file, fileKey, recipientId, recipientName } = this.pendingInvite;
+
+        // For guest invites, public_key comes from the signal payload (generated by the guest browser).
+        // For account-based invites, fall back to the key stored at invite creation time.
+        const publicKey = data?.public_key || this.pendingInvite.recipientPublicKey;
+
+        const pseudoFriend = {
+            id: recipientId,
+            name: recipientName,
+            public_key: publicKey,
+        };
+        await this.startTransfer(pseudoFriend, file, fileKey);
+    },
+
+    // Prepare an invite-based pending transfer. The file and pre-generated key are
+    // held in memory until the recipient accepts (up to 24 h, page must stay open).
+    setPendingInvite({ transferId, file, fileKey, recipientId, recipientPublicKey, recipientName }) {
+        this.pendingInvite = { transferId, file, fileKey, recipientId, recipientPublicKey, recipientName };
+        this.inviteReady = false;
+    },
+
+    clearPendingInvite() {
+        this.pendingInvite = null;
+        this.inviteReady = false;
+    },
+
+    // preGeneratedKey: optional CryptoKey already created (invite flow).
+    async startTransfer(friend, file, preGeneratedKey = null) {
          await sodium.ready;
-         
+
          if (!friend.public_key) {
-             alert("L'ami n'a pas de clé publique (Il doit se reconnecter une fois pour la publier)."); 
+             alert("L'ami n'a pas de clé publique (Il doit se reconnecter une fois pour la publier).");
              return;
          }
 
-         const fileKey = await generateMasterKey();
+         const fileKey = preGeneratedKey ?? await generateMasterKey();
          const fileKeyRaw = await window.crypto.subtle.exportKey("raw", fileKey);
          
          const publicKey = await importKeyFromPEM(friend.public_key);
@@ -193,6 +309,10 @@ export const useP2PStore = defineStore('p2p', {
          dc.binaryType = "arraybuffer";
          dc.onopen = () => this.sendFileData(file, fileKey, dc);
          
+         this.pingCount = 0;
+         this.pingCooldownUntil = null;
+         if (this.connectingTimeout) { clearTimeout(this.connectingTimeout); this.connectingTimeout = null; }
+
          this.activeTransfer = {
              friendId: friend.id,
              type: 'send',
@@ -205,10 +325,11 @@ export const useP2PStore = defineStore('p2p', {
                  stage: 'Initialisation...',
                  iceState: 'new',
                  connectionType: null,
-                 usingTurn: false
+                 usingTurn: false,
+                 wasConnected: false
              }
          };
-         
+
          // Start heartbeat to prevent session timeout
          this.startHeartbeat();
 
@@ -225,6 +346,19 @@ export const useP2PStore = defineStore('p2p', {
                  fileKeyEncrypted: keyEncryptedBase64
              }
          });
+
+         // Auto-dismiss the waiting state after 3 minutes with no response
+         this.connectingTimeout = setTimeout(() => {
+             if (this.activeTransfer && this.activeTransfer.status === 'Connecting...') {
+                 const pc = this.activeTransfer.pc;
+                 if (pc) { pc.onicecandidate = null; pc.oniceconnectionstatechange = null; pc.close(); }
+                 this.activeTransfer = null;
+                 this.stopHeartbeat();
+                 this.rejectedTransfer = { friendId: friend.id, fileName: file.name, timedOut: true };
+                 setTimeout(() => { this.rejectedTransfer = null; }, 8000);
+             }
+             this.connectingTimeout = null;
+         }, 3 * 60 * 1000);
     },
 
     async acceptTransfer() {
@@ -301,10 +435,11 @@ export const useP2PStore = defineStore('p2p', {
                  stage: 'Initialisation...',
                  iceState: 'new',
                  connectionType: null,
-                 usingTurn: false
+                 usingTurn: false,
+                 wasConnected: false
              }
         };
-        
+
         // Start heartbeat to prevent session timeout
         this.startHeartbeat();
 
@@ -338,12 +473,24 @@ export const useP2PStore = defineStore('p2p', {
         });
     },
 
-    rejectTransfer() {
+    async rejectTransfer() {
+        if (!this.incomingOffer) return;
+        const realtimeStore = useRealtimeStore();
+        const senderId = this.incomingOffer.senderId;
+        const transferId = this.incomingOffer.transferId;
+        // Clear local state immediately so the UI updates right away
         this.incomingOffer = null;
-        // Should send 'reject' signal ideally
+        this.candidateQueue = [];
+        // Send the reject signal — best-effort, errors are logged but don't block the UI
+        try {
+            await realtimeStore.sendP2PSignal(senderId, 'reject', { transferId });
+        } catch (err) {
+            console.error('[P2P] Failed to send reject signal:', err);
+        }
     },
 
     cancelTransfer() {
+        this._clearConnectingTimeout();
         if (this.activeTransfer) {
             this.activeTransfer.pc.close();
             this.activeTransfer = null;

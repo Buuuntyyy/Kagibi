@@ -6,11 +6,12 @@ package authprovider
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
 	"time"
+
+	"kagibi/backend/pkg/emailcrypto"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/pquerna/otp"
@@ -25,7 +26,9 @@ const queryIDEq = "id = ?"
 type authUser struct {
 	bun.BaseModel      `bun:"table:auth_users,alias:au"`
 	ID                 string     `bun:"id,pk"`
-	Email              string     `bun:"email,unique,notnull"`
+	EmailHash          string     `bun:"email_hash,notnull"`
+	EmailEncrypted     string     `bun:"email_encrypted,notnull"`
+	Email              string     `bun:"-"` // virtual: decrypted from EmailEncrypted after load
 	PasswordHash       string     `bun:"password_hash,notnull"`
 	TOTPSecret         string     `bun:"totp_secret"`
 	TOTPEnabled        bool       `bun:"totp_enabled,notnull,default:false"`
@@ -48,10 +51,8 @@ type LocalProvider struct {
 func NewLocalProvider(db *bun.DB) *LocalProvider {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		b := make([]byte, 32)
-		_, _ = rand.Read(b)
-		secret = hex.EncodeToString(b)
-		log.Printf("[LocalAuth] WARNING: JWT_SECRET not set — using random secret. Tokens will be invalidated on restart.")
+		log.Fatalf("[LocalAuth] FATAL: JWT_SECRET environment variable is not set. " +
+			"Set a stable secret (e.g. openssl rand -hex 32) so tokens survive restarts.")
 	}
 	return &LocalProvider{secret: []byte(secret), db: db}
 }
@@ -91,7 +92,7 @@ func (p *LocalProvider) CheckPassword(hash, password string) error {
 
 // CreateAuthUser inserts a new auth_users record and returns the generated UUID.
 func (p *LocalProvider) CreateAuthUser(email, password string) (string, error) {
-	hash, err := p.HashPassword(password)
+	pwHash, err := p.HashPassword(password)
 	if err != nil {
 		return "", fmt.Errorf("failed to hash password: %w", err)
 	}
@@ -105,10 +106,17 @@ func (p *LocalProvider) CreateAuthUser(email, password string) (string, error) {
 	userID := fmt.Sprintf("%x-%x-%x-%x-%x",
 		idBytes[0:4], idBytes[4:6], idBytes[6:8], idBytes[8:10], idBytes[10:16])
 
+	emailHash := emailcrypto.Hash(email)
+	emailEnc, err := emailcrypto.Encrypt(email)
+	if err != nil {
+		return "", fmt.Errorf("failed to encrypt email: %w", err)
+	}
+
 	au := &authUser{
-		ID:           userID,
-		Email:        email,
-		PasswordHash: hash,
+		ID:             userID,
+		EmailHash:      emailHash,
+		EmailEncrypted: emailEnc,
+		PasswordHash:   pwHash,
 	}
 	_, err = p.db.NewInsert().Model(au).Exec(context.Background())
 	if err != nil {
@@ -117,13 +125,19 @@ func (p *LocalProvider) CreateAuthUser(email, password string) (string, error) {
 	return userID, nil
 }
 
-// FindAuthUserByEmail looks up an auth_users record by email.
+// FindAuthUserByEmail looks up an auth_users record by email using the HMAC hash index.
 func (p *LocalProvider) FindAuthUserByEmail(email string) (*authUser, error) {
+	hash := emailcrypto.Hash(email)
 	var au authUser
-	err := p.db.NewSelect().Model(&au).Where("email = ?", email).Scan(context.Background())
+	err := p.db.NewSelect().Model(&au).Where("email_hash = ?", hash).Scan(context.Background())
 	if err != nil {
 		return nil, err
 	}
+	plain, err := emailcrypto.Decrypt(au.EmailEncrypted)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt auth user email: %w", err)
+	}
+	au.Email = plain
 	return &au, nil
 }
 
@@ -157,6 +171,28 @@ func (p *LocalProvider) UpdateUserPasswordWithVerification(userID, oldPassword, 
 		return fmt.Errorf("invalid current password")
 	}
 	return p.UpdateUserPassword(userID, newPassword)
+}
+
+// UpdateUserEmailWithVerification verifies the current password before updating the email.
+// Returns an error if the password is wrong or the new email is already taken.
+func (p *LocalProvider) UpdateUserEmailWithVerification(userID, password, newEmail string) error {
+	var au authUser
+	if err := p.db.NewSelect().Model(&au).Where(queryIDEq, userID).Scan(context.Background()); err != nil {
+		return fmt.Errorf("user not found")
+	}
+	if err := p.CheckPassword(au.PasswordHash, password); err != nil {
+		return fmt.Errorf("invalid current password")
+	}
+	newEmailHash := emailcrypto.Hash(newEmail)
+	newEmailEnc, err := emailcrypto.Encrypt(newEmail)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt new email: %w", err)
+	}
+	_, err = p.db.NewUpdate().Model((*authUser)(nil)).
+		Set("email_hash = ?, email_encrypted = ?", newEmailHash, newEmailEnc).
+		Where(queryIDEq, userID).
+		Exec(context.Background())
+	return err
 }
 
 // ReissueToken verifies the password for the given email and, if correct, returns
@@ -282,6 +318,20 @@ func (p *LocalProvider) SyncMFAStatus(userID string, enabled bool) error {
 		      mfa_verified = EXCLUDED.mfa_verified
 	`, userID, enabled, enabled)
 	return err
+}
+
+// GenerateGuestToken issues a short-lived HS256 JWT for a P2P guest session.
+// The token expires at expiresAt (matches the invite expiry) and carries is_guest=true
+// so middleware can distinguish guest sessions from full accounts.
+func (p *LocalProvider) GenerateGuestToken(guestUserID string, expiresAt time.Time) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub":      guestUserID,
+		"is_guest": true,
+		"aal":      "guest",
+		"exp":      expiresAt.Unix(),
+		"iat":      time.Now().Unix(),
+	})
+	return token.SignedString(p.secret)
 }
 
 // DisableTOTP removes all TOTP data for the user.

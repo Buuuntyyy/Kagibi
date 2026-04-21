@@ -57,6 +57,9 @@ func DeleteAccount(db *bun.DB, provider authprovider.AuthProvider) gin.HandlerFu
 			c.JSON(http.StatusNotFound, gin.H{"error": "Compte non trouvé"})
 			return
 		}
+		if decErr := pkg.DecryptUserEmail(&user); decErr != nil {
+			log.Printf("[RGPD] Could not decrypt email for user %s (continuing deletion): %v", userID, decErr)
+		}
 
 		log.Printf("[RGPD] Starting IMMEDIATE deletion for user: %s (email: %s, provider: %s)", userID, user.Email, provider.Name())
 

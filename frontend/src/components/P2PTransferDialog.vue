@@ -2,20 +2,33 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 
 <template>
-  <div v-if='visible' class='p2p-notification-container'>
-    <div class='p2p-card'>
-      <div class='card-header'>
+  <div v-if='visible' class='p2p-notification-container' :class="{ minimized: isMinimized }">
+    <div class='p2p-card' :class="{ shaking: shakeCard }">
+      <div class='card-header' @click.self="isMinimized && (isMinimized = false)">
         <h3 class='header-title'>
           <svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'></circle><line x1='2' y1='12' x2='22' y2='12'></line><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'></path></svg>
           {{ t('p2p.title') }}
+          <!-- Compact progress shown when minimized -->
+          <span v-if="isMinimized && p2pStore.activeTransfer" class="mini-progress">
+            {{ p2pStore.activeTransfer.progress }}%
+          </span>
         </h3>
-        <button v-if='canClose' @click='close' class='close-icon'>&times;</button>
+        <div class="header-actions">
+          <button class='minimize-icon' @click='isMinimized = !isMinimized' :title="isMinimized ? 'Agrandir' : 'Réduire'">
+            <svg v-if="isMinimized" xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='18 15 12 9 6 15'></polyline></svg>
+            <svg v-else xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>
+          </button>
+          <button v-if='canClose' @click='close' class='close-icon'>&times;</button>
+        </div>
       </div>
       
+      <!-- Card body hidden when minimized -->
+      <template v-if="!isMinimized">
+
       <!-- INCOMING REQUEST -->
       <div v-if='p2pStore.incomingOffer' class='notification-body'>
          <p class='request-text'>
-            {{ t('p2p.incomingRequest', { sender: p2pStore.incomingOffer.senderId.substring(0,8) }) }}
+            {{ t('p2p.incomingRequest', { sender: senderName }) }}
          </p>
          <div class='file-preview'>
             <div class='file-icon-box'>
@@ -32,6 +45,20 @@
          </div>
       </div>
 
+      <!-- REJECTED BY RECIPIENT (or timed out) -->
+      <div v-else-if='p2pStore.rejectedTransfer' class='notification-body'>
+        <div class='rejected-notice'>
+          <svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'></circle><line x1='15' y1='9' x2='9' y2='15'></line><line x1='9' y1='9' x2='15' y2='15'></line></svg>
+          <div>
+            <p class='rejected-title'>{{ p2pStore.rejectedTransfer.timedOut ? t('p2p.transferTimedOut') : t('p2p.transferRejected') }}</p>
+            <p class='rejected-file'>{{ p2pStore.rejectedTransfer.fileName }}</p>
+          </div>
+        </div>
+        <div class='actions-grid single'>
+          <button @click='p2pStore.rejectedTransfer = null' class='btn btn-secondary'>{{ t('common.close') }}</button>
+        </div>
+      </div>
+
       <!-- ACTIVE TRANSFER -->
       <div v-else-if='p2pStore.activeTransfer' class='notification-body'>
          <div class='status-header'>
@@ -43,6 +70,12 @@
          </div>
          <p class='filename-display' :title='p2pStore.activeTransfer.fileName'>{{ p2pStore.activeTransfer.fileName }}</p>
          
+         <!-- Keep window active warning -->
+         <div v-if='!isDone' class='keep-active-notice'>
+           <svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'></path><line x1='12' y1='9' x2='12' y2='13'></line><line x1='12' y1='17' x2='12.01' y2='17'></line></svg>
+           {{ t('p2p.keepWindowActive') }}
+         </div>
+
          <!-- Connection Info -->
          <div v-if='p2pStore.activeTransfer.connectionInfo' class='connection-info'>
              <div class='info-row'>
@@ -63,28 +96,150 @@
          <div class='actions-grid single' v-else>
              <button @click='cancel' class='btn btn-danger-text'>{{ t('common.cancel') }}</button>
          </div>
+
+         <!-- Re-notify while waiting for acceptance -->
+         <div v-if='isWaitingForAcceptance' class='renotify-section'>
+             <button
+                 class='btn btn-renotify'
+                 @click='sendPing'
+                 :disabled='!canPing'
+             >
+                 <svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9'/><path d='M13.73 21a2 2 0 0 1-3.46 0'/></svg>
+                 {{ pingBtnText }}
+             </button>
+             <span class='ping-count'>{{ t('p2p.pingsLeft', { count: pingsLeft }) }}</span>
+         </div>
       </div>
+
+      </template><!-- end v-if="!isMinimized" -->
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useP2PStore } from '../stores/p2p';
+import { useFriendStore } from '../stores/friends';
 
 const { t } = useI18n();
 
 const p2pStore = useP2PStore();
+const friendStore = useFriendStore();
 
-const visible = computed(() => !!p2pStore.incomingOffer || !!p2pStore.activeTransfer);
+const senderName = computed(() => {
+    const offer = p2pStore.incomingOffer;
+    if (!offer) return '';
+    const friend = friendStore.friends.find(f => f.id === offer.senderId);
+    return friend?.name || offer.senderId.substring(0, 8);
+});
+
+const visible = computed(() => !!p2pStore.incomingOffer || !!p2pStore.activeTransfer || !!p2pStore.rejectedTransfer);
 const isDone = computed(() => p2pStore.activeTransfer?.status === 'Done' || p2pStore.activeTransfer?.status === 'Complete');
-const canClose = computed(() => isDone.value || !!p2pStore.incomingOffer);
+const canClose = computed(() => isDone.value || !!p2pStore.incomingOffer || !!p2pStore.rejectedTransfer);
+const isWaitingForAcceptance = computed(() =>
+    p2pStore.activeTransfer?.type === 'send' && p2pStore.activeTransfer?.status === 'Connecting...'
+);
 
 const statusText = computed(() => {
     if (!p2pStore.activeTransfer) return '';
     return p2pStore.activeTransfer.status;
 });
+
+const isMinimized = ref(false);
+
+// --- Shake card ---
+const shakeCard = ref(false);
+function triggerShake() {
+    shakeCard.value = false;
+    nextTick(() => {
+        shakeCard.value = true;
+        setTimeout(() => { shakeCard.value = false; }, 700);
+    });
+}
+
+// --- Sound ---
+function playPingSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
+        gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + 0.5);
+    } catch (_) { /* Audio not supported */ }
+}
+
+// --- Browser notifications ---
+function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+}
+function showBrowserNotification(title, body) {
+    if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, { body, icon: '/Logo.png' });
+    }
+}
+
+// Trigger on incoming offer
+watch(() => p2pStore.incomingOffer, (offer) => {
+    if (offer) {
+        isMinimized.value = false; // Always expand on new offer
+        playPingSound();
+        showBrowserNotification(t('p2p.title'), t('p2p.incomingRequest', { sender: senderName.value }));
+        setTimeout(triggerShake, 300);
+    }
+});
+
+// Trigger on p2p_ping signal from sender — pingSeq increments on every ping,
+// so the watcher always fires regardless of any previous state.
+watch(() => p2pStore.pingSeq, (seq) => {
+    if (seq === 0) return; // initial mount, not an actual ping
+    triggerShake();
+    playPingSound();
+    if (p2pStore.incomingOffer) {
+        showBrowserNotification(t('p2p.pingNotification'), t('p2p.pingNotificationBody'));
+    }
+});
+
+// --- Re-notify cooldown timer ---
+const now = ref(Date.now());
+let nowInterval = null;
+onMounted(() => {
+    nowInterval = setInterval(() => { now.value = Date.now(); }, 1000);
+    requestNotificationPermission();
+});
+onUnmounted(() => {
+    if (nowInterval) clearInterval(nowInterval);
+});
+
+const canPing = computed(() => {
+    if (p2pStore.pingCount >= 3) return false;
+    if (p2pStore.pingCooldownUntil && now.value < p2pStore.pingCooldownUntil) return false;
+    return true;
+});
+const pingsLeft = computed(() => Math.max(0, 3 - p2pStore.pingCount));
+const cooldownSecondsLeft = computed(() => {
+    if (!p2pStore.pingCooldownUntil) return 0;
+    return Math.max(0, Math.ceil((p2pStore.pingCooldownUntil - now.value) / 1000));
+});
+const pingBtnText = computed(() => {
+    if (p2pStore.pingCount >= 3) return t('p2p.pingLimitReached');
+    if (cooldownSecondsLeft.value > 0) return `${t('p2p.pingNotify')} (${cooldownSecondsLeft.value}s)`;
+    return t('p2p.pingNotify');
+});
+
+function sendPing() {
+    if (!p2pStore.activeTransfer) return;
+    p2pStore.sendPing(p2pStore.activeTransfer.friendId, p2pStore.activeTransfer.transferId);
+}
 
 const formatSize = (bytes) => {
     if (bytes === 0) return '0 B';
@@ -99,8 +254,9 @@ const reject = () => p2pStore.rejectTransfer();
 const cancel = () => p2pStore.cancelTransfer();
 const close = () => {
     if(p2pStore.incomingOffer) p2pStore.rejectTransfer();
+    else if(p2pStore.rejectedTransfer) p2pStore.rejectedTransfer = null;
     else if(p2pStore.activeTransfer && isDone.value) p2pStore.activeTransfer = null;
-    else p2pStore.cancelTransfer(); 
+    else p2pStore.cancelTransfer();
 };
 </script>
 
@@ -129,6 +285,16 @@ const close = () => {
 @keyframes slideIn {
     from { transform: translateY(20px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    15%, 45%, 75% { transform: translateX(-6px); }
+    30%, 60%, 90% { transform: translateX(6px); }
+}
+
+.p2p-card.shaking {
+    animation: shake 0.65s cubic-bezier(.36,.07,.19,.97) both;
 }
 
 .card-header {
@@ -312,5 +478,138 @@ const close = () => {
 
 .info-value.turn-relay {
     color: var(--warning-color, #f39c12);
+}
+
+.rejected-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: var(--error-bg-color, #fdf0f0);
+    border: 1px solid var(--error-color, #e74c3c);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+    color: var(--error-color, #e74c3c);
+}
+.rejected-notice svg { flex-shrink: 0; margin-top: 2px; }
+.rejected-title {
+    margin: 0 0 4px 0;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.rejected-file {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--secondary-text-color, #888);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 240px;
+}
+
+.renotify-section {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color, #eee);
+}
+
+.btn-renotify {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid var(--primary-color, #3498db);
+    color: var(--primary-color, #3498db);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.btn-renotify:hover:not(:disabled) {
+    background: var(--primary-color, #3498db);
+    color: white;
+}
+.btn-renotify:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.ping-count {
+    font-size: 0.78rem;
+    color: var(--secondary-text-color, #888);
+    white-space: nowrap;
+}
+
+.keep-active-notice {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: var(--warning-color, #f39c12);
+    background: var(--warning-bg-color, #fffbf0);
+    border: 1px solid var(--warning-color, #f39c12);
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin-bottom: 10px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.minimize-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--secondary-text-color, #888);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+.minimize-icon:hover { color: var(--main-text-color, #333); }
+
+.mini-progress {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--primary-color, #3498db);
+    margin-left: 8px;
+}
+
+@media (max-width: 768px) {
+    .p2p-notification-container {
+        bottom: 72px; /* above mobile nav */
+        right: 8px;
+        left: 8px;
+    }
+
+    .p2p-card {
+        width: 100%;
+    }
+
+    /* Minimized: just a compact pill at bottom-right */
+    .p2p-notification-container.minimized {
+        left: auto;
+        right: 8px;
+        width: auto;
+    }
+
+    .p2p-notification-container.minimized .p2p-card {
+        width: auto;
+        min-width: 160px;
+    }
+
+    .p2p-notification-container.minimized .card-header {
+        cursor: pointer;
+    }
 }
 </style>

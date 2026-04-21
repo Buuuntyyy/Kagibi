@@ -12,6 +12,7 @@ import (
 	"kagibi/backend/handlers/folders"
 	"kagibi/backend/handlers/friends"
 	"kagibi/backend/handlers/keys"
+	p2phandlers "kagibi/backend/handlers/p2p"
 	"kagibi/backend/handlers/security"
 	"kagibi/backend/handlers/shares"
 	"kagibi/backend/handlers/tags"
@@ -20,6 +21,7 @@ import (
 	"kagibi/backend/middleware"
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
+	"kagibi/backend/pkg/emailcrypto"
 	"kagibi/backend/pkg/monitoring"
 	"kagibi/backend/pkg/s3storage"
 	"kagibi/backend/pkg/workers"
@@ -41,6 +43,7 @@ import (
 
 func main() {
 	loadEnv()
+	emailcrypto.Init()
 
 	// DB must be initialized before auth so LocalProvider can access auth_users
 	db := pkg.NewDB()
@@ -192,10 +195,11 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	mfaGroup.POST("/verify", auth.MFAVerifyHandler(provider))
 	mfaGroup.DELETE("/unenroll", auth.MFAUnenrollHandler(provider, redisClient))
 
-	// Protected routes (JWT required)
+	// Protected routes (JWT required, guest tokens rejected)
 	authMW := middleware.AuthMiddleware(provider, redisClient)
 	protected := api.Group("")
 	protected.Use(authMW)
+	protected.Use(middleware.BlockGuest())
 
 	registerUserRoutes(protected, db, redisClient, provider)
 	registerFileRoutes(protected, db, redisClient)
@@ -206,6 +210,8 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	registerSecurityRoutes(protected)
 	registerBillingRoutes(api, protected, authMW, db)
 	registerP2PRoutes(protected, db)
+	registerP2PGuestRoutes(api, db, authMW)
+	registerPublicP2PRoutes(api, db, provider)
 	registerEventRoutes(protected, db)
 
 	// WebSocket endpoint — authenticated via Authorization header or Sec-WebSocket-Protocol trick.
@@ -229,6 +235,7 @@ func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	g.POST("/auth/logout", func(c *gin.Context) { auth.LogoutHandler(c, redisClient) })
 	g.POST("/auth/ws-token", auth.WsTokenHandler(redisClient))
 	g.POST("/auth/update-password", auth.LocalUpdatePasswordHandler(provider, redisClient))
+	g.PUT("/auth/update-email", auth.LocalUpdateEmailHandler(provider, db, redisClient))
 	g.DELETE("/auth/account", auth.DeleteAccount(db, provider))
 
 	usersG := g.Group("/users")
@@ -333,10 +340,34 @@ func p2pSignalHandler(db *bun.DB) gin.HandlerFunc {
 			Payload:    req.Payload,
 		}
 		if _, err := db.NewInsert().Model(signal).Exec(c.Request.Context()); err != nil {
-			c.JSON(500, gin.H{"error": "Failed to send signal"})
+			log.Printf("[P2P] Insert failed type=%s sender=%s target=%s: %v",
+				req.SignalType, userID.(string), req.TargetUserID, err)
+			// For reject signals, best-effort WS delivery even when the DB is unavailable:
+			// the initiator must learn about the refusal. Signal ID 0 is intentionally
+			// skipped by the frontend deduplication guard (only truthy IDs are tracked).
+			if req.SignalType == "reject" {
+				wshandler.GlobalHub.SendP2PSignalToUser(req.TargetUserID, userID.(string), req.SignalType, 0, req.Payload)
+				c.JSON(200, gin.H{"status": "sent", "signal_id": 0})
+			} else {
+				c.JSON(500, gin.H{"error": "Failed to send signal"})
+			}
 			return
 		}
-		wshandler.GlobalHub.SendP2PSignalToUser(req.TargetUserID, userID.(string), req.SignalType, req.Payload)
+		wshandler.GlobalHub.SendP2PSignalToUser(req.TargetUserID, userID.(string), req.SignalType, signal.ID, req.Payload)
+
+		// Only mark high-volume signals (offer/answer/candidate) consumed immediately
+		// when the target is connected via WS — this prevents the polling fallback from
+		// replaying them. For reject and p2p_ping the polling fallback is intentionally
+		// kept active as a reliability net: WS delivery is best-effort and these signals
+		// are critical to the user experience.
+		criticalForPolling := req.SignalType == "reject" || req.SignalType == "p2p_ping"
+		if !criticalForPolling && wshandler.GlobalHub.IsConnected(req.TargetUserID) {
+			db.NewUpdate().Model((*pkg.P2PSignal)(nil)).
+				Set("consumed = true").
+				Where("id = ?", signal.ID).
+				Exec(c.Request.Context())
+		}
+
 		c.JSON(200, gin.H{"status": "sent", "signal_id": signal.ID})
 	}
 }
@@ -347,7 +378,7 @@ func p2pFetchSignalsHandler(db *bun.DB) gin.HandlerFunc {
 		var signals []pkg.P2PSignal
 		if err := db.NewSelect().
 			Model(&signals).
-			Where("target_id = ? AND consumed = false", userID).
+			Where("target_id = ? AND consumed = false AND created_at > NOW() - INTERVAL '2 minutes'", userID).
 			Order("created_at ASC").
 			Scan(c.Request.Context()); err != nil {
 			c.JSON(500, gin.H{"error": "Failed to fetch signals"})
@@ -390,11 +421,28 @@ func p2pIceConfigHandler() gin.HandlerFunc {
 	}
 }
 
+// registerP2PRoutes registers endpoints that require a full (non-guest) auth session.
+// Creating an invite is restricted to registered users only.
 func registerP2PRoutes(g *gin.RouterGroup, db *bun.DB) {
 	p2pG := g.Group("/p2p")
+	p2pG.POST("/invite", p2phandlers.CreateInviteHandler(db))
+}
+
+// registerP2PGuestRoutes registers P2P endpoints that are accessible to both
+// regular users and ephemeral guest sessions (aal=guest).
+// These are mounted directly on the api group with authMW but without BlockGuest.
+func registerP2PGuestRoutes(api *gin.RouterGroup, db *bun.DB, authMW gin.HandlerFunc) {
+	p2pG := api.Group("/p2p")
+	p2pG.Use(authMW)
 	p2pG.POST("/signal", p2pSignalHandler(db))
 	p2pG.GET("/signals", p2pFetchSignalsHandler(db))
-	p2pG.GET("ice-config", p2pIceConfigHandler())
+	p2pG.GET("/ice-config", p2pIceConfigHandler())
+	p2pG.GET("/invite/:token", p2phandlers.GetInviteHandler(db))
+	p2pG.POST("/invite/:token/accept", p2phandlers.AcceptInviteHandler(db, wshandler.GlobalHub))
+}
+
+func registerPublicP2PRoutes(api *gin.RouterGroup, db *bun.DB, provider authprovider.AuthProvider) {
+	api.POST("/p2p/guest-auth", p2phandlers.GuestAuthHandler(db, provider))
 }
 
 // registerEventRoutes adds a polling endpoint for realtime events.

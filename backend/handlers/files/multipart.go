@@ -485,6 +485,7 @@ func GetPresignedDownloadHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	log.Printf("Presigned streaming download URL generated - UserID: %s, FileID: %d, Size: %d", userID, fileID, file.Size)
+	monitoring.FileDownloadsTotal.Inc()
 
 	// Return URL with decryption metadata
 	c.JSON(http.StatusOK, gin.H{

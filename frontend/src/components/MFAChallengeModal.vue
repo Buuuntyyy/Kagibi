@@ -57,7 +57,7 @@ const props = defineProps({
   context: {
     type: String,
     default: 'general',
-    validator: (value) => ['login', 'destructive', 'download', 'general'].includes(value)
+    validator: (value) => ['login', 'destructive', 'download', 'email_change', 'general'].includes(value)
   }
 })
 
@@ -75,6 +75,7 @@ const contextMessages = {
   login: 'Entrez votre code MFA pour vous connecter.',
   destructive: 'Cette action nécessite une vérification MFA pour des raisons de sécurité.',
   download: 'L\'accès à ce fichier nécessite une vérification MFA.',
+  email_change: 'La modification de l\'adresse email nécessite une vérification MFA.',
   general: 'Veuillez entrer votre code MFA pour continuer.'
 }
 

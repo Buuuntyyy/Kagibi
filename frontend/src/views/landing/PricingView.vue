@@ -443,5 +443,31 @@ import LandingNav from '../../components/landing/LandingNav.vue'
   .pricing-grid-full {
     grid-template-columns: 1fr;
   }
+
+  .pricing-hero {
+    padding: 3rem 1rem;
+  }
+
+  .pricing-hero h1 {
+    font-size: clamp(1.6rem, 5vw, 3rem);
+  }
+
+  .pricing-hero p {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .pricing-hero {
+    padding: 2rem 1rem;
+  }
+
+  .plan-card {
+    padding: 1.25rem;
+  }
+
+  .plan-price {
+    font-size: clamp(1.8rem, 7vw, 3rem);
+  }
 }
 </style>

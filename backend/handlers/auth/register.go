@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
+	"kagibi/backend/pkg/emailcrypto"
 	"kagibi/backend/pkg/mailer"
 	"kagibi/backend/pkg/monitoring"
 	"log"
@@ -87,10 +88,19 @@ func RegisterHandler(c *gin.Context, db *bun.DB, provider authprovider.AuthProvi
 		return
 	}
 
+	emailHash := emailcrypto.Hash(req.Email)
+	emailEnc, err := emailcrypto.Encrypt(req.Email)
+	if err != nil {
+		log.Printf("[Register] Failed to encrypt email: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la création du profil. Veuillez réessayer."})
+		return
+	}
+
 	user := &pkg.User{
 		ID:                         userID,
 		Name:                       req.Name,
-		Email:                      req.Email,
+		EmailHash:                  emailHash,
+		EmailEncrypted:             emailEnc,
 		AvatarURL:                  normalizeAvatarURL(req.AvatarURL),
 		Salt:                       req.Salt,
 		EncryptedMasterKey:         req.EncryptedMasterKey,

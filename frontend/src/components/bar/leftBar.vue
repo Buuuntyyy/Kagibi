@@ -182,6 +182,18 @@ const newFriendId = ref('')
 const showLeftInfo = ref(false)
 const isCollapsed = ref(false)
 
+const isTablet = () => window.innerWidth >= 769 && window.innerWidth <= 1024
+
+const syncCollapsedState = () => {
+  if (isTablet()) {
+    isCollapsed.value = true
+  } else if (window.innerWidth > 1024 && isCollapsed.value) {
+    // Only auto-expand if it was auto-collapsed (not manually collapsed)
+    // We can't distinguish, so only restore if we're back to desktop range
+    isCollapsed.value = false
+  }
+}
+
 const closeAddFriendMenu = () => {
     if (showAddFriendMenu.value) {
         showAddFriendMenu.value = false
@@ -204,10 +216,13 @@ const toggleAddFriendMenu = () => {
 
 onMounted(() => {
     window.addEventListener('click', closeAddFriendMenu)
+    syncCollapsedState()
+    window.addEventListener('resize', syncCollapsedState)
 })
 
 onUnmounted(() => {
     window.removeEventListener('click', closeAddFriendMenu)
+    window.removeEventListener('resize', syncCollapsedState)
 })
 
 const addFriend = async () => {
@@ -814,5 +829,51 @@ const storageLimitGB = computed(() => {
 /* Hide line bar in collapsed mode, already handled by v-if in template but cleaning css */
 .left-bar.collapsed .storage-bar {
     display: none;
+}
+
+/* Hide sidebar entirely on mobile — replaced by bottom nav */
+@media (max-width: 768px) {
+  .left-bar-container {
+    display: none;
+  }
+}
+
+/* On tablets, auto-collapse the sidebar */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .left-bar {
+    width: 72px;
+    padding: 8px;
+  }
+
+  .left-bar .btn-new span,
+  .left-bar .menu-item span,
+  .left-bar .arrow-icon,
+  .left-bar .accordion-content,
+  .left-bar .storage-info {
+    display: none;
+  }
+
+  .left-bar .btn-new {
+    padding: 0;
+    justify-content: center;
+  }
+
+  .left-bar .plus-icon { margin: 0; }
+
+  .left-bar .menu-item {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .left-bar .icon-svg { margin: 0; }
+
+  .left-bar .storage-section {
+    padding: 6px;
+  }
+
+  /* Hide the manual toggle — sidebar is auto-collapsed by breakpoint */
+  .collapse-toggle {
+    display: none;
+  }
 }
 </style>
