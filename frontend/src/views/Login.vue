@@ -147,7 +147,10 @@
 
           <div v-else-if="mode === 'register'" key="register" class="auth-form-container">
             <div class="form-header">
-              <h2>{{ t('auth.register') }}</h2>
+              <div class="form-header-titles">
+                <a href="#" class="header-register-link" @click.prevent="mode = 'login'">{{ t('auth.login') }}</a>
+                <h2>{{ t('auth.register') }}</h2>
+              </div>
               <p>{{ t('auth.startSecuring') }}</p>
             </div>
 
