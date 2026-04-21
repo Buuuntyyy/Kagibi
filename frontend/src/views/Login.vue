@@ -233,15 +233,14 @@ onMounted(() => {
 }
 
 .auth-layout {
-  /* Use margin: auto within the flex/block container to center vertically safe */
   margin: auto;
-  padding: 2rem 2rem; /* Give some breathing room when scrolling */
+  padding: 2rem 2rem;
   display: grid;
   grid-template-columns: 1fr 1fr;
   width: 100%;
   max-width: 80%;
   gap: 2rem;
-  align-items: center;
+  align-items: start;
 }
 
 /* Left Column: Branding */
@@ -309,6 +308,8 @@ onMounted(() => {
   font-size: 2.5rem;
   font-weight: 700;
   margin: 0;
+  padding-bottom: 0.1em;
+  line-height: 1.2;
   background: linear-gradient(to right, var(--primary-color), var(--accent-color));
   -webkit-background-clip: text;
   background-clip: text;
