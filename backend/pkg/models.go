@@ -225,21 +225,21 @@ type RealtimeEvent struct {
 type P2PInvite struct {
 	bun.BaseModel `bun:"table:p2p_invites"`
 
-	ID             int64      `bun:"id,pk,autoincrement" json:"id"`
+	ID                      int64      `bun:"id,pk,autoincrement" json:"id"`
 	Token                   string     `bun:"token,unique,notnull" json:"token"`
 	SenderID                string     `bun:"sender_id,notnull" json:"sender_id"`
 	SenderName              string     `bun:"sender_name,notnull" json:"sender_name"`
 	RecipientEmailEncrypted string     `bun:"recipient_email_encrypted" json:"-"` // AES-256-GCM encrypted, nullable
-	RecipientEmail          string     `bun:"-" json:"recipient_email"`            // virtual: decrypted from RecipientEmailEncrypted
+	RecipientEmail          string     `bun:"-" json:"recipient_email"`           // virtual: decrypted from RecipientEmailEncrypted
 	RecipientID             string     `bun:"recipient_id,notnull" json:"recipient_id"`
-	TransferID     string     `bun:"transfer_id,notnull" json:"transfer_id"`
-	FileName       string     `bun:"file_name,notnull" json:"file_name"`
-	FileSize       int64      `bun:"file_size,notnull" json:"file_size"`
-	IsGuest        bool       `bun:"is_guest,notnull,default:false" json:"is_guest"`
-	ExpiresAt      time.Time  `bun:"expires_at,notnull" json:"expires_at"`
-	GuestAuthedAt  *time.Time `bun:"guest_authed_at" json:"guest_authed_at,omitempty"`
-	AcceptedAt     *time.Time `bun:"accepted_at" json:"accepted_at,omitempty"`
-	CreatedAt      time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	TransferID              string     `bun:"transfer_id,notnull" json:"transfer_id"`
+	FileName                string     `bun:"file_name,notnull" json:"file_name"`
+	FileSize                int64      `bun:"file_size,notnull" json:"file_size"`
+	IsGuest                 bool       `bun:"is_guest,notnull,default:false" json:"is_guest"`
+	ExpiresAt               time.Time  `bun:"expires_at,notnull" json:"expires_at"`
+	GuestAuthedAt           *time.Time `bun:"guest_authed_at" json:"guest_authed_at,omitempty"`
+	AcceptedAt              *time.Time `bun:"accepted_at" json:"accepted_at,omitempty"`
+	CreatedAt               time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 // P2PSignal represents a WebRTC signaling message
