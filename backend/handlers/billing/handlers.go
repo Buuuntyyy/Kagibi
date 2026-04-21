@@ -153,6 +153,22 @@ func GetUsageHandler(db *bun.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": errFailedGetUserPlan})
 			return
 		}
+
+		// Compute real storage from files table to avoid counter drift
+		var realUsage struct{ Sum int64 }
+		_ = db.NewSelect().TableExpr("files").
+			ColumnExpr("COALESCE(SUM(size), 0) AS sum").
+			Where("user_id = ? AND is_preview = false", userID).
+			Scan(c.Request.Context(), &realUsage)
+
+		// Sync the counter so quota checks stay accurate
+		if realUsage.Sum != planState.StorageUsed {
+			_, _ = db.NewUpdate().Model((*pkg.UserPlan)(nil)).
+				Set("storage_used = ?", realUsage.Sum).
+				Where("user_id = ?", userID).
+				Exec(c.Request.Context())
+		}
+
 		activeShares, _ := db.NewSelect().TableExpr("file_shares fs").
 			Join("JOIN files f ON f.id = fs.file_id").
 			Where("f.user_id = ?", userID).
@@ -162,8 +178,8 @@ func GetUsageHandler(db *bun.DB) gin.HandlerFunc {
 			Where("user_id = ?", userID).
 			Exec(c.Request.Context())
 		c.JSON(http.StatusOK, gin.H{
-			"storage_used_bytes": planState.StorageUsed,
-			"storage_used_gb":    float64(planState.StorageUsed) / (1024 * 1024 * 1024),
+			"storage_used_bytes": realUsage.Sum,
+			"storage_used_gb":    float64(realUsage.Sum) / (1024 * 1024 * 1024),
 			"storage_limit_gb":   float64(planState.StorageLimit) / (1024 * 1024 * 1024),
 			"p2p_shares_active":  activeShares,
 			"p2p_shares_limit":   planState.P2PMaxExchanges,

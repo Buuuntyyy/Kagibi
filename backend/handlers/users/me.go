@@ -30,6 +30,7 @@ type UserResponse struct {
 	FriendCode          string    `json:"friend_code"`
 	PublicKey           string    `json:"public_key"`
 	EncryptedPrivateKey string    `json:"encrypted_private_key"`
+	EncryptFilenames    bool      `json:"encrypt_filenames"`
 	CreatedAt           time.Time `json:"created_at"`
 }
 
@@ -88,6 +89,7 @@ func MeHandler(c *gin.Context, db *bun.DB) {
 		FriendCode:          user.FriendCode,
 		PublicKey:           user.PublicKey,
 		EncryptedPrivateKey: user.EncryptedPrivateKey,
+		EncryptFilenames:    user.EncryptFilenames,
 		CreatedAt:           user.CreatedAt,
 	}
 

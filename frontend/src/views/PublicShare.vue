@@ -354,4 +354,33 @@ const downloadFile = async () => {
 .error-state svg {
   margin-bottom: 20px;
 }
+
+@media (max-width: 640px) {
+  .share-page-container {
+    padding: 16px;
+  }
+
+  .share-card {
+    padding: 24px 20px;
+    max-width: 100%;
+  }
+
+  .share-header {
+    padding: 16px 20px;
+  }
+
+  .share-header h2 {
+    font-size: 1.2rem;
+  }
+
+  .public-footer {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 400px) {
+  .share-card {
+    padding: 16px;
+  }
+}
 </style>

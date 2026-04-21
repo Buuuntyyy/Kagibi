@@ -7,12 +7,9 @@
 
     <section class="compare-hero">
       <div class="container">
-        <div class="hero-eyebrow">Comparatif</div>
-        <h1>Kagibi face aux autres solutions</h1>
-        <p class="hero-subtitle">
-          Toutes les solutions de stockage cloud ne se valent pas.
-          Voici pourquoi le chiffrement côté client change tout.
-        </p>
+        <div class="hero-eyebrow">{{ t('landing.compare.eyebrow') }}</div>
+        <h1>{{ t('landing.compare.title') }}</h1>
+        <p class="hero-subtitle">{{ t('landing.compare.subtitle') }}</p>
       </div>
     </section>
 
@@ -22,7 +19,7 @@
           <table class="compare-table">
             <thead>
               <tr>
-                <th class="feature-col">Fonctionnalité</th>
+                <th class="feature-col">{{ t('landing.compare.tableFeature') }}</th>
                 <th class="kagibi-col">
                   <div class="th-brand kagibi">
                     <img src="/Logo.png" alt="Kagibi" width="24" />
@@ -61,9 +58,7 @@
           </table>
         </div>
 
-        <p class="disclaimer">
-          Informations collectées publiquement sur les sites officiels et documentations des éditeurs. Dernière mise à jour : avril 2026.
-        </p>
+        <p class="disclaimer">{{ t('landing.compare.disclaimer') }}</p>
       </div>
     </section>
 
@@ -73,16 +68,16 @@
         <div class="tech-header">
           <span class="tech-badge">+</span>
           <div>
-            <h2>Comparaison technique approfondie</h2>
-            <p class="tech-subtitle">Algorithmes, architecture et garanties cryptographiques.</p>
+            <h2>{{ t('landing.compare.techTitle') }}</h2>
+            <p class="tech-subtitle">{{ t('landing.compare.techSubtitle') }}</p>
           </div>
         </div>
 
         <div class="tech-legend">
-          <span class="tag green">Vert</span> Avantage / bonne pratique
-          <span class="tag yellow">Orange</span> Partiel / dépend de la configuration
-          <span class="tag red">Rouge</span> Risque / point négatif
-          <span class="tag gray">Gris</span> Information neutre
+          <span class="tag green">{{ t('landing.compare.legendColorGreen') }}</span> {{ t('landing.compare.legendAdvantage') }}
+          <span class="tag yellow">{{ t('landing.compare.legendColorYellow') }}</span> {{ t('landing.compare.legendPartial') }}
+          <span class="tag red">{{ t('landing.compare.legendColorRed') }}</span> {{ t('landing.compare.legendRisk') }}
+          <span class="tag gray">{{ t('landing.compare.legendColorGray') }}</span> {{ t('landing.compare.legendNeutral') }}
         </div>
 
         <div class="tech-grid">
@@ -93,15 +88,15 @@
               <span>Kagibi</span>
             </div>
             <ul class="tech-list">
-              <li><span class="tag green">AES-256-GCM</span> Chiffrement des fichiers côté client</li>
-              <li><span class="tag green">RSA-OAEP / ECDH</span> Échange de clés pour le partage</li>
-              <li><span class="tag green">PBKDF2 / Argon2</span> Dérivation de clé depuis le mot de passe</li>
-              <li><span class="tag green">WebCrypto API</span> Opérations cryptographiques natives du navigateur</li>
-              <li><span class="tag green">Zero-Knowledge</span> Clés chiffrées transmises au serveur</li>
-              <li><span class="tag green">WebRTC DataChannel</span> Transfert P2P chiffré de bout en bout</li>
-              <li><span class="tag green">AGPLv3</span> Code source intégralement auditable</li>
-              <li><span class="tag yellow">JWT + Redis</span> Sessions sans état, révocation instantanée</li>
-              <li><span class="tag yellow">MFA TOTP</span> Double authentification supportée</li>
+              <li><span class="tag green">AES-256-GCM</span> {{ t('landing.compare.techKagibi1') }}</li>
+              <li><span class="tag green">RSA-OAEP / ECDH</span> {{ t('landing.compare.techKagibi2') }}</li>
+              <li><span class="tag green">PBKDF2 / Argon2</span> {{ t('landing.compare.techKagibi3') }}</li>
+              <li><span class="tag green">WebCrypto API</span> {{ t('landing.compare.techKagibi4') }}</li>
+              <li><span class="tag green">Zero-Knowledge</span> {{ t('landing.compare.techKagibi5') }}</li>
+              <li><span class="tag green">WebRTC DataChannel</span> {{ t('landing.compare.techKagibi6') }}</li>
+              <li><span class="tag green">AGPLv3</span> {{ t('landing.compare.techKagibi7') }}</li>
+              <li><span class="tag yellow">JWT + Redis</span> {{ t('landing.compare.techKagibi8') }}</li>
+              <li><span class="tag yellow">MFA TOTP</span> {{ t('landing.compare.techKagibi9') }}</li>
             </ul>
           </div>
 
@@ -110,13 +105,13 @@
               <span>Proton Drive</span>
             </div>
             <ul class="tech-list">
-              <li><span class="tag green">AES-256</span> Chiffrement côté client</li>
-              <li><span class="tag green">OpenPGP</span> Chiffrement des clés et des métadonnées</li>
-              <li><span class="tag green">SRP</span> Authentification sans transmission du mot de passe</li>
-              <li><span class="tag green">Zero-Knowledge</span> Proton ne peut pas lire vos fichiers</li>
-              <li><span class="tag gray">Propriétaire</span> Partie du code source fermée</li>
-              <li><span class="tag gray">Suisse</span> Juridiction helvétique (hors EU)</li>
-              <li><span class="tag gray">Pas de P2P</span> Pas de transfert direct entre pairs</li>
+              <li><span class="tag green">AES-256</span> {{ t('landing.compare.techProton1') }}</li>
+              <li><span class="tag green">OpenPGP</span> {{ t('landing.compare.techProton2') }}</li>
+              <li><span class="tag green">SRP</span> {{ t('landing.compare.techProton3') }}</li>
+              <li><span class="tag green">Zero-Knowledge</span> {{ t('landing.compare.techProton4') }}</li>
+              <li><span class="tag gray">Propriétaire</span> {{ t('landing.compare.techProton5') }}</li>
+              <li><span class="tag gray">Suisse</span> {{ t('landing.compare.techProton6') }}</li>
+              <li><span class="tag gray">Pas de P2P</span> {{ t('landing.compare.techProton7') }}</li>
             </ul>
           </div>
 
@@ -125,13 +120,13 @@
               <span>Nextcloud</span>
             </div>
             <ul class="tech-list">
-              <li><span class="tag yellow">AES-128/256</span> Chiffrement côté serveur (optionnel)</li>
-              <li><span class="tag red">Côté serveur</span> Clés gérées par l'administrateur serveur</li>
-              <li><span class="tag green">Open Source</span> Code source AGPLv3 disponible</li>
-              <li><span class="tag green">Auto-hébergeable</span> Contrôle total de l'infrastructure</li>
-              <li><span class="tag gray">E2EE expérimental</span> Module E2EE peu mature, non activé par défaut</li>
-              <li><span class="tag gray">Dépend de l'hébergeur</span> Conformité RGPD variable selon l'instance</li>
-              <li><span class="tag gray">Pas de P2P</span> Pas de transfert direct entre pairs</li>
+              <li><span class="tag yellow">AES-128/256</span> {{ t('landing.compare.techNextcloud1') }}</li>
+              <li><span class="tag red">Côté serveur</span> {{ t('landing.compare.techNextcloud2') }}</li>
+              <li><span class="tag green">Open Source</span> {{ t('landing.compare.techNextcloud3') }}</li>
+              <li><span class="tag green">Auto-hébergeable</span> {{ t('landing.compare.techNextcloud4') }}</li>
+              <li><span class="tag gray">E2EE expérimental</span> {{ t('landing.compare.techNextcloud5') }}</li>
+              <li><span class="tag gray">Dépend de l'hébergeur</span> {{ t('landing.compare.techNextcloud6') }}</li>
+              <li><span class="tag gray">Pas de P2P</span> {{ t('landing.compare.techNextcloud7') }}</li>
             </ul>
           </div>
 
@@ -140,13 +135,13 @@
               <span>OpenCloud</span>
             </div>
             <ul class="tech-list">
-              <li><span class="tag yellow">AES-256</span> Chiffrement côté serveur</li>
-              <li><span class="tag red">Côté serveur</span> Clés détenues par l'opérateur</li>
-              <li><span class="tag green">Open Source</span> Fork d'ownCloud, licence Apache 2.0</li>
-              <li><span class="tag green">Auto-hébergeable</span> Déploiement sur infrastructure propre</li>
-              <li><span class="tag gray">Pas d'E2EE natif</span> Aucun chiffrement côté client intégré</li>
-              <li><span class="tag gray">Allemagne</span> Hébergement typiquement DACH</li>
-              <li><span class="tag gray">Pas de P2P</span> Pas de transfert direct entre pairs</li>
+              <li><span class="tag yellow">AES-256</span> {{ t('landing.compare.techOpencloud1') }}</li>
+              <li><span class="tag red">Côté serveur</span> {{ t('landing.compare.techOpencloud2') }}</li>
+              <li><span class="tag green">Open Source</span> {{ t('landing.compare.techOpencloud3') }}</li>
+              <li><span class="tag green">Auto-hébergeable</span> {{ t('landing.compare.techOpencloud4') }}</li>
+              <li><span class="tag gray">Pas d'E2EE natif</span> {{ t('landing.compare.techOpencloud5') }}</li>
+              <li><span class="tag gray">Allemagne</span> {{ t('landing.compare.techOpencloud6') }}</li>
+              <li><span class="tag gray">Pas de P2P</span> {{ t('landing.compare.techOpencloud7') }}</li>
             </ul>
           </div>
 
@@ -155,13 +150,13 @@
               <span>Google Drive</span>
             </div>
             <ul class="tech-list">
-              <li><span class="tag yellow">AES-256</span> Chiffrement en transit et au repos</li>
-              <li><span class="tag red">Côté serveur</span> Google détient et gère toutes les clés</li>
-              <li><span class="tag red">Code fermé</span> Aucun audit indépendant possible</li>
-              <li><span class="tag red">Cloud Act</span> Soumis aux injonctions des autorités américaines</li>
-              <li><span class="tag red">Analyse des données</span> Contenu utilisé pour entraîner des modèles IA</li>
-              <li><span class="tag red">USA</span> Serveurs sous juridiction américaine</li>
-              <li><span class="tag gray">Pas de P2P</span> Pas de transfert direct entre pairs</li>
+              <li><span class="tag yellow">AES-256</span> {{ t('landing.compare.techGoogle1') }}</li>
+              <li><span class="tag red">Côté serveur</span> {{ t('landing.compare.techGoogle2') }}</li>
+              <li><span class="tag red">Code fermé</span> {{ t('landing.compare.techGoogle3') }}</li>
+              <li><span class="tag red">Cloud Act</span> {{ t('landing.compare.techGoogle4') }}</li>
+              <li><span class="tag red">Analyse des données</span> {{ t('landing.compare.techGoogle5') }}</li>
+              <li><span class="tag red">USA</span> {{ t('landing.compare.techGoogle6') }}</li>
+              <li><span class="tag gray">Pas de P2P</span> {{ t('landing.compare.techGoogle7') }}</li>
             </ul>
           </div>
 
@@ -171,14 +166,14 @@
 
     <section class="compare-cta">
       <div class="container">
-        <h2>La solution qui ne peut mathématiquement pas lire vos données</h2>
-        <p>Le chiffrement côté client n'est pas une option — c'est la fondation.</p>
+        <h2>{{ t('landing.compare.ctaTitle') }}</h2>
+        <p>{{ t('landing.compare.ctaSubtitle') }}</p>
         <div class="cta-buttons">
           <router-link to="/login" class="btn btn-primary btn-large">
-            Créer mon compte gratuitement
+            {{ t('landing.compare.ctaCreate') }}
           </router-link>
           <router-link to="/" class="btn btn-outline btn-large">
-            En savoir plus
+            {{ t('landing.compare.ctaMore') }}
           </router-link>
         </div>
       </div>
@@ -187,7 +182,11 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import LandingNav from '../../components/landing/LandingNav.vue'
+
+const { t } = useI18n()
 
 function cellClass(v) {
   if (v === true)       return 'cell yes'
@@ -201,75 +200,75 @@ function cellText(v) {
   if (v === true)       return '✓'
   if (v === false)      return '✗'
   if (v === 'partial')  return '~'
-  if (v === 'roadmap')  return 'En dev.'
+  if (v === 'roadmap')  return t('landing.compare.inDev')
   return v
 }
 
-const rows = [
+const rows = computed(() => [
   {
-    feature: 'Chiffrement côté client (Zero-Knowledge)',
-    tooltip: 'Vos fichiers sont chiffrés sur votre appareil avant envoi — le serveur ne voit que du bruit.',
+    feature: t('landing.compare.r1'),
+    tooltip: t('landing.compare.r1tip'),
     highlight: true,
     kagibi: true, proton: true, nextcloud: false, opencloud: false, google: false,
   },
   {
-    feature: 'Transfert P2P chiffré',
-    tooltip: 'Envoi direct de navigateur à navigateur, sans stockage intermédiaire.',
+    feature: t('landing.compare.r2'),
+    tooltip: t('landing.compare.r2tip'),
     kagibi: true, proton: false, nextcloud: false, opencloud: false, google: false,
   },
   {
-    feature: 'Open Source',
+    feature: t('landing.compare.r3'),
     kagibi: true, proton: 'partial', nextcloud: true, opencloud: true, google: false,
   },
   {
-    feature: 'Hébergé en France / Europe',
+    feature: t('landing.compare.r4'),
     kagibi: true, proton: true, nextcloud: 'partial', opencloud: 'partial', google: false,
   },
   {
-    feature: 'Immunisé Cloud Act (USA)',
-    tooltip: 'Les serveurs hors juridiction américaine ne peuvent pas être contraints à livrer des données.',
+    feature: t('landing.compare.r5'),
+    tooltip: t('landing.compare.r5tip'),
     kagibi: true, proton: true, nextcloud: 'partial', opencloud: 'partial', google: false,
   },
   {
-    feature: 'Partage via lien chiffré',
+    feature: t('landing.compare.r6'),
     kagibi: true, proton: true, nextcloud: true, opencloud: true, google: 'partial',
   },
   {
-    feature: 'Conformité RGPD stricte',
+    feature: t('landing.compare.r7'),
     kagibi: true, proton: true, nextcloud: true, opencloud: true, google: 'partial',
   },
   {
-    feature: 'Auto-hébergeable',
-    tooltip: 'Déployer votre propre instance sur votre infrastructure.',
+    feature: t('landing.compare.r8'),
+    tooltip: t('landing.compare.r8tip'),
     kagibi: 'roadmap', proton: false, nextcloud: true, opencloud: true, google: false,
   },
   {
-    feature: 'Licence copyleft (AGPLv3)',
-    tooltip: 'Interdit les forks propriétaires — toute modification doit rester publique.',
+    feature: t('landing.compare.r9'),
+    tooltip: t('landing.compare.r9tip'),
     kagibi: true, proton: false, nextcloud: 'partial', opencloud: 'partial', google: false,
   },
   {
-    feature: 'Accès sans abonnement',
+    feature: t('landing.compare.r10'),
     kagibi: true, proton: true, nextcloud: true, opencloud: true, google: true,
   },
   {
-    feature: 'Application mobile native',
+    feature: t('landing.compare.r11'),
     kagibi: false, proton: true, nextcloud: true, opencloud: true, google: true,
   },
   {
-    feature: 'Application desktop (Windows / Linux)',
+    feature: t('landing.compare.r12'),
     kagibi: 'roadmap', proton: true, nextcloud: true, opencloud: true, google: true,
   },
   {
-    feature: 'Chiffrement des noms de fichiers',
+    feature: t('landing.compare.r13'),
     kagibi: true, proton: true, nextcloud: false, opencloud: false, google: false,
   },
   {
-    feature: 'Aucun accès fournisseur aux données',
+    feature: t('landing.compare.r14'),
     highlight: true,
     kagibi: true, proton: true, nextcloud: false, opencloud: false, google: false,
   },
-]
+])
 </script>
 
 <style scoped>
@@ -675,6 +674,28 @@ const rows = [
     padding: 4rem 0 2rem;
   }
 
+  .compare-hero h1 {
+    font-size: clamp(1.6rem, 5vw, 2.5rem);
+  }
+
+  .table-wrapper {
+    border-radius: 8px;
+  }
+
+  .compare-table th,
+  .compare-table td {
+    padding: 10px 8px;
+    font-size: 0.82rem;
+  }
+
+  .feature-cell {
+    min-width: 120px;
+  }
+
+  .tech-grid {
+    grid-template-columns: 1fr;
+  }
+
   .cta-buttons {
     flex-direction: column;
     align-items: center;
@@ -683,6 +704,26 @@ const rows = [
   .btn {
     width: 100%;
     justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 0 1rem;
+  }
+
+  .compare-table th,
+  .compare-table td {
+    padding: 8px 6px;
+    font-size: 0.75rem;
+  }
+
+  .th-brand {
+    font-size: 0.75rem;
+  }
+
+  .feature-hint {
+    display: none; /* hide tooltips on very small screens to save space */
   }
 }
 </style>

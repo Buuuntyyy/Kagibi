@@ -48,6 +48,9 @@ import { ref } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
 import MFAChallengeModal from '../MFAChallengeModal.vue'
+import { isP2PSubdomain } from '../../composables/useSubdomain'
+
+const postLoginRoute = isP2PSubdomain ? '/' : { name: 'Home' }
 
 const email = ref('')
 const password = ref('')
@@ -69,7 +72,7 @@ const login = async () => {
       showMFAChallenge.value = true
     } else if (result) {
       // Login successful without MFA
-      router.push({ name: 'Home' })
+      router.push(postLoginRoute)
     } else {
       error.value = 'Identifiants invalides'
     }
@@ -89,7 +92,7 @@ const login = async () => {
 const onMFAVerified = () => {
   // MFA verified successfully, redirect to Home
   authStore.pendingMFAVerification = false
-  router.push({ name: 'Home' })
+  router.push(postLoginRoute)
 }
 
 const onMFACancelled = () => {

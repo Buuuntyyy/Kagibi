@@ -5,14 +5,17 @@ package auth
 
 import (
 	"context"
+	"html"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
+	"kagibi/backend/pkg/emailcrypto"
 	"kagibi/backend/pkg/monitoring"
 
 	"github.com/gin-gonic/gin"
@@ -34,6 +37,11 @@ type signupRequest struct {
 type updateAuthPasswordRequest struct {
 	OldPassword string `json:"old_password" binding:"required"`
 	NewPassword string `json:"new_password" binding:"required,min=8"`
+}
+
+type updateAuthEmailRequest struct {
+	NewEmail string `json:"new_email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
 }
 
 func getLocalProvider(provider authprovider.AuthProvider) (*authprovider.LocalProvider, bool) {
@@ -288,5 +296,104 @@ func LocalUpdatePasswordHandler(provider authprovider.AuthProvider, redisClient 
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Mot de passe mis à jour avec succès"})
+	}
+}
+
+// LocalUpdateEmailHandler handles PUT /api/v1/auth/update-email (protected — JWT required).
+// Verifies the current password before updating the email in both auth_users and profiles tables,
+// then issues a fresh JWT embedding the new email.
+func LocalUpdateEmailHandler(provider authprovider.AuthProvider, db *bun.DB, redisClient *redis.Client) gin.HandlerFunc {
+	emailRe := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+	return func(c *gin.Context) {
+		lp, ok := getLocalProvider(provider)
+		if !ok {
+			c.JSON(http.StatusNotImplemented, gin.H{"error": "Update email only available in local auth mode"})
+			return
+		}
+
+		userID := c.GetString("user_id")
+		if userID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Non authentifié"})
+			return
+		}
+
+		var req updateAuthEmailRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		newEmail := strings.ToLower(strings.TrimSpace(req.NewEmail))
+		if !emailRe.MatchString(newEmail) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Adresse email invalide"})
+			return
+		}
+		// Defense in depth: HTML-escape to neutralize any residual special chars
+		// (the regex already excludes < > " ' ; but we keep this for consistency with username handling)
+		newEmail = html.EscapeString(newEmail)
+
+		// Verify password and update auth_users.email
+		if err := lp.UpdateUserEmailWithVerification(userID, req.Password, newEmail); err != nil {
+			if err.Error() == "invalid current password" {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Mot de passe incorrect"})
+				return
+			}
+			if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
+				c.JSON(http.StatusConflict, gin.H{"error": "Cette adresse email est déjà utilisée"})
+				return
+			}
+			log.Printf("ERROR: Failed to update auth email for user %s: %v", userID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la mise à jour de l'email"})
+			return
+		}
+
+		// Update profiles.email_hash and email_encrypted to keep tables in sync
+		newEmailHash := emailcrypto.Hash(newEmail)
+		newEmailEnc, encErr := emailcrypto.Encrypt(newEmail)
+		if encErr != nil {
+			log.Printf("ERROR: Failed to encrypt new email for user %s: %v", userID, encErr)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la mise à jour du profil"})
+			return
+		}
+		if _, err := db.NewUpdate().TableExpr("profiles").
+			Set("email_hash = ?, email_encrypted = ?", newEmailHash, newEmailEnc).
+			Where("id = ?", userID).
+			Exec(c.Request.Context()); err != nil {
+			log.Printf("ERROR: Failed to update profile email for user %s: %v", userID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la mise à jour du profil"})
+			return
+		}
+
+		// Revoke old tokens and issue a fresh one with the new email
+		if redisClient != nil {
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+				redisClient.Set(ctx, "token_revoke:"+userID, strconv.FormatInt(time.Now().Unix(), 10), 7*24*time.Hour)
+			}()
+		}
+
+		// Fetch the current AAL from the old token claims so we preserve MFA state
+		aal := "aal1"
+		if authHeader := c.GetHeader("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+			if claims, err := parseLocalToken(lp, strings.TrimPrefix(authHeader, "Bearer ")); err == nil {
+				if v, ok2 := claims["aal"].(string); ok2 && v != "" {
+					aal = v
+				}
+			}
+		}
+
+		newToken, err := lp.GenerateTokenWithAAL(userID, newEmail, aal)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la génération du token"})
+			return
+		}
+
+		log.Printf("INFO: Email updated - UserID: %s, NewEmail: %s", userID, newEmail)
+		c.JSON(http.StatusOK, gin.H{
+			"message":      "Email mis à jour avec succès",
+			"email":        newEmail,
+			"access_token": newToken,
+		})
 	}
 }

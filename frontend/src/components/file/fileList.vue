@@ -54,9 +54,9 @@
 
     <!-- Selection Action Bar / Security Tip Bar -->
     <div class="selection-gap" :class="{ 'has-content': selectedItems.length > 0 || (!loadingSecuritySettings && !mfaSettings.mfa_enabled) }">
-      <Transition name="selection-bar">
+      <Transition name="selection-bar" mode="out-in">
         <!-- Selection Actions -->
-        <div v-if="selectedItems.length > 0" class="selection-action-bar">
+        <div v-if="selectedItems.length > 0" key="selection-bar" class="selection-action-bar">
           <div class="selection-actions">
             <button class="action-btn download-action" @click.stop="downloadSelectedFiles" :title="t('file.download')">
             <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
@@ -75,7 +75,7 @@
         </div>
 
         <!-- Security Tip Bar (shown when no items selected) -->
-        <div v-else-if="!loadingSecuritySettings && !mfaSettings.mfa_enabled" class="security-tip-bar" @click="navigateToSecurity">
+        <div v-else-if="!loadingSecuritySettings && !mfaSettings.mfa_enabled" key="tip-warning" class="security-tip-bar" @click="navigateToSecurity">
           <div class="tip-content">
             <svg class="tip-icon" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor">
               <path d="M0 0h24v24H0V0z" fill="none"/>
@@ -89,7 +89,7 @@
           </svg>
         </div>
 
-        <div v-else-if="!loadingSecuritySettings && mfaSettings.mfa_enabled" class="security-tip-bar success">
+        <div v-else-if="!loadingSecuritySettings && mfaSettings.mfa_enabled" key="tip-success" class="security-tip-bar success">
           <div class="tip-content">
             <svg class="tip-icon" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor">
               <path d="M0 0h24v24H0V0z" fill="none"/>
@@ -124,6 +124,43 @@
         </div>
       </div>
     </div>
+    <!-- Filter chips bar (extensions + tags) -->
+    <div class="ext-filter-bar" v-if="availableExtensions.length >= 2 || availableTags.length >= 1">
+      <!-- Extensions group -->
+      <template v-if="availableExtensions.length >= 2">
+        <button
+          class="ext-chip"
+          :class="{ active: activeExtensions.length === 0 }"
+          @click.stop="activeExtensions = []"
+        >Tous</button>
+        <button
+          v-for="{ ext, count } in availableExtensions"
+          :key="'ext-' + ext"
+          class="ext-chip"
+          :class="{ active: activeExtensions.includes(ext) }"
+          @click.stop="toggleExtension(ext)"
+        >.{{ ext }} <span class="ext-count">{{ count }}</span></button>
+      </template>
+
+      <!-- Separator -->
+      <span v-if="availableExtensions.length >= 2 && availableTags.length >= 1" class="filter-separator" />
+
+      <!-- Tags group -->
+      <template v-if="availableTags.length >= 1">
+        <button
+          v-for="tag in availableTags"
+          :key="'tag-' + tag.name"
+          class="ext-chip tag-chip"
+          :class="{ active: activeTags.includes(tag.name) }"
+          :style="activeTags.includes(tag.name) ? { background: tag.color, borderColor: tag.color } : { borderColor: tag.color, color: tag.color }"
+          @click.stop="toggleTag(tag.name)"
+        >
+          <span class="tag-dot" :style="{ background: activeTags.includes(tag.name) ? '#fff' : tag.color }" />
+          {{ tag.name }}
+        </button>
+      </template>
+    </div>
+
     <FileTable
       :folders="filteredFolders"
       :files="filteredFiles"
@@ -293,6 +330,16 @@ watch(
   }
 )
 
+watch(
+  () => uiStore.pendingMobileAction,
+  (action) => {
+    if (!action) return
+    uiStore.pendingMobileAction = null
+    if (action === 'upload') triggerFileInput()
+    else if (action === 'createFolder') createNewFolder()
+  }
+)
+
 const deselectAll = () => {
     selectedItems.value = [];
     lastClickedIndex.value = -1;
@@ -300,6 +347,57 @@ const deselectAll = () => {
 
 const currentSortKey = ref('name');
 const currentSortDirection = ref('asc');
+
+// Extension filter
+const activeExtensions = ref([])
+
+const availableExtensions = computed(() => {
+  const counts = {}
+  for (const file of fileStore.files) {
+    const name = file.Name || ''
+    const dot = name.lastIndexOf('.')
+    if (dot > 0) {
+      const ext = name.slice(dot + 1).toLowerCase()
+      counts[ext] = (counts[ext] || 0) + 1
+    }
+  }
+  return Object.entries(counts)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ext, count]) => ({ ext, count }))
+})
+
+const toggleExtension = (ext) => {
+  const idx = activeExtensions.value.indexOf(ext)
+  if (idx >= 0) activeExtensions.value.splice(idx, 1)
+  else activeExtensions.value.push(ext)
+}
+
+// Tag filter
+const activeTags = ref([])
+
+const availableTags = computed(() => {
+  const nameSet = new Set()
+  for (const file of fileStore.files) {
+    if (file.Tags) file.Tags.forEach(t => nameSet.add(t))
+  }
+  for (const folder of fileStore.folders) {
+    if (folder.Tags) folder.Tags.forEach(t => nameSet.add(t))
+  }
+  return [...nameSet]
+    .map(name => tagStore.tags.find(t => t.name === name) || { name, color: 'var(--secondary-text-color)' })
+    .sort((a, b) => a.name.localeCompare(b.name))
+})
+
+const toggleTag = (name) => {
+  const idx = activeTags.value.indexOf(name)
+  if (idx >= 0) activeTags.value.splice(idx, 1)
+  else activeTags.value.push(name)
+}
+
+watch(() => fileStore.currentPath, () => {
+  activeExtensions.value = []
+  activeTags.value = []
+})
 
 const handleSortChange = (key) => {
   if (currentSortKey.value === key) {
@@ -357,10 +455,10 @@ const columns = computed(() => {
   }
 
   cols.push(
-    { key: 'tags', label: t('file.tags') },
-    { key: 'created', label: t('file.columnCreated') },
-    { key: 'updated', label: t('file.columnUpdated') },
-    { key: 'size', label: t('file.columnSize') }
+    { key: 'tags', label: t('file.tags'), headerClass: 'col-tags', cellClass: 'col-tags' },
+    { key: 'created', label: t('file.columnCreated'), headerClass: 'col-created', cellClass: 'col-created' },
+    { key: 'updated', label: t('file.columnUpdated'), headerClass: 'col-updated', cellClass: 'col-updated' },
+    { key: 'size', label: t('file.columnSize'), headerClass: 'col-size', cellClass: 'col-size' }
   );
   return cols;
 })
@@ -370,6 +468,21 @@ const filteredFolders = computed(() => {
   if (fileStore.searchQuery) {
     const query = fileStore.searchQuery.toLowerCase()
     folders = folders.filter(folder => folder.Name.toLowerCase().includes(query))
+    // Search-specific tag filter
+    if (fileStore.searchFilterTags.length > 0) {
+      folders = folders.filter(folder => {
+        const tags = folder.Tags || []
+        return fileStore.searchFilterTags.every(t => tags.includes(t))
+      })
+    }
+  } else {
+    // Per-folder tag filter (non-search mode)
+    if (activeTags.value.length > 0) {
+      folders = folders.filter(folder => {
+        const tags = folder.Tags || []
+        return activeTags.value.every(t => tags.includes(t))
+      })
+    }
   }
   return sortItems(folders);
 })
@@ -379,6 +492,38 @@ const filteredFiles = computed(() => {
   if (fileStore.searchQuery) {
     const query = fileStore.searchQuery.toLowerCase()
     files = files.filter(file => file.Name.toLowerCase().includes(query))
+    // Search-specific extension filter
+    if (fileStore.searchFilterExtensions.length > 0) {
+      files = files.filter(file => {
+        const name = file.Name || ''
+        const dot = name.lastIndexOf('.')
+        const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
+        return fileStore.searchFilterExtensions.includes(ext)
+      })
+    }
+    // Search-specific tag filter
+    if (fileStore.searchFilterTags.length > 0) {
+      files = files.filter(file => {
+        const tags = file.Tags || []
+        return fileStore.searchFilterTags.every(t => tags.includes(t))
+      })
+    }
+  } else {
+    // Per-folder filters (non-search mode)
+    if (activeExtensions.value.length > 0) {
+      files = files.filter(file => {
+        const name = file.Name || ''
+        const dot = name.lastIndexOf('.')
+        const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
+        return activeExtensions.value.includes(ext)
+      })
+    }
+    if (activeTags.value.length > 0) {
+      files = files.filter(file => {
+        const tags = file.Tags || []
+        return activeTags.value.every(t => tags.includes(t))
+      })
+    }
   }
   return sortItems(files);
 })
@@ -634,8 +779,21 @@ const navigateToSecurity = () => {
   router.push({ name: 'Account' })
 }
 
-watch(() => fileStore.currentPath, () => {
+watch(() => fileStore.currentPath, async () => {
   selectedItems.value = []
+  if (!fileStore.pendingHighlight) return
+  const { id, type } = fileStore.pendingHighlight
+  fileStore.pendingHighlight = null
+  await nextTick()
+  const item = type === 'folder'
+    ? fileStore.folders.find(f => f.ID === id)
+    : fileStore.files.find(f => f.ID === id)
+  if (!item) return
+  selectedItems.value = [{ ...item, type }]
+  nextTick(() => {
+    const row = document.querySelector(`[data-item-id="${id}"]`)
+    if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  })
 })
 
 onUnmounted(() => {
@@ -895,8 +1053,23 @@ const isSelected = (item, type) => {
   return selectedItems.value.some(i => i.ID === item.ID && i.type === type);
 }
 
+const getParentPath = (path) => {
+  if (!path || path === '/') return '/'
+  const p = path.replace(/\/$/, '')
+  const idx = p.lastIndexOf('/')
+  return idx <= 0 ? '/' : p.slice(0, idx + 1)
+}
+
 const openFolder = (folder) => {
   const folderName = folder.Name || folder.name;
+
+  if (fileStore.searchQuery) {
+    const parentPath = getParentPath(folder.Path || folder.path)
+    fileStore.pendingHighlight = { id: folder.ID, type: 'folder' }
+    fileStore.clearSearch()
+    fileStore.fetchItems(parentPath)
+    return
+  }
 
   if (fileStore.viewMode === 'shared') {
       fileStore.navigateShared(folder.ID, folderName);
@@ -1085,6 +1258,14 @@ const updateTags = async () => {
 }
 
 const downloadFile = async (file) => {
+  if (fileStore.searchQuery) {
+    const parentPath = getParentPath(file.Path || file.path)
+    fileStore.pendingHighlight = { id: file.ID, type: 'file' }
+    fileStore.clearSearch()
+    fileStore.fetchItems(parentPath)
+    return
+  }
+
   fileStore.addToHistory({ ...file, type: 'file' });
 
   const previewTypes = [
@@ -1848,37 +2029,131 @@ button {
 }
 
 /* Selection Bar Animation */
-.selection-bar-enter-active {
-  animation: slideDown 0.2s ease-out;
-}
-
+.selection-bar-enter-active,
 .selection-bar-leave-active {
-  animation: slideUp 0.15s ease-in;
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-    max-height: 0;
+.selection-bar-enter-from,
+.selection-bar-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.selection-bar-enter-to,
+.selection-bar-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    max-height: 60px;
+
+  .toolbar-left,
+  .toolbar-right {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .btn-add-file,
+  .btn-rename,
+  .btn-download,
+  .btn-delete {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.75rem;
+    flex: 1;
+    min-width: 80px;
+  }
+
+  .breadcrumbs {
+    font-size: 0.85rem;
+    flex-wrap: wrap;
+  }
+
+  .selection-action-bar {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.5rem;
   }
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-    max-height: 60px;
+@media (max-width: 480px) {
+  .path-banner {
+    padding: 0.5rem;
   }
-  to {
-    opacity: 0;
-    transform: translateY(-10px);
-    max-height: 0;
+
+  .breadcrumb-link {
+    font-size: 0.8rem;
   }
+}
+
+/* ===== Extension filter bar ===== */
+.ext-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 1rem 0.6rem;
+  align-items: center;
+}
+
+.ext-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--hover-background-color);
+  color: var(--secondary-text-color);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.ext-chip:hover {
+  background: var(--card-color);
+  border-color: var(--primary-color);
+  color: var(--main-text-color);
+}
+
+.ext-chip.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+}
+
+.ext-chip.active .ext-count {
+  opacity: 0.8;
+}
+
+.ext-count {
+  font-size: 0.72rem;
+  opacity: 0.65;
+}
+
+.filter-separator {
+  width: 1px;
+  height: 18px;
+  background: var(--border-color);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.tag-chip {
+  font-weight: 500;
+}
+
+.tag-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 </style>

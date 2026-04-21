@@ -5,7 +5,7 @@
   <div class="account-page">
     <div class="page-header">
       <div class="header-content">
-        <button class="btn-back" @click="router.push('/dashboard')">
+        <button class="btn-back" @click="router.go(-1)">
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M19 12H5M12 19l-7-7 7-7"/>
           </svg>
@@ -71,6 +71,49 @@
               </div>
               <button class="btn-secondary" @click="handleUpdateUsername" :disabled="updatingUsername">
                 {{ updatingUsername ? t('account.updating') : t('account.modify') }}
+              </button>
+            </div>
+            <div class="form-divider"></div>
+            <div class="form-row">
+              <div class="input-group">
+                <label>
+                  {{ t('account.newEmail') }}
+                  <input
+                    type="email"
+                    v-model="emailForm.newEmail"
+                    :placeholder="authStore.user?.email"
+                  />
+                </label>
+              </div>
+              <div class="input-group">
+                <label>
+                  {{ t('account.currentPasswordForEmail') }}
+                  <div class="password-input-wrapper">
+                    <input
+                      :type="showEmailPassword ? 'text' : 'password'"
+                      v-model="emailForm.password"
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      class="toggle-password-btn"
+                      @click="showEmailPassword = !showEmailPassword"
+                      :title="t('account.showHide')"
+                    >
+                      <svg v-if="!showEmailPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                      </svg>
+                      <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                      </svg>
+                    </button>
+                  </div>
+                </label>
+              </div>
+              <button class="btn-secondary" @click="handleUpdateEmail" :disabled="updatingEmail">
+                {{ updatingEmail ? t('account.updatingEmail') : t('account.updateEmail') }}
               </button>
             </div>
           </div>
@@ -447,6 +490,11 @@ const usernameForm = ref({
   newName: ''
 })
 
+const emailForm = ref({
+  newEmail: '',
+  password: ''
+})
+
 const passwordForm = ref({
   current: '',
   new: '',
@@ -456,8 +504,10 @@ const passwordForm = ref({
 const showCurrentPassword = ref(false)
 const showNewPassword = ref(false)
 const showConfirmPassword = ref(false)
+const showEmailPassword = ref(false)
 
 const updatingUsername = ref(false)
+const updatingEmail = ref(false)
 const updatingPassword = ref(false)
 
 const errorModal = ref({
@@ -627,6 +677,57 @@ const handleUpdateUsername = async () => {
   } finally {
     updatingUsername.value = false
   }
+}
+
+const executeEmailUpdate = async () => {
+  const newEmail = emailForm.value.newEmail.trim()
+  updatingEmail.value = true
+  try {
+    await authStore.updateEmail(newEmail, emailForm.value.password)
+    showSuccess('Succès', 'Votre adresse email a été mise à jour avec succès.')
+    emailForm.value.newEmail = ''
+    emailForm.value.password = ''
+    showEmailPassword.value = false
+  } catch (error) {
+    console.error('Failed to update email:', error)
+    const errorMessage = error.message || 'Erreur lors de la mise à jour de l\'email.'
+    showError('Erreur', errorMessage)
+  } finally {
+    updatingEmail.value = false
+  }
+}
+
+const handleUpdateEmail = async () => {
+  const newEmail = emailForm.value.newEmail.trim()
+  if (!newEmail) {
+    showError('Erreur', 'Veuillez entrer une nouvelle adresse email.')
+    return
+  }
+
+  if (newEmail === authStore.user?.email) {
+    showError('Erreur', 'Veuillez entrer une adresse email différente de l\'adresse actuelle.')
+    return
+  }
+
+  if (!emailForm.value.password) {
+    showError('Erreur', 'Veuillez entrer votre mot de passe pour confirmer.')
+    return
+  }
+
+  // Check if MFA is required for email change
+  try {
+    const mfaRequired = await isMFARequired('email_change')
+    if (mfaRequired) {
+      pendingAction.value = async () => { await executeEmailUpdate() }
+      mfaChallengeContext.value = 'email_change'
+      showMFAChallenge.value = true
+      return
+    }
+  } catch (err) {
+    console.error('Error checking MFA requirement:', err)
+  }
+
+  await executeEmailUpdate()
 }
 
 const handleUpdatePassword = async () => {
@@ -943,6 +1044,45 @@ const executeDeleteAccount = async () => {
   .content-grid {
     grid-template-columns: 1fr;
   }
+
+  .user-card {
+    position: static;
+  }
+}
+
+@media (max-width: 600px) {
+  .account-page {
+    padding: 1rem;
+  }
+
+  .page-header {
+    margin-bottom: 1.25rem;
+  }
+
+  .header-content h1 {
+    font-size: 1.4rem;
+  }
+
+  .content-grid {
+    gap: 1rem;
+  }
+
+  .user-card {
+    padding: 1.25rem;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .form-row button {
+    width: 100%;
+  }
+
+  .password-form {
+    gap: 0.75rem;
+  }
 }
 
 /* User Card */
@@ -1047,6 +1187,12 @@ const executeDeleteAccount = async () => {
   display: flex;
   gap: 1rem;
   align-items: flex-end;
+}
+
+.form-divider {
+  border: none;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  margin: 1rem 0;
 }
 
 .password-row {

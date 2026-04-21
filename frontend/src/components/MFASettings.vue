@@ -121,7 +121,7 @@
 
       <div class="restriction-list">
         <!-- Login Restriction -->
-        <div class="restriction-item">
+        <div class="restriction-item" :class="localSettings.require_mfa_on_login ? 'item-on' : 'item-off'">
           <div class="restriction-info">
             <div class="restriction-icon">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -145,7 +145,7 @@
         </div>
 
         <!-- Destructive Actions Restriction -->
-        <div class="restriction-item">
+        <div class="restriction-item" :class="localSettings.require_mfa_on_destructive_actions ? 'item-on' : 'item-off'">
           <div class="restriction-info">
             <div class="restriction-icon">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -169,7 +169,7 @@
         </div>
 
         <!-- Download Restriction -->
-        <div class="restriction-item">
+        <div class="restriction-item" :class="localSettings.require_mfa_on_downloads ? 'item-on' : 'item-off'">
           <div class="restriction-info">
             <div class="restriction-icon">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -188,6 +188,30 @@
               type="checkbox"
               v-model="localSettings.require_mfa_on_downloads"
               @change="saveRestriction('require_mfa_on_downloads')"
+            >
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- Email Change Restriction -->
+        <div class="restriction-item" :class="localSettings.require_mfa_on_email_change ? 'item-on' : 'item-off'">
+          <div class="restriction-info">
+            <div class="restriction-icon">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                <polyline points="22,6 12,13 2,6"></polyline>
+              </svg>
+            </div>
+            <div class="restriction-text">
+              <span class="restriction-title">Modification de l'email</span>
+              <span class="restriction-desc">Exige le MFA avant de changer l'adresse email du compte</span>
+            </div>
+          </div>
+          <label class="toggle-switch">
+            <input
+              type="checkbox"
+              v-model="localSettings.require_mfa_on_email_change"
+              @change="saveRestriction('require_mfa_on_email_change')"
             >
             <span class="slider"></span>
           </label>
@@ -268,7 +292,8 @@ const qrCanvas = ref(null)
 const localSettings = ref({
   require_mfa_on_login: false,
   require_mfa_on_destructive_actions: false,
-  require_mfa_on_downloads: false
+  require_mfa_on_downloads: false,
+  require_mfa_on_email_change: false
 })
 
 // Sync local settings with fetched settings
@@ -276,7 +301,8 @@ watch(securitySettings, (newSettings) => {
   localSettings.value = {
     require_mfa_on_login: newSettings.require_mfa_on_login,
     require_mfa_on_destructive_actions: newSettings.require_mfa_on_destructive_actions,
-    require_mfa_on_downloads: newSettings.require_mfa_on_downloads
+    require_mfa_on_downloads: newSettings.require_mfa_on_downloads,
+    require_mfa_on_email_change: newSettings.require_mfa_on_email_change
   }
 }, { deep: true, immediate: true })
 
@@ -444,20 +470,15 @@ function filterNumericInput(event) {
   align-items: center;
   gap: 1rem;
   padding: 1.5rem;
-  background: var(--hover-background-color);
+  background: rgba(233, 168, 39, 0.06);
   border-radius: 12px;
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(233, 168, 39, 0.35);
   transition: all 0.3s ease;
 }
 
 .mfa-status-header.active {
-  background: rgba(34, 197, 94, 0.08);
-  border-color: rgba(34, 197, 94, 0.3);
-}
-
-.mfa-status-header.active .status-indicator {
-  background: rgba(34, 197, 94, 0.15);
-  color: rgb(22, 163, 74);
+  background: rgba(42, 157, 143, 0.08);
+  border-color: rgba(42, 157, 143, 0.35);
 }
 
 .status-indicator {
@@ -467,14 +488,14 @@ function filterNumericInput(event) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--border-color);
-  color: var(--secondary-text-color);
+  background: rgba(233, 168, 39, 0.15);
+  color: var(--warning-color);
   flex-shrink: 0;
 }
 
 .status-indicator.active {
-  background: var(--success-color);
-  color: white;
+  background: rgba(42, 157, 143, 0.18);
+  color: var(--success-color);
 }
 
 .status-text {
@@ -485,6 +506,10 @@ function filterNumericInput(event) {
   margin: 0 0 0.25rem 0;
   font-size: 1.1rem;
   color: var(--main-text-color);
+}
+
+.mfa-status-header.active .status-text h4 {
+  color: var(--success-color);
 }
 
 .status-desc {
@@ -802,9 +827,19 @@ function filterNumericInput(event) {
   align-items: center;
   justify-content: space-between;
   padding: 1.25rem;
-  background: var(--hover-background-color);
   border-radius: 8px;
-  border: 1px solid var(--border-color);
+  border: 1px solid transparent;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+
+.restriction-item.item-on {
+  background: rgba(34, 197, 94, 0.09);
+  border-color: rgba(34, 197, 94, 0.28);
+}
+
+.restriction-item.item-off {
+  background: rgba(239, 68, 68, 0.07);
+  border-color: rgba(239, 68, 68, 0.22);
 }
 
 .restriction-info {
@@ -818,12 +853,20 @@ function filterNumericInput(event) {
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: var(--primary-color);
-  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: background 0.25s ease, color 0.25s ease;
+  color: var(--main-text-color);
+}
+
+.item-on .restriction-icon {
+  background: rgba(34, 197, 94, 0.18);
+}
+
+.item-off .restriction-icon {
+  background: rgba(239, 68, 68, 0.14);
 }
 
 .restriction-text {
@@ -882,7 +925,7 @@ function filterNumericInput(event) {
 }
 
 input:checked + .slider {
-  background-color: var(--primary-color);
+  background-color: #22c55e;
 }
 
 input:checked + .slider:before {
