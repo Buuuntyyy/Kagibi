@@ -37,6 +37,24 @@
             <span>{{ t('p2p.invite.sendEmailOption') }}</span>
           </label>
 
+          <div v-if="sendEmailOption" class="email-lang-row">
+            <span class="email-lang-label">{{ t('p2p.invite.emailLang') }}</span>
+            <div class="lang-toggle">
+              <button
+                class="lang-btn"
+                :class="{ active: emailLang === 'fr' }"
+                @click="emailLang = 'fr'"
+                type="button"
+              >🇫🇷 Français</button>
+              <button
+                class="lang-btn"
+                :class="{ active: emailLang === 'en' }"
+                @click="emailLang = 'en'"
+                type="button"
+              >🇬🇧 English</button>
+            </div>
+          </div>
+
           <label class="legal-consent-toggle">
             <input type="checkbox" v-model="legalConsent" />
             <span>
@@ -115,6 +133,7 @@ const loading = ref(false)
 const copied = ref(false)
 const emailSent = ref(false)
 const sendEmailOption = ref(false)
+const emailLang = ref('en')
 const legalConsent = ref(false)
 
 const inviteToken = ref('')
@@ -158,6 +177,7 @@ async function create() {
         file_size: props.file.size,
         transfer_id: props.transferId,
         send_email: sendEmailOption.value,
+        email_lang: emailLang.value,
       }),
     })
 
@@ -411,6 +431,47 @@ function close() {
   height: 15px;
   cursor: pointer;
   accent-color: var(--primary-color);
+}
+
+.email-lang-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: -0.5rem;
+  margin-bottom: 1rem;
+}
+
+.email-lang-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.lang-toggle {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.lang-btn {
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.lang-btn.active {
+  border-color: var(--primary-color);
+  background: var(--primary-color);
+  color: #fff;
+}
+
+.lang-btn:not(.active):hover {
+  border-color: var(--primary-color);
+  color: var(--text-color);
 }
 
 .legal-consent-toggle {

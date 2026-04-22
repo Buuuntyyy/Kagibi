@@ -321,6 +321,9 @@ export const useP2PStore = defineStore('p2p', {
              progress: 0,
              fileName: file.name,
              transferId: transferId,
+             totalBytes: file.size,
+             transferredBytes: 0,
+             transferStartedAt: null,
              connectionInfo: {
                  stage: 'Initialisation...',
                  iceState: 'new',
@@ -431,6 +434,9 @@ export const useP2PStore = defineStore('p2p', {
              buffer: [],
              receivedSize: 0,
              transferId: transferId,
+             totalBytes: offerData.size,
+             transferredBytes: 0,
+             transferStartedAt: null,
              connectionInfo: {
                  stage: 'Initialisation...',
                  iceState: 'new',
@@ -448,7 +454,10 @@ export const useP2PStore = defineStore('p2p', {
             const dc = event.channel;
             dc.binaryType = "arraybuffer";
             dc.onmessage = (msgEvent) => this.handleReceiveMessage(msgEvent);
-            dc.onopen = () => { this.activeTransfer.status = 'Receiving...'; };
+            dc.onopen = () => {
+                this.activeTransfer.status = 'Receiving...';
+                this.activeTransfer.transferStartedAt = Date.now();
+            };
         };
 
         await pc.setRemoteDescription(new RTCSessionDescription(offerData.sdp));
@@ -503,6 +512,7 @@ export const useP2PStore = defineStore('p2p', {
         let offset = 0;
         let chunkIndex = 0;
         this.activeTransfer.status = 'Sending...';
+        this.activeTransfer.transferStartedAt = Date.now();
 
         const waitForBuffer = () => {
              // Lower buffer threshold to ensures smoother flow
@@ -546,6 +556,7 @@ export const useP2PStore = defineStore('p2p', {
             offset += CHUNK_SIZE;
             chunkIndex++;
             this.activeTransfer.progress = Math.round((offset / file.size) * 100);
+            this.activeTransfer.transferredBytes = Math.min(offset, file.size);
         }
         
          await waitForBuffer();
@@ -609,6 +620,7 @@ export const useP2PStore = defineStore('p2p', {
             this.activeTransfer.buffer[index] = decrypted;
             
             this.activeTransfer.receivedSize += decrypted.byteLength;
+            this.activeTransfer.transferredBytes = this.activeTransfer.receivedSize;
             this.activeTransfer.progress = Math.round((this.activeTransfer.receivedSize / this.activeTransfer.fileSize) * 100);
 
             if (this.activeTransfer.receivedSize >= this.activeTransfer.fileSize) {
