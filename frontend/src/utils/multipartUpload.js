@@ -9,6 +9,7 @@ const MAX_CONCURRENT_WORKERS = 3
 const MAX_RETRIES = 3
 const INITIAL_RETRY_DELAY = 1000 // 1 second
 const PART_SIZE = 10 * 1024 * 1024 // 10MB per part (matches crypto CHUNK_SIZE)
+const PROGRESS_THROTTLE_MS = 250 // max 4 UI updates/sec — avoids saturating Vue reactivity
 
 /**
  * Upload state enum
@@ -50,10 +51,21 @@ export class MultipartUploadManager {
     this.totalSize = 0
     this.uploadedBytes = 0
     this.state = UploadState.PENDING
-    this.onProgress = options.onProgress || (() => {})
     this.onStateChange = options.onStateChange || (() => {})
     this.onError = options.onError || (() => {})
     this.abortController = new AbortController()
+
+    // Throttle progress callbacks: XHR onprogress can fire hundreds of times/sec.
+    // Capping at 4 updates/sec keeps Vue reactivity off the critical path.
+    const rawOnProgress = options.onProgress || (() => {})
+    let lastEmit = 0
+    this.onProgress = (percent, uploaded, total) => {
+      const now = Date.now()
+      if (now - lastEmit >= PROGRESS_THROTTLE_MS) {
+        lastEmit = now
+        rawOnProgress(percent, uploaded, total)
+      }
+    }
   }
 
   /**
