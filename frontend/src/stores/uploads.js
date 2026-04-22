@@ -30,16 +30,23 @@ export const useUploadStore = defineStore('uploads', {
   state: () => ({
     /** @type {Map<string, UploadItem>} */
     uploads: new Map(),
-    
+
     /** Global settings */
     maxConcurrentFiles: 3,
     maxConcurrentChunksPerFile: 3,
-    
+
     /** Queue processing state */
     isProcessing: false,
-    
+
     /** Show/hide upload manager panel */
-    showManager: false
+    showManager: false,
+
+    /** Folder creation phase (before file uploads begin) */
+    folderCreation: {
+      active: false,
+      total: 0,
+      done: 0
+    }
   }),
 
   getters: {
@@ -165,15 +172,13 @@ export const useUploadStore = defineStore('uploads', {
     
     /**
      * Update upload item state
-     * @param {string} id 
-     * @param {Partial<UploadItem>} updates 
+     * Mutates in place to avoid spreading large objects (File, manager) on every progress tick.
      */
     updateUpload(id, updates) {
       const upload = this.uploads.get(id)
       if (upload) {
         Object.assign(upload, updates)
-        // Force reactivity by replacing in map
-        this.uploads.set(id, { ...upload })
+        this.uploads.set(id, upload)
       }
     },
     
@@ -206,14 +211,16 @@ export const useUploadStore = defineStore('uploads', {
     },
     
     /**
-     * Mark upload as completed
+     * Mark upload as completed. Releases File and manager references to free memory.
      */
     setCompleted(id, result = null) {
-      this.updateUpload(id, { 
-        status: UploadStatus.COMPLETED, 
+      this.updateUpload(id, {
+        status: UploadStatus.COMPLETED,
         progress: 100,
         endTime: Date.now(),
-        result
+        result,
+        file: null,    // release File DOM reference
+        manager: null  // release MultipartUploadManager + all part blobs
       })
     },
     
@@ -311,6 +318,20 @@ export const useUploadStore = defineStore('uploads', {
      */
     toggleManager() {
       this.showManager = !this.showManager
+    },
+
+    /**
+     * Folder creation phase progress tracking
+     */
+    startFolderCreation(total) {
+      this.folderCreation = { active: true, total, done: 0 }
+      if (!this.showManager) this.showManager = true
+    },
+    incrementFolderCreation() {
+      this.folderCreation.done++
+    },
+    endFolderCreation() {
+      this.folderCreation.active = false
     },
     
     /**

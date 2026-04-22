@@ -198,6 +198,99 @@ export class MultipartUploadManager {
   }
 
   /**
+   * Upload a single part with automatic retry and URL refresh on failure.
+   */
+  async _uploadPartWithRetry(part, signal) {
+    let lastError
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        return await this.uploadSinglePart(part, signal)
+      } catch (err) {
+        lastError = err
+        if (attempt < MAX_RETRIES && this.state !== UploadState.ABORTED) {
+          const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt)
+          console.warn(`Part ${part.partNumber} failed, retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`)
+          await new Promise(r => setTimeout(r, delay))
+          try { await this.refreshPartUrl(part) } catch { /* use existing URL if refresh fails */ }
+        }
+      }
+    }
+    throw new Error(`Part ${part.partNumber} failed after ${MAX_RETRIES} retries: ${lastError?.message}`)
+  }
+
+  /**
+   * Pipeline variant of uploadParts: accepts an async iterable of encrypted Blobs
+   * yielded one by one, starting each upload as soon as its chunk is ready.
+   * Peak memory = MAX_CONCURRENT_WORKERS in-flight chunks (not all chunks at once).
+   */
+  async uploadPartsStreamed(chunkIterable) {
+    if (this.state === UploadState.ABORTED) throw new Error('Upload was aborted')
+
+    const completedParts = []
+    const allDone = []
+    let firstError = null
+    let chunkIndex = 0
+
+    // Manual semaphore: limits concurrent S3 PUT requests to MAX_CONCURRENT_WORKERS
+    let activeUploads = 0
+    const waiters = []
+    const acquireSlot = () => {
+      if (activeUploads < MAX_CONCURRENT_WORKERS) { activeUploads++; return Promise.resolve() }
+      return new Promise(resolve => waiters.push(resolve))
+    }
+    const releaseSlot = () => {
+      activeUploads--
+      if (waiters.length > 0) { activeUploads++; waiters.shift()() }
+    }
+
+    for await (const blob of chunkIterable) {
+      if (this.state === UploadState.ABORTED) throw new Error('Upload aborted')
+      if (firstError) throw firstError
+
+      await acquireSlot()
+      if (firstError) { releaseSlot(); throw firstError }
+
+      const part = this.parts[chunkIndex++]
+      part.data = blob
+      part.size = blob.size || blob.byteLength || 0
+      part.state = UploadState.UPLOADING
+
+      const controller = new AbortController()
+      part.controller = controller
+
+      const p = this._uploadPartWithRetry(part, controller.signal)
+        .then(etag => {
+          part.etag = etag
+          part.state = UploadState.COMPLETED
+          completedParts.push({ part_number: part.partNumber, etag })
+          this.uploadedBytes += part.size
+          this.updateProgress()
+        })
+        .catch(err => {
+          if (!firstError) {
+            firstError = err
+            this.state = UploadState.FAILED
+            this.onStateChange(this.state)
+          }
+          part.state = UploadState.FAILED
+        })
+        .finally(releaseSlot)
+
+      allDone.push(p)
+    }
+
+    await Promise.all(allDone)
+    if (firstError) throw firstError
+
+    // Release encrypted blob references held by each part
+    for (const part of this.parts) {
+      part.data = null
+    }
+
+    return completedParts
+  }
+
+  /**
    * Upload a single part to S3 with progress tracking
    */
   async uploadSinglePart(part, signal) {

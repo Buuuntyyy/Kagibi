@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/monitoring"
@@ -226,7 +227,11 @@ func deleteFolderRecursive(c *gin.Context, db *bun.DB, userID, folderPath string
 		return fmt.Errorf("Erreur lors de la récupération du contenu du dossier")
 	}
 
-	deleteFolderS3Objects(ctx, userID, folderPath, files)
+	go func() {
+		s3Ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		deleteFolderS3Objects(s3Ctx, userID, folderPath, files)
+	}()
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {

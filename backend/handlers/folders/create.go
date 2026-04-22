@@ -20,7 +20,7 @@ import (
 
 // \p{L} matches any Unicode letter (covers accented and non-Latin characters).
 // \p{N} matches any Unicode number. The remaining chars are safe punctuation.
-var validNameRegex = regexp.MustCompile(`^[\p{L}\p{N}\s\-\._]+$`)
+var validNameRegex = regexp.MustCompile(`^[\p{L}\p{N}\s\-\._'\x{2018}\x{2019}]+$`)
 
 type CreateFolderRequest struct {
 	Name string `json:"name" binding:"required" validate:"required,foldername"`
