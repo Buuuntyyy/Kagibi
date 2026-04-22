@@ -909,6 +909,17 @@ export const useFileStore = defineStore('files', {
         console.error('Error creating folder:', error)
       }
     },
+    async createFolderAtPath(folderName, targetPath) {
+      const authStore = useAuthStore()
+      let nameToSend = folderName;
+      if (authStore.user?.encrypt_filenames && authStore.masterKey) {
+        nameToSend = await encryptFileName(folderName, authStore.masterKey);
+      }
+      await api.post('/folders/create', {
+        name: nameToSend,
+        path: targetPath,
+      })
+    },
     async deleteFiles(fileIDs) {
     try {
       const authStore = useAuthStore()

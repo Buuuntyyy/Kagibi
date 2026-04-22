@@ -21,6 +21,9 @@
       <div class="toolbar-left">
         <button @click="triggerFileInput" class="btn-add-file">{{ t('file.addFile') }}</button>
         <button @click="createNewFolder" class="btn-add-file">{{ t('file.createFolder') }}</button>
+        <button @click="triggerFolderInput" :disabled="folderProgress.isOpen" class="btn-add-file">
+          {{ t('file.uploadFolder') }}
+        </button>
       </div>
       <div class="toolbar-right">
         <button @click="renameSelectedItem" :disabled="selectedItems.length !== 1" class="btn-rename">
@@ -35,6 +38,7 @@
       </div>
     </div>
     <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" multiple />
+    <input type="file" ref="folderInput" @change="handleFolderUpload" style="display: none" webkitdirectory />
     <div class="path-banner">
 
       <div class="breadcrumbs">
@@ -263,6 +267,38 @@
       @verified="onMFAVerified"
       @cancelled="onMFACancelled"
     />
+
+    <div v-if="folderProgress.isOpen" class="folder-conflict-overlay">
+      <div class="folder-conflict-content folder-progress-content">
+        <h3>Upload de dossier en cours</h3>
+        <p class="progress-phase-label">
+          <span v-if="folderProgress.phase === 'folders'">
+            Création de l'arborescence...
+          </span>
+          <span v-else>
+            Mise en file d'attente des fichiers...
+          </span>
+        </p>
+        <div class="progress-track">
+          <div class="progress-fill" :style="{ width: folderProgressPercent + '%' }"></div>
+        </div>
+        <p class="progress-counter">
+          {{ folderProgress.foldersCreated }} / {{ folderProgress.foldersTotal }} dossier{{ folderProgress.foldersTotal > 1 ? 's' : '' }} créé{{ folderProgress.foldersTotal > 1 ? 's' : '' }}
+        </p>
+      </div>
+    </div>
+
+    <div v-if="folderAlertModal.isOpen" class="folder-conflict-overlay" @click.self="folderAlertModal.isOpen = false">
+      <div class="folder-conflict-content">
+        <h3>{{ folderAlertModal.title }}</h3>
+        <p v-for="(line, i) in folderAlertModal.lines" :key="i" :class="i === folderAlertModal.lines.length - 1 ? 'folder-conflict-hint' : ''">
+          <span v-html="line"></span>
+        </p>
+        <div class="folder-conflict-actions">
+          <button @click="folderAlertModal.isOpen = false" class="btn-conflict-ok">OK</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -288,7 +324,7 @@ import MoveDialog from '../MoveDialog.vue';
 import ManageShareDialog from '../ManageShareDialog.vue';
 import FileTable from './FileTable.vue';
 import MFAChallengeModal from '../MFAChallengeModal.vue';
-import { formatSpeed } from '../../utils/format'
+import { formatSpeed, formatSize } from '../../utils/format'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -316,6 +352,31 @@ const loadingSecuritySettings = ref(true)
 const selectedItems = ref([])
 const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
 const fileInput = ref(null)
+const folderInput = ref(null)
+const folderAlertModal = ref({ isOpen: false, title: '', lines: [] })
+const folderProgress = ref({ isOpen: false, foldersCreated: 0, foldersTotal: 0, phase: 'folders' })
+
+const folderProgressPercent = computed(() =>
+  folderProgress.value.foldersTotal === 0 ? 0
+    : Math.round((folderProgress.value.foldersCreated / folderProgress.value.foldersTotal) * 100)
+)
+
+const showFolderAlert = (title, lines) => {
+  folderAlertModal.value = { isOpen: true, title, lines }
+}
+
+const FOLDER_NAME_RE = /^[\p{L}\p{N}\s\-\._'\u2018\u2019]+$/u
+
+const invalidCharsOf = (name) => {
+  const chars = new Set()
+  for (const ch of name) {
+    if (!FOLDER_NAME_RE.test(ch)) {
+      const cp = ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')
+      chars.add(`"${ch}" (U+${cp})`)
+    }
+  }
+  return [...chars].join(', ')
+}
 const isDragging = ref(false)
 
 const uploadSpeedText = computed(() => {
@@ -1320,6 +1381,116 @@ const handleFileUpload = async (event) => {
   }
 }
 
+const triggerFolderInput = () => {
+  folderInput.value.click()
+}
+
+const handleFolderUpload = async (event) => {
+  const files = Array.from(event.target.files)
+  event.target.value = ''
+  if (!files.length) return
+
+  // --- Collect all unique folder names from the tree ---
+  const folderSet = new Set()
+  for (const file of files) {
+    const parts = file.webkitRelativePath.split('/')
+    for (let depth = 1; depth < parts.length; depth++) {
+      folderSet.add(parts.slice(0, depth).join('/'))
+    }
+  }
+
+  const sortedFolderPaths = [...folderSet].sort(
+    (a, b) => a.split('/').length - b.split('/').length
+  )
+
+  // --- Pre-flight 1: invalid characters ---
+  const invalidNames = sortedFolderPaths
+    .map(relPath => {
+      const name = relPath.split('/').pop()
+      const bad = invalidCharsOf(name)
+      return bad ? { relPath, name, bad } : null
+    })
+    .filter(Boolean)
+
+  if (invalidNames.length > 0) {
+    const lines = [
+      'Les dossiers suivants contiennent des caractères interdits :',
+      ...invalidNames.map(e => `<strong>${e.relPath}</strong> → caractère(s) interdit(s) : ${e.bad}`),
+      'Caractères autorisés : lettres, chiffres, espaces, <code>-</code> <code>.</code> <code>_</code>'
+    ]
+    showFolderAlert('Noms de dossiers invalides', lines)
+    return
+  }
+
+  // --- Pre-flight 2: conflict with existing folder at current path ---
+  const rootName = files[0].webkitRelativePath.split('/')[0]
+  const hasConflict = fileStore.folders.some(f => f.Name === rootName)
+  if (hasConflict) {
+    showFolderAlert(
+      t('file.folderConflictTitle'),
+      [
+        t('file.folderConflictMsg', { name: rootName }),
+        t('file.folderConflictHint')
+      ]
+    )
+    return
+  }
+
+  // --- Pre-flight 3: storage check ---
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0)
+  const storageLimit = authStore.user?.storage_limit ?? authStore.user?.plan_storage_limit ?? 0
+  const storageUsed = authStore.user?.storage_used ?? authStore.user?.plan_storage_used ?? 0
+  const available = storageLimit - storageUsed
+  if (storageLimit > 0 && totalSize > available) {
+    showFolderAlert('Espace insuffisant', [
+      `Taille du dossier sélectionné : <strong>${formatSize(totalSize)}</strong>`,
+      `Espace disponible : <strong>${formatSize(Math.max(0, available))}</strong>`,
+      'Libérez de l\'espace ou passez à un abonnement supérieur avant de réessayer.'
+    ])
+    return
+  }
+
+  // --- All checks passed — show progress and proceed ---
+  folderProgress.value = { isOpen: true, foldersCreated: 0, foldersTotal: sortedFolderPaths.length, phase: 'folders' }
+  await nextTick() // let Vue render the modal before the loop blocks the event loop
+
+  try {
+    for (let i = 0; i < sortedFolderPaths.length; i++) {
+      const relPath = sortedFolderPaths[i]
+      const segments = relPath.split('/')
+      const folderName = segments[segments.length - 1]
+      const parentRelPath = segments.slice(0, -1).join('/')
+      const base = fileStore.currentPath === '/' ? '' : fileStore.currentPath
+      const parentPath = parentRelPath ? `${base}/${parentRelPath}` : fileStore.currentPath
+      await fileStore.createFolderAtPath(folderName, parentPath)
+      folderProgress.value.foldersCreated = i + 1
+    }
+
+    folderProgress.value.phase = 'queuing'
+
+    const filesByTargetPath = new Map()
+    for (const file of files) {
+      const parts = file.webkitRelativePath.split('/')
+      const relDir = parts.slice(0, -1).join('/')
+      const base = fileStore.currentPath === '/' ? '' : fileStore.currentPath
+      const targetPath = relDir ? `${base}/${relDir}` : fileStore.currentPath
+      if (!filesByTargetPath.has(targetPath)) filesByTargetPath.set(targetPath, [])
+      filesByTargetPath.get(targetPath).push(file)
+    }
+
+    for (const [targetPath, pathFiles] of filesByTargetPath) {
+      await uploadQueueManager.addFiles(pathFiles, targetPath)
+    }
+
+    fileStore.fetchItems(fileStore.currentPath)
+  } catch (error) {
+    console.error('Folder upload failed:', error)
+    showFolderAlert('Erreur lors de l\'upload', [error.response?.data?.error || error.message])
+  } finally {
+    folderProgress.value.isOpen = false
+  }
+}
+
 const createNewFolder = async () => {
   const folderName = await openInputDialog(t('dialogs.rename.newFolderTitle'), '', t('dialogs.rename.newFolderPlaceholder'))
   if (folderName) {
@@ -2155,5 +2326,93 @@ button {
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+.folder-conflict-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.folder-conflict-content {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  width: 440px;
+  max-width: 90vw;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.folder-conflict-content h3 {
+  margin: 0 0 12px;
+  color: #c62828;
+  font-size: 1.1rem;
+}
+
+.folder-conflict-content p {
+  margin: 0 0 10px;
+  color: #333;
+  line-height: 1.5;
+}
+
+.folder-conflict-hint {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.folder-conflict-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.btn-conflict-ok {
+  padding: 8px 24px;
+  background-color: #42b983;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.btn-conflict-ok:hover {
+  background-color: #3aa876;
+}
+
+.folder-progress-content {
+  text-align: center;
+}
+
+.progress-phase-label {
+  color: #555;
+  margin-bottom: 16px;
+}
+
+.progress-track {
+  width: 100%;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #42b983;
+  border-radius: 4px;
+  transition: width 0.25s ease;
+}
+
+.progress-counter {
+  font-size: 0.88rem;
+  color: #888;
+  margin: 0;
 }
 </style>
