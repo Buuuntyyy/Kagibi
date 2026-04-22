@@ -56,23 +56,6 @@ export const useUploadStore = defineStore('uploads', {
     uploadList: (state) => Array.from(state.uploads.values()),
     
     /**
-     * Uploads grouped by status
-     */
-    pendingUploads: (state) => 
-      Array.from(state.uploads.values()).filter(u => u.status === UploadStatus.PENDING),
-    
-    activeUploads: (state) => 
-      Array.from(state.uploads.values()).filter(u => 
-        [UploadStatus.ENCRYPTING, UploadStatus.UPLOADING, UploadStatus.COMPLETING].includes(u.status)
-      ),
-    
-    completedUploads: (state) => 
-      Array.from(state.uploads.values()).filter(u => u.status === UploadStatus.COMPLETED),
-    
-    failedUploads: (state) => 
-      Array.from(state.uploads.values()).filter(u => u.status === UploadStatus.FAILED),
-    
-    /**
      * Overall progress (0-100)
      */
     overallProgress: (state) => {
@@ -81,17 +64,6 @@ export const useUploadStore = defineStore('uploads', {
       
       const totalProgress = uploads.reduce((sum, u) => sum + u.progress, 0)
       return Math.round(totalProgress / uploads.length)
-    },
-    
-    /**
-     * Total bytes uploaded / total bytes
-     */
-    totalBytes: (state) => {
-      const uploads = Array.from(state.uploads.values())
-      return {
-        uploaded: uploads.reduce((sum, u) => sum + u.uploadedBytes, 0),
-        total: uploads.reduce((sum, u) => sum + u.totalBytes, 0)
-      }
     },
     
     /**
