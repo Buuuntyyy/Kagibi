@@ -35,7 +35,7 @@ func SendP2PInvite(toEmail, senderName, fileName string, fileSize int64, token s
 
 func p2pInviteBody(toEmail, senderName, fileName string, fileSize int64, token string) string {
 	sizeStr := formatBytes(fileSize)
-	link := "https://kagibi.cloud/p2p?invite=" + token
+	link := "https://send.kagibi.cloud/?invite=" + token
 	return "Hello,\n\n" +
 		senderName + " wants to send you a file securely via Kagibi:\n\n" +
 		"  File: " + fileName + " (" + sizeStr + ")\n\n" +
