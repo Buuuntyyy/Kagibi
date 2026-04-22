@@ -164,9 +164,16 @@ class UploadQueueManager {
   /**
    * Async generator: yields encrypted Blobs one at a time, checking for cancellation
    * between chunks. Keeps only one plaintext chunk in memory at a time.
+   * Empty files (0 bytes) yield a single 28-byte blob (AES-GCM nonce + auth tag, no ciphertext).
    */
   async *_encryptChunksGen(file, fileKey, uploadStore, id) {
     const baseNonce = generateBaseNonce()
+
+    if (file.size === 0) {
+      yield await encryptChunkWorker(new ArrayBuffer(0), fileKey, 0, baseNonce)
+      return
+    }
+
     let offset = 0
     let chunkIndex = 0
     while (offset < file.size) {
@@ -217,8 +224,9 @@ class UploadQueueManager {
       const encryptedFileKey = await wrapMasterKey(fileKey, authStore.masterKey)
       const shareKeysMap = await this.buildShareKeysMap(fileKey, targetPath)
 
-      // Pre-calculate encrypted size: AES-GCM adds exactly (nonce + tag) per chunk
-      const totalParts = Math.ceil(file.size / PART_SIZE)
+      // Pre-calculate encrypted size: AES-GCM adds exactly (nonce + tag) per chunk.
+      // Empty files produce 1 chunk of 28 bytes (nonce + auth tag, zero ciphertext).
+      const totalParts = file.size === 0 ? 1 : Math.ceil(file.size / PART_SIZE)
       const totalEncryptedSize = file.size + totalParts * (NONCE_LENGTH + TAG_LENGTH_BYTES)
       uploadStore.updateUpload(id, { encryptedSize: totalEncryptedSize, totalBytes: totalEncryptedSize })
 
@@ -281,22 +289,23 @@ class UploadQueueManager {
     const encryptedFileKey = await wrapMasterKey(fileKey, masterKey)
     
     // Encrypt
-    const totalParts = Math.ceil(file.size / PART_SIZE)
     const encryptedChunks = []
     const baseNonce = generateBaseNonce()
-    
-    let offset = 0
-    let chunkIndex = 0
-    
-    while (offset < file.size) {
-      const chunkBlob = file.slice(offset, offset + PART_SIZE)
-      const chunkArrayBuffer = await chunkBlob.arrayBuffer()
-      const encryptedChunkBlob = await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex, baseNonce)
-      encryptedChunks.push(encryptedChunkBlob)
-      offset += PART_SIZE
-      chunkIndex++
+
+    if (file.size === 0) {
+      encryptedChunks.push(await encryptChunkWorker(new ArrayBuffer(0), fileKey, 0, baseNonce))
+    } else {
+      let offset = 0
+      let chunkIndex = 0
+      while (offset < file.size) {
+        const chunkBlob = file.slice(offset, offset + PART_SIZE)
+        const chunkArrayBuffer = await chunkBlob.arrayBuffer()
+        encryptedChunks.push(await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex, baseNonce))
+        offset += PART_SIZE
+        chunkIndex++
+      }
     }
-    
+
     const totalEncryptedSize = encryptedChunks.reduce((sum, chunk) => sum + (chunk.size || 0), 0)
     
     // Upload
