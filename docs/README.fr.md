@@ -3,6 +3,7 @@
 **Stockage cloud chiffré de bout en bout, sans compromis.**
 
 Kagibi est une plateforme de stockage cloud conçue autour d'un principe simple : **ce que vous stockez ne regarde que vous**. Le serveur ne peut pas lire vos fichiers. Pas parce que nous promettons de ne pas le faire — mais parce que nous n'en avons pas la capacité technique.
+
 Ce projet a été développé par [Buuuntyyy] avec l'aide d'intelligence artificielle pour certaines tâches de développement et de documentation. L'objectif est de fournir une solution de stockage sécurisée, respectueuse de la vie privée, et facile à utiliser, tout en étant transparente sur son fonctionnement interne.
 
 ---
@@ -16,6 +17,67 @@ Kagibi fonctionne différemment. Vos fichiers sont chiffrés **sur votre apparei
 Ce modèle dit *zero-knowledge* a un coût : il n'est pas possible de récupérer vos fichiers si vous perdez votre mot de passe sans code de récupération. C'est un compromis assumé, pas un bug.
 
 Kagibi est publié sous licence **AGPLv3** : le code est auditable, le déploiement est autonome si vous le souhaitez.
+
+---
+
+## Fonctionnalités
+
+### Gestion des fichiers
+
+- **Upload de fichiers** — glisser-déposer ou sélection classique, avec progression en temps réel (phase de chiffrement puis phase d'envoi).
+- **Upload de dossiers** — téléversez une arborescence entière en une fois. En cas de conflit de nom, trois options s'offrent à vous : renommer automatiquement, ignorer ou remplacer.
+- **Upload multipart** — les fichiers volumineux (> 10 Mo) sont découpés en fragments de 10 Mo, chiffrés individuellement et envoyés en parallèle.
+- **Téléchargement** — déchiffrement en streaming côté client : le fichier n'est jamais reconstruit en clair en mémoire avant d'être écrit sur disque.
+- **Organisation** — création de dossiers, renommage, déplacement, suppression (simple ou récursive).
+- **Tags** — étiquetez vos dossiers pour les retrouver plus facilement via la recherche et les filtres.
+- **Prévisualisation** — aperçu des images et PDF directement dans le navigateur, sans téléchargement.
+
+### Recherche et filtrage
+
+La barre de recherche globale (raccourci **Ctrl+K**) parcourt l'ensemble de vos fichiers et dossiers.
+
+- **Résultats en contexte** — cliquer sur un résultat vous amène directement à l'emplacement du fichier dans l'arborescence, avec mise en surbrillance.
+- **Filtres disponibles** :
+  - Par catégorie de type (Tous, Documents, Images, Archives)
+  - Par extension (ex. `.pdf`, `.mp4`)
+  - Par tag (étiquettes posées sur les dossiers)
+  - Par type d'élément (fichier ou dossier)
+- **Note** : la recherche est désactivée si le chiffrement des noms de fichiers est activé, les noms stockés étant opaques pour le serveur.
+
+### Partage
+
+Trois mécanismes de partage coexistent, décrits en détail dans la section [Les trois systèmes de partage](#les-trois-systèmes-de-partage).
+
+### Transfert P2P
+
+Envoi direct d'un fichier d'un appareil à un autre, chiffré de bout en bout, sans stockage intermédiaire sur nos serveurs. Voir la section dédiée pour le détail du fonctionnement.
+
+### Amis et présence
+
+- Système de **code ami** (8 caractères alphanumériques, ex. `#A7KD92XZ`) pour trouver d'autres utilisateurs sans exposer l'adresse e-mail.
+- Envoi et acceptation de demandes d'amitié.
+- **Indicateur de présence** en temps réel (point vert) avec tolérance de 8 secondes à la déconnexion pour éviter les clignotements.
+- Suppression mutuelle d'un ami (révoque automatiquement les partages associés).
+
+### Sécurité du compte
+
+- **Authentification à deux facteurs (MFA)** — TOTP (application d'authentification), avec verrouillage de 15 minutes après 5 tentatives échouées.
+- **Code de récupération** — généré à l'inscription, permet de regagner l'accès à la clé maître si le mot de passe est perdu.
+- **Révocation de sessions** — déconnexion de tous les appareils instantanément.
+- **Élévation AAL2** — certaines actions sensibles (changement de mot de passe, suppression du compte) nécessitent une confirmation MFA même si la session est déjà active.
+
+### Conformité RGPD
+
+- **Droit à l'effacement (Art. 17)** — la suppression de compte déclenche une suppression logique immédiate, suivie d'une suppression physique définitive (fichiers S3 + lignes base de données) au bout de 30 jours.
+- **Droit à la portabilité (Art. 20)** — export de toutes vos données sur demande.
+
+### Interface et ergonomie
+
+- Thème **clair / sombre**, bascule en un clic.
+- Interface **multilingue** : français et anglais, avec persistance du choix.
+- **Navigation au clavier** : Ctrl+K pour la recherche, touches fléchées dans les listes.
+- **Design responsive** : navigation adaptée mobile avec barre inférieure et feuilles de bas de page.
+- **Quota de stockage** affiché en temps réel dans la barre latérale (mis à jour en moins de 2 secondes après chaque opération).
 
 ---
 
@@ -165,18 +227,36 @@ Le serveur stocke : la `FileKey` chiffrée (inutilisable sans la clé privée du
 
 ### 3. Transfert P2P (appareil à appareil)
 
-Le transfert P2P envoie des fichiers directement d'un appareil à un autre, sans passer par le stockage serveur.
-**Toutefois, les réseaux internet modernes rendent souvent les connexions directes impossibles (NAT, pare-feu). Kagibi utilise un serveur TURN pour relayer les données quand nécessaire, mais le chiffrement de bout en bout est maintenu.**
-Concrètement, les appareils établissent une connexion WebRTC DataChannel, et les données sont chiffrées en AES-GCM avant d'être envoyées. Le serveur ne voit que des flux de données chiffrés, même lors du relais TURN.
+Le transfert P2P envoie des fichiers directement d'un appareil à un autre, chiffré de bout en bout, sans stockage serveur intermédiaire.
 
-**Fonctionnement :**
+Les réseaux modernes rendent parfois les connexions directes impossibles (NAT, pare-feu). Dans ce cas, Kagibi utilise un serveur TURN (relais) qui appartient à Kagibi. **Les données transitant par ce relais restent chiffrées en AES-GCM — le serveur ne voit que des flux opaques, pas le contenu.**
 
-1. Les deux appareils établissent une connexion **WebRTC DataChannel** via un serveur de signalisation (WebSocket).
-2. Le backend relaie uniquement les messages de négociation WebRTC (offer/answer/ICE candidates), stockés temporairement dans la table `p2p_signals` pour livraison hors-ligne.
-3. Une fois la connexion pair-à-pair établie, les données transitent **directement** entre les appareils, chiffrées en AES-GCM par la couche applicative.
-4. Le serveur ne voit ni le contenu transféré, ni les métadonnées du fichier.
+#### Deux modes de transfert
 
-Les transferts P2P sont comptabilisés par plan utilisateur (`p2p_max_exchanges`).
+**Mode direct (entre amis enregistrés)**
+
+1. L'expéditeur sélectionne un ami en ligne et un fichier, puis lance le transfert.
+2. Une clé de fichier AES-256 est générée aléatoirement, chiffrée avec la clé publique RSA du destinataire.
+3. La connexion WebRTC est négociée via WebSocket (signaux stockés dans `p2p_signals`).
+4. Une fois le canal DataChannel ouvert, le fichier est envoyé par fragments de 16 Ko, chacun chiffré avec un nonce aléatoire distinct.
+5. Le destinataire reçoit une notification sonore + visuelle, accepte le transfert, et son navigateur déchiffre et reconstitue le fichier localement.
+
+**Mode invitation (sans compte requis)**
+
+1. L'expéditeur génère un **lien d'invitation** depuis la page P2P.
+2. Le lien peut être partagé manuellement ou envoyé par e-mail (en français ou en anglais au choix).
+3. Le destinataire ouvre le lien sur `send.kagibi.cloud` — **aucun compte n'est nécessaire**.
+4. Il génère une paire de clés RSA éphémère dans son navigateur (non stockée).
+5. L'expéditeur est notifié de l'acceptation et démarre le transfert WebRTC.
+6. Le lien d'invitation est à **usage unique** et expire après 24 heures.
+
+#### Informations affichées pendant le transfert
+
+- **Progression** en pourcentage avec barre visuelle.
+- **Vitesse de transfert** (ex. `4.2 MB/s`) calculée en temps réel.
+- **Temps restant estimé** (ex. `~1m 30s`).
+- **Type de connexion** : direct (LAN), via STUN (traversée NAT) ou via relais TURN.
+- **Re-notification** : l'expéditeur peut relancer une alerte sonore au destinataire (jusqu'à 3 fois, cooldown 30 s).
 
 ---
 
@@ -186,14 +266,14 @@ Les transferts P2P sont comptabilisés par plan utilisateur (`p2p_max_exchanges`
 
 | Donnée | Format | Pourquoi |
 |--------|--------|---------|
-| Adresse email | Clair | Authentification |
+| Adresse e-mail | Chiffré (AES-256-GCM) | Authentification, sans exposition en clair |
 | Nom d'affichage | Clair | Interface utilisateur |
 | Mot de passe | bcrypt (coût 12) | Vérification à la connexion |
 | Sel Argon2id | Aléatoire (16 octets) | Dérivation de la KEK côté client |
 | `EncryptedMasterKey` | Chiffré (KEK) | Restauration de la MasterKey à la connexion |
 | Clé publique RSA | Clair | Chiffrement des partages entrants |
 | `EncryptedPrivateKey` | Chiffré (MasterKey) | Déchiffrement des partages reçus |
-| Code de récupération | SHA-256 (hash) | Réinitialisation sans email |
+| Code de récupération | SHA-256 (hash) | Réinitialisation sans e-mail |
 | Code ami | Clair | Recherche d'amis |
 
 ### Métadonnées de fichiers
@@ -211,14 +291,13 @@ Les transferts P2P sont comptabilisés par plan utilisateur (`p2p_max_exchanges`
 - Liste d'amis et statut (en attente / accepté)
 - Partages actifs : identifiant de ressource + clé chiffrée + permissions
 - Liens publics : token + clé chiffrée + expiration + hash de mot de passe optionnel
-- Activités récentes (fichiers accédés — optionnel)
+- Invitations P2P : token + nom du fichier + taille + date d'expiration (contenu non stocké)
 
 ### Ce qui n'est pas collecté
 
 - Contenu des fichiers (jamais en clair sur le serveur)
 - Historique de navigation ou de recherche
 - Adresses IP (sauf journalisation temporaire à des fins de sécurité/abus)
-- Données analytiques ou pixels de tracking
 - Informations sur l'appareil ou le navigateur
 
 ---
@@ -270,8 +349,8 @@ Si le code de récupération est également perdu, les données sont **définiti
 ```bash
 git clone https://github.com/Buuuntyyy/Kagibi.git
 cd Kagibi
-cp backend/.env.example backend/.env # Configurer les variables d'environnement (voir backend/README.md)
-cp frontend/.env.example frontend/.env # Configurer les variables d'environnement (voir frontend/README.md)
+cp backend/.env.example backend/.env   # Configurer les variables S3, JWT_SECRET, etc.
+cp frontend/.env.example frontend/.env # Configurer VITE_BACKEND_URL=http://localhost:8080
 
 cd backend
 go run main.go
