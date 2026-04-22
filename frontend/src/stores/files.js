@@ -237,6 +237,7 @@ export const useFileStore = defineStore('files', {
     // Used to coordinate navigation from Suggestions
     pendingNavigatePath: null,
     pendingHighlight: null,     // { id, type } — item to select after navigation
+    pendingSearch: null,        // query to execute instead of fetchItems after navigation
     // Maps encrypted folder path → decrypted display name (populated when encrypt_filenames=true)
     folderNameCache: {},
   }),
@@ -340,6 +341,12 @@ export const useFileStore = defineStore('files', {
     },
     async fetchItems(path) {
       const preferenceStore = usePreferencesStore()
+        // If a pending search is set, run it instead of fetching the folder
+        if (this.pendingSearch) {
+          const q = this.pendingSearch
+          this.pendingSearch = null
+          return this.searchFiles(q)
+        }
         // If a pending navigation is set, consume it and use that path
         if (this.pendingNavigatePath) {
           path = this.pendingNavigatePath;

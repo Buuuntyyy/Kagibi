@@ -447,11 +447,20 @@ const handleEnter = () => {
     const fLen = filteredFolders.value.length
     if (activeIndex.value < fLen) openItem(filteredFolders.value[activeIndex.value], 'folder')
     else openItem(filteredFiles.value[activeIndex.value - fLen], 'file')
-  } else {
-    // No item selected: commit search, close dropdown, show filter bar
-    showDropdown.value = false
-    searchCommitted.value = true
+    return
   }
+
+  if (!searchQuery.value.trim()) return
+
+  showDropdown.value = false
+  searchCommitted.value = true
+
+  if (router.currentRoute.value.name !== 'MyFiles') {
+    // Navigate to the file page; fetchItems will intercept and run the search instead
+    fileStore.pendingSearch = searchQuery.value.trim()
+    router.push({ name: 'MyFiles' })
+  }
+  // Already on MyFiles: dropdown is closed, committed filter bar appears — done
 }
 
 const openItem = (item, type = 'file') => {
