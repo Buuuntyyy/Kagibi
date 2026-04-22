@@ -68,6 +68,11 @@
          <div class='progress-track'>
              <div class='progress-fill' :style='{ width: p2pStore.activeTransfer.progress + "%" }'></div>
          </div>
+         <!-- Speed + ETA row -->
+         <div v-if='transferSpeed !== null' class='speed-eta-row'>
+             <span class='speed-value'>{{ formattedSpeed }}</span>
+             <span v-if='transferETA !== null' class='eta-value'>{{ formattedETA }}</span>
+         </div>
          <p class='filename-display' :title='p2pStore.activeTransfer.fileName'>{{ p2pStore.activeTransfer.fileName }}</p>
          
          <!-- Keep window active warning -->
@@ -248,6 +253,45 @@ const formatSize = (bytes) => {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
+
+// Speed in bytes/sec, null if not yet meaningful
+const transferSpeed = computed(() => {
+    const t = p2pStore.activeTransfer;
+    if (!t?.transferStartedAt) return null;
+    const elapsed = (now.value - t.transferStartedAt) / 1000;
+    if (elapsed < 1) return null;
+    const transferred = t.transferredBytes ?? t.receivedSize ?? 0;
+    return transferred / elapsed;
+});
+
+const transferETA = computed(() => {
+    const speed = transferSpeed.value;
+    if (!speed || speed < 512) return null;
+    const t = p2pStore.activeTransfer;
+    const total = t.totalBytes ?? t.fileSize ?? 0;
+    const transferred = t.transferredBytes ?? t.receivedSize ?? 0;
+    const remaining = total - transferred;
+    if (remaining <= 0) return null;
+    return remaining / speed; // seconds
+});
+
+const formattedSpeed = computed(() => {
+    const s = transferSpeed.value;
+    if (s === null) return '';
+    if (s >= 1024 * 1024) return `${(s / (1024 * 1024)).toFixed(1)} MB/s`;
+    if (s >= 1024) return `${(s / 1024).toFixed(0)} KB/s`;
+    return `${Math.round(s)} B/s`;
+});
+
+const formattedETA = computed(() => {
+    const secs = transferETA.value;
+    if (secs === null) return '';
+    if (secs < 5) return '< 5s';
+    if (secs < 60) return `~${Math.round(secs)}s`;
+    const m = Math.floor(secs / 60);
+    const s = Math.round(secs % 60);
+    return s > 0 ? `~${m}m ${s}s` : `~${m}m`;
+});
 
 const accept = () => p2pStore.acceptTransfer();
 const reject = () => p2pStore.rejectTransfer();
@@ -442,6 +486,23 @@ const close = () => {
     font-weight: 700;
     color: var(--primary-color, #3498db);
 }
+.speed-eta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
+    margin-bottom: 8px;
+}
+
+.speed-value {
+    font-weight: 600;
+    color: var(--primary-color, #3498db);
+}
+
+.eta-value {
+    color: var(--secondary-text-color, #888);
+}
+
 .filename-display {
     font-size: 0.85rem;
     color: var(--main-text-color, #333);
