@@ -48,6 +48,10 @@ La barre de recherche globale (raccourci **Ctrl+K**) parcourt l'ensemble de vos 
 
 Trois mécanismes de partage coexistent, décrits en détail dans la section [Les trois systèmes de partage](#les-trois-systèmes-de-partage).
 
+- **Partage par lien** — lien public (avec ou sans compte), possibilité de déposer des fichiers dans un dossier partagé publiquement.
+- **Partage avec un ami** — permissions granulaires (téléchargement, création, suppression, déplacement), gestion visuelle en vert/rouge. Les fichiers déposés par l'ami sont récupérables par le propriétaire via une chaîne de clés dossier.
+- **Transfert P2P** — aucun stockage serveur, chiffrement de bout en bout.
+
 ### Transfert P2P
 
 Envoi direct d'un fichier d'un appareil à un autre, chiffré de bout en bout, sans stockage intermédiaire sur nos serveurs. Voir la section dédiée pour le détail du fonctionnement.
@@ -195,6 +199,8 @@ Vous générez un lien public que n'importe qui peut ouvrir, sans compte.
 4. Le destinataire visite le lien, Kagibi lui retourne le blob chiffré et la `ShareKey`.
 5. Son navigateur déchiffre le fichier localement.
 
+Lorsque le lien porte sur un **dossier**, la page publique permet également de **déposer des fichiers** dans ce dossier. Les fichiers envoyés par des visiteurs sont chiffrés dans leur navigateur avec la `FolderKey`, puis téléversés vers le stockage S3 du propriétaire. Le serveur n'a à aucun moment accès au contenu en clair.
+
 Le serveur stocke : le token, la clé chiffrée avec la ShareKey, le hash du mot de passe optionnel, la date d'expiration. Il ne peut pas lire le fichier.
 
 ---
@@ -211,7 +217,7 @@ Le partage direct entre comptes utilise la cryptographie asymétrique pour garan
 
 2. Pour ajouter un ami, on utilise son **code ami** (8 caractères alphanumériques, ex. `#A7KD92XZ`), unique par compte.
 
-3. Pour partager un fichier :
+3. Pour partager un **fichier** :
    - Kagibi récupère la clé publique RSA du destinataire.
    - La `FileKey` (clé AES du fichier) est chiffrée avec cette clé publique.
    - Le résultat chiffré est stocké en base, rattaché au partage.
@@ -220,6 +226,43 @@ Le partage direct entre comptes utilise la cryptographie asymétrique pour garan
    - Il récupère la `FileKey` chiffrée.
    - Son navigateur la déchiffre avec sa clé privée RSA (déchiffrée elle-même avec sa MasterKey).
    - Le fichier est déchiffré localement.
+
+5. Pour partager un **dossier** (avec permissions granulaires) :
+   - Le propriétaire génère une `FolderKey` (AES-256), chiffrée avec sa propre MasterKey et stockée côté serveur.
+   - Il définit les permissions accordées à l'ami.
+   - L'ami accède au contenu du dossier selon les droits accordés.
+
+#### Permissions de partage de dossier
+
+| Permission | Accorde |
+|------------|---------|
+| Téléchargement | Accéder et télécharger les fichiers |
+| Création | Déposer des fichiers et créer des sous-dossiers |
+| Suppression | Supprimer des fichiers dans le dossier partagé |
+| Déplacement | Renommer et déplacer des éléments |
+
+Permissions accordées par défaut lors d'un nouveau partage : **Téléchargement + Création**.
+
+Les permissions sont visualisées en couleur dans la boîte de dialogue de gestion du partage : **vert** = droit accordé, **rouge** = droit refusé. Toute tentative d'action sans le droit correspondant déclenche un message d'erreur explicite.
+
+#### Chaîne de clés pour les fichiers déposés par un ami
+
+Quand un ami dépose un fichier dans votre dossier partagé, le fichier est chiffré avec une clé dérivée de la `FolderKey`. Pour que le propriétaire puisse le télécharger, le backend expose un endpoint de récupération de clé :
+
+```
+MasterKey du propriétaire
+        │
+        ▼
+  Déchiffre folder.encrypted_key  →  FolderKey
+        │
+        ▼
+  Déchiffre folder_file_key.encrypted_key  →  FileKey
+        │
+        ▼
+  Déchiffrement du contenu du fichier
+```
+
+Cette chaîne garantit que le propriétaire retrouve toujours accès à ses fichiers, même ceux déposés par des tiers, sans jamais exposer la MasterKey au serveur.
 
 Le serveur stocke : la `FileKey` chiffrée (inutilisable sans la clé privée du destinataire), les relations d'amitié, les permissions.
 
