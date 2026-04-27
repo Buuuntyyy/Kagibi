@@ -185,6 +185,13 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	publicShareRoutes.GET("/:token/download", func(c *gin.Context) { shares.DownloadSharedFileHandler(c, db) })
 	publicShareRoutes.GET("/:token/download/file/:file_id", func(c *gin.Context) { shares.DownloadFileFromSharedFolderHandler(c, db) })
 	publicShareRoutes.GET("/:token/browse/*subpath", func(c *gin.Context) { shares.BrowseSharedFolderHandler(c, db) })
+	publicShareRoutes.DELETE("/:token/file/:file_id", func(c *gin.Context) { shares.DeleteFileFromSharedFolderHandler(c, db) })
+	publicShareRoutes.DELETE("/:token/folder/:folder_id", func(c *gin.Context) { shares.DeleteFolderFromSharedFolderHandler(c, db) })
+	publicShareRoutes.POST("/:token/folder", func(c *gin.Context) { shares.CreateFolderInPublicShareHandler(c, db) })
+	publicShareRoutes.POST("/:token/rename", func(c *gin.Context) { shares.RenameInPublicShareHandler(c, db) })
+	publicShareRoutes.POST("/:token/multipart/initiate", func(c *gin.Context) { shares.InitiatePublicShareUploadHandler(c, db) })
+	publicShareRoutes.POST("/:token/multipart/complete", func(c *gin.Context) { shares.CompletePublicShareUploadHandler(c, db) })
+	publicShareRoutes.POST("/:token/multipart/abort", func(c *gin.Context) { shares.AbortPublicShareUploadHandler(c, db) })
 
 	// MFA routes — protected by JWT, registered on the auth group
 	mfaGroup := authGroup.Group("/mfa")
@@ -273,6 +280,7 @@ func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	filesG.GET("/download/:fileID/presigned", func(c *gin.Context) { files.GetPresignedDownloadHandler(c, db) })
 	filesG.POST("/batch-presign", func(c *gin.Context) { files.BatchPresignDownloadHandler(c, db) })
 	filesG.POST("/selection-tree", func(c *gin.Context) { files.GetSelectionTreeHandler(c, db) })
+	filesG.GET("/:id/folder-key", func(c *gin.Context) { files.GetFileFolderKeyHandler(c, db) })
 }
 
 func registerFolderRoutes(g *gin.RouterGroup, db *bun.DB) {
@@ -307,12 +315,28 @@ func registerShareRoutes(g *gin.RouterGroup, db *bun.DB) {
 	sharesG.GET(routeDirect, func(c *gin.Context) { shares.ListDirectSharesForResourceHandler(c, db) })
 	sharesG.DELETE(routeDirect, func(c *gin.Context) { shares.RemoveDirectShareHandler(c, db) })
 	sharesG.GET("/check-path", func(c *gin.Context) { shares.GetActiveSharesForPathHandler(c, db) })
+	sharesG.GET("/check-path-direct", func(c *gin.Context) { shares.GetDirectSharesForPathHandler(c, db) })
 	sharesG.GET("/file/:fileID", func(c *gin.Context) { shares.GetShareForResourceHandler(c, db) })
 	sharesG.GET("/direct/folder/:folderID/content", func(c *gin.Context) { shares.GetSharedFolderContentHandler(c, db) })
 	sharesG.DELETE("/link/:shareID", func(c *gin.Context) { shares.DeleteShareLinkHandler(c, db) })
 	sharesG.GET("/with-me", func(c *gin.Context) { shares.ListImportedSharesHandler(c, db) })
 	sharesG.POST("/with-me", func(c *gin.Context) { shares.ImportShareHandler(c, db) })
 	sharesG.DELETE("/with-me/:id", func(c *gin.Context) { shares.RemoveImportedShareHandler(c, db) })
+	sharesG.GET("/link/:shareID/overrides", func(c *gin.Context) { shares.ListShareItemOverridesHandler(c, db) })
+	sharesG.PUT("/link/:shareID/overrides", func(c *gin.Context) { shares.UpsertShareItemOverrideHandler(c, db) })
+	sharesG.DELETE("/link/:shareID/overrides", func(c *gin.Context) { shares.DeleteShareItemOverrideHandler(c, db) })
+	sharesG.POST("/link/:shareID/overrides/bulk", func(c *gin.Context) { shares.BulkOverrideHandler(c, db) })
+	sharesG.PATCH("/link/:shareID/permissions", func(c *gin.Context) { shares.UpdateSharePermissionsHandler(c, db) })
+	sharesG.GET("/link/:shareID/browse/*subpath", func(c *gin.Context) { shares.BrowseShareTreeHandler(c, db) })
+	sharesG.PATCH("/direct/:share_id/permissions", func(c *gin.Context) { shares.UpdateDirectSharePermissionsHandler(c, db) })
+	sharesG.POST("/direct/:share_id/create-folder", func(c *gin.Context) { shares.CreateFolderInDirectShareHandler(c, db) })
+	sharesG.DELETE("/direct/:share_id/file/:file_id", func(c *gin.Context) { shares.DeleteFileFromDirectShareHandler(c, db) })
+	sharesG.DELETE("/direct/:share_id/folder/:folder_id", func(c *gin.Context) { shares.DeleteFolderFromDirectShareHandler(c, db) })
+	sharesG.POST("/direct/:share_id/rename", func(c *gin.Context) { shares.RenameInDirectShareHandler(c, db) })
+	sharesG.POST("/direct/:share_id/multipart/initiate", func(c *gin.Context) { shares.InitiateSharedMultipartHandler(c, db) })
+	sharesG.POST("/direct/:share_id/multipart/complete", func(c *gin.Context) { shares.CompleteSharedMultipartHandler(c, db) })
+	sharesG.POST("/direct/:share_id/multipart/abort", func(c *gin.Context) { shares.AbortSharedMultipartHandler(c, db) })
+	sharesG.GET("/direct/:share_id/folder/:folder_id/tree", func(c *gin.Context) { shares.GetSharedFolderTreeHandler(c, db) })
 }
 
 func registerSecurityRoutes(g *gin.RouterGroup) {

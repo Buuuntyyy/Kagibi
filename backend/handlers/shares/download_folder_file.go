@@ -50,6 +50,11 @@ func DownloadFileFromSharedFolderHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	if !shareLink.PermDownload {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Download not permitted on this share"})
+		return
+	}
+
 	var file pkg.File
 	err = db.NewSelect().Model(&file).
 		Where("id = ?", fileID).
@@ -67,6 +72,33 @@ func DownloadFileFromSharedFolderHandler(c *gin.Context, db *bun.DB) {
 
 	if !strings.HasPrefix(file.Path, shareLink.Path) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "File is not in the shared folder"})
+		return
+	}
+
+	// Load all overrides for the share to check access and download permissions
+	var overrides []pkg.ShareItemOverride
+	_ = db.NewSelect().Model(&overrides).
+		Where("share_id = ?", shareLink.ID).
+		Scan(c.Request.Context())
+
+	overrideMap := make(map[string]pkg.ShareItemOverride, len(overrides))
+	for _, o := range overrides {
+		overrideMap[o.ItemPath] = o
+	}
+
+	// Reject if the file itself or any ancestor folder is set to 'none'
+	for _, o := range overrides {
+		if o.AccessLevel == "none" {
+			if strings.HasPrefix(file.Path, o.ItemPath+"/") || file.Path == o.ItemPath {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Access to this file is restricted"})
+				return
+			}
+		}
+	}
+
+	// Reject if the file itself or any ancestor folder has can_download = false
+	if !effectiveCanDownload(overrideMap, file.Path, true) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Download not permitted for this file"})
 		return
 	}
 

@@ -62,15 +62,27 @@
             <template #link="{ item }">
               <div class="link-actions">
                 <button @click.stop="copyLink(item.link)" class="icon-btn" :title="t('shared.copyLink')">
-                  📋
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
                 </button>
               </div>
             </template>
 
             <template #actions="{ item }">
-              <button @click.stop="deleteShare(item.id)" class="delete-btn" :title="t('shared.deleteShare')">
-                🗑️ {{ t('common.delete') }}
-              </button>
+              <div class="action-group">
+                <button @click.stop="openManageDialog(item)" class="icon-btn" title="Gérer le partage">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                </button>
+                <button v-if="item.resource_type === 'folder' && item.token !== 'DIRECT'" @click.stop="navigateToFolder(item)" class="icon-btn" title="Naviguer vers le dossier">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+                </button>
+                <button v-if="item.resource_type === 'folder' && item.token === 'DIRECT'" @click.stop="navigateToSharedFolder(item)" class="icon-btn" title="Ouvrir le dossier partagé">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+                </button>
+                <button @click.stop="deleteShare(item.id)" class="delete-btn" :title="t('shared.deleteShare')">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM15.5 4l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                  {{ t('common.delete') }}
+                </button>
+              </div>
             </template>
           </FileTable>
         </div>
@@ -88,25 +100,35 @@
       </div>
     </div>
   </div>
+
+  <ManageShareDialog
+    :isOpen="showManageDialog"
+    :item="managingItem"
+    @close="showManageDialog = false"
+  />
 </template>
 
 <script setup>
 import { ref, onMounted, computed, reactive, watch }from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
 import FileTable from './file/FileTable.vue';
 import SharedWithMe from './sharedWithMe.vue';
+import ManageShareDialog from './ManageShareDialog.vue';
 import { usePreferencesStore } from '../stores/preferences';
 import { useFileStore } from '../stores/files';
 
 const { t } = useI18n();
 const route = useRoute();
+const router = useRouter();
 const preferenceStore = usePreferencesStore();
 const fileStore = useFileStore();
 const shares = ref([]);
 const loading = ref(true);
 const error = ref(null);
+const showManageDialog = ref(false);
+const managingItem = ref(null);
 
 const sections = reactive({
   'my-shares': true,
@@ -210,6 +232,32 @@ const formatDate = (dateString) => {
 const isExpired = (dateString) => {
   if (!dateString) return false;
   return new Date(dateString) < new Date();
+};
+
+const openManageDialog = (share) => {
+  managingItem.value = {
+    ID: share.resource_id,
+    Name: share.resource_name,
+    type: share.resource_type,
+    share_token: share.token,
+    share_id: share.id,
+    perm_download: share.perm_download,
+    perm_create: share.perm_create,
+    perm_delete: share.perm_delete,
+    perm_move: share.perm_move,
+  };
+  showManageDialog.value = true;
+};
+
+const navigateToFolder = (share) => {
+  fileStore.currentPath = share.resource_path || '/';
+  router.push('/dashboard/home');
+};
+
+const navigateToSharedFolder = async (share) => {
+  // For direct shares from the owner's "Mes Partages" view, navigate owner to their own folder
+  fileStore.currentPath = share.resource_path || '/';
+  router.push('/dashboard/files');
 };
 
 onMounted(() => {
@@ -510,5 +558,11 @@ onMounted(() => {
   cursor: default;
   font-weight: bold;
   text-decoration: none;
+}
+
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 </style>

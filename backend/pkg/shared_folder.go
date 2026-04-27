@@ -58,19 +58,23 @@ func GetSharedFolderContent(db *bun.DB, basePath string, ownerID string, shareID
 		searchPrefix = ""
 	}
 
-	// Files directly in the folder
+	// Files directly in the folder (preview files are always excluded)
 	err := db.NewSelect().Model(&files).
 		Where("user_id = ?", ownerID).
+		Where("is_preview = ?", false).
 		Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"/%", searchPrefix+"/%/%").
 		Scan(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Folders directly in the folder
+	// Folders directly in the folder (with sizes)
 	err = db.NewSelect().Model(&folders).
-		Where("user_id = ?", ownerID).
-		Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"/%", searchPrefix+"/%/%").
+		ColumnExpr("?TableAlias.*").
+		ColumnExpr("COALESCE(fs.size_bytes, 0) AS size_bytes").
+		Join("LEFT JOIN folder_sizes AS fs ON fs.folder_id = ?TableAlias.id").
+		Where("?TableAlias.user_id = ?", ownerID).
+		Where("?TableAlias.path LIKE ? AND ?TableAlias.path NOT LIKE ?", searchPrefix+"/%", searchPrefix+"/%/%").
 		Scan(ctx)
 	if err != nil {
 		return nil, nil, err

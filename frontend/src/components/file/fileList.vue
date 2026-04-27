@@ -19,25 +19,35 @@
 
     <div class="toolbar" v-if="preferenceStore.showToolBar">
       <div class="toolbar-left">
-        <button @click="triggerFileInput" class="btn-add-file">{{ t('file.addFile') }}</button>
-        <button @click="createNewFolder" class="btn-add-file">{{ t('file.createFolder') }}</button>
-        <button @click="triggerFolderInput" :disabled="folderProgress.isOpen" class="btn-add-file">
-          {{ t('file.uploadFolder') }}
-        </button>
+        <template v-if="fileStore.viewMode !== 'shared'">
+          <button @click="triggerFileInput" class="btn-add-file">{{ t('file.addFile') }}</button>
+          <button @click="createNewFolder" class="btn-add-file">{{ t('file.createFolder') }}</button>
+          <button @click="triggerFolderInput" :disabled="folderProgress.isOpen" class="btn-add-file">
+            {{ t('file.uploadFolder') }}
+          </button>
+        </template>
+        <template v-else>
+          <button v-if="fileStore.sharedPermissions.create" @click="triggerSharedFileInput" class="btn-add-file">{{ t('file.addFile') }}</button>
+          <button v-if="fileStore.sharedPermissions.create" @click="createNewFolder" class="btn-add-file">{{ t('file.createFolder') }}</button>
+        </template>
       </div>
       <div class="toolbar-right">
-        <button @click="renameSelectedItem" :disabled="selectedItems.length !== 1" class="btn-rename">
+        <button v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.move"
+          @click="renameSelectedItem" :disabled="selectedItems.length !== 1" class="btn-rename">
           {{ t('file.rename') }}
         </button>
-        <button @click="downloadSelectedFiles" :disabled="selectedItems.length === 0" class="btn-download">
+        <button v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.download"
+          @click="downloadSelectedFiles" :disabled="selectedItems.length === 0" class="btn-download">
           {{ t('file.download') }}
         </button>
-        <button @click="deleteSelectedItems" :disabled="selectedItems.length === 0" class="btn-delete">
+        <button v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.delete"
+          @click="deleteSelectedItems" :disabled="selectedItems.length === 0" class="btn-delete">
           {{ t('common.delete') }}
         </button>
       </div>
     </div>
     <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" multiple />
+    <input type="file" ref="sharedFileInput" @change="handleSharedFileUpload" style="display: none" multiple />
     <input type="file" ref="folderInput" @change="handleFolderUpload" style="display: none" webkitdirectory />
     <div class="path-banner">
 
@@ -195,36 +205,42 @@
     v-if="contextMenu.visible"
     :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }">
       <template v-if="contextMenu.item">
-        <div class="menu-item" @click.stop="handleContextAction('preview')" v-if="contextMenu.item.type === 'file'">
+        <div class="menu-item" @click.stop="handleContextAction('preview')"
+          v-if="contextMenu.item.type === 'file' && (fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.download)">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></span> {{ t('file.preview') }}
         </div>
-        <div class="menu-item" @click.stop="handleContextAction('download')">
+        <div class="menu-item" @click.stop="handleContextAction('download')"
+          v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.download">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg></span> {{ contextMenu.item.type === 'folder' ? t('file.downloadZip') : t('file.download') }}
         </div>
-        <div class="menu-item" @click.stop="handleContextAction('rename')">
+        <div class="menu-item" @click.stop="handleContextAction('rename')"
+          v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.move">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M14.06 9.02l.92.92L5.92 19H5v-.92l9.06-9.06M17.66 3c-.25 0-.51.1-.7.29l-1.83 1.83 3.75 3.75 1.83-1.83c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.2-.2-.45-.29-.71-.29zm-3.6 3.19L3 17.25V21h3.75L17.81 9.94l-3.75-3.75z"/></svg></span> {{ t('file.rename') }}
         </div>
-        <div class="menu-item" @click.stop="handleContextAction('move')">
+        <div class="menu-item" @click.stop="handleContextAction('move')" v-if="fileStore.viewMode !== 'shared'">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 12v-3h-4v-4h4V8l5 5-5 5z"/></svg></span> {{ t('file.move') }}
         </div>
-        <div class="menu-item" @click.stop="handleContextAction('share')">
+        <div class="menu-item" @click.stop="handleContextAction('share')" v-if="fileStore.viewMode !== 'shared'">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg></span> {{ t('file.share') }}
         </div>
-        <div class="menu-item" v-if="contextMenu.item && contextMenu.item.shared" @click.stop="handleContextAction('get-share-link')">
+        <div class="menu-item" v-if="fileStore.viewMode !== 'shared' && contextMenu.item && contextMenu.item.shared" @click.stop="handleContextAction('get-share-link')">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></span> {{ t('share.openLink') }}
         </div>
-        <div class="menu-item" @click.stop="handleContextAction('tags')">
+        <div class="menu-item" @click.stop="handleContextAction('tags')" v-if="fileStore.viewMode !== 'shared'">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16zM16 17H5V7h11l3.55 5L16 17z"/></svg></span> {{ t('file.tags') }}
         </div>
-        <div class="menu-item delete" @click.stop="handleContextAction('delete')">
+        <div class="menu-item delete" @click.stop="handleContextAction('delete')"
+          v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.delete">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/></svg></span> {{ t('file.delete') }}
         </div>
       </template>
       <template v-else>
-        <div class="menu-item" @click.stop="handleContextAction('add-file')">
+        <div class="menu-item" @click.stop="handleContextAction('add-file')"
+          v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.create">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15.01l1.41 1.41L11 14.83V19h2v-4.17l1.59 1.59L16 15.01 12.01 11 8 15.01z"/></svg></span> {{ t('file.addFile') }}
         </div>
-        <div class="menu-item" @click.stop="handleContextAction('create-folder')">
+        <div class="menu-item" @click.stop="handleContextAction('create-folder')"
+          v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.create">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V6h5.17l2 2H20v10zm-8-4h2v2h2v-2h2v-2h-2v-2h-2v2h-2z"/></svg></span> {{ t('file.createFolder') }}
         </div>
       </template>
@@ -352,6 +368,7 @@ const loadingSecuritySettings = ref(true)
 const selectedItems = ref([])
 const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
 const fileInput = ref(null)
+const sharedFileInput = ref(null)
 const folderInput = ref(null)
 const folderAlertModal = ref({ isOpen: false, title: '', lines: [] })
 const folderProgress = ref({ isOpen: false, foldersCreated: 0, foldersTotal: 0, phase: 'folders' })
@@ -967,7 +984,11 @@ const handleContextAction = (action) => {
   const item = contextMenu.value.item
 
   if (action === 'add-file') {
-    triggerFileInput()
+    if (fileStore.viewMode === 'shared') {
+      triggerSharedFileInput()
+    } else {
+      triggerFileInput()
+    }
     closeContextMenu()
     return
   }
@@ -984,6 +1005,12 @@ const handleContextAction = (action) => {
       // If multiple items are selected, download them all
       if (selectedItems.value.length > 1) {
         downloadSelectedFiles()
+      } else if (fileStore.viewMode === 'shared') {
+        if (item.type === 'file') {
+          fileStore.downloadFile(item.ID, item.Name, item.MimeType || 'application/octet-stream')
+        } else if (item.type === 'folder') {
+          fileStore.downloadSharedFolderAsZip(item.ID, item.Name)
+        }
       } else if (item.type === 'file') {
         // Use unified download popup for single file
         downloadStore.downloadSingleFile(item.ID, item.Name, item.EncryptedKey, item.Size || 0)
@@ -1191,6 +1218,17 @@ const downloadSelectedFiles = async () => {
 }
 
 const executeDownloadSelectedFiles = async (files, folders) => {
+  // Shared mode: use the store's shared download flows
+  if (fileStore.viewMode === 'shared') {
+    for (const file of files) {
+      await fileStore.downloadFile(file.ID, file.Name, file.MimeType || 'application/octet-stream');
+    }
+    for (const folder of folders) {
+      await fileStore.downloadSharedFolderAsZip(folder.ID, folder.Name);
+    }
+    return;
+  }
+
   // Single file: download with progress popup (unified UX)
   if (files.length === 1 && folders.length === 0) {
     const file = files[0];
@@ -1243,6 +1281,26 @@ const getDeleteWarningMessage = (items) => {
 const deleteSelectedItems = () => {
   if (selectedItems.value.length === 0) return;
 
+  if (fileStore.viewMode === 'shared') {
+    if (!fileStore.sharedPermissions.delete) {
+      uiStore.showError("Vous n'avez pas l'autorisation de supprimer des éléments dans ce partage.");
+      return;
+    }
+    uiStore.requestDeleteConfirmation({
+      title: "Supprimer les éléments",
+      message: '',
+      itemName: selectedItems.value.length === 1 ? selectedItems.value[0].Name : null,
+      itemsCount: selectedItems.value.length,
+      onConfirm: async () => {
+        for (const item of selectedItems.value) {
+          await fileStore.deleteFromShare(item.ID, item.type);
+        }
+        selectedItems.value = [];
+      }
+    });
+    return;
+  }
+
   const warningMessage = getDeleteWarningMessage(selectedItems.value)
 
   uiStore.requestDeleteConfirmation({
@@ -1281,8 +1339,12 @@ const renameSelectedItem = async () => {
 
   if (newName && newName !== item.Name) {
     try {
-      await fileStore.renameItem(item.ID, item.type, newName);
-      selectedItems.value = []; // Clear selection
+      if (fileStore.viewMode === 'shared') {
+        await fileStore.renameInShare(item.ID, item.type, newName);
+      } else {
+        await fileStore.renameItem(item.ID, item.type, newName);
+      }
+      selectedItems.value = [];
     } catch (error) {
       alert("Erreur lors du renommage : " + (error.response?.data?.error || error.message));
     }
@@ -1370,6 +1432,20 @@ const openShareForSelected = () => {
 
 const triggerFileInput = () => {
   fileInput.value.click()
+}
+
+const triggerSharedFileInput = () => {
+  sharedFileInput.value.click()
+}
+
+const handleSharedFileUpload = async (event) => {
+  const files = event.target.files
+  if (files && files.length > 0) {
+    for (const file of files) {
+      await fileStore.uploadSharedFile(file)
+    }
+    event.target.value = ''
+  }
 }
 
 const handleFileUpload = async (event) => {
@@ -1493,8 +1569,13 @@ const handleFolderUpload = async (event) => {
 
 const createNewFolder = async () => {
   const folderName = await openInputDialog(t('dialogs.rename.newFolderTitle'), '', t('dialogs.rename.newFolderPlaceholder'))
-  if (folderName) {
-    await fileStore.createFolder(folderName)
+  if (!folderName) return;
+
+  if (fileStore.viewMode === 'shared') {
+    const current = fileStore.sharedBreadcrumbs[fileStore.sharedBreadcrumbs.length - 1];
+    await fileStore.createSharedFolder(folderName, current.id);
+  } else {
+    await fileStore.createFolder(folderName);
   }
 }
 
@@ -1521,8 +1602,17 @@ const onDrop = async (e) => {
   isDragging.value = false
   const files = e.dataTransfer.files
   if (files.length > 0) {
-    // Use the new queue manager for multi-file uploads
-    await uploadQueueManager.addFiles(files, fileStore.currentPath)
+    if (fileStore.viewMode === 'shared') {
+      if (!fileStore.sharedPermissions.create) {
+        uiStore.showError("Vous n'avez pas l'autorisation d'ajouter des fichiers dans ce partage.");
+        return;
+      }
+      for (const file of files) {
+        await fileStore.uploadSharedFile(file)
+      }
+    } else {
+      await uploadQueueManager.addFiles(files, fileStore.currentPath)
+    }
   }
 }
 

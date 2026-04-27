@@ -69,10 +69,11 @@ type CompleteMultipartRequest struct {
 	TotalSize    int64          `json:"total_size" binding:"required"`
 	ContentType  string         `json:"content_type"`
 	EncryptedKey string         `json:"encrypted_key" binding:"required"`
-	ShareKeys    string         `json:"share_keys"`
-	PreviewID    *int64         `json:"preview_id"`
-	IsPreview    bool           `json:"is_preview"`
-	Synced       bool           `json:"synced"`
+	ShareKeys       string `json:"share_keys"`
+	DirectShareKeys string `json:"direct_share_keys"` // { "rootFolderId": "encryptedFileKey" } for folder shares
+	PreviewID       *int64 `json:"preview_id"`
+	IsPreview       bool   `json:"is_preview"`
+	Synced          bool   `json:"synced"`
 }
 
 // CompletePart represents a completed part with ETag
@@ -352,9 +353,14 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// Process share keys
+	// Process share keys (public link shares → share_file_keys)
 	if err := processShareKeys(ctx, tx, req.ShareKeys, fileRecord); err != nil {
 		log.Printf("Error processing share keys: %v", err)
+	}
+
+	// Process direct share keys (friend folder shares → folder_file_keys)
+	if err := processDirectShareKeys(ctx, tx, req.DirectShareKeys, fileRecord); err != nil {
+		log.Printf("Error processing direct share keys: %v", err)
 	}
 
 	if err := tx.Commit(); err != nil {
