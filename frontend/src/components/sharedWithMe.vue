@@ -81,7 +81,7 @@ import api from '../api';
 import ContextMenu from './file/ContextMenu.vue';
 import { useFileStore } from '../stores/files';
 import { useAuthStore } from '../stores/auth';
-import { decryptKeyWithPrivateKey, importKeyFromPEM, decryptChunkedFileWorker } from '../utils/crypto';
+import { decryptChunkedFileWorker } from '../utils/crypto';
 import sodium from 'libsodium-wrappers-sumo';
 
 const fileStore = useFileStore();
@@ -94,8 +94,6 @@ const loading = ref(false);
 const error = ref(null);
 
 const currentFolder = ref(null);
-const currentFolderKey = ref(null); // Key of the root shared folder (decrypted)
-const folderStack = ref([]);
 
 watch(() => fileStore.shareUpdateTrigger, () => {
     if (currentFolder.value) {
@@ -239,22 +237,8 @@ const handleItemClick = (item) => {
 }
 
 const navigateUp = () => {
-    if (folderStack.value.length > 0) {
-        const parent = folderStack.value.pop();
-        currentFolder.value = parent;
-        if (parent) {
-             fetchFolderContent(parent.resource_id);
-        } else {
-             // Back to root
-             currentFolderKey.value = null; // Clear key
-             fetchSharedWithMe();
-        }
-    } else {
-        // Should not happen if button is only visible when currentFolder != null
-        currentFolder.value = null;
-        currentFolderKey.value = null;
-        fetchSharedWithMe();
-    }
+    currentFolder.value = null;
+    fetchSharedWithMe();
 }
 
 const handleOpenFolder = async (folder) => {
@@ -262,61 +246,14 @@ const handleOpenFolder = async (folder) => {
         console.warn("handleOpenFolder called with undefined folder");
         return;
     }
-    try {
-        // If we are at root, we need to decrypt the folder key
-        if (!currentFolder.value) {
-             if (!folder.encrypted_key) {
-             alert(t('shared.missingFolderKey'));
-                 return;
-             }
-             
-             // Ensure RSA keys are loaded before attempting decryption
-             if (!authStore.privateKey && authStore.masterKey) {
-                 await authStore.ensureRSAKeys(authStore.masterKey);
-             }
-             
-             if (!authStore.privateKey) {
-               throw new Error(t('shared.privateKeyUnavailable'));
-             }
-             
-             // Decrypt Root Folder Key
-            await sodium.ready;
-            const rsaPrivateKey = authStore.privateKey;
-            if (!rsaPrivateKey) throw new Error("Private key not ready");
-            
-            const encryptedKeyBytes = sodium.from_base64(folder.encrypted_key);
-            const folderKeyRaw = await window.crypto.subtle.decrypt(
-                { name: "RSA-OAEP" },
-                rsaPrivateKey,
-                encryptedKeyBytes
-            );
-            
-            // Import as AES-GCM for file decryption later
-            currentFolderKey.value = await window.crypto.subtle.importKey(
-                "raw", 
-                folderKeyRaw,
-                "AES-GCM",
-                true,
-                ["decrypt"]
-            );
-        }
-        
-        // Push current state to stack (if not null, i.e. we are going deeper)
-        // actually we store the *previous* folder in stack
-        folderStack.value.push(currentFolder.value);
-        currentFolder.value = folder;
-        
-        await fetchFolderContent(folder.resource_id);
-    } catch (e) {
-        console.error("Failed to open folder:", e);
-      alert(`${t('shared.openFolderDecryptError')}: ${e.message}`);
-        // Reset navigation if failed
-        if (folderStack.value.length > 0) {
-             // pop back?
-             folderStack.value.pop();
-             currentFolder.value = null; 
-        }
-    }
+    // Navigate to /dashboard/files and open the shared folder there
+    await fileStore.openSharedRoot({
+        id: folder.id || folder.ID,
+        resource_id: folder.resource_id || folder.ID || folder.id,
+        name: folder.name || folder.Name,
+        encrypted_key: folder.encrypted_key,
+    });
+    router.push('/dashboard/files');
 }
 
 const handleContextAction = async (action) => {

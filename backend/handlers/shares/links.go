@@ -34,6 +34,10 @@ type createShareLinkRequest struct {
 	EncryptedKey string           `json:"encrypted_key"`
 	Token        string           `json:"token"`
 	FileKeys     map[int64]string `json:"file_keys"`
+	PermDownload bool             `json:"perm_download"`
+	PermCreate   bool             `json:"perm_create"`
+	PermDelete   bool             `json:"perm_delete"`
+	PermMove     bool             `json:"perm_move"`
 }
 
 func generateToken() (string, error) {
@@ -148,6 +152,11 @@ func DownloadSharedFileHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	if !shareLink.PermDownload {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Download not permitted on this share"})
+		return
+	}
+
 	file, err := getSharedFile(c.Request.Context(), db, shareLink.ResourceID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
@@ -160,6 +169,62 @@ func DownloadSharedFileHandler(c *gin.Context, db *bun.DB) {
 		log.Printf("Error streaming file: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve file from storage"})
 	}
+}
+
+// UpdateSharePermissionsHandler updates the permission flags on an existing share link
+func UpdateSharePermissionsHandler(c *gin.Context, db *bun.DB) {
+	userID := c.GetString("user_id")
+	shareID, err := strconv.ParseInt(c.Param("shareID"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid share ID"})
+		return
+	}
+
+	var body struct {
+		PermDownload *bool `json:"perm_download"`
+		PermCreate   *bool `json:"perm_create"`
+		PermDelete   *bool `json:"perm_delete"`
+		PermMove     *bool `json:"perm_move"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	var share pkg.ShareLink
+	if err := db.NewSelect().Model(&share).Where("id = ? AND owner_id = ?", shareID, userID).Scan(c.Request.Context()); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Share not found"})
+		return
+	}
+
+	if body.PermDownload != nil {
+		share.PermDownload = *body.PermDownload
+	}
+	if body.PermCreate != nil {
+		share.PermCreate = *body.PermCreate
+	}
+	if body.PermDelete != nil {
+		share.PermDelete = *body.PermDelete
+	}
+	if body.PermMove != nil {
+		share.PermMove = *body.PermMove
+	}
+
+	_, err = db.NewUpdate().Model(&share).
+		Column("perm_download", "perm_create", "perm_delete", "perm_move").
+		Where("id = ?", shareID).
+		Exec(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update permissions"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"perm_download": share.PermDownload,
+		"perm_create":   share.PermCreate,
+		"perm_delete":   share.PermDelete,
+		"perm_move":     share.PermMove,
+	})
 }
 
 // GetShareForResourceHandler allows the owner to retrieve share link(s) for a given file
@@ -244,6 +309,10 @@ func createNewShareLink(ctx context.Context, db *bun.DB, userID, path string, re
 		Token:        token,
 		ExpiresAt:    req.ExpiresAt,
 		EncryptedKey: req.EncryptedKey,
+		PermDownload: req.PermDownload,
+		PermCreate:   req.PermCreate,
+		PermDelete:   req.PermDelete,
+		PermMove:     req.PermMove,
 	}
 
 	_, err := db.NewInsert().Model(shareLink).Exec(ctx)

@@ -15,11 +15,20 @@ import (
 	"github.com/uptrace/bun"
 )
 
+type SharePermissions struct {
+	Download bool `json:"download"`
+	Create   bool `json:"create"`
+	Delete   bool `json:"delete"`
+	Move     bool `json:"move"`
+}
+
 type FolderContentResponse struct {
-	Folders      []FolderWithKey `json:"folders"`
-	Files        []FileWithKey   `json:"files"`
-	RootShareID  int64           `json:"root_share_id"`
-	RootFolderID int64           `json:"root_folder_id"`
+	Folders           []FolderWithKey  `json:"folders"`
+	Files             []FileWithKey    `json:"files"`
+	RootShareID       int64            `json:"root_share_id"`
+	RootFolderID      int64            `json:"root_folder_id"`
+	CurrentFolderPath string           `json:"current_folder_path"`
+	Permissions       SharePermissions `json:"permissions"`
 }
 
 type FileWithKey struct {
@@ -66,6 +75,22 @@ func GetSharedFolderContentHandler(c *gin.Context, db *bun.DB) {
 	resp := enrichContentWithKeys(c.Request.Context(), db, rootSharedFolderID, files, folders)
 	resp.RootShareID = share.ID
 	resp.RootFolderID = rootSharedFolderID
+	resp.CurrentFolderPath = targetFolder.Path
+	resp.Permissions = SharePermissions{
+		Download: share.PermDownload,
+		Create:   share.PermCreate,
+		Delete:   share.PermDelete,
+		Move:     share.PermMove,
+	}
+
+	if !share.PermDownload {
+		for i := range resp.Files {
+			resp.Files[i].EncryptedKey = ""
+		}
+		for i := range resp.Folders {
+			resp.Folders[i].EncryptedKey = ""
+		}
+	}
 
 	c.JSON(http.StatusOK, resp)
 }

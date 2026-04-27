@@ -405,6 +405,7 @@ export class MultipartUploadManager {
         content_type: metadata.contentType,
         encrypted_key: metadata.encryptedKey,
         share_keys: metadata.shareKeys || '',
+        direct_share_keys: metadata.directShareKeys || '',
         preview_id: metadata.previewId || null,
         is_preview: metadata.isPreview || false
       })

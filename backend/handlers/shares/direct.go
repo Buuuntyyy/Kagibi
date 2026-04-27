@@ -30,6 +30,10 @@ type CreateDirectShareRequest struct {
 	FriendID         string           `json:"friend_id"`
 	EncryptedKey     string           `json:"encrypted_key"` // FileKey (for file) OR FolderKey (for folder), encrypted with friend's PUBLIC key
 	Permission       string           `json:"permission"`
+	PermDownload     *bool            `json:"perm_download"` // nil defaults to true
+	PermCreate       *bool            `json:"perm_create"`   // nil defaults to false
+	PermDelete       *bool            `json:"perm_delete"`   // nil defaults to false
+	PermMove         *bool            `json:"perm_move"`     // nil defaults to false
 	FolderFileKeys   map[int64]string `json:"folder_file_keys"`   // For folders: Map of fileID -> FileKey encrypted with FolderKey
 	FolderFolderKeys map[int64]string `json:"folder_folder_keys"` // For folders: Map of subFolderID -> SubFolderKey encrypted with FolderKey
 }
@@ -70,16 +74,31 @@ func checkUserExists(ctx context.Context, db *bun.DB, userID string) (bool, erro
 	return db.NewSelect().Model((*pkg.User)(nil)).Where(queryIDEq, userID).Exists(ctx)
 }
 
+func resolvePermDownload(p *bool) bool {
+	if p == nil {
+		return true
+	}
+	return *p
+}
+
 func handleFileShare(ctx context.Context, db *bun.DB, req CreateDirectShareRequest) error {
 	share := &pkg.FileShare{
 		FileID:           req.ResourceID,
 		SharedWithUserID: req.FriendID,
 		EncryptedKey:     req.EncryptedKey,
 		Permission:       req.Permission,
+		PermDownload:     resolvePermDownload(req.PermDownload),
 		CreatedAt:        time.Now(),
 	}
 	_, err := db.NewInsert().Model(share).Exec(ctx)
 	return err
+}
+
+func resolveBoolPerm(p *bool, def bool) bool {
+	if p == nil {
+		return def
+	}
+	return *p
 }
 
 func handleFolderShare(ctx context.Context, db *bun.DB, req CreateDirectShareRequest) error {
@@ -88,6 +107,10 @@ func handleFolderShare(ctx context.Context, db *bun.DB, req CreateDirectShareReq
 		SharedWithUserID: req.FriendID,
 		EncryptedKey:     req.EncryptedKey,
 		Permission:       req.Permission,
+		PermDownload:     resolveBoolPerm(req.PermDownload, true),
+		PermCreate:       resolveBoolPerm(req.PermCreate, false),
+		PermDelete:       resolveBoolPerm(req.PermDelete, false),
+		PermMove:         resolveBoolPerm(req.PermMove, false),
 		CreatedAt:        time.Now(),
 	}
 
@@ -158,6 +181,78 @@ func sendShareNotifications(c *gin.Context, db *bun.DB, friendID string) {
 	}); err != nil {
 		log.Print(logStorageUpdateFailed)
 	}
+}
+
+// UpdateDirectSharePermissionsHandler updates permissions on a direct folder share.
+// Only the owner of the shared folder may call this.
+func UpdateDirectSharePermissionsHandler(c *gin.Context, db *bun.DB) {
+	currentUserID := c.GetString("user_id")
+	shareID, err := strconv.ParseInt(c.Param("share_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid share ID"})
+		return
+	}
+
+	var req struct {
+		PermDownload *bool `json:"perm_download"`
+		PermCreate   *bool `json:"perm_create"`
+		PermDelete   *bool `json:"perm_delete"`
+		PermMove     *bool `json:"perm_move"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	// Fetch share and verify ownership via the folder
+	var share pkg.FolderShare
+	if err := db.NewSelect().Model(&share).Where("id = ?", shareID).Scan(c.Request.Context()); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Share not found"})
+		return
+	}
+
+	// Verify the caller owns the folder
+	var folder pkg.Folder
+	if err := db.NewSelect().Model(&folder).Where("id = ? AND user_id = ?", share.FolderID, currentUserID).Scan(c.Request.Context()); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+		return
+	}
+
+	if req.PermDownload != nil {
+		share.PermDownload = *req.PermDownload
+	}
+	if req.PermCreate != nil {
+		share.PermCreate = *req.PermCreate
+	}
+	if req.PermDelete != nil {
+		share.PermDelete = *req.PermDelete
+	}
+	if req.PermMove != nil {
+		share.PermMove = *req.PermMove
+	}
+
+	if _, err := db.NewUpdate().Model(&share).
+		Column("perm_download", "perm_create", "perm_delete", "perm_move").
+		Where("id = ?", shareID).
+		Exec(c.Request.Context()); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update permissions"})
+		return
+	}
+
+	// Notify recipient in real time
+	if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, share.SharedWithUserID, "storage_update", map[string]any{
+		"action":   "share_permissions_updated",
+		"share_id": shareID,
+	}); err != nil {
+		log.Print(logStorageUpdateFailed)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"perm_download": share.PermDownload,
+		"perm_create":   share.PermCreate,
+		"perm_delete":   share.PermDelete,
+		"perm_move":     share.PermMove,
+	})
 }
 
 // RemoveDirectShareHandler revokes a direct share with a friend

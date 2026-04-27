@@ -35,6 +35,11 @@ realtimeStore.onEvent('storage_update', (payload) => {
     fs.fetchItems(fs.currentPath);
     fs.notifyShareUpdate();
   }
+  // If owner changed direct-share permissions, refresh active shared session
+  if (payload.action === 'share_permissions_updated' && payload.share_id) {
+    const fs = useFileStore(pinia);
+    fs.refreshSharedPermissionsIfActive(payload.share_id);
+  }
 });
 
 realtimeStore.onEvent('friend_update', (payload) => {
