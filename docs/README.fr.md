@@ -245,6 +245,8 @@ Permissions accordées par défaut lors d'un nouveau partage : **Téléchargemen
 
 Les permissions sont visualisées en couleur dans la boîte de dialogue de gestion du partage : **vert** = droit accordé, **rouge** = droit refusé. Toute tentative d'action sans le droit correspondant déclenche un message d'erreur explicite.
 
+Les permissions sont **modifiables à tout moment** après création du partage : un clic sur le chip bascule le droit et synchronise immédiatement avec le serveur.
+
 #### Chaîne de clés pour les fichiers déposés par un ami
 
 Quand un ami dépose un fichier dans votre dossier partagé, le fichier est chiffré avec une clé dérivée de la `FolderKey`. Pour que le propriétaire puisse le télécharger, le backend expose un endpoint de récupération de clé :
@@ -265,6 +267,41 @@ MasterKey du propriétaire
 Cette chaîne garantit que le propriétaire retrouve toujours accès à ses fichiers, même ceux déposés par des tiers, sans jamais exposer la MasterKey au serveur.
 
 Le serveur stocke : la `FileKey` chiffrée (inutilisable sans la clé privée du destinataire), les relations d'amitié, les permissions.
+
+---
+
+### Restrictions par élément dans un partage par lien
+
+Pour les dossiers partagés via lien public, il est possible de définir des droits **par sous-élément** indépendamment des permissions globales du lien. Un panneau latéral dans la boîte de dialogue de gestion permet de naviguer dans l'arborescence du dossier partagé et de configurer chaque entrée individuellement.
+
+#### Niveaux d'accès pour les sous-dossiers
+
+| Niveau | Comportement |
+|--------|-------------|
+| Accès complet | Le visiteur voit et peut interagir avec le dossier selon les droits globaux |
+| Lecture seule | Le visiteur peut consulter le contenu mais ne peut pas y écrire |
+| Masqué | Le dossier est invisible pour le visiteur |
+
+Pour chaque fichier, deux droits supplémentaires sont réglables indépendamment :
+- **Téléchargement** : autoriser ou bloquer le téléchargement (et la prévisualisation) de ce fichier spécifique.
+- **Suppression** : autoriser ou protéger ce fichier contre la suppression.
+
+#### Contrôles en masse
+
+Des boutons de contrôle en masse permettent d'appliquer un réglage uniforme à tous les dossiers ou tous les fichiers du niveau courant en un seul clic, puis d'affiner élément par élément.
+
+#### Navigation dans l'arborescence
+
+Le panneau affiche un fil d'Ariane cliquable. Il est possible de descendre dans n'importe quel sous-dossier pour y configurer les restrictions, puis de remonter via le fil d'Ariane.
+
+---
+
+### Vue de gestion des partages
+
+La page "Partages" centralise tous vos partages actifs en deux sections repliables :
+
+- **Mes partages** — liste dédupliquée de vos ressources partagées avec : type (fichier / dossier), compteur de vues, date de création, date d'expiration, copie du lien en un clic, accès direct au dossier partagé dans l'arborescence, et gestion des droits.
+- **Partagés avec moi** — liste des ressources que d'autres utilisateurs ont partagées avec vous.
 
 ---
 
