@@ -25,6 +25,7 @@ import (
 )
 
 const errLinkExpired = "Link expired"
+const errLinkAlreadyUsed = "Link already used"
 
 type createShareLinkRequest struct {
 	ResourceID   int64            `json:"resource_id"`
@@ -34,6 +35,7 @@ type createShareLinkRequest struct {
 	EncryptedKey string           `json:"encrypted_key"`
 	Token        string           `json:"token"`
 	FileKeys     map[int64]string `json:"file_keys"`
+	SingleUse    bool             `json:"single_use"`
 	PermDownload bool             `json:"perm_download"`
 	PermCreate   bool             `json:"perm_create"`
 	PermDelete   bool             `json:"perm_delete"`
@@ -110,10 +112,14 @@ func GetShareLinkHandler(c *gin.Context, db *bun.DB) {
 
 	shareLink, err := getValidShareLink(c.Request.Context(), db, token)
 	if err != nil {
-		if err.Error() == errLinkExpired {
+		switch err.Error() {
+		case errLinkExpired:
 			monitoring.RecordShareAccess("expired")
 			c.JSON(http.StatusGone, gin.H{"error": err.Error()})
-		} else {
+		case errLinkAlreadyUsed:
+			monitoring.RecordShareAccess("already_used")
+			c.JSON(http.StatusGone, gin.H{"error": err.Error()})
+		default:
 			monitoring.RecordShareAccess("not_found")
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		}
@@ -140,7 +146,7 @@ func DownloadSharedFileHandler(c *gin.Context, db *bun.DB) {
 	shareLink, err := getValidShareLink(c.Request.Context(), db, token)
 	if err != nil {
 		status := http.StatusNotFound
-		if err.Error() == errLinkExpired {
+		if err.Error() == errLinkExpired || err.Error() == errLinkAlreadyUsed {
 			status = http.StatusGone
 		}
 		c.JSON(status, gin.H{"error": err.Error()})
@@ -155,6 +161,20 @@ func DownloadSharedFileHandler(c *gin.Context, db *bun.DB) {
 	if !shareLink.PermDownload {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Download not permitted on this share"})
 		return
+	}
+
+	// For single-use links, atomically mark as used before streaming.
+	// If another request already consumed it, abort with 410 Gone.
+	if shareLink.SingleUse {
+		marked, err := markShareLinkUsed(c.Request.Context(), db, shareLink.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process link"})
+			return
+		}
+		if !marked {
+			c.JSON(http.StatusGone, gin.H{"error": errLinkAlreadyUsed})
+			return
+		}
 	}
 
 	file, err := getSharedFile(c.Request.Context(), db, shareLink.ResourceID)
@@ -309,6 +329,7 @@ func createNewShareLink(ctx context.Context, db *bun.DB, userID, path string, re
 		Token:        token,
 		ExpiresAt:    req.ExpiresAt,
 		EncryptedKey: req.EncryptedKey,
+		SingleUse:    req.SingleUse,
 		PermDownload: req.PermDownload,
 		PermCreate:   req.PermCreate,
 		PermDelete:   req.PermDelete,
@@ -344,7 +365,25 @@ func getValidShareLink(ctx context.Context, db *bun.DB, token string) (*pkg.Shar
 	if shareLink.ExpiresAt != nil && shareLink.ExpiresAt.Before(time.Now()) {
 		return nil, fmt.Errorf(errLinkExpired)
 	}
+	if shareLink.SingleUse && shareLink.UsedAt != nil {
+		return nil, fmt.Errorf(errLinkAlreadyUsed)
+	}
 	return &shareLink, nil
+}
+
+// markShareLinkUsed atomically sets used_at on a single-use link.
+// Returns true if the mark succeeded (link was not yet consumed).
+func markShareLinkUsed(ctx context.Context, db *bun.DB, id int64) (bool, error) {
+	now := time.Now()
+	res, err := db.NewUpdate().Model(&pkg.ShareLink{}).
+		Set("used_at = ?", now).
+		Where("id = ? AND single_use = true AND used_at IS NULL", id).
+		Exec(ctx)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }
 
 func incrementShareViews(ctx context.Context, db *bun.DB, id int64) {

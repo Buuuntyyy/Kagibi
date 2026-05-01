@@ -33,8 +33,10 @@
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
         </div>
-        <h2>Lien introuvable ou expiré</h2>
-        <p>{{ error }}</p>
+        <h2 v-if="alreadyUsed">Lien déjà utilisé</h2>
+        <h2 v-else>Lien introuvable ou expiré</h2>
+        <p v-if="alreadyUsed">Ce lien à usage unique a déjà été utilisé et n'est plus accessible.</p>
+        <p v-else>{{ error }}</p>
       </div>
       
       <div v-else class="share-card glass-panel">
@@ -99,6 +101,7 @@ const router = useRouter()
 const shareInfo = ref(null)
 const loading = ref(true)
 const error = ref(null)
+const alreadyUsed = ref(false)
 
 const formatSize = (bytes) => {
   if (bytes === 0) return '0 B'
@@ -119,7 +122,11 @@ onMounted(async () => {
     }
 
   } catch (err) {
-    error.value = err.response?.data?.error || 'Lien invalide ou expiré.'
+    const errMsg = err.response?.data?.error || 'Lien invalide ou expiré.'
+    if (errMsg === 'Link already used') {
+      alreadyUsed.value = true
+    }
+    error.value = errMsg
   } finally {
     loading.value = false
   }

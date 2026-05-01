@@ -32,6 +32,11 @@ func BrowseSharedFolderHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	if shareLink.SingleUse && shareLink.UsedAt != nil {
+		c.JSON(http.StatusGone, gin.H{"error": "Link already used"})
+		return
+	}
+
 	if shareLink.ResourceType != "folder" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "This share link is not for a folder"})
 		return

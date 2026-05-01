@@ -173,6 +173,16 @@ func migrateSchemaAlterations(ctx context.Context, db *bun.DB) error {
 		}
 	}
 
+	// Single-use link columns
+	for _, col := range []string{
+		`ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "single_use" BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "used_at" TIMESTAMPTZ`,
+	} {
+		if _, err := db.ExecContext(ctx, col); err != nil {
+			log.Printf("Warning: failed to add single_use/used_at column to share_links: %v", err)
+		}
+	}
+
 	// Share permissions columns
 	for _, col := range []string{
 		`ALTER TABLE "share_links"    ADD COLUMN IF NOT EXISTS "perm_download" BOOLEAN NOT NULL DEFAULT true`,
