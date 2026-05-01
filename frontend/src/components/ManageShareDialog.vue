@@ -116,6 +116,14 @@
                       <input type="datetime-local" id="expiresAt" v-model="expiresAt" class="form-control" />
                   </div>
 
+                  <div class="form-group single-use-group">
+                      <label class="single-use-label">
+                          <input type="checkbox" v-model="singleUse" class="single-use-checkbox" />
+                          <span>Usage unique</span>
+                      </label>
+                      <p class="single-use-hint">Le lien sera invalidé après le premier téléchargement.</p>
+                  </div>
+
                   <div class="perm-group">
                       <label class="perm-label">Droits accordés</label>
                       <div class="perm-chips">
@@ -409,6 +417,7 @@ const loading = ref(false);
 const linkCopied = ref(false);
 const shareLinkInput = ref(null);
 const expiresAt = ref(null);
+const singleUse = ref(false);
 
 // Permissions (for folder shares, set at creation time)
 const permissions = ref({ download: true, create: true, delete: false, move: false });
@@ -525,7 +534,7 @@ const createShare = async () => {
             expirationDate = selectedDate.toISOString();
         }
 
-        const result = await fileStore.createShareLink(itemId, props.item.type, expirationDate, permissions.value);
+        const result = await fileStore.createShareLink(itemId, props.item.type, expirationDate, permissions.value, singleUse.value);
 
         localShareToken.value = result.token;
         localShareId.value = result.id;
@@ -924,6 +933,7 @@ const close = () => {
   treeItems.value = { folders: [], files: [] };
   treePath.value = [];
   permissions.value = { download: true, create: true, delete: false, move: false };
+  singleUse.value = false;
 };
 </script>
 
@@ -1706,5 +1716,37 @@ button {
 .bulk-btns {
   display: flex;
   gap: 3px;
+}
+
+.single-use-group {
+  text-align: left;
+  width: 100%;
+  max-width: 300px;
+  margin-left: auto;
+  margin-right: auto;
+  margin-bottom: 1rem;
+}
+
+.single-use-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--main-text-color);
+  font-weight: 500;
+}
+
+.single-use-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--primary-color);
+}
+
+.single-use-hint {
+  margin: 4px 0 0 24px;
+  font-size: 0.78rem;
+  color: var(--secondary-text-color);
 }
 </style>

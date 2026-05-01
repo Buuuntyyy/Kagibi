@@ -50,6 +50,11 @@ func DownloadFileFromSharedFolderHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	if shareLink.SingleUse && shareLink.UsedAt != nil {
+		c.JSON(http.StatusGone, gin.H{"error": "Link already used"})
+		return
+	}
+
 	if !shareLink.PermDownload {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Download not permitted on this share"})
 		return
@@ -100,6 +105,19 @@ func DownloadFileFromSharedFolderHandler(c *gin.Context, db *bun.DB) {
 	if !effectiveCanDownload(overrideMap, file.Path, true) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Download not permitted for this file"})
 		return
+	}
+
+	// For single-use links, atomically mark as used before streaming.
+	if shareLink.SingleUse {
+		marked, err := markShareLinkUsed(c.Request.Context(), db, shareLink.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process link"})
+			return
+		}
+		if !marked {
+			c.JSON(http.StatusGone, gin.H{"error": "Link already used"})
+			return
+		}
 	}
 
 	// S3 Key construction
