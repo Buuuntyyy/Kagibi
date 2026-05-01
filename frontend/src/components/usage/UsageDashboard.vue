@@ -65,7 +65,9 @@ const billingStore = useBillingStore()
 const currentPlan = computed(() => billingStore.currentPlan)
 
 const maxStorageGB = computed(() => {
-  return currentPlan.value?.storage_limit_gb || Number(import.meta.env.VITE_DEFAULT_STORAGE_GB) || 20;
+  return billingStore.currentUsage?.storage_limit_gb
+    || Number(import.meta.env.VITE_DEFAULT_STORAGE_GB)
+    || 20
 })
 
 const storagePercent = computed(() => {
