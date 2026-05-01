@@ -25,30 +25,70 @@
               </div>
 
               <div v-else class="friends-list">
-                   <div v-for="friend in friends" :key="friend.id" class="friend-item">
-                      <div class="friend-info">
-                         <div class="friend-avatar">
-                           {{ friend.name.charAt(0).toUpperCase() }}
+                   <div v-for="friend in friends" :key="friend.id" class="friend-entry">
+                      <div class="friend-item">
+                         <div class="friend-info">
+                            <div class="friend-avatar">
+                              {{ friend.name.charAt(0).toUpperCase() }}
+                            </div>
+                            <div>
+                              <p class="friend-name">{{ friend.name }}</p>
+                              <p class="friend-email">{{ friend.email }}</p>
+                            </div>
                          </div>
-                         <div>
-                           <p class="friend-name">{{ friend.name }}</p>
-                           <p class="friend-email">{{ friend.email }}</p>
+
+                         <div v-if="!friend.public_key" class="key-missing" :title="t('share.keyMissing')">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align:middle;margin-right:4px;flex-shrink:0"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>{{ t('share.noKey') }}
                          </div>
+
+                         <button v-else
+                             @click="shareWithFriend(friend)"
+                             :disabled="sharing[friend.id]"
+                             class="btn-sm"
+                             :class="[isFriendShared(friend.id) ? 'btn-danger' : 'btn-outline']">
+                             <span v-if="sharing[friend.id]">...</span>
+                             <span v-else-if="isFriendShared(friend.id)">{{ t('share.stop') }}</span>
+                             <span v-else>{{ t('share.send') }}</span>
+                         </button>
                       </div>
 
-                      <div v-if="!friend.public_key" class="key-missing" :title="t('share.keyMissing')">
-                         <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style="vertical-align:middle;margin-right:4px;flex-shrink:0"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>{{ t('share.noKey') }}
+                      <!-- Per-friend permissions (only when shared) -->
+                      <div v-if="isFriendShared(friend.id)" class="friend-perms">
+                         <button
+                             class="perm-friend-chip"
+                             :class="{ active: directShareStatus[friend.id]?.perm_download }"
+                             @click="toggleDirectPerm(friend, 'download')"
+                             title="Téléchargement">
+                             <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
+                             Téléchargement
+                         </button>
+                         <template v-if="item?.type === 'folder'">
+                            <button
+                                class="perm-friend-chip"
+                                :class="{ active: directShareStatus[friend.id]?.perm_create }"
+                                @click="toggleDirectPerm(friend, 'create')"
+                                title="Création">
+                                <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                                Création
+                            </button>
+                            <button
+                                class="perm-friend-chip"
+                                :class="{ active: directShareStatus[friend.id]?.perm_delete }"
+                                @click="toggleDirectPerm(friend, 'delete')"
+                                title="Suppression">
+                                <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM15.5 4l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                                Suppression
+                            </button>
+                            <button
+                                class="perm-friend-chip"
+                                :class="{ active: directShareStatus[friend.id]?.perm_move }"
+                                @click="toggleDirectPerm(friend, 'move')"
+                                title="Déplacement">
+                                <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M10 9h4V6h3l-5-5-5 5h3v3zm-1 1H6V7l-5 5 5 5v-3h3v-4zm14 2-5-5v3h-3v4h3v3l5-5zm-9 3h-4v3H7l5 5 5-5h-3v-3z"/></svg>
+                                Déplacement
+                            </button>
+                         </template>
                       </div>
-
-                      <button v-else
-                          @click="shareWithFriend(friend)"
-                          :disabled="sharing[friend.id]"
-                          class="btn-sm"
-                          :class="[isFriendShared(friend.id) ? 'btn-danger' : 'btn-outline']">
-                          <span v-if="sharing[friend.id]">...</span>
-                          <span v-else-if="isFriendShared(friend.id)">{{ t('share.stop') }}</span>
-                          <span v-else>{{ t('share.send') }}</span>
-                      </button>
                    </div>
               </div>
           </div>
@@ -381,8 +421,9 @@ const treePath = ref([]); // [{name, subpath}]
 const localPermissions = ref({ download: true, create: false, delete: false, move: false });
 
 // Friends Share State
-const sharing = ref({}); // Map [friendId] -> boolean (loading state)
-const sharedStatus = ref({}); // Map [friendId] -> boolean (success state)
+// directShareStatus[friendId] = { shareId, perm_download, perm_create, perm_delete, perm_move }
+const sharing = ref({});
+const directShareStatus = ref({});
 const friends = computed(() => friendStore.acceptedFriends);
 
 // Local state to handle immediate updates without waiting for parent refresh
@@ -390,30 +431,33 @@ const localShareToken = ref(null);
 const localShareId = ref(null);
 const localExpiresAt = ref(null);
 
+const resourceType = computed(() =>
+    (props.item?.type === 'folder' || props.item?.is_dir) ? 'folder' : 'file'
+);
+
 const fetchDirectShares = async () => {
     if (!props.item) return;
     try {
-        const resourceType = (props.item.type === 'folder' || props.item.is_dir) ? 'folder' : 'file';
         const resourceId = props.item.ID || props.item.id;
-        
         const response = await api.get('/shares/direct', {
-            params: {
-                resource_id: resourceId,
-                resource_type: resourceType
-            }
+            params: { resource_id: resourceId, resource_type: resourceType.value }
         });
-        
-        const sharedWithArg = response.data.shared_with || [];
-        const statusMap = {};
-        sharedWithArg.forEach(uid => {
-            statusMap[uid] = true;
+        const list = response.data.shared_with || [];
+        const map = {};
+        list.forEach(info => {
+            map[info.user_id] = {
+                shareId:      info.share_id,
+                perm_download: info.perm_download,
+                perm_create:   info.perm_create  ?? false,
+                perm_delete:   info.perm_delete  ?? false,
+                perm_move:     info.perm_move    ?? false,
+            };
         });
-        sharedStatus.value = statusMap;
-        
+        directShareStatus.value = map;
     } catch (e) {
         console.error("Error fetching direct shares:", e);
     }
-}
+};
 
 // Reset local state when item changes
 watch(() => props.item, (newItem) => {
@@ -428,7 +472,7 @@ watch(() => props.item, (newItem) => {
             move: newItem.perm_move ?? false,
         };
 
-        sharedStatus.value = {};
+        directShareStatus.value = {};
         restrictionsPanelOpen.value = false;
         treeItems.value = { folders: [], files: [] };
         treePath.value = [];
@@ -556,9 +600,23 @@ const togglePermission = async (key) => {
 
 // --- Friends Sharing Methods ---
 
-const isFriendShared = (friendId) => {
-    return sharedStatus.value[friendId];
-}
+const isFriendShared = (friendId) => !!directShareStatus.value[friendId];
+
+const toggleDirectPerm = async (friend, key) => {
+    const info = directShareStatus.value[friend.id];
+    if (!info?.shareId) return;
+    const newValue = !info[`perm_${key}`];
+    info[`perm_${key}`] = newValue;
+    try {
+        await api.patch(`/shares/direct/${info.shareId}/permissions`, {
+            resource_type: resourceType.value,
+            [`perm_${key}`]: newValue,
+        });
+    } catch (e) {
+        console.error('Failed to update direct share permission:', e);
+        info[`perm_${key}`] = !newValue;
+    }
+};
 
 // Decrypt a key encrypted with master key (AES-GCM, IV prepended)
 async function decryptWithMasterKey(encryptedB64, masterKey) {
@@ -643,16 +701,15 @@ const shareWithFriend = async (friend) => {
            onConfirm: async () => {
              sharing.value[friend.id] = true;
              try {
-                const resourceType = (props.item.type === 'folder' || props.item.is_dir) ? 'folder' : 'file';
                 const resourceId = props.item.ID || props.item.id;
                 await api.delete(`/shares/direct`, {
-                    params: { resource_id: resourceId, resource_type: resourceType, friend_id: friend.id }
+                    params: { resource_id: resourceId, resource_type: resourceType.value, friend_id: friend.id }
                 });
-                sharedStatus.value[friend.id] = false;
+                delete directShareStatus.value[friend.id];
              } catch(e) {
                 console.error("Revoke failed:", e);
                 if (e.response && e.response.status === 404) {
-                     sharedStatus.value[friend.id] = false;
+                     delete directShareStatus.value[friend.id];
                 } else {
                      alert("Erreur lors de la suppression du partage.");
                 }
@@ -667,9 +724,8 @@ const shareWithFriend = async (friend) => {
     sharing.value[friend.id] = true;
     try {
         await sodium.ready;
-        const resourceType = (props.item.type === 'folder' || props.item.is_dir) ? 'folder' : 'file';
 
-        if (resourceType === 'file') {
+        if (resourceType.value === 'file') {
              const itemEncryptedKey = props.item.EncryptedKey || props.item.encrypted_key;
              if (!itemEncryptedKey) throw new Error("Clé du fichier manquante. Impossible de partager.");
              if (!authStore.masterKey) throw new Error("Clé Maître non disponible (Session expirée ?). Veuillez vous reconnecter.");
@@ -680,15 +736,15 @@ const shareWithFriend = async (friend) => {
              const encryptedKeyForFriend = await encryptKeyWithPublicKey(fileKeyRawBuffer, friendPublicKey);
              await api.post('/shares/direct', {
                 resource_id: props.item.ID || props.item.id,
-                resource_type: resourceType,
+                resource_type: resourceType.value,
                 friend_id: friend.id,
                 encrypted_key: encryptedKeyForFriend,
                 permission: 'read',
-                perm_download: permissions.value.download,
+                perm_download: true,
              });
-             sharedStatus.value[friend.id] = true;
+             await fetchDirectShares();
 
-        } else if (resourceType === 'folder') {
+        } else if (resourceType.value === 'folder') {
             if (!authStore.masterKey) throw new Error("Clé Maître non disponible (Session expirée ?). Veuillez vous reconnecter.");
 
             const itemId = props.item.ID || props.item.id;
@@ -711,18 +767,18 @@ const shareWithFriend = async (friend) => {
 
             await api.post('/shares/direct', {
                 resource_id: props.item.ID || props.item.id,
-                resource_type: resourceType,
+                resource_type: resourceType.value,
                 friend_id: friend.id,
                 encrypted_key: encryptedKeyForFriend,
                 permission: 'read',
-                perm_download: permissions.value.download,
-                perm_create: permissions.value.create,
-                perm_delete: permissions.value.delete,
-                perm_move: permissions.value.move,
+                perm_download: true,
+                perm_create: false,
+                perm_delete: false,
+                perm_move: false,
                 folder_file_keys: folderFileKeys,
                 folder_folder_keys: folderFolderKeys
             });
-            sharedStatus.value[friend.id] = true;
+            await fetchDirectShares();
         }
 
     } catch (e) {
@@ -863,8 +919,7 @@ const setFileDownload = async (file, canDownload) => {
 
 const close = () => {
   emit('close');
-  // Clean up
-  sharedStatus.value = {};
+  directShareStatus.value = {};
   restrictionsPanelOpen.value = false;
   treeItems.value = { folders: [], files: [] };
   treePath.value = [];
@@ -1176,11 +1231,17 @@ button {
 }
 
 .friends-list {
-  max-height: 160px;
+  max-height: 280px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
+}
+
+.friend-entry {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 .friend-item {
@@ -1188,12 +1249,53 @@ button {
   align-items: center;
   justify-content: space-between;
   padding: 5px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
 }
 
-.friend-item:hover {
+.friend-entry:hover .friend-item {
   background-color: var(--hover-background-color);
+}
+
+.friend-perms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 5px 8px;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--background-color);
+}
+
+.perm-friend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  color: var(--secondary-text-color);
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.perm-friend-chip.active {
+  background: rgba(22, 163, 74, 0.1);
+  border-color: #16a34a;
+  color: #16a34a;
+}
+
+.perm-friend-chip:not(.active) {
+  background: rgba(220, 38, 38, 0.05);
+  border-color: rgba(220, 38, 38, 0.25);
+  color: #b91c1c;
+}
+
+.perm-friend-chip:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background: rgba(99, 102, 241, 0.08);
 }
 
 .friend-info {

@@ -56,6 +56,7 @@
     "columnSize": "Size",
     "folderType": "Folder",
     "fileType": "File",
+    "securityTipsTitle": "Security tips",
     "securityTipWarningTitle": "Tip:",
     "securityTipWarningBody": "Enable two-factor authentication (MFA) to secure your account",
     "securityTipSuccessTitle": "Secured:",

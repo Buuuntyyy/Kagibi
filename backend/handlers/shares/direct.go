@@ -183,8 +183,8 @@ func sendShareNotifications(c *gin.Context, db *bun.DB, friendID string) {
 	}
 }
 
-// UpdateDirectSharePermissionsHandler updates permissions on a direct folder share.
-// Only the owner of the shared folder may call this.
+// UpdateDirectSharePermissionsHandler updates permissions on a direct share (file or folder).
+// Only the owner of the shared resource may call this.
 func UpdateDirectSharePermissionsHandler(c *gin.Context, db *bun.DB) {
 	currentUserID := c.GetString("user_id")
 	shareID, err := strconv.ParseInt(c.Param("share_id"), 10, 64)
@@ -194,30 +194,55 @@ func UpdateDirectSharePermissionsHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	var req struct {
-		PermDownload *bool `json:"perm_download"`
-		PermCreate   *bool `json:"perm_create"`
-		PermDelete   *bool `json:"perm_delete"`
-		PermMove     *bool `json:"perm_move"`
+		ResourceType string `json:"resource_type"`
+		PermDownload *bool  `json:"perm_download"`
+		PermCreate   *bool  `json:"perm_create"`
+		PermDelete   *bool  `json:"perm_delete"`
+		PermMove     *bool  `json:"perm_move"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
 	}
 
-	// Fetch share and verify ownership via the folder
+	if req.ResourceType == "file" {
+		var share pkg.FileShare
+		if err := db.NewSelect().Model(&share).Where("id = ?", shareID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Share not found"})
+			return
+		}
+		var file pkg.File
+		if err := db.NewSelect().Model(&file).Where("id = ? AND user_id = ?", share.FileID, currentUserID).Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+			return
+		}
+		if req.PermDownload != nil {
+			share.PermDownload = *req.PermDownload
+		}
+		if _, err := db.NewUpdate().Model(&share).Column("perm_download").Where("id = ?", shareID).Exec(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update permissions"})
+			return
+		}
+		if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, share.SharedWithUserID, "storage_update", map[string]any{
+			"action": "share_permissions_updated", "share_id": shareID,
+		}); err != nil {
+			log.Print(logStorageUpdateFailed)
+		}
+		c.JSON(http.StatusOK, gin.H{"perm_download": share.PermDownload})
+		return
+	}
+
+	// Default: folder share
 	var share pkg.FolderShare
 	if err := db.NewSelect().Model(&share).Where("id = ?", shareID).Scan(c.Request.Context()); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Share not found"})
 		return
 	}
-
-	// Verify the caller owns the folder
 	var folder pkg.Folder
 	if err := db.NewSelect().Model(&folder).Where("id = ? AND user_id = ?", share.FolderID, currentUserID).Scan(c.Request.Context()); err != nil {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
 		return
 	}
-
 	if req.PermDownload != nil {
 		share.PermDownload = *req.PermDownload
 	}
@@ -230,7 +255,6 @@ func UpdateDirectSharePermissionsHandler(c *gin.Context, db *bun.DB) {
 	if req.PermMove != nil {
 		share.PermMove = *req.PermMove
 	}
-
 	if _, err := db.NewUpdate().Model(&share).
 		Column("perm_download", "perm_create", "perm_delete", "perm_move").
 		Where("id = ?", shareID).
@@ -238,15 +262,11 @@ func UpdateDirectSharePermissionsHandler(c *gin.Context, db *bun.DB) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update permissions"})
 		return
 	}
-
-	// Notify recipient in real time
 	if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, share.SharedWithUserID, "storage_update", map[string]any{
-		"action":   "share_permissions_updated",
-		"share_id": shareID,
+		"action": "share_permissions_updated", "share_id": shareID,
 	}); err != nil {
 		log.Print(logStorageUpdateFailed)
 	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"perm_download": share.PermDownload,
 		"perm_create":   share.PermCreate,
@@ -352,7 +372,16 @@ func handleRemoveError(c *gin.Context, err error) {
 	}
 }
 
-// ListDirectSharesForResourceHandler returns a list of friend IDs with whom the resource is shared
+type DirectShareInfo struct {
+	UserID       string `json:"user_id"`
+	ShareID      int64  `json:"share_id"`
+	PermDownload bool   `json:"perm_download"`
+	PermCreate   bool   `json:"perm_create"`
+	PermDelete   bool   `json:"perm_delete"`
+	PermMove     bool   `json:"perm_move"`
+}
+
+// ListDirectSharesForResourceHandler returns shares (with permissions) for a resource
 func ListDirectSharesForResourceHandler(c *gin.Context, db *bun.DB) {
 	resourceIDStr := c.Query("resource_id")
 	resourceType := c.Query("resource_type")
@@ -362,29 +391,41 @@ func ListDirectSharesForResourceHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	var sharedWithIDs []string
+	var result []DirectShareInfo
 
 	if resourceType == "file" || resourceType == "" {
 		var shares []pkg.FileShare
-		err := db.NewSelect().Model(&shares).
+		if err := db.NewSelect().Model(&shares).
 			Where("file_id = ?", resourceIDStr).
-			Scan(c.Request.Context())
-		if err == nil {
+			Scan(c.Request.Context()); err == nil {
 			for _, s := range shares {
-				sharedWithIDs = append(sharedWithIDs, s.SharedWithUserID)
+				result = append(result, DirectShareInfo{
+					UserID:       s.SharedWithUserID,
+					ShareID:      s.ID,
+					PermDownload: s.PermDownload,
+				})
 			}
 		}
 	} else if resourceType == "folder" {
 		var shares []pkg.FolderShare
-		err := db.NewSelect().Model(&shares).
+		if err := db.NewSelect().Model(&shares).
 			Where("folder_id = ?", resourceIDStr).
-			Scan(c.Request.Context())
-		if err == nil {
+			Scan(c.Request.Context()); err == nil {
 			for _, s := range shares {
-				sharedWithIDs = append(sharedWithIDs, s.SharedWithUserID)
+				result = append(result, DirectShareInfo{
+					UserID:       s.SharedWithUserID,
+					ShareID:      s.ID,
+					PermDownload: s.PermDownload,
+					PermCreate:   s.PermCreate,
+					PermDelete:   s.PermDelete,
+					PermMove:     s.PermMove,
+				})
 			}
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"shared_with": sharedWithIDs})
+	if result == nil {
+		result = []DirectShareInfo{}
+	}
+	c.JSON(http.StatusOK, gin.H{"shared_with": result})
 }
