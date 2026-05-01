@@ -245,6 +245,8 @@ Default permissions when creating a new share: **Download + Create**.
 
 Permissions are displayed with color coding in the share management dialog: **green** = granted, **red** = denied. Any attempt to perform an action without the required permission triggers an explicit error message.
 
+Permissions are **editable at any time** after the share is created: clicking a chip toggles the right and syncs immediately with the server.
+
 #### Key chain for friend-uploaded files
 
 When a friend uploads a file into your shared folder, the file is encrypted with a key derived from the `FolderKey`. A dedicated backend endpoint allows the owner to recover the file key:
@@ -265,6 +267,41 @@ Owner's MasterKey
 This chain guarantees the owner can always access files uploaded by friends, while the zero-knowledge guarantee is preserved.
 
 The server stores: the encrypted `FileKey` (unusable without the recipient's private key), friendship relations, and permissions.
+
+---
+
+### Per-element restrictions in link shares
+
+For folders shared via public link, it is possible to define access rights **per sub-element**, independently of the link's global permissions. A side panel in the share management dialog lets you navigate the shared folder tree and configure each entry individually.
+
+#### Access levels for sub-folders
+
+| Level | Behavior |
+|-------|----------|
+| Full access | The visitor sees and can interact with the folder per the global link permissions |
+| Read-only | The visitor can browse the folder's content but cannot write to it |
+| Hidden | The folder is invisible to the visitor |
+
+For each file, two additional rights are independently configurable:
+- **Download**: allow or block download (and preview) of that specific file.
+- **Delete**: allow or protect that specific file from deletion.
+
+#### Bulk controls
+
+Bulk control buttons let you apply a uniform setting to all folders or all files at the current level in one click, then fine-tune element by element.
+
+#### Tree navigation
+
+The panel shows a clickable breadcrumb trail. You can drill down into any sub-folder to configure its restrictions, then navigate back up via the breadcrumb.
+
+---
+
+### Shares management view
+
+The "Shares" page centralises all your active shares in two collapsible sections:
+
+- **My shares** — deduplicated list of your shared resources with: type (file / folder), view counter, creation date, expiry date, one-click link copy, direct navigation to the shared folder in the file tree, and rights management.
+- **Shared with me** — list of resources that other users have shared with you.
 
 ---
 
