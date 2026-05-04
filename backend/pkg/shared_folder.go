@@ -44,6 +44,32 @@ func replaceFileKeysFromShare(ctx context.Context, db *bun.DB, shareID int64, fi
 	}
 }
 
+// GetSharedFilesRecursive retrieves all files under a shared path (all depths).
+func GetSharedFilesRecursive(db *bun.DB, basePath string, ownerID string, shareID int64) ([]File, error) {
+	ctx := context.Background()
+	var files []File
+
+	searchPrefix := basePath
+	if searchPrefix == "/" {
+		searchPrefix = ""
+	}
+
+	err := db.NewSelect().Model(&files).
+		Where("user_id = ?", ownerID).
+		Where("is_preview = ?", false).
+		Where("path LIKE ?", searchPrefix+"/%").
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(files) > 0 {
+		replaceFileKeysFromShare(ctx, db, shareID, files)
+	}
+
+	return files, nil
+}
+
 // GetSharedFolderContent retrieves files and folders within a shared path
 func GetSharedFolderContent(db *bun.DB, basePath string, ownerID string, shareID int64) ([]File, []Folder, error) {
 	ctx := context.Background()
