@@ -12,6 +12,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
     error: null,
     currentPath: '/',
     shareToken: null,
+    sharePassword: null,
     ownerEmail: null,
     ownerName: null,
     resourceName: null,
@@ -30,6 +31,10 @@ export const usePublicFileStore = defineStore('publicFiles', {
       setTimeout(() => { this.toast.visible = false; }, 3500);
     },
 
+    authHeaders() {
+      return this.sharePassword ? { 'X-Share-Password': this.sharePassword } : {};
+    },
+
     async fetchItems(token, subpath = '/') {
       if (!token) {
         this.error = "Token de partage manquant.";
@@ -41,7 +46,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
       this.currentPath = subpath;
 
       try {
-        const response = await api.get(`/public/share/${token}/browse${subpath}`);
+        const response = await api.get(`/public/share/${token}/browse${subpath}`, { headers: this.authHeaders() });
         this.files = response.data.files || [];
         this.folders = response.data.folders || [];
         this.ownerEmail = response.data.owner_email;
@@ -73,7 +78,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
 
     async deleteFile(fileId) {
       try {
-        await api.delete(`/public/share/${this.shareToken}/file/${fileId}`);
+        await api.delete(`/public/share/${this.shareToken}/file/${fileId}`, { headers: this.authHeaders() });
         this.files = this.files.filter(f => f.ID !== fileId);
       } catch (error) {
         console.error('Delete error:', error);
@@ -83,7 +88,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
 
     async deleteFolder(folderId) {
       try {
-        await api.delete(`/public/share/${this.shareToken}/folder/${folderId}`);
+        await api.delete(`/public/share/${this.shareToken}/folder/${folderId}`, { headers: this.authHeaders() });
         this.folders = this.folders.filter(f => f.ID !== folderId);
       } catch (error) {
         console.error('Delete folder error:', error);
@@ -100,7 +105,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
         const response = await api.post(`/public/share/${this.shareToken}/folder`, {
           name,
           parent_path: this.currentPath,
-        });
+        }, { headers: this.authHeaders() });
         this.folders = [...this.folders, { ID: response.data.id, Name: response.data.name, Path: response.data.path }];
       } catch (e) {
         console.error('Create folder error:', e);
@@ -115,7 +120,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
         return;
       }
       try {
-        await api.post(`/public/share/${this.shareToken}/rename`, { id, type, new_name: newName });
+        await api.post(`/public/share/${this.shareToken}/rename`, { id, type, new_name: newName }, { headers: this.authHeaders() });
         if (type === 'file') {
           const f = this.files.find(f => f.ID === id);
           if (f) f.Name = newName;
@@ -165,6 +170,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
         try {
             const response = await api.get(`/public/share/${this.shareToken}/download/file/${fileId}`, {
                 responseType: 'blob',
+                headers: this.authHeaders(),
             });
 
             const decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, file.MimeType || 'application/octet-stream');
@@ -194,7 +200,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
 
       try {
         const sp = encodeURIComponent(subpath || '/');
-        const res = await api.get(`/public/share/${this.shareToken}/files-recursive?subpath=${sp}`);
+        const res = await api.get(`/public/share/${this.shareToken}/files-recursive?subpath=${sp}`, { headers: this.authHeaders() });
         const files = res.data.files || [];
 
         if (files.length === 0) {
@@ -214,7 +220,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
             const fileKey = await unwrapMasterKey(file.encrypted_key, shareKey);
             const response = await api.get(
               `/public/share/${this.shareToken}/download/file/${file.id}`,
-              { responseType: 'blob' },
+              { responseType: 'blob', headers: this.authHeaders() },
             );
             const decryptedBlob = await decryptChunkedFileWorker(
               response.data,
@@ -300,7 +306,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
                     total_size: totalEncryptedSize,
                     total_parts: encryptedChunks.length,
                     encrypted_key: encryptedFileKey,
-                });
+                }, { headers: this.authHeaders() });
                 const { upload_id: uploadId, key: s3Key, presigned_urls: presignedURLs } = initiateRes.data;
 
                 // Upload parts
@@ -308,7 +314,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
                 for (let i = 0; i < presignedURLs.length; i++) {
                     const resp = await fetch(presignedURLs[i].url, { method: 'PUT', body: encryptedChunks[i] });
                     if (!resp.ok) {
-                        await api.post(`/public/share/${this.shareToken}/multipart/abort`, { upload_id: uploadId, key: s3Key }).catch(() => {});
+                        await api.post(`/public/share/${this.shareToken}/multipart/abort`, { upload_id: uploadId, key: s3Key }, { headers: this.authHeaders() }).catch(() => {});
                         throw new Error(`Part ${i + 1} upload failed (HTTP ${resp.status})`);
                     }
                     const etag = resp.headers.get('ETag') || '';
@@ -326,7 +332,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
                     total_size: totalEncryptedSize,
                     content_type: 'application/octet-stream',
                     encrypted_key: encryptedFileKey,
-                });
+                }, { headers: this.authHeaders() });
             }
 
             this.uploadProgress = 100;

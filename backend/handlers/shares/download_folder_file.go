@@ -55,6 +55,10 @@ func DownloadFileFromSharedFolderHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	if !checkSharePassword(c, &shareLink) {
+		return
+	}
+
 	if !shareLink.PermDownload {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Download not permitted on this share"})
 		return

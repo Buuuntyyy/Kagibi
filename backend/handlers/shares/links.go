@@ -22,10 +22,26 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const errLinkExpired = "Link expired"
 const errLinkAlreadyUsed = "Link already used"
+
+// checkSharePassword validates the X-Share-Password header against the stored bcrypt hash.
+// Returns true if the link has no password or if the provided password matches.
+// Writes a 401 response and returns false when the password is missing or wrong.
+func checkSharePassword(c *gin.Context, shareLink *pkg.ShareLink) bool {
+	if shareLink.PasswordHash == "" {
+		return true
+	}
+	password := c.GetHeader("X-Share-Password")
+	if password == "" || bcrypt.CompareHashAndPassword([]byte(shareLink.PasswordHash), []byte(password)) != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "password_required"})
+		return false
+	}
+	return true
+}
 
 type createShareLinkRequest struct {
 	ResourceID   int64            `json:"resource_id"`
@@ -126,6 +142,10 @@ func GetShareLinkHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	if !checkSharePassword(c, shareLink) {
+		return
+	}
+
 	monitoring.RecordShareAccess("success")
 	go incrementShareViews(context.Background(), db, shareLink.ID)
 
@@ -150,6 +170,10 @@ func DownloadSharedFileHandler(c *gin.Context, db *bun.DB) {
 			status = http.StatusGone
 		}
 		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !checkSharePassword(c, shareLink) {
 		return
 	}
 
@@ -334,6 +358,14 @@ func createNewShareLink(ctx context.Context, db *bun.DB, userID, path string, re
 		PermCreate:   req.PermCreate,
 		PermDelete:   req.PermDelete,
 		PermMove:     req.PermMove,
+	}
+
+	if req.Password != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+		if err != nil {
+			return nil, err
+		}
+		shareLink.PasswordHash = string(hash)
 	}
 
 	_, err := db.NewInsert().Model(shareLink).Exec(ctx)
