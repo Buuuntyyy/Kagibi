@@ -62,6 +62,12 @@
             <div class="menu-item" @click="handleContextAction('download')" v-if="contextMenu.item.type === 'file'">
               <span class="menu-icon">⬇️</span> {{ t('shared.downloadDecrypt') }}
             </div>
+            <div class="menu-item" @click="handleContextAction('download-zip')" v-if="contextMenu.item.type === 'folder' && !isZipping">
+              <span class="menu-icon">🗜️</span> {{ t('shared.downloadAsZip') }}
+            </div>
+            <div class="menu-item disabled" v-if="contextMenu.item.type === 'folder' && isZipping">
+              <span class="menu-icon">⏳</span> {{ zipProgress }}/{{ zipTotal }}
+            </div>
              <div class="menu-divider"></div>
             <div class="menu-item delete" @click="handleContextAction('delete')">
               <span class="menu-icon">🗑️</span> {{ t('shared.removeShare') }}
@@ -82,11 +88,16 @@ import ContextMenu from './file/ContextMenu.vue';
 import { useFileStore } from '../stores/files';
 import { useAuthStore } from '../stores/auth';
 import { decryptChunkedFileWorker } from '../utils/crypto';
+import { zipSync } from 'fflate';
 import sodium from 'libsodium-wrappers-sumo';
 
 const fileStore = useFileStore();
 const authStore = useAuthStore();
 const { t } = useI18n();
+
+const isZipping = ref(false);
+const zipProgress = ref(0);
+const zipTotal = ref(0);
 const router = useRouter();
 const route = useRoute();
 const items = ref([]);
@@ -262,7 +273,11 @@ const handleContextAction = async (action) => {
 
     if (action === 'download') {
         if (item.type === 'file') {
-                await downloadSharedFile(item);
+            await downloadSharedFile(item);
+        }
+    } else if (action === 'download-zip') {
+        if (item.type === 'folder') {
+            await downloadFolderAsZip(item);
         }
     }
         else if (action === 'delete') {
@@ -397,6 +412,103 @@ const downloadSharedFile = async (item) => {
     }
 }
 
+const downloadFolderAsZip = async (folder) => {
+    const folderID = folder.resource_id || folder.ID || folder.id;
+    if (!folderID) return;
+
+    if (!authStore.privateKey && authStore.masterKey) {
+        await authStore.ensureRSAKeys(authStore.masterKey);
+    }
+    if (!authStore.privateKey) {
+        alert(t('shared.privateKeyUnavailable'));
+        return;
+    }
+
+    isZipping.value = true;
+    zipProgress.value = 0;
+    zipTotal.value = 0;
+
+    try {
+        await sodium.ready;
+
+        const res = await api.get(`/shares/direct/folder/${folderID}/files-recursive`);
+        const files = res.data.files || [];
+        const rootEncryptedKey = res.data.root_encrypted_key;
+
+        if (files.length === 0) {
+            alert(t('shared.emptyFolder'));
+            return;
+        }
+
+        // Decrypt root folder key with RSA private key
+        const encryptedKeyBytes = sodium.from_base64(rootEncryptedKey);
+        const rootFolderKeyRaw = await window.crypto.subtle.decrypt(
+            { name: 'RSA-OAEP' },
+            authStore.privateKey,
+            encryptedKeyBytes
+        );
+        const rootFolderKey = await window.crypto.subtle.importKey(
+            'raw', rootFolderKeyRaw, 'AES-GCM', false, ['decrypt']
+        );
+
+        zipTotal.value = files.length;
+        const zipData = {};
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            try {
+                // Decrypt file key with root folder key (AES-GCM, IV = first 12 bytes)
+                const encFileKeyBytes = sodium.from_base64(file.encrypted_key);
+                const iv = encFileKeyBytes.slice(0, 12);
+                const ciphertext = encFileKeyBytes.slice(12);
+                const fileKeyRaw = await window.crypto.subtle.decrypt(
+                    { name: 'AES-GCM', iv },
+                    rootFolderKey,
+                    ciphertext
+                );
+                const fileKey = await window.crypto.subtle.importKey(
+                    'raw', fileKeyRaw, 'AES-GCM', false, ['decrypt']
+                );
+
+                const response = await api.get(`/files/download/${file.id}`, { responseType: 'blob' });
+                const decryptedBlob = await decryptChunkedFileWorker(
+                    response.data,
+                    fileKey,
+                    file.mime_type || 'application/octet-stream'
+                );
+                const buffer = await decryptedBlob.arrayBuffer();
+                zipData[file.relative_path] = new Uint8Array(buffer);
+            } catch (e) {
+                console.error(`ZIP: skipping ${file.name}:`, e);
+            }
+            zipProgress.value = i + 1;
+        }
+
+        if (Object.keys(zipData).length === 0) {
+            alert(t('shared.zipNoFiles'));
+            return;
+        }
+
+        const zipped = zipSync(zipData, { level: 0 });
+        const blob = new Blob([zipped], { type: 'application/zip' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${folder.name || folder.Name || 'dossier'}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) {
+        console.error('ZIP download error:', e);
+        alert(`${t('shared.downloadDecryptError')}: ${e.message}`);
+    } finally {
+        isZipping.value = false;
+        zipProgress.value = 0;
+        zipTotal.value = 0;
+    }
+};
+
 onMounted(() => {
   fetchSharedWithMe();
 });
@@ -461,5 +573,11 @@ onMounted(() => {
 
 .current-path {
   font-weight: bold;
+}
+
+.menu-item.disabled {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
 }
 </style>

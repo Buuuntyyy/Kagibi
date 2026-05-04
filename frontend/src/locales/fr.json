@@ -402,6 +402,8 @@
     "missingEncryptionKey": "Clé de chiffrement manquante.",
     "openFileMissingKey": "Impossible d'ouvrir le fichier : clé manquante.",
     "downloadDecryptError": "Erreur lors du téléchargement/déchiffrement",
+    "downloadAsZip": "Télécharger en ZIP",
+    "zipNoFiles": "Aucun fichier n'a pu être inclus dans l'archive.",
     "noShares": "Aucun partage pour le moment",
     "loading": "Chargement des partages...",
     "error": "Erreur lors du chargement des partages"

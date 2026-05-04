@@ -23,6 +23,19 @@
           <span v-if="index < pathSegments.length - 1" class="separator">/</span>
         </div>
       </div>
+
+      <button
+        v-if="store.permissions.download && !store.isZipping"
+        class="btn-zip-current"
+        @click="downloadCurrentFolderAsZip"
+        title="Télécharger ce dossier en ZIP">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M20 6h-2.18c.07-.44.18-.88.18-1.36 0-2.57-2.1-4.64-4.67-4.64-1.6 0-2.96.8-3.85 2.02C8.6 1.07 7.19.5 5.64.5A4.15 4.15 0 0 0 1.5 4.64c0 .48.11.92.18 1.36H0v13h20V6zM13.33 2c1.49 0 2.67 1.19 2.67 2.64 0 .46-.13.88-.33 1.36h-4.64c-.2-.48-.34-.9-.34-1.36C10.69 3.19 11.86 2 13.33 2zM5.64 2.5c.9 0 1.68.35 2.27.91l-1.6 2.59H3.97c-.2-.48-.33-.9-.33-1.36C3.64 3.35 4.54 2.5 5.64 2.5zM2 7.5h7.5v4H2V7.5zm0 10V13h7.5v4.5H2zm9.5 0V13H18v4.5h-6.5zm6.5-6h-6.5v-4H18v4z"/></svg>
+        ZIP
+      </button>
+      <span v-else-if="store.isZipping" class="zip-progress-inline">
+        <svg class="spin-icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z"/></svg>
+        {{ store.zipProgress }}/{{ store.zipTotal }}
+      </span>
     </div>
 
     <!-- Toolbar (create / rename / upload) -->
@@ -215,6 +228,12 @@
               @click="openFolder(contextMenu.item.Name); closeContextMenu()">
             <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
             Ouvrir
+          </button>
+          <button v-if="store.permissions.download && !store.isZipping"
+              class="ctx-item"
+              @click="downloadFolderZip(contextMenu.item); closeContextMenu()">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
+            Télécharger en ZIP
           </button>
           <button v-if="store.permissions.move"
               class="ctx-item"
@@ -474,6 +493,20 @@ const downloadFile = (file) => {
   store.downloadFile(file.ID, file.Name);
 };
 
+const downloadCurrentFolderAsZip = () => {
+  const name = store.currentPath === '/'
+    ? (store.resourceName || 'dossier')
+    : store.currentPath.split('/').filter(Boolean).pop();
+  store.downloadFolderAsZip(store.currentPath, `${name}.zip`);
+};
+
+const downloadFolderZip = (folder) => {
+  const subpath = store.currentPath === '/'
+    ? `/${folder.Name}`
+    : `${store.currentPath}/${folder.Name}`;
+  store.downloadFolderAsZip(subpath, `${folder.Name}.zip`);
+};
+
 const deleteFile = async (file) => {
   if (!confirm(`Supprimer "${file.Name}" ? Cette action est irréversible.`)) return;
   try {
@@ -612,6 +645,51 @@ const formatDate = (dateString) => {
 .separator {
   margin: 0 4px;
   color: var(--border-color);
+}
+
+/* ZIP button in path banner */
+.btn-zip-current {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primary-color);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-zip-current:hover {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: var(--primary-color);
+}
+
+.zip-progress-inline {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: var(--secondary-text-color);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+  color: var(--primary-color);
 }
 
 /* Toolbar */

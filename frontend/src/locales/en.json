@@ -402,6 +402,8 @@
     "missingEncryptionKey": "Missing encryption key.",
     "openFileMissingKey": "Unable to open file: missing key.",
     "downloadDecryptError": "Error while downloading/decrypting",
+    "downloadAsZip": "Download as ZIP",
+    "zipNoFiles": "No files could be included in the archive.",
     "noShares": "No shares yet",
     "loading": "Loading shares...",
     "error": "Error loading shares"

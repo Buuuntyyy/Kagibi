@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import api from '../api';
 import { deriveKeyFromToken, unwrapMasterKey, decryptChunkedFileWorker, generateMasterKey, wrapMasterKey, encryptChunkWorker } from '../utils/crypto';
 import { PART_SIZE } from '../utils/multipartUpload';
+import { zipSync } from 'fflate';
 
 export const usePublicFileStore = defineStore('publicFiles', {
   state: () => ({
@@ -19,6 +20,9 @@ export const usePublicFileStore = defineStore('publicFiles', {
     isUploading: false,
     uploadProgress: 0,
     uploadingFileName: null,
+    isZipping: false,
+    zipProgress: 0,
+    zipTotal: 0,
   }),
   actions: {
     showToast(message, type = 'error') {
@@ -176,6 +180,81 @@ export const usePublicFileStore = defineStore('publicFiles', {
             console.error('Download error:', error);
             this.showToast("Impossible de télécharger le fichier.");
         }
+    },
+
+    async downloadFolderAsZip(subpath, zipName) {
+      if (!this.permissions.download) {
+        this.showToast("Vous n'avez pas l'autorisation de télécharger depuis ce partage.");
+        return;
+      }
+
+      this.isZipping = true;
+      this.zipProgress = 0;
+      this.zipTotal = 0;
+
+      try {
+        const sp = encodeURIComponent(subpath || '/');
+        const res = await api.get(`/public/share/${this.shareToken}/files-recursive?subpath=${sp}`);
+        const files = res.data.files || [];
+
+        if (files.length === 0) {
+          this.showToast("Aucun fichier téléchargeable dans ce dossier.");
+          return;
+        }
+
+        this.zipTotal = files.length;
+        const shareKey = await deriveKeyFromToken(this.shareToken);
+        const zipData = {};
+
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          if (!file.encrypted_key) continue;
+
+          try {
+            const fileKey = await unwrapMasterKey(file.encrypted_key, shareKey);
+            const response = await api.get(
+              `/public/share/${this.shareToken}/download/file/${file.id}`,
+              { responseType: 'blob' },
+            );
+            const decryptedBlob = await decryptChunkedFileWorker(
+              response.data,
+              fileKey,
+              file.mime_type || 'application/octet-stream',
+            );
+            const buffer = await decryptedBlob.arrayBuffer();
+            zipData[file.relative_path] = new Uint8Array(buffer);
+          } catch (e) {
+            console.error(`ZIP: skipping ${file.name}:`, e);
+          }
+
+          this.zipProgress = i + 1;
+        }
+
+        if (Object.keys(zipData).length === 0) {
+          this.showToast("Aucun fichier n'a pu être chiffré pour l'archive.");
+          return;
+        }
+
+        const zipped = zipSync(zipData, { level: 0 });
+        const blob = new Blob([zipped], { type: 'application/zip' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = zipName || 'archive.zip';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+        this.showToast('Archive ZIP téléchargée.', 'success');
+      } catch (e) {
+        console.error('ZIP download error:', e);
+        this.showToast('Erreur lors de la création de l\'archive ZIP.');
+      } finally {
+        this.isZipping = false;
+        this.zipProgress = 0;
+        this.zipTotal = 0;
+      }
     },
 
     async uploadFiles(fileList) {
