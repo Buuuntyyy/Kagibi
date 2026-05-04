@@ -116,6 +116,11 @@
                       <input type="datetime-local" id="expiresAt" v-model="expiresAt" class="form-control" />
                   </div>
 
+                  <div class="form-group">
+                      <label for="sharePassword">Mot de passe (optionnel)</label>
+                      <input type="password" id="sharePassword" v-model="sharePassword" class="form-control" placeholder="Laisser vide pour aucun mot de passe" autocomplete="new-password" />
+                  </div>
+
                   <div class="form-group single-use-group">
                       <label class="single-use-label">
                           <input type="checkbox" v-model="singleUse" class="single-use-checkbox" />
@@ -418,6 +423,7 @@ const linkCopied = ref(false);
 const shareLinkInput = ref(null);
 const expiresAt = ref(null);
 const singleUse = ref(false);
+const sharePassword = ref('');
 
 // Permissions (for folder shares, set at creation time)
 const permissions = ref({ download: true, create: true, delete: false, move: false });
@@ -481,6 +487,7 @@ watch(() => props.item, (newItem) => {
             move: newItem.perm_move ?? false,
         };
 
+        sharePassword.value = '';
         directShareStatus.value = {};
         restrictionsPanelOpen.value = false;
         treeItems.value = { folders: [], files: [] };
@@ -534,7 +541,7 @@ const createShare = async () => {
             expirationDate = selectedDate.toISOString();
         }
 
-        const result = await fileStore.createShareLink(itemId, props.item.type, expirationDate, permissions.value, singleUse.value);
+        const result = await fileStore.createShareLink(itemId, props.item.type, expirationDate, permissions.value, singleUse.value, sharePassword.value);
 
         localShareToken.value = result.token;
         localShareId.value = result.id;

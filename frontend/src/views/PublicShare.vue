@@ -24,7 +24,36 @@
          <div class="spinner"></div>
          <p>Chargement du partage...</p>
       </div>
-      
+
+      <div v-else-if="passwordRequired" class="share-card glass-panel password-card">
+        <div class="file-preview-section">
+          <div class="file-icon-wrapper">
+            <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="var(--primary-color)" stroke-width="1.5">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <h2 class="file-name">Partage protégé</h2>
+          <p class="share-meta">Un mot de passe est requis pour accéder à ce partage.</p>
+        </div>
+        <form @submit.prevent="submitPassword" class="password-form">
+          <input
+            type="password"
+            v-model="enteredPassword"
+            placeholder="Mot de passe"
+            class="password-input"
+            :class="{ 'input-error': passwordError }"
+            autofocus
+            autocomplete="current-password"
+          />
+          <p v-if="passwordError" class="password-error-msg">Mot de passe incorrect.</p>
+          <button type="submit" class="btn-primary-lg" :disabled="passwordLoading">
+            <span v-if="passwordLoading">Vérification...</span>
+            <span v-else>Déverrouiller</span>
+          </button>
+        </form>
+      </div>
+
       <div v-else-if="error" class="error-state">
         <div class="error-icon">
           <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="var(--error-color)" stroke-width="2">
@@ -94,14 +123,22 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
+import { usePublicFileStore } from '../stores/publicFileStore'
 import { deriveKeyFromToken, unwrapMasterKey, decryptChunkedFileWorker } from '../utils/crypto'
 
 const route = useRoute()
 const router = useRouter()
+const publicFileStore = usePublicFileStore()
+
 const shareInfo = ref(null)
 const loading = ref(true)
 const error = ref(null)
 const alreadyUsed = ref(false)
+const passwordRequired = ref(false)
+const enteredPassword = ref('')
+const passwordError = ref(false)
+const passwordLoading = ref(false)
+const currentPassword = ref('')
 
 const formatSize = (bytes) => {
   if (bytes === 0) return '0 B'
@@ -111,36 +148,63 @@ const formatSize = (bytes) => {
   return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+const fetchShareInfo = async (password = '') => {
+  const token = route.params.token
+  const headers = password ? { 'X-Share-Password': password } : {}
+  const response = await api.get(`/public/share/${token}`, { headers })
+  return response.data
+}
+
 onMounted(async () => {
   try {
-    const token = route.params.token
-    const response = await api.get(`/public/share/${token}`)
-    shareInfo.value = response.data
+    shareInfo.value = await fetchShareInfo()
 
     if (shareInfo.value.resource_type === 'folder') {
-      router.replace({ name: 'PublicBrowse', params: { token: token, subpath: [] } })
+      router.replace({ name: 'PublicBrowse', params: { token: route.params.token, subpath: [] } })
     }
-
   } catch (err) {
     const errMsg = err.response?.data?.error || 'Lien invalide ou expiré.'
-    if (errMsg === 'Link already used') {
+    if (errMsg === 'password_required') {
+      passwordRequired.value = true
+    } else if (errMsg === 'Link already used') {
       alreadyUsed.value = true
+      error.value = errMsg
+    } else {
+      error.value = errMsg
     }
-    error.value = errMsg
   } finally {
     loading.value = false
   }
 })
 
+const submitPassword = async () => {
+  if (!enteredPassword.value) return
+  passwordLoading.value = true
+  passwordError.value = false
+  try {
+    shareInfo.value = await fetchShareInfo(enteredPassword.value)
+    currentPassword.value = enteredPassword.value
+    publicFileStore.sharePassword = enteredPassword.value
+    passwordRequired.value = false
+
+    if (shareInfo.value.resource_type === 'folder') {
+      router.replace({ name: 'PublicBrowse', params: { token: route.params.token, subpath: [] } })
+    }
+  } catch (err) {
+    passwordError.value = true
+  } finally {
+    passwordLoading.value = false
+  }
+}
+
 const downloadFile = async () => {
   if (!shareInfo.value) return;
   const token = route.params.token;
+  const headers = currentPassword.value ? { 'X-Share-Password': currentPassword.value } : {}
 
   try {
-    // 1. Derive Share Key from Token
     const shareKey = await deriveKeyFromToken(token);
 
-    // 2. Decrypt File Key
     let fileKey;
     if (shareInfo.value.encrypted_key) {
         try {
@@ -155,14 +219,11 @@ const downloadFile = async () => {
         return;
     }
 
-    // 3. Download Encrypted Blob
-    const response = await api.get(`/public/share/${token}/download`, { responseType: 'blob' });
-    
-    // 4. Decrypt Blob
+    const response = await api.get(`/public/share/${token}/download`, { responseType: 'blob', headers });
+
     const mimeType = shareInfo.value.mime_type || 'application/octet-stream';
     const decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, mimeType);
-    
-    // 5. Save
+
     const url = window.URL.createObjectURL(decryptedBlob);
     const link = document.createElement('a');
     link.href = url;
@@ -170,7 +231,7 @@ const downloadFile = async () => {
     document.body.appendChild(link);
     link.click();
     setTimeout(() => { link.remove(); window.URL.revokeObjectURL(url); }, 100);
-    
+
   } catch (err) {
     console.error("Download failed", err)
     alert("Erreur lors du téléchargement")
@@ -342,6 +403,44 @@ const downloadFile = async () => {
 .loading-state, .error-state {
   text-align: center;
   color: var(--secondary-text-color);
+}
+
+/* Password protection */
+.password-card {
+  text-align: center;
+}
+
+.password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.password-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--background-color);
+  color: var(--main-text-color);
+  font-size: 1rem;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.password-input:focus {
+  border-color: var(--primary-color);
+}
+
+.password-input.input-error {
+  border-color: var(--error-color, #e53935);
+}
+
+.password-error-msg {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--error-color, #e53935);
 }
 
 .spinner {

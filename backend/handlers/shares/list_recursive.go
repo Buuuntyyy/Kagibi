@@ -38,6 +38,9 @@ func ListSharedFilesRecursiveHandler(c *gin.Context, db *bun.DB) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Not a folder share"})
 		return
 	}
+	if !checkSharePassword(c, &shareLink) {
+		return
+	}
 	if !shareLink.PermDownload {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Download not permitted on this share"})
 		return

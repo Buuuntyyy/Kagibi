@@ -37,6 +37,10 @@ func BrowseSharedFolderHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	if !checkSharePassword(c, &shareLink) {
+		return
+	}
+
 	if shareLink.ResourceType != "folder" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "This share link is not for a folder"})
 		return

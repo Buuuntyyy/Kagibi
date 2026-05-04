@@ -43,6 +43,10 @@ func resolvePublicShareForWrite(c *gin.Context, db *bun.DB, permCheck func(*pkg.
 		return nil, false
 	}
 
+	if !checkSharePassword(c, &shareLink) {
+		return nil, false
+	}
+
 	if !permCheck(&shareLink) {
 		c.JSON(http.StatusForbidden, gin.H{"error": permName + " not permitted on this share"})
 		return nil, false

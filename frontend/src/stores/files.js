@@ -1269,7 +1269,7 @@ export const useFileStore = defineStore('files', {
         throw error
       }
     },
-    async createShareLink(resourceId, resourceType, expiresAt = null, permissions = null, singleUse = false) {
+    async createShareLink(resourceId, resourceType, expiresAt = null, permissions = null, singleUse = false, password = '') {
       const authStore = useAuthStore();
       const token = generateShareToken();
 
@@ -1295,6 +1295,7 @@ export const useFileStore = defineStore('files', {
           encrypted_key: encryptedKeyForShare,
           file_keys: fileKeys,
           single_use: singleUse,
+          password: password || '',
           perm_download: permissions?.download ?? true,
           perm_create: permissions?.create ?? false,
           perm_delete: permissions?.delete ?? false,
