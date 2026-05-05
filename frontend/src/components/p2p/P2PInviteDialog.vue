@@ -235,11 +235,13 @@ async function copyLink() {
 }
 
 function close() {
-  if (step.value === 'form') {
-    step.value = 'form'
-    email.value = ''
-    error.value = ''
-  }
+  step.value = 'form'
+  email.value = ''
+  error.value = ''
+  legalConsent.value = false
+  inviteToken.value = ''
+  emailSent.value = false
+  copied.value = false
   emit('close')
 }
 </script>
