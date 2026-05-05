@@ -275,3 +275,58 @@ func streamFileFromS3(c *gin.Context, file *pkg.File) {
 		log.Printf("Error streaming file to client: %v", err)
 	}
 }
+
+// GetFileFolderKeyHandler returns the folder-key chain for a file whose encrypted_key
+// is empty (uploaded by a friend into a shared folder). The owner calls this endpoint
+// to obtain the two wrapped keys needed to derive the file key:
+//
+//	folderKey = unwrap(folder_encrypted_key, masterKey)
+//	fileKey   = unwrap(file_encrypted_key,   folderKey)
+func GetFileFolderKeyHandler(c *gin.Context, db *bun.DB) {
+	userID := c.GetString("user_id")
+	fileID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file ID"})
+		return
+	}
+
+	var file pkg.File
+	if err := db.NewSelect().Model(&file).
+		Where("id = ? AND user_id = ?", fileID, userID).
+		Scan(c.Request.Context()); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "File not found"})
+		return
+	}
+
+	// This endpoint is only meaningful when the file has no direct key.
+	if file.EncryptedKey != "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "file has its own key"})
+		return
+	}
+
+	var fk pkg.FolderFileKey
+	if err := db.NewSelect().Model(&fk).
+		Where("file_id = ?", fileID).
+		Scan(c.Request.Context()); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "no folder key found for this file"})
+		return
+	}
+
+	var folder pkg.Folder
+	if err := db.NewSelect().Model(&folder).
+		Where("id = ? AND user_id = ?", fk.FolderID, userID).
+		Scan(c.Request.Context()); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "folder not found"})
+		return
+	}
+
+	if folder.EncryptedKey == "" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "folder key not set"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"folder_encrypted_key": folder.EncryptedKey,
+		"file_encrypted_key":   fk.EncryptedKey,
+	})
+}

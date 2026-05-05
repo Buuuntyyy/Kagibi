@@ -30,16 +30,23 @@ export const useUploadStore = defineStore('uploads', {
   state: () => ({
     /** @type {Map<string, UploadItem>} */
     uploads: new Map(),
-    
+
     /** Global settings */
     maxConcurrentFiles: 3,
     maxConcurrentChunksPerFile: 3,
-    
+
     /** Queue processing state */
     isProcessing: false,
-    
+
     /** Show/hide upload manager panel */
-    showManager: false
+    showManager: false,
+
+    /** Folder creation phase (before file uploads begin) */
+    folderCreation: {
+      active: false,
+      total: 0,
+      done: 0
+    }
   }),
 
   getters: {
@@ -47,23 +54,6 @@ export const useUploadStore = defineStore('uploads', {
      * All uploads as array (for reactivity in Vue)
      */
     uploadList: (state) => Array.from(state.uploads.values()),
-    
-    /**
-     * Uploads grouped by status
-     */
-    pendingUploads: (state) => 
-      Array.from(state.uploads.values()).filter(u => u.status === UploadStatus.PENDING),
-    
-    activeUploads: (state) => 
-      Array.from(state.uploads.values()).filter(u => 
-        [UploadStatus.ENCRYPTING, UploadStatus.UPLOADING, UploadStatus.COMPLETING].includes(u.status)
-      ),
-    
-    completedUploads: (state) => 
-      Array.from(state.uploads.values()).filter(u => u.status === UploadStatus.COMPLETED),
-    
-    failedUploads: (state) => 
-      Array.from(state.uploads.values()).filter(u => u.status === UploadStatus.FAILED),
     
     /**
      * Overall progress (0-100)
@@ -74,17 +64,6 @@ export const useUploadStore = defineStore('uploads', {
       
       const totalProgress = uploads.reduce((sum, u) => sum + u.progress, 0)
       return Math.round(totalProgress / uploads.length)
-    },
-    
-    /**
-     * Total bytes uploaded / total bytes
-     */
-    totalBytes: (state) => {
-      const uploads = Array.from(state.uploads.values())
-      return {
-        uploaded: uploads.reduce((sum, u) => sum + u.uploadedBytes, 0),
-        total: uploads.reduce((sum, u) => sum + u.totalBytes, 0)
-      }
     },
     
     /**
@@ -165,15 +144,13 @@ export const useUploadStore = defineStore('uploads', {
     
     /**
      * Update upload item state
-     * @param {string} id 
-     * @param {Partial<UploadItem>} updates 
+     * Mutates in place to avoid spreading large objects (File, manager) on every progress tick.
      */
     updateUpload(id, updates) {
       const upload = this.uploads.get(id)
       if (upload) {
         Object.assign(upload, updates)
-        // Force reactivity by replacing in map
-        this.uploads.set(id, { ...upload })
+        this.uploads.set(id, upload)
       }
     },
     
@@ -206,14 +183,16 @@ export const useUploadStore = defineStore('uploads', {
     },
     
     /**
-     * Mark upload as completed
+     * Mark upload as completed. Releases File and manager references to free memory.
      */
     setCompleted(id, result = null) {
-      this.updateUpload(id, { 
-        status: UploadStatus.COMPLETED, 
+      this.updateUpload(id, {
+        status: UploadStatus.COMPLETED,
         progress: 100,
         endTime: Date.now(),
-        result
+        result,
+        file: null,    // release File DOM reference
+        manager: null  // release MultipartUploadManager + all part blobs
       })
     },
     
@@ -311,6 +290,20 @@ export const useUploadStore = defineStore('uploads', {
      */
     toggleManager() {
       this.showManager = !this.showManager
+    },
+
+    /**
+     * Folder creation phase progress tracking
+     */
+    startFolderCreation(total) {
+      this.folderCreation = { active: true, total, done: 0 }
+      if (!this.showManager) this.showManager = true
+    },
+    incrementFolderCreation() {
+      this.folderCreation.done++
+    },
+    endFolderCreation() {
+      this.folderCreation.active = false
     },
     
     /**

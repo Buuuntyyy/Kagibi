@@ -7,10 +7,13 @@ package pkg
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"sync"
 	"time"
+
+	"kagibi/backend/pkg/emailcrypto"
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
@@ -68,17 +71,41 @@ func ListUsers(db *bun.DB) ([]User, error) {
 	return users, err
 }
 
+// DecryptUserEmail decrypts user.EmailEncrypted and stores the result in user.Email.
+// Must be called after any DB load that needs the plaintext email.
+func DecryptUserEmail(u *User) error {
+	if u.EmailEncrypted == "" {
+		return nil
+	}
+	plain, err := emailcrypto.Decrypt(u.EmailEncrypted)
+	if err != nil {
+		return fmt.Errorf("DecryptUserEmail: %w", err)
+	}
+	u.Email = plain
+	return nil
+}
+
 func FindUserByEmail(db *bun.DB, email string) (*User, error) {
 	ctx := context.Background()
 	var user User
-	err := db.NewSelect().Model(&user).Where("email = ?", email).Scan(ctx)
-	return &user, err
+	hash := emailcrypto.Hash(email)
+	err := db.NewSelect().Model(&user).Where("email_hash = ?", hash).Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := DecryptUserEmail(&user); err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 func FindUserByID(db *bun.DB, userID string) (*User, error) {
 	var user User
 	err := db.NewSelect().Model(&user).Where("id = ?", userID).Scan(context.Background())
 	if err != nil {
+		return nil, err
+	}
+	if err := DecryptUserEmail(&user); err != nil {
 		return nil, err
 	}
 	return &user, nil

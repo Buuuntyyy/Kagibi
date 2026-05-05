@@ -39,10 +39,19 @@ async function fetchICEConfig() {
 
 export const useP2PStore = defineStore('p2p', {
   state: () => ({
-    incomingOffer: null, 
-    activeTransfer: null, 
+    incomingOffer: null,
+    activeTransfer: null,
+    rejectedTransfer: null, // Info shown to initiator when recipient rejects
     candidateQueue: [], // Store candidates that arrive before acceptance
-    heartbeatInterval: null // Interval for session maintenance
+    heartbeatInterval: null, // Interval for session maintenance
+    pingCount: 0, // Number of pings sent for current transfer
+    pingCooldownUntil: null, // Timestamp until which pings are throttled
+    pingSeq: 0, // Incremented on every received ping — watcher always fires
+    connectingTimeout: null, // Timeout that dismisses a stuck Connecting... state
+    resumeTimeout: null,     // Timeout waiting for a resume offer on the receiver side
+    // Invite system: sender keeps the file + key in memory while waiting for the recipient
+    pendingInvite: null, // { transferId, file, fileKey, recipientId, recipientPublicKey, recipientName }
+    inviteReady: false,  // true once the recipient accepted → sender can start transfer
   }),
   actions: {
     startHeartbeat() {
@@ -57,8 +66,8 @@ export const useP2PStore = defineStore('p2p', {
             }
             
             try {
-                const token = localStorage.getItem('token');
-                await axios.get(`${API_BASE_URL}/heartbeat`, {
+                const token = await authClient.getToken();
+                await axios.get(`${API_BASE_URL}heartbeat`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
                 //console.log('[P2P] Session heartbeat sent');
@@ -83,22 +92,70 @@ export const useP2PStore = defineStore('p2p', {
                 this.activeTransfer.connectionInfo.iceState = pc.iceConnectionState;
                 if (pc.iceConnectionState === 'checking') {
                     this.activeTransfer.connectionInfo.stage = 'Négociation de la connexion...';
-                } else if (pc.iceConnectionState === 'connected') {
-                    this.activeTransfer.connectionInfo.stage = 'Connecté';
-                    this.detectConnectionType(pc, transferId);
+                } else if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                    this._clearConnectingTimeout(); // Connection established — no longer waiting
+                    this.activeTransfer.connectionInfo.wasConnected = true;
+                    if (pc.iceConnectionState === 'connected') {
+                        this.activeTransfer.connectionInfo.stage = 'Connecté';
+                        this.detectConnectionType(pc, transferId);
+                    }
                 }
             }
-            if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+            if (pc.iceConnectionState === 'disconnected') {
+                // 'disconnected' is a transient state — WebRTC may recover automatically.
+                // Only update the stage label; never show an error dialog here.
                 if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
                     const isDone = this.activeTransfer.status === 'Done' || this.activeTransfer.status === 'Complete';
                     if (!isDone) {
-                        console.error('ICE Connection Failed/Disconnected during active transfer');
-                        uiStore.showError(
-                            "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
-                            'Échec de Connexion'
-                        );
-                        this.activeTransfer.status = 'Error';
-                        this.activeTransfer.connectionInfo.stage = 'Échec de connexion';
+                        this.activeTransfer.connectionInfo.stage = 'Reconnexion en cours...';
+                    }
+                }
+            } else if (pc.iceConnectionState === 'failed') {
+                if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
+                    const isDone = this.activeTransfer.status === 'Done' || this.activeTransfer.status === 'Complete';
+                    if (!isDone) {
+                        const MAX_RESUME = 3;
+                        const attempts = this.activeTransfer.resumeAttempts ?? 0;
+                        if (attempts < MAX_RESUME) {
+                            if (this.activeTransfer.type === 'receive') {
+                                // Receiver drives resume negotiation
+                                this._initiateResume(transferId);
+                            } else {
+                                // Sender waits for the receiver's resume request (30 s window)
+                                this.activeTransfer.status = 'Reconnecting...';
+                                this.activeTransfer.connectionInfo.stage = 'Reconnexion en cours...';
+                                this._senderResumeTimeout = setTimeout(() => {
+                                    if (this.activeTransfer && this.activeTransfer.transferId === transferId &&
+                                        this.activeTransfer.status === 'Reconnecting...') {
+                                        this.activeTransfer.status = 'Error';
+                                        this.activeTransfer.connectionInfo.stage = 'Échec de connexion';
+                                        uiStore.showError(
+                                            "Le contact distant s'est déconnecté et n'a pas pu reprendre le transfert.",
+                                            'Contact déconnecté'
+                                        );
+                                    }
+                                    this._senderResumeTimeout = null;
+                                }, 30000);
+                            }
+                        } else {
+                            // Exhausted retries — give up
+                            const wasEverConnected = this.activeTransfer.connectionInfo.wasConnected || attempts > 0;
+                            if (wasEverConnected) {
+                                console.error('ICE Connection Failed — remote peer likely disconnected');
+                                uiStore.showError(
+                                    "Le contact distant s'est déconnecté pendant le transfert. Le fichier n'a pas été transféré complètement.",
+                                    'Contact déconnecté'
+                                );
+                            } else {
+                                console.error('ICE Connection Failed — could not establish connection');
+                                uiStore.showError(
+                                    "La connexion P2P a échoué (ICE Failed). Un serveur TURN est nécessaire pour traverser les pare-feux et NAT stricts.",
+                                    'Échec de Connexion'
+                                );
+                            }
+                            this.activeTransfer.status = 'Error';
+                            this.activeTransfer.connectionInfo.stage = 'Échec de connexion';
+                        }
                     }
                 }
             }
@@ -108,6 +165,20 @@ export const useP2PStore = defineStore('p2p', {
     _handleOfferSignal(sender_id, data) {
         this.incomingOffer = { senderId: sender_id, ...data.meta, sdp: data.sdp, transferId: data.transferId };
         this.candidateQueue = [];
+    },
+
+    _handlePingSignal() {
+        this.pingSeq++;
+    },
+
+    sendPing(friendId, transferId) {
+        const now = Date.now();
+        if (this.pingCount >= 3) return;
+        if (this.pingCooldownUntil && now < this.pingCooldownUntil) return;
+        const realtimeStore = useRealtimeStore();
+        realtimeStore.sendP2PSignal(friendId, 'p2p_ping', { transferId });
+        this.pingCount++;
+        this.pingCooldownUntil = now + 30000;
     },
 
     async _handleAnswerSignal(sender_id, data) {
@@ -143,6 +214,37 @@ export const useP2PStore = defineStore('p2p', {
         }
     },
 
+    _clearConnectingTimeout() {
+        if (this.connectingTimeout) { clearTimeout(this.connectingTimeout); this.connectingTimeout = null; }
+    },
+
+    _handleRejectSignal(sender_id, data) {
+        // Only the sender side has type='send'; the receiver has no activeTransfer yet.
+        if (!this.activeTransfer || this.activeTransfer.type !== 'send') return;
+        // If both sides carry a transferId it must match — prevents stale/wrong-session signals.
+        if (data?.transferId && this.activeTransfer.transferId && data.transferId !== this.activeTransfer.transferId) return;
+        // Sender must be our intended recipient
+        if (this.activeTransfer.friendId !== sender_id) {
+            console.warn('[P2P] Reject signal ignored — sender_id mismatch:', sender_id, 'expected:', this.activeTransfer.friendId);
+            return;
+        }
+
+        const fileName = this.activeTransfer.fileName;
+        // Null out all handlers before closing to prevent stale callbacks
+        const pc = this.activeTransfer.pc;
+        pc.onicecandidate = null;
+        pc.oniceconnectionstatechange = null;
+        pc.ondatachannel = null;
+        pc.close();
+        this._clearConnectingTimeout();
+        this.activeTransfer = null;
+        this.stopHeartbeat();
+
+        this.rejectedTransfer = { friendId: sender_id, fileName };
+        // Auto-dismiss after 6 seconds
+        setTimeout(() => { this.rejectedTransfer = null; }, 6000);
+    },
+
     async handleSignal(payload) {
         const { sender_id, type, data } = payload;
         if (type === 'offer') {
@@ -151,18 +253,63 @@ export const useP2PStore = defineStore('p2p', {
             await this._handleAnswerSignal(sender_id, data);
         } else if (type === 'candidate') {
             await this._handleCandidateSignal(sender_id, data);
+        } else if (type === 'reject') {
+            this._handleRejectSignal(sender_id, data);
+        } else if (type === 'p2p_ping') {
+            this._handlePingSignal();
+        } else if (type === 'p2p_resume_request') {
+            await this._handleResumeRequestSignal(sender_id, data);
+        } else if (type === 'p2p_resume_offer') {
+            await this._handleResumeOfferSignal(sender_id, data);
+        } else if (type === 'invite_accepted') {
+            await this._handleInviteAcceptedSignal(sender_id, data);
         }
     },
 
-    async startTransfer(friend, file) {
+    // Called when the recipient opens the invite link and accepts.
+    // If the pendingInvite matches the transfer_id, kick off the WebRTC handshake.
+    async _handleInviteAcceptedSignal(sender_id, data) {
+        if (!this.pendingInvite) return;
+        if (data?.transfer_id && data.transfer_id !== this.pendingInvite.transferId) return;
+        if (sender_id !== this.pendingInvite.recipientId) return;
+
+        this.inviteReady = true;
+        const { file, fileKey, recipientId, recipientName } = this.pendingInvite;
+
+        // For guest invites, public_key comes from the signal payload (generated by the guest browser).
+        // For account-based invites, fall back to the key stored at invite creation time.
+        const publicKey = data?.public_key || this.pendingInvite.recipientPublicKey;
+
+        const pseudoFriend = {
+            id: recipientId,
+            name: recipientName,
+            public_key: publicKey,
+        };
+        await this.startTransfer(pseudoFriend, file, fileKey);
+    },
+
+    // Prepare an invite-based pending transfer. The file and pre-generated key are
+    // held in memory until the recipient accepts (up to 24 h, page must stay open).
+    setPendingInvite({ transferId, file, fileKey, recipientId, recipientPublicKey, recipientName }) {
+        this.pendingInvite = { transferId, file, fileKey, recipientId, recipientPublicKey, recipientName };
+        this.inviteReady = false;
+    },
+
+    clearPendingInvite() {
+        this.pendingInvite = null;
+        this.inviteReady = false;
+    },
+
+    // preGeneratedKey: optional CryptoKey already created (invite flow).
+    async startTransfer(friend, file, preGeneratedKey = null) {
          await sodium.ready;
-         
+
          if (!friend.public_key) {
-             alert("L'ami n'a pas de clé publique (Il doit se reconnecter une fois pour la publier)."); 
+             alert("L'ami n'a pas de clé publique (Il doit se reconnecter une fois pour la publier).");
              return;
          }
 
-         const fileKey = await generateMasterKey();
+         const fileKey = preGeneratedKey ?? await generateMasterKey();
          const fileKeyRaw = await window.crypto.subtle.exportKey("raw", fileKey);
          
          const publicKey = await importKeyFromPEM(friend.public_key);
@@ -191,8 +338,12 @@ export const useP2PStore = defineStore('p2p', {
 
          const dc = pc.createDataChannel("file");
          dc.binaryType = "arraybuffer";
-         dc.onopen = () => this.sendFileData(file, fileKey, dc);
+         dc.onopen = () => this.sendFileData(file, fileKey, dc, 0);
          
+         this.pingCount = 0;
+         this.pingCooldownUntil = null;
+         if (this.connectingTimeout) { clearTimeout(this.connectingTimeout); this.connectingTimeout = null; }
+
          this.activeTransfer = {
              friendId: friend.id,
              type: 'send',
@@ -201,14 +352,22 @@ export const useP2PStore = defineStore('p2p', {
              progress: 0,
              fileName: file.name,
              transferId: transferId,
+             totalBytes: file.size,
+             transferredBytes: 0,
+             transferStartedAt: null,
+             file: file,       // kept for resume
+             fileKey: fileKey, // kept for resume
+             resumeAttempts: 0,
+             sendGeneration: 0, // incremented on each resume to stop stale send loops
              connectionInfo: {
                  stage: 'Initialisation...',
                  iceState: 'new',
                  connectionType: null,
-                 usingTurn: false
+                 usingTurn: false,
+                 wasConnected: false
              }
          };
-         
+
          // Start heartbeat to prevent session timeout
          this.startHeartbeat();
 
@@ -225,6 +384,19 @@ export const useP2PStore = defineStore('p2p', {
                  fileKeyEncrypted: keyEncryptedBase64
              }
          });
+
+         // Auto-dismiss the waiting state after 3 minutes with no response
+         this.connectingTimeout = setTimeout(() => {
+             if (this.activeTransfer && this.activeTransfer.status === 'Connecting...') {
+                 const pc = this.activeTransfer.pc;
+                 if (pc) { pc.onicecandidate = null; pc.oniceconnectionstatechange = null; pc.close(); }
+                 this.activeTransfer = null;
+                 this.stopHeartbeat();
+                 this.rejectedTransfer = { friendId: friend.id, fileName: file.name, timedOut: true };
+                 setTimeout(() => { this.rejectedTransfer = null; }, 8000);
+             }
+             this.connectingTimeout = null;
+         }, 3 * 60 * 1000);
     },
 
     async acceptTransfer() {
@@ -297,14 +469,19 @@ export const useP2PStore = defineStore('p2p', {
              buffer: [],
              receivedSize: 0,
              transferId: transferId,
+             totalBytes: offerData.size,
+             transferredBytes: 0,
+             transferStartedAt: null,
+             resumeAttempts: 0,
              connectionInfo: {
                  stage: 'Initialisation...',
                  iceState: 'new',
                  connectionType: null,
-                 usingTurn: false
+                 usingTurn: false,
+                 wasConnected: false
              }
         };
-        
+
         // Start heartbeat to prevent session timeout
         this.startHeartbeat();
 
@@ -313,7 +490,10 @@ export const useP2PStore = defineStore('p2p', {
             const dc = event.channel;
             dc.binaryType = "arraybuffer";
             dc.onmessage = (msgEvent) => this.handleReceiveMessage(msgEvent);
-            dc.onopen = () => { this.activeTransfer.status = 'Receiving...'; };
+            dc.onopen = () => {
+                this.activeTransfer.status = 'Receiving...';
+                this.activeTransfer.transferStartedAt = Date.now();
+            };
         };
 
         await pc.setRemoteDescription(new RTCSessionDescription(offerData.sdp));
@@ -338,87 +518,309 @@ export const useP2PStore = defineStore('p2p', {
         });
     },
 
-    rejectTransfer() {
+    async rejectTransfer() {
+        if (!this.incomingOffer) return;
+        const realtimeStore = useRealtimeStore();
+        const senderId = this.incomingOffer.senderId;
+        const transferId = this.incomingOffer.transferId;
+        // Clear local state immediately so the UI updates right away
         this.incomingOffer = null;
-        // Should send 'reject' signal ideally
+        this.candidateQueue = [];
+        // Send the reject signal — best-effort, errors are logged but don't block the UI
+        try {
+            await realtimeStore.sendP2PSignal(senderId, 'reject', { transferId });
+        } catch (err) {
+            console.error('[P2P] Failed to send reject signal:', err);
+        }
     },
 
     cancelTransfer() {
+        this._clearConnectingTimeout();
+        this._clearResumeTimeout();
+        if (this._senderResumeTimeout) { clearTimeout(this._senderResumeTimeout); this._senderResumeTimeout = null; }
         if (this.activeTransfer) {
-            this.activeTransfer.pc.close();
+            const pc = this.activeTransfer.pc;
+            if (pc) { pc.onicecandidate = null; pc.oniceconnectionstatechange = null; pc.ondatachannel = null; pc.close(); }
             this.activeTransfer = null;
         }
         this.stopHeartbeat();
     },
 
-    async sendFileData(file, key, dc) {
+    _clearResumeTimeout() {
+        if (this.resumeTimeout) { clearTimeout(this.resumeTimeout); this.resumeTimeout = null; }
+    },
+
+    // Returns the index of the first missing chunk (= next chunk the sender should send).
+    _getResumePoint(buffer) {
+        let i = 0;
+        while (buffer[i] !== undefined) i++;
+        return i;
+    },
+
+    // Called by the receiver when ICE fails during an active transfer.
+    _initiateResume(transferId) {
+        if (!this.activeTransfer || this.activeTransfer.transferId !== transferId) return;
+        const transfer = this.activeTransfer;
+        transfer.resumeAttempts++;
+        const resumeFrom = this._getResumePoint(transfer.buffer);
+        transfer.status = 'Reconnecting...';
+        transfer.connectionInfo.stage = `Reprise depuis le paquet ${resumeFrom}…`;
+
+        const realtimeStore = useRealtimeStore();
+        realtimeStore.sendP2PSignal(transfer.friendId, 'p2p_resume_request', {
+            transferId,
+            resumeFrom,
+        });
+
+        // Give up if the sender never replies with a resume offer
+        this._clearResumeTimeout();
+        this.resumeTimeout = setTimeout(() => {
+            this.resumeTimeout = null;
+            if (this.activeTransfer && this.activeTransfer.transferId === transferId &&
+                this.activeTransfer.status === 'Reconnecting...') {
+                this.activeTransfer.status = 'Error';
+                this.activeTransfer.connectionInfo.stage = 'Échec de connexion';
+                const uiStore = useUIStore();
+                uiStore.showError(
+                    "Le contact distant ne répond plus. Le transfert n'a pas pu reprendre.",
+                    'Contact déconnecté'
+                );
+            }
+        }, 30000);
+    },
+
+    // Sender: receiver asked to resume from a given chunk index.
+    async _handleResumeRequestSignal(sender_id, data) {
+        if (!this.activeTransfer || this.activeTransfer.type !== 'send') return;
+        if (this.activeTransfer.friendId !== sender_id) return;
+        if (data.transferId !== this.activeTransfer.transferId) return;
+        if (this.activeTransfer.status === 'Error') return;
+
+        const MAX_RESUME = 3;
+        if (this.activeTransfer.resumeAttempts >= MAX_RESUME) return;
+        this.activeTransfer.resumeAttempts++;
+
+        // Cancel the sender-side give-up timeout — the receiver is alive
+        if (this._senderResumeTimeout) { clearTimeout(this._senderResumeTimeout); this._senderResumeTimeout = null; }
+
+        // Tear down the old PC cleanly before creating a new one
+        const oldPc = this.activeTransfer.pc;
+        if (oldPc) {
+            oldPc.onicecandidate = null;
+            oldPc.oniceconnectionstatechange = null;
+            oldPc.ondatachannel = null;
+            try { oldPc.close(); } catch (_) {}
+        }
+
+        // Increment generation so any still-running sendFileData loop will exit
+        this.activeTransfer.sendGeneration++;
+
+        await this._createResumeOffer(sender_id, data.resumeFrom);
+    },
+
+    // Sender: build a new RTCPeerConnection and send a resume offer.
+    async _createResumeOffer(recipientId, fromChunk) {
+        const transfer = this.activeTransfer;
+        if (!transfer) return;
+
+        const transferId = transfer.transferId;
+        transfer.connectionInfo.stage = `Reprise depuis le paquet ${fromChunk}…`;
+        transfer.connectionInfo.wasConnected = false;
+        transfer.connectionInfo.iceState = 'new';
+
+        const rtcConfig = await fetchICEConfig();
+        const pc = new RTCPeerConnection(rtcConfig);
+        transfer.pc = pc;
+
+        const realtimeStore = useRealtimeStore();
+        pc.oniceconnectionstatechange = this._makeIceStateHandler(pc, transferId);
+        pc.onicecandidate = e => {
+            if (e.candidate) {
+                realtimeStore.sendP2PSignal(recipientId, 'candidate', {
+                    candidate: e.candidate,
+                    transferId,
+                });
+            }
+        };
+
+        const dc = pc.createDataChannel("file");
+        dc.binaryType = "arraybuffer";
+        const capturedGeneration = transfer.sendGeneration;
+        dc.onopen = () => {
+            // Only start sending if this DC still belongs to the current generation
+            if (this.activeTransfer && this.activeTransfer.sendGeneration === capturedGeneration) {
+                this.sendFileData(transfer.file, transfer.fileKey, dc, fromChunk);
+            }
+        };
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        realtimeStore.sendP2PSignal(recipientId, 'p2p_resume_offer', {
+            sdp: offer,
+            transferId,
+            resumeFrom: fromChunk,
+        });
+    },
+
+    // Receiver: sender replied with a fresh offer to resume from a given chunk.
+    async _handleResumeOfferSignal(sender_id, data) {
+        if (!this.activeTransfer || this.activeTransfer.type !== 'receive') return;
+        if (this.activeTransfer.friendId !== sender_id) return;
+        if (data.transferId !== this.activeTransfer.transferId) return;
+        if (this.activeTransfer.status !== 'Reconnecting...') return;
+
+        this._clearResumeTimeout();
+
+        const transfer = this.activeTransfer;
+        const transferId = transfer.transferId;
+
+        // Tear down the old PC
+        const oldPc = transfer.pc;
+        if (oldPc) {
+            oldPc.onicecandidate = null;
+            oldPc.oniceconnectionstatechange = null;
+            oldPc.ondatachannel = null;
+            try { oldPc.close(); } catch (_) {}
+        }
+
+        transfer.connectionInfo.wasConnected = false;
+        transfer.connectionInfo.iceState = 'new';
+        transfer.connectionInfo.stage = `Reprise depuis le paquet ${data.resumeFrom}…`;
+
+        const rtcConfig = await fetchICEConfig();
+        const pc = new RTCPeerConnection(rtcConfig);
+        transfer.pc = pc;
+
+        const realtimeStore = useRealtimeStore();
+        pc.oniceconnectionstatechange = this._makeIceStateHandler(pc, transferId);
+        pc.onicecandidate = e => {
+            if (e.candidate) {
+                realtimeStore.sendP2PSignal(sender_id, 'candidate', {
+                    candidate: e.candidate,
+                    transferId,
+                });
+            }
+        };
+
+        pc.ondatachannel = (event) => {
+            const dc = event.channel;
+            dc.binaryType = "arraybuffer";
+            dc.onmessage = (msgEvent) => this.handleReceiveMessage(msgEvent);
+            dc.onopen = () => {
+                // Restore receiving status without resetting progress or transferStartedAt
+                if (this.activeTransfer && this.activeTransfer.transferId === transferId) {
+                    this.activeTransfer.status = 'Receiving...';
+                }
+            };
+        };
+
+        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+        this.candidateQueue = []; // stale candidates from old session are irrelevant
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        realtimeStore.sendP2PSignal(sender_id, 'answer', {
+            sdp: answer,
+            transferId,
+        });
+    },
+
+    async sendFileData(file, key, dc, startChunk = 0) {
         const CHUNK_SIZE = 16 * 1024; // 16KB chunk size
-        let offset = 0;
-        let chunkIndex = 0;
+        let offset = startChunk * CHUNK_SIZE;
+        let chunkIndex = startChunk;
+
+        // Capture the generation at entry — if the caller creates a new PC/DC for a
+        // resume, it increments sendGeneration before calling us again, so the old
+        // invocation detects the mismatch and exits cleanly.
+        const myGeneration = this.activeTransfer.sendGeneration;
+
         this.activeTransfer.status = 'Sending...';
+        if (startChunk === 0) {
+            this.activeTransfer.transferStartedAt = Date.now();
+        }
 
         const waitForBuffer = () => {
-             // Lower buffer threshold to ensures smoother flow
-             if(dc.bufferedAmount > 8 * 1024 * 1024) { 
+             if (dc.bufferedAmount > 8 * 1024 * 1024) {
                  return new Promise(resolve => {
-                     const listener = () => {
-                         dc.removeEventListener('bufferedamountlow', listener);
+                     const done = () => {
+                         dc.removeEventListener('bufferedamountlow', done);
+                         dc.removeEventListener('close', done);
+                         dc.removeEventListener('error', done);
                          resolve();
                      };
-                     dc.addEventListener('bufferedamountlow', listener);
+                     dc.addEventListener('bufferedamountlow', done);
+                     // Resolve immediately if the channel closes so the loop can exit
+                     dc.addEventListener('close', done);
+                     dc.addEventListener('error', done);
                  });
              }
              return Promise.resolve();
         };
 
-        while(offset < file.size) {
+        while (offset < file.size) {
             if (!this.activeTransfer) break; // Cancelled
+            if (this.activeTransfer.sendGeneration !== myGeneration) break; // Superseded by resume
 
             const chunk = file.slice(offset, offset + CHUNK_SIZE);
             const buffer = await chunk.arrayBuffer();
-            
+
+            if (!this.activeTransfer || this.activeTransfer.sendGeneration !== myGeneration) break;
+
             const iv = window.crypto.getRandomValues(new Uint8Array(12));
             const encrypted = await window.crypto.subtle.encrypt(
                 { name: "AES-GCM", iv: iv },
                 key,
                 buffer
             );
-            
-            // Packet structure: [Index (4 bytes)][IV (12 bytes)][Encrypted Data]
+
+            if (!this.activeTransfer || this.activeTransfer.sendGeneration !== myGeneration) break;
+
+            // Packet structure: [Index (4 bytes big-endian)][IV (12 bytes)][Encrypted Data]
             const packet = new Uint8Array(4 + 12 + encrypted.byteLength);
-            
-            // Write Index (Big Endian)
             new DataView(packet.buffer).setUint32(0, chunkIndex, false);
-            
             packet.set(iv, 4);
             packet.set(new Uint8Array(encrypted), 16);
-            
+
             await waitForBuffer();
-            dc.send(packet);
-            
+
+            if (!this.activeTransfer || this.activeTransfer.sendGeneration !== myGeneration) break;
+
+            try {
+                dc.send(packet);
+            } catch (_) {
+                break; // DataChannel closed under us
+            }
+
             offset += CHUNK_SIZE;
             chunkIndex++;
             this.activeTransfer.progress = Math.round((offset / file.size) * 100);
+            this.activeTransfer.transferredBytes = Math.min(offset, file.size);
         }
-        
-         await waitForBuffer();
-         dc.send(new TextEncoder().encode("EOF"));
-         this.activeTransfer.status = 'Done';
-         
-         // Close DataChannel and PeerConnection after a short delay
-         setTimeout(() => {
-             if (dc && dc.readyState === 'open') {
-                 dc.close();
-             }
-             if (pc && pc.connectionState !== 'closed') {
-                 pc.close();
-             }
-         }, 500);
-         
-         setTimeout(() => {
-             this.activeTransfer = null;
-             this.stopHeartbeat();
-         }, 2000);
+
+        // Only finalise if this invocation is still the active one
+        if (!this.activeTransfer || this.activeTransfer.sendGeneration !== myGeneration) return;
+
+        await waitForBuffer();
+        try { dc.send(new TextEncoder().encode("EOF")); } catch (_) {}
+        this.activeTransfer.status = 'Done';
+
+        setTimeout(() => {
+            if (dc && dc.readyState === 'open') dc.close();
+            if (this.activeTransfer && this.activeTransfer.sendGeneration === myGeneration) {
+                const pc = this.activeTransfer.pc;
+                if (pc && pc.connectionState !== 'closed') pc.close();
+            }
+        }, 500);
+
+        setTimeout(() => {
+            if (this.activeTransfer && this.activeTransfer.sendGeneration === myGeneration) {
+                this.activeTransfer = null;
+                this.stopHeartbeat();
+            }
+        }, 2000);
     },
 
     async handleReceiveMessage(event) {
@@ -462,6 +864,7 @@ export const useP2PStore = defineStore('p2p', {
             this.activeTransfer.buffer[index] = decrypted;
             
             this.activeTransfer.receivedSize += decrypted.byteLength;
+            this.activeTransfer.transferredBytes = this.activeTransfer.receivedSize;
             this.activeTransfer.progress = Math.round((this.activeTransfer.receivedSize / this.activeTransfer.fileSize) * 100);
 
             if (this.activeTransfer.receivedSize >= this.activeTransfer.fileSize) {

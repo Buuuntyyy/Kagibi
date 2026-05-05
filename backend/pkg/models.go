@@ -15,7 +15,7 @@ import (
 // It is set at startup by main.go to avoid an import cycle.
 type WSHub interface {
 	SendEventToUser(userID, eventType string, id int64, payload map[string]any)
-	SendP2PSignalToUser(targetUserID, senderID, signalType string, payload map[string]any)
+	SendP2PSignalToUser(targetUserID, senderID, signalType string, signalID int64, payload map[string]any)
 }
 
 // wsHub is the global hub instance injected at startup.
@@ -27,10 +27,12 @@ func SetWSHub(h WSHub) { wsHub = h }
 type User struct {
 	bun.BaseModel `bun:"table:profiles,alias:p"`
 
-	ID        string `bun:"id,pk"`
-	Name      string `bun:"name,notnull"`
-	Email     string `bun:"email,unique,notnull"`
-	AvatarURL string `bun:"avatar_url,notnull,default:'/avatars/default.png'" json:"avatar_url"`
+	ID             string `bun:"id,pk"`
+	Name           string `bun:"name,notnull"`
+	EmailHash      string `bun:"email_hash,notnull" json:"-"`
+	EmailEncrypted string `bun:"email_encrypted,notnull" json:"-"`
+	Email          string `bun:"-" json:"email"` // virtual: populated by DecryptUserEmail after any DB load
+	AvatarURL      string `bun:"avatar_url,notnull,default:'/avatars/default.png'" json:"avatar_url"`
 	// PasswordHash removed as it is handled by Supabase
 	Salt                       string     `bun:"salt,notnull" json:"salt"`
 	EncryptedMasterKey         string     `bun:"encrypted_master_key,notnull" json:"encrypted_master_key"`
@@ -60,7 +62,7 @@ type UserPlan struct {
 	Plan             string    `bun:"plan,notnull,default:'free'" json:"plan"`
 	StorageLimit     int64     `bun:"storage_limit,notnull,default:21474836480" json:"storage_limit"`
 	StorageUsed      int64     `bun:"storage_used,notnull,default:0" json:"storage_used"`
-	P2PMaxExchanges  int       `bun:"p2p_max_exchanges,notnull,default:5" json:"p2p_max_exchanges"`
+	P2PMaxExchanges  int       `bun:"p2p_max_exchanges,notnull,default:-1" json:"p2p_max_exchanges"`
 	P2PExchangesUsed int       `bun:"p2p_exchanges_used,notnull,default:0" json:"p2p_exchanges_used"`
 	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt        time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
@@ -110,6 +112,7 @@ type FileShare struct {
 	SharedWithUserID string    `bun:"shared_with_user_id,notnull"`
 	EncryptedKey     string    `bun:"encrypted_key,notnull"` // File Key Encrypted with recipient's Public Key
 	Permission       string    `bun:"permission,notnull,default:'read'"`
+	PermDownload     bool      `bun:"perm_download,notnull,default:true"`
 	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 }
 
@@ -119,6 +122,10 @@ type FolderShare struct {
 	SharedWithUserID string    `bun:"shared_with_user_id,notnull"`
 	EncryptedKey     string    `bun:"encrypted_key"` // FolderKey encrypted with Recipient's Public Key
 	Permission       string    `bun:"permission,notnull,default:'read'"`
+	PermDownload     bool      `bun:"perm_download,notnull,default:true"`
+	PermCreate       bool      `bun:"perm_create,notnull,default:false"`
+	PermDelete       bool      `bun:"perm_delete,notnull,default:false"`
+	PermMove         bool      `bun:"perm_move,notnull,default:false"`
 	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 }
 
@@ -183,6 +190,25 @@ type ShareLink struct {
 	ExpiresAt    *time.Time `bun:"expires_at"`            // Optionnel : expiration
 	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	Views        int64      `bun:"views,default:0"`
+	SingleUse    bool       `bun:"single_use,default:false"`   // Link is invalidated after first download
+	UsedAt       *time.Time `bun:"used_at"`                    // Set when a single-use link is consumed
+	PermDownload bool       `bun:"perm_download,default:true"` // Can download files
+	PermCreate   bool       `bun:"perm_create,default:false"`  // Folder: can create files/dirs
+	PermDelete   bool       `bun:"perm_delete,default:false"`  // Folder: can delete files/dirs
+	PermMove     bool       `bun:"perm_move,default:false"`    // Folder: can move files/dirs
+}
+
+// ShareItemOverride stores per-item access restrictions within a shared folder.
+type ShareItemOverride struct {
+	bun.BaseModel `bun:"table:share_item_overrides,alias:sio"`
+
+	ID          int64  `bun:"id,pk,autoincrement" json:"id"`
+	ShareID     int64  `bun:"share_id,notnull" json:"share_id"`
+	ItemPath    string `bun:"item_path,notnull" json:"item_path"`
+	ItemType    string `bun:"item_type,notnull" json:"item_type"`       // "file" | "folder"
+	AccessLevel string `bun:"access_level,notnull" json:"access_level"` // "full" | "readonly" | "none"
+	CanDelete   bool   `bun:"can_delete,notnull,default:true" json:"can_delete"`
+	CanDownload bool   `bun:"can_download,notnull,default:true" json:"can_download"`
 }
 
 type ImportedShare struct {
@@ -214,6 +240,30 @@ type RealtimeEvent struct {
 	EventType string         `bun:"event_type,notnull"`
 	Payload   map[string]any `bun:"payload,type:jsonb"`
 	CreatedAt time.Time      `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+}
+
+// P2PInvite is a time-limited token that lets an authenticated user invite
+// anyone (guest or registered) to a P2P transfer without both being online simultaneously.
+// RecipientEmail is optional — used only for notification; RecipientID is a guest UUID for
+// guest invites (IsGuest=true) or the registered user ID for account-based invites.
+type P2PInvite struct {
+	bun.BaseModel `bun:"table:p2p_invites"`
+
+	ID                      int64      `bun:"id,pk,autoincrement" json:"id"`
+	Token                   string     `bun:"token,unique,notnull" json:"token"`
+	SenderID                string     `bun:"sender_id,notnull" json:"sender_id"`
+	SenderName              string     `bun:"sender_name,notnull" json:"sender_name"`
+	RecipientEmailEncrypted string     `bun:"recipient_email_encrypted" json:"-"` // AES-256-GCM encrypted, nullable
+	RecipientEmail          string     `bun:"-" json:"recipient_email"`           // virtual: decrypted from RecipientEmailEncrypted
+	RecipientID             string     `bun:"recipient_id,notnull" json:"recipient_id"`
+	TransferID              string     `bun:"transfer_id,notnull" json:"transfer_id"`
+	FileName                string     `bun:"file_name,notnull" json:"file_name"`
+	FileSize                int64      `bun:"file_size,notnull" json:"file_size"`
+	IsGuest                 bool       `bun:"is_guest,notnull,default:false" json:"is_guest"`
+	ExpiresAt               time.Time  `bun:"expires_at,notnull" json:"expires_at"`
+	GuestAuthedAt           *time.Time `bun:"guest_authed_at" json:"guest_authed_at,omitempty"`
+	AcceptedAt              *time.Time `bun:"accepted_at" json:"accepted_at,omitempty"`
+	CreatedAt               time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 // P2PSignal represents a WebRTC signaling message

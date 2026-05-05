@@ -61,18 +61,19 @@ type PresignedPart struct {
 
 // CompleteMultipartRequest contains the parts info to complete upload
 type CompleteMultipartRequest struct {
-	UploadID     string         `json:"upload_id" binding:"required"`
-	Key          string         `json:"key" binding:"required"`
-	Parts        []CompletePart `json:"parts" binding:"required,min=1"`
-	FileName     string         `json:"file_name" binding:"required"`
-	FilePath     string         `json:"file_path"`
-	TotalSize    int64          `json:"total_size" binding:"required"`
-	ContentType  string         `json:"content_type"`
-	EncryptedKey string         `json:"encrypted_key" binding:"required"`
-	ShareKeys    string         `json:"share_keys"`
-	PreviewID    *int64         `json:"preview_id"`
-	IsPreview    bool           `json:"is_preview"`
-	Synced       bool           `json:"synced"`
+	UploadID        string         `json:"upload_id" binding:"required"`
+	Key             string         `json:"key" binding:"required"`
+	Parts           []CompletePart `json:"parts" binding:"required,min=1"`
+	FileName        string         `json:"file_name" binding:"required"`
+	FilePath        string         `json:"file_path"`
+	TotalSize       int64          `json:"total_size" binding:"required"`
+	ContentType     string         `json:"content_type"`
+	EncryptedKey    string         `json:"encrypted_key" binding:"required"`
+	ShareKeys       string         `json:"share_keys"`
+	DirectShareKeys string         `json:"direct_share_keys"` // { "rootFolderId": "encryptedFileKey" } for folder shares
+	PreviewID       *int64         `json:"preview_id"`
+	IsPreview       bool           `json:"is_preview"`
+	Synced          bool           `json:"synced"`
 }
 
 // CompletePart represents a completed part with ETag
@@ -352,9 +353,14 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// Process share keys
+	// Process share keys (public link shares → share_file_keys)
 	if err := processShareKeys(ctx, tx, req.ShareKeys, fileRecord); err != nil {
 		log.Printf("Error processing share keys: %v", err)
+	}
+
+	// Process direct share keys (friend folder shares → folder_file_keys)
+	if err := processDirectShareKeys(ctx, tx, req.DirectShareKeys, fileRecord); err != nil {
+		log.Printf("Error processing direct share keys: %v", err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -485,6 +491,7 @@ func GetPresignedDownloadHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	log.Printf("Presigned streaming download URL generated - UserID: %s, FileID: %d, Size: %d", userID, fileID, file.Size)
+	monitoring.FileDownloadsTotal.Inc()
 
 	// Return URL with decryption metadata
 	c.JSON(http.StatusOK, gin.H{

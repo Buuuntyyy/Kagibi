@@ -220,6 +220,58 @@ var (
 			Help: "Nombre de connexions WebSocket actives",
 		},
 	)
+
+	// --- Métriques de réplication S3 (backup) ---
+
+	// Counter: Nombre de runs de réplication (label status: "success" / "failure")
+	BackupReplicationRunsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "kagibi_backup_replication_runs_total",
+			Help: "Nombre total de réplications du bucket principal vers le bucket de sauvegarde IA",
+		},
+		[]string{"status"},
+	)
+
+	// Histogram: Durée des runs de réplication
+	BackupReplicationDuration = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "kagibi_backup_replication_duration_seconds",
+			Help:    "Durée des runs de réplication S3 en secondes",
+			Buckets: []float64{30, 60, 120, 300, 600, 1200, 1800, 3600},
+		},
+	)
+
+	// Gauge: Timestamp Unix du dernier run (permet un calcul d'ancienneté dans Grafana)
+	BackupLastRunTimestamp = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_backup_last_run_timestamp_seconds",
+			Help: "Timestamp Unix de la dernière exécution de réplication",
+		},
+	)
+
+	// Gauge: Statut du dernier run (1 = succès, 0 = échec)
+	BackupLastRunStatus = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_backup_last_run_status",
+			Help: "Statut de la dernière réplication (1 = succès, 0 = échec)",
+		},
+	)
+
+	// Gauge: Nombre d'objets copiés lors du dernier run
+	BackupObjectsReplicated = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_backup_objects_replicated",
+			Help: "Nombre d'objets S3 copiés lors de la dernière réplication",
+		},
+	)
+
+	// Gauge: Nombre de versions de sauvegarde actuellement stockées dans le bucket IA
+	BackupVersionsCount = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_backup_versions_count",
+			Help: "Nombre de snapshots de sauvegarde actuellement stockés dans le bucket IA",
+		},
+	)
 )
 
 // RecordRequestMetrics enregistre les métriques pour une requête HTTP
@@ -333,4 +385,19 @@ func IncrementActiveConnections() {
 // DecrementActiveConnections décrémente le nombre de connexions actives
 func DecrementActiveConnections() {
 	ActiveConnections.Dec()
+}
+
+// RecordBackupReplication enregistre le résultat d'un run de réplication S3.
+func RecordBackupReplication(success bool, duration time.Duration, objectCount int) {
+	status := "failure"
+	statusValue := float64(0)
+	if success {
+		status = "success"
+		statusValue = 1
+	}
+	BackupReplicationRunsTotal.WithLabelValues(status).Inc()
+	BackupReplicationDuration.Observe(duration.Seconds())
+	BackupLastRunTimestamp.SetToCurrentTime()
+	BackupLastRunStatus.Set(statusValue)
+	BackupObjectsReplicated.Set(float64(objectCount))
 }

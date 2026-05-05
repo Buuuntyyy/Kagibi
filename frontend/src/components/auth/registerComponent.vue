@@ -786,4 +786,23 @@ label,
     }
   }
 }
+
+@media (max-width: 600px) {
+  .form-row-top {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .avatar-sidebar {
+    align-items: center;
+  }
+
+  .identity-fields {
+    width: 100%;
+  }
+
+  .form-control {
+    font-size: 16px; /* prevent iOS zoom on focus */
+  }
+}
 </style>

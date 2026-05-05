@@ -27,7 +27,8 @@ export function useMFA() {
     mfa_verified: false,
     require_mfa_on_login: false,
     require_mfa_on_destructive_actions: false,
-    require_mfa_on_downloads: false
+    require_mfa_on_downloads: false,
+    require_mfa_on_email_change: false
   })
 
   const error = ref(null)
@@ -293,6 +294,7 @@ export function useMFA() {
       case 'login': return securitySettings.value.require_mfa_on_login
       case 'destructive': return securitySettings.value.require_mfa_on_destructive_actions
       case 'download': return securitySettings.value.require_mfa_on_downloads
+      case 'email_change': return securitySettings.value.require_mfa_on_email_change
       default: return false
     }
   }

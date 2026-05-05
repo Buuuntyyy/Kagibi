@@ -22,6 +22,7 @@ type FriendResponse struct {
 	RequestID int64  `json:"requestId,omitempty"` // ID of the friendship row, useful for cancelling/accepting
 	PublicKey string `json:"public_key"`          // NEW: Required for encrypted sharing
 	Online    bool   `json:"online"`              // REALTIME STATUS - Now handled by Supabase Presence
+	AvatarURL string `json:"avatar_url"`
 }
 
 type FriendHandler struct {
@@ -85,6 +86,7 @@ func (h *FriendHandler) processSingleFriendship(ctx context.Context, currentUser
 		RequestID: f.ID,
 		PublicKey: otherUser.PublicKey,
 		Online:    online,
+		AvatarURL: otherUser.AvatarURL,
 	}
 }
 

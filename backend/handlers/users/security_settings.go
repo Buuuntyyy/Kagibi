@@ -21,6 +21,7 @@ type SecuritySettings struct {
 	RequireMFAOnLogin              bool   `bun:"require_mfa_on_login" json:"require_mfa_on_login"`
 	RequireMFAOnDestructiveActions bool   `bun:"require_mfa_on_destructive_actions" json:"require_mfa_on_destructive_actions"`
 	RequireMFAOnDownloads          bool   `bun:"require_mfa_on_downloads" json:"require_mfa_on_downloads"`
+	RequireMFAOnEmailChange        bool   `bun:"require_mfa_on_email_change" json:"require_mfa_on_email_change"`
 }
 
 // GetSecuritySettingsHandler retrieves user security settings
@@ -65,6 +66,7 @@ type UpdateSecuritySettingsRequest struct {
 	RequireMFAOnLogin              *bool `json:"require_mfa_on_login"`
 	RequireMFAOnDestructiveActions *bool `json:"require_mfa_on_destructive_actions"`
 	RequireMFAOnDownloads          *bool `json:"require_mfa_on_downloads"`
+	RequireMFAOnEmailChange        *bool `json:"require_mfa_on_email_change"`
 }
 
 // UpdateSecuritySettingsHandler updates user security settings
@@ -117,6 +119,9 @@ func UpdateSecuritySettingsHandler(c *gin.Context, db *bun.DB) {
 	if req.RequireMFAOnDownloads != nil {
 		settings.RequireMFAOnDownloads = *req.RequireMFAOnDownloads
 	}
+	if req.RequireMFAOnEmailChange != nil {
+		settings.RequireMFAOnEmailChange = *req.RequireMFAOnEmailChange
+	}
 
 	// Upsert settings
 	_, err = db.NewInsert().
@@ -127,6 +132,7 @@ func UpdateSecuritySettingsHandler(c *gin.Context, db *bun.DB) {
 		Set("require_mfa_on_login = EXCLUDED.require_mfa_on_login").
 		Set("require_mfa_on_destructive_actions = EXCLUDED.require_mfa_on_destructive_actions").
 		Set("require_mfa_on_downloads = EXCLUDED.require_mfa_on_downloads").
+		Set("require_mfa_on_email_change = EXCLUDED.require_mfa_on_email_change").
 		Exec(c.Request.Context())
 
 	if err != nil {

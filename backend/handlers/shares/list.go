@@ -21,9 +21,15 @@ type ShareResponse struct {
 	Link         string     `json:"link"`
 	ResourceType string     `json:"resource_type"`
 	ResourceName string     `json:"resource_name"`
+	ResourceID   int64      `json:"resource_id"`
+	ResourcePath string     `json:"resource_path"`
 	Views        int64      `json:"views"`
 	ExpiresAt    *time.Time `json:"expires_at"`
 	CreatedAt    time.Time  `json:"created_at"`
+	PermDownload bool       `json:"perm_download"`
+	PermCreate   bool       `json:"perm_create"`
+	PermDelete   bool       `json:"perm_delete"`
+	PermMove     bool       `json:"perm_move"`
 }
 
 // ListSharesHandler lists all active share links created by the user
@@ -65,9 +71,15 @@ func fetchAndProcessShareLinks(ctx context.Context, db *bun.DB, userID string) [
 			Link:         fmt.Sprintf("/s/%s", l.Token),
 			ResourceType: l.ResourceType,
 			ResourceName: name,
+			ResourceID:   l.ResourceID,
+			ResourcePath: l.Path,
 			Views:        l.Views,
 			ExpiresAt:    l.ExpiresAt,
 			CreatedAt:    l.CreatedAt,
+			PermDownload: l.PermDownload,
+			PermCreate:   l.PermCreate,
+			PermDelete:   l.PermDelete,
+			PermMove:     l.PermMove,
 		})
 	}
 	return response
@@ -99,8 +111,10 @@ func fetchAndProcessDirectFileShares(ctx context.Context, db *bun.DB, userID str
 			Link:         "Shared with " + friendName,
 			ResourceType: "file",
 			ResourceName: f.Name,
+			ResourceID:   f.ID,
 			Views:        0,
 			CreatedAt:    fs.CreatedAt,
+			PermDownload: fs.PermDownload,
 		})
 	}
 	return response
@@ -132,8 +146,14 @@ func fetchAndProcessDirectFolderShares(ctx context.Context, db *bun.DB, userID s
 			Link:         "Shared with " + friendName,
 			ResourceType: "folder",
 			ResourceName: f.Name,
+			ResourceID:   f.ID,
+			ResourcePath: f.Path,
 			Views:        0,
 			CreatedAt:    fs.CreatedAt,
+			PermDownload: fs.PermDownload,
+			PermCreate:   fs.PermCreate,
+			PermDelete:   fs.PermDelete,
+			PermMove:     fs.PermMove,
 		})
 	}
 	return response
