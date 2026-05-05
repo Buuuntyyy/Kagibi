@@ -16,7 +16,9 @@ import UsageDashboard from '../components/usage/UsageDashboard.vue'
 import LandingHome from '../views/landing/HomeView.vue'
 import LandingPricing from '../views/landing/PricingView.vue'
 import LandingTransfer from '../views/landing/TransferView.vue'
+import LandingSecurity from '../views/landing/SecurityView.vue'
 import { useAuthStore } from '../stores/auth'
+import { isP2PSubdomain } from '../composables/useSubdomain'
 
 const isLocalAuthBypassEnabled =
   import.meta.env.DEV && String(import.meta.env.VITE_LOCAL_BYPASS_AUTH).toLowerCase() === 'true'
@@ -25,7 +27,10 @@ const routes = [
   {
     path: '/',
     name: 'LandingHome',
-    component: LandingHome,
+    component: isP2PSubdomain
+      ? () => import('../views/p2p/P2PSubdomainView.vue')
+      : LandingHome,
+    meta: isP2PSubdomain ? { requiresAuth: true } : {},
   },
   {
     path: '/pricing',
@@ -41,6 +46,11 @@ const routes = [
     path: '/compare',
     name: 'Compare',
     component: () => import('../views/landing/CompareView.vue'),
+  },
+  {
+    path: '/security',
+    name: 'Security',
+    component: LandingSecurity,
   },
   {
     path: '/login',
@@ -121,10 +131,7 @@ const routes = [
     name: 'PublicBrowse',
     component: PublicBrowse,
   },
-  {
-    path: '/',
-    redirect: '/dashboard/home',
-  },
+  ...(!isP2PSubdomain ? [{ path: '/', redirect: '/dashboard/home' }] : []),
 ]
 
 const router = createRouter({
@@ -150,12 +157,19 @@ router.beforeEach(async (to, from, next) => {
     return
   }
 
+  // Guest P2P invite links carry ?invite=TOKEN and self-authenticate on mount —
+  // skip the auth gate so the view can run its guest-auth flow.
+  if (isP2PSubdomain && to.query.invite) {
+    next()
+    return
+  }
+
   const isAuthenticated = await authStore.checkAuth()
 
   if (to.meta.requiresAuth && !isAuthenticated) {
     next('/login')
   } else if (to.name === 'Login' && isAuthenticated) {
-    next('/dashboard/home')
+    next(isP2PSubdomain ? '/' : '/dashboard/home')
   } else {
     next()
   }

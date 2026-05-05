@@ -9,6 +9,24 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <title>Kagibi</title>
+    <script nonce="analytics-loader">
+      (function() {
+        var d = document;
+        var el = d.createElement('script');
+        el.async = true;
+        el.defer = true;
+        el.src = 'https://stats.kagibi.cloud/website-favicon';
+        
+        // Détection du domaine
+        if (window.location.hostname === 'send.kagibi.cloud') {
+          el.setAttribute('data-website-id', 'ecf55047-8987-46ed-99c3-4315c292ae71');
+        } else {
+          el.setAttribute('data-website-id', '9d8fa65a-b413-4b91-907e-f5c1c49c7e90');
+        }
+        
+        d.getElementsByTagName('head')[0].appendChild(el);
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

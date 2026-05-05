@@ -44,6 +44,32 @@ func replaceFileKeysFromShare(ctx context.Context, db *bun.DB, shareID int64, fi
 	}
 }
 
+// GetSharedFilesRecursive retrieves all files under a shared path (all depths).
+func GetSharedFilesRecursive(db *bun.DB, basePath string, ownerID string, shareID int64) ([]File, error) {
+	ctx := context.Background()
+	var files []File
+
+	searchPrefix := basePath
+	if searchPrefix == "/" {
+		searchPrefix = ""
+	}
+
+	err := db.NewSelect().Model(&files).
+		Where("user_id = ?", ownerID).
+		Where("is_preview = ?", false).
+		Where("path LIKE ?", searchPrefix+"/%").
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(files) > 0 {
+		replaceFileKeysFromShare(ctx, db, shareID, files)
+	}
+
+	return files, nil
+}
+
 // GetSharedFolderContent retrieves files and folders within a shared path
 func GetSharedFolderContent(db *bun.DB, basePath string, ownerID string, shareID int64) ([]File, []Folder, error) {
 	ctx := context.Background()
@@ -58,19 +84,23 @@ func GetSharedFolderContent(db *bun.DB, basePath string, ownerID string, shareID
 		searchPrefix = ""
 	}
 
-	// Files directly in the folder
+	// Files directly in the folder (preview files are always excluded)
 	err := db.NewSelect().Model(&files).
 		Where("user_id = ?", ownerID).
+		Where("is_preview = ?", false).
 		Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"/%", searchPrefix+"/%/%").
 		Scan(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Folders directly in the folder
+	// Folders directly in the folder (with sizes)
 	err = db.NewSelect().Model(&folders).
-		Where("user_id = ?", ownerID).
-		Where("path LIKE ? AND path NOT LIKE ?", searchPrefix+"/%", searchPrefix+"/%/%").
+		ColumnExpr("?TableAlias.*").
+		ColumnExpr("COALESCE(fs.size_bytes, 0) AS size_bytes").
+		Join("LEFT JOIN folder_sizes AS fs ON fs.folder_id = ?TableAlias.id").
+		Where("?TableAlias.user_id = ?", ownerID).
+		Where("?TableAlias.path LIKE ? AND ?TableAlias.path NOT LIKE ?", searchPrefix+"/%", searchPrefix+"/%/%").
 		Scan(ctx)
 	if err != nil {
 		return nil, nil, err

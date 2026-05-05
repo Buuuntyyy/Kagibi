@@ -6,8 +6,8 @@
     <LandingNav />
     <section class="transfer-hero">
       <div class="container">
-        <h1>Transfert P2P Ultra-Rapide</h1>
-        <p>Envoyez jusqu'à 10 Go en direct, sans upload. Vitesse maximale, zéro trace.</p>
+        <h1>{{ t('landing.transfer.heroTitle') }}</h1>
+        <p>{{ t('landing.transfer.heroSubtitle') }}</p>
       </div>
     </section>
 
@@ -22,27 +22,27 @@
                 <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
               </svg>
             </div>
-            <h2>Comment ça fonctionne ?</h2>
+            <h2>{{ t('landing.transfer.howTitle') }}</h2>
             <div class="steps">
               <div class="step">
                 <div class="step-number">1</div>
                 <div class="step-content">
-                  <h4>Sélectionnez vos fichiers</h4>
-                  <p>Choisissez les fichiers à envoyer (10 Go max)</p>
+                  <h4>{{ t('landing.transfer.step1Title') }}</h4>
+                  <p>{{ t('landing.transfer.step1Desc') }}</p>
                 </div>
               </div>
               <div class="step">
                 <div class="step-number">2</div>
                 <div class="step-content">
-                  <h4>Obtenez un lien unique</h4>
-                  <p>Un lien sécurisé est généré instantanément</p>
+                  <h4>{{ t('landing.transfer.step2Title') }}</h4>
+                  <p>{{ t('landing.transfer.step2Desc') }}</p>
                 </div>
               </div>
               <div class="step">
                 <div class="step-number">3</div>
                 <div class="step-content">
-                  <h4>Partagez et transférez</h4>
-                  <p>Connexion P2P directe via serveur TURN</p>
+                  <h4>{{ t('landing.transfer.step3Title') }}</h4>
+                  <p>{{ t('landing.transfer.step3Desc') }}</p>
                 </div>
               </div>
             </div>
@@ -54,8 +54,8 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
               </svg>
-              <h4>Vitesse Maximale</h4>
-              <p>Pas d'upload serveur, transfert direct P2P à pleine bande passante</p>
+              <h4>{{ t('landing.transfer.feat1Title') }}</h4>
+              <p>{{ t('landing.transfer.feat1Desc') }}</p>
             </div>
 
             <div class="feature-box">
@@ -63,16 +63,16 @@
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
               </svg>
-              <h4>Chiffrement E2E</h4>
-              <p>Vos fichiers sont chiffrés de bout en bout pendant le transfert</p>
+              <h4>{{ t('landing.transfer.feat2Title') }}</h4>
+              <p>{{ t('landing.transfer.feat2Desc') }}</p>
             </div>
 
             <div class="feature-box">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
               </svg>
-              <h4>Zero-Trace</h4>
-              <p>Aucun fichier n'est stocké sur nos serveurs, tranquillité absolue</p>
+              <h4>{{ t('landing.transfer.feat3Title') }}</h4>
+              <p>{{ t('landing.transfer.feat3Desc') }}</p>
             </div>
 
             <div class="feature-box">
@@ -80,20 +80,20 @@
                 <circle cx="12" cy="12" r="10"></circle>
                 <polyline points="12 6 12 12 16 14"></polyline>
               </svg>
-              <h4>Disponible 24/7</h4>
-              <p>Service disponible en permanence, aucune limite d'utilisation</p>
+              <h4>{{ t('landing.transfer.feat4Title') }}</h4>
+              <p>{{ t('landing.transfer.feat4Desc') }}</p>
             </div>
           </div>
 
           <!-- CTA Card -->
           <div class="cta-card">
-            <h3>Prêt à transférer ?</h3>
-            <p>Connectez-vous pour commencer à utiliser le transfert P2P instantané</p>
+            <h3>{{ t('landing.transfer.ctaTitle') }}</h3>
+            <p>{{ t('landing.transfer.ctaSubtitle') }}</p>
             <router-link to="/login" class="btn btn-primary btn-large">
-              Accéder au transfert
+              {{ t('landing.transfer.ctaBtn') }}
             </router-link>
             <div class="cta-note">
-              Gratuit et illimité pour tous les utilisateurs
+              {{ t('landing.transfer.ctaNote') }}
             </div>
           </div>
         </div>
@@ -103,28 +103,19 @@
     <!-- Technical Details -->
     <section class="tech-section">
       <div class="container">
-        <h2>Technologie WebRTC & TURN</h2>
+        <h2>{{ t('landing.transfer.techTitle') }}</h2>
         <div class="tech-grid">
           <div class="tech-card">
-            <h4>WebRTC</h4>
-            <p>
-              Protocole de communication peer-to-peer standardisé par le W3C. 
-              Permet une connexion directe entre navigateurs sans intermédiaire.
-            </p>
+            <h4>{{ t('landing.transfer.tech1Title') }}</h4>
+            <p>{{ t('landing.transfer.tech1Desc') }}</p>
           </div>
           <div class="tech-card">
-            <h4>Serveur TURN</h4>
-            <p>
-              Infrastructure de relais pour les connexions impossibles en direct. 
-              Garantit un transfert réussi même derrière un NAT strict.
-            </p>
+            <h4>{{ t('landing.transfer.tech2Title') }}</h4>
+            <p>{{ t('landing.transfer.tech2Desc') }}</p>
           </div>
           <div class="tech-card">
-            <h4>Chiffrement AES</h4>
-            <p>
-              Chiffrement côté client avant transfert. Les clés sont échangées via 
-              signaling sécurisé, jamais stockées.
-            </p>
+            <h4>{{ t('landing.transfer.tech3Title') }}</h4>
+            <p>{{ t('landing.transfer.tech3Desc') }}</p>
           </div>
         </div>
       </div>
@@ -133,7 +124,10 @@
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
 import LandingNav from '../../components/landing/LandingNav.vue'
+
+const { t } = useI18n()
 </script>
 
 <style scoped>
@@ -388,6 +382,32 @@ import LandingNav from '../../components/landing/LandingNav.vue'
 
   .cta-card {
     padding: 3rem 2rem;
+  }
+
+  .transfer-hero {
+    padding: 3rem 1rem 2rem;
+  }
+
+  .transfer-hero h1 {
+    font-size: clamp(1.6rem, 5vw, 3rem);
+  }
+
+  .info-card {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .transfer-hero {
+    padding: 2rem 1rem;
+  }
+
+  .cta-card {
+    padding: 2rem 1rem;
+  }
+
+  .container {
+    padding: 0 1rem;
   }
 }
 </style>

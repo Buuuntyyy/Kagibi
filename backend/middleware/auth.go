@@ -124,9 +124,23 @@ func AuthMiddleware(provider authprovider.AuthProvider, redisClient *redis.Clien
 			aal = aalClaim
 		}
 		c.Set("aal", aal)
+		c.Set("is_guest", aal == "guest")
 
 		trackActiveSession(redisClient, userID)
 
+		c.Next()
+	}
+}
+
+// BlockGuest rejects requests that carry a guest JWT (aal=guest).
+// Apply this after AuthMiddleware on any route group that must be inaccessible
+// to ephemeral P2P guest sessions (file storage, account management, etc.).
+func BlockGuest() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if isGuest, _ := c.Get("is_guest"); isGuest == true {
+			c.AbortWithStatusJSON(403, gin.H{"error": "Guest sessions cannot access this resource"})
+			return
+		}
 		c.Next()
 	}
 }

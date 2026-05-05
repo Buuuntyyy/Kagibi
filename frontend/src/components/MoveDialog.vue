@@ -2,7 +2,7 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 
 <template>
-  <div v-if="isOpen" class="modal-overlay" @click.self="close">
+  <div class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <div class="modal-header">
         <h3>{{ t('dialogs.move.title') }}</h3>
@@ -18,7 +18,10 @@
           <div v-if="loading" class="loading-spinner">Chargement...</div>
           <div v-else-if="folders.length === 0 && currentPath !== '/'">Aucun sous-dossier.</div>
           <div v-for="folder in folders" :key="folder.ID" class="folder-item" @click="navigateTo(folder.Name)">
-            📁 {{ folder.Name }}
+            <svg class="folder-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="#5f6368"/>
+            </svg>
+            {{ folder.Name }}
           </div>
         </div>
       </div>
@@ -31,15 +34,11 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import api from '../api';
 
 const { t } = useI18n();
-
-const props = defineProps({
-  isOpen: Boolean,
-});
 
 const emit = defineEmits(['close', 'move-to']);
 
@@ -47,10 +46,15 @@ const loading = ref(false);
 const currentPath = ref('/');
 const folders = ref([]);
 
+// Encode each path segment independently so accented characters and spaces
+// are properly percent-encoded in the URL, while the slash separators are preserved.
+const encodePath = (path) =>
+  path.split('/').map(seg => encodeURIComponent(seg)).join('/');
+
 const fetchFolders = async (path) => {
   loading.value = true;
   try {
-    const response = await api.get(`/files/list${path}`);
+    const response = await api.get(`/files/list${encodePath(path)}`);
     folders.value = response.data.folders || [];
   } catch (error) {
     console.error('Error fetching folders:', error);
@@ -60,11 +64,11 @@ const fetchFolders = async (path) => {
   }
 };
 
-watch(() => props.isOpen, (newVal) => {
-  if (newVal) {
-    currentPath.value = '/';
-    fetchFolders('/');
-  }
+// The component is mounted by v-if in the parent, so onMounted fires exactly
+// when the dialog opens — no prop watcher needed.
+onMounted(() => {
+  currentPath.value = '/';
+  fetchFolders('/');
 });
 
 const navigateTo = (folderName) => {
@@ -173,6 +177,15 @@ const close = () => {
   padding: 8px;
   cursor: pointer;
   border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.folder-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .folder-item:hover {

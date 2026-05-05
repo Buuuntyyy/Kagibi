@@ -1,4 +1,40 @@
-# Changelog - Modifications de Sécurité Supplémentaires
+# Changelog
+
+## v2.12.0 — 2026-04-27
+
+### Corrections
+
+- **HTTP 500 sur l'upload public** : remplacé l'instruction `ON CONFLICT` (qui requiert une contrainte UNIQUE) par un pattern SELECT → INSERT/UPDATE dans les handlers `CompletePublicShareUploadHandler` et `CompleteSharedMultipartHandler`. Les fichiers déposés par des visiteurs ou des amis dans un dossier partagé sont maintenant correctement enregistrés en base.
+- **Téléchargement des fichiers déposés par un ami** : le propriétaire peut désormais télécharger les fichiers uploadés par ses amis dans un dossier partagé. Un nouvel endpoint `GET /files/:id/folder-key` retourne la chaîne de clés nécessaire (`folder_encrypted_key` + `file_encrypted_key`). Le client reconstruit la clé de fichier en deux étapes : `MasterKey → FolderKey → FileKey`.
+- **Quota de stockage** : lors d'un remplacement de fichier, le delta (nouvelle taille − ancienne taille) est utilisé à la place de la taille totale, évitant un gonflement artificiel du quota.
+
+### Nouvelles fonctionnalités
+
+- **Gardes de permissions** : toute action interdite par les droits du partage (créer un dossier, supprimer, renommer, déposer un fichier) affiche désormais un message d'erreur explicite via `useUIStore().showError()` au lieu d'échouer silencieusement.
+- **Interface ManageShareDialog** : les puces de permissions sont maintenant colorées — **vert** si le droit est accordé, **rouge** s'il est refusé — dans la boîte de création et dans la vue de gestion d'un partage existant. Effet hover neutre pour indiquer l'interactivité.
+- **Permissions par défaut** : lors d'un nouveau partage de dossier, les droits accordés par défaut sont **Téléchargement + Création** (précédemment Téléchargement uniquement).
+
+---
+
+## v2.11.0 — 2026-04-27
+
+### Nouvelles fonctionnalités
+
+- **Upload de dossiers** : téléversement d'une arborescence complète en une opération, avec barre de progression globale et gestion des conflits (renommer, ignorer, remplacer).
+- **Barre de recherche améliorée** : cliquer sur un résultat navigue directement vers l'emplacement du fichier dans l'arborescence avec mise en surbrillance visuelle.
+- **Système de partage de dossiers entre amis** : partage granulaire de dossiers avec un ami enregistré, gestion des permissions (téléchargement, création, suppression, déplacement), navigation dans le contenu partagé, upload et suppression de fichiers selon les droits.
+- **Page de partage public** : la page d'accès par lien permet de parcourir l'arborescence d'un dossier partagé et d'y déposer des fichiers (chiffrés côté client).
+- **Langue de l'e-mail d'invitation P2P** : l'expéditeur peut choisir d'envoyer l'invitation en français ou en anglais, avec un contenu enrichi dans les deux langues.
+
+### Corrections
+
+- Performance de la barre de progression : limitation à 4 mises à jour par seconde pour libérer des ressources pendant l'upload.
+- Fichiers vides : uploadés avec une taille minimale pour contourner une contrainte de chiffrement.
+- Lien dans l'e-mail d'invitation P2P : correction de l'URL de redirection.
+- Script d'analyse (`umami`) : ajout du nonce CSP manquant.
+- Statistiques dynamiques sur le sous-domaine `send`.
+
+---
 
 ## Version 2.3 - Enhancements de Sécurité Avancés
 

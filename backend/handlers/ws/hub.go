@@ -31,7 +31,9 @@ const (
 	redisPresencePrefix = "ws:presence:"
 	redisBroadcastChan  = "ws:broadcast"
 	// presenceTTL must outlive the grace period so a pod crash doesn't leave stale keys forever.
-	presenceTTL = presenceGracePeriod + 30*time.Second
+	// It must also be longer than pingPeriod (54 s) so the key is still alive when renewPresence
+	// is called from the pong handler. 5 minutes gives plenty of headroom.
+	presenceTTL = 5 * time.Minute
 )
 
 // Client represents a single WebSocket connection from an authenticated user.
@@ -52,6 +54,12 @@ type Hub struct {
 	mu      sync.RWMutex
 	clients map[string][]*Client // userID → local connections
 
+	// localPresence tracks users that are considered online in single-pod mode.
+	// It is set on first connect and cleared only when the grace-period timer fires,
+	// so IsConnected returns true during the reconnect grace window even though
+	// h.clients is temporarily empty after Unregister.
+	localPresence map[string]struct{}
+
 	// Redis fields — nil when running without Redis (single-pod / dev mode).
 	rdb        *redis.Client
 	pubsub     *redis.PubSub
@@ -61,7 +69,8 @@ type Hub struct {
 
 // GlobalHub is the singleton hub used throughout the application.
 var GlobalHub = &Hub{
-	clients: make(map[string][]*Client),
+	clients:       make(map[string][]*Client),
+	localPresence: make(map[string]struct{}),
 }
 
 // pendingDisconnects holds timers that fire the DisconnectHook after the grace period.
@@ -188,6 +197,19 @@ func (h *Hub) clearPresence(userID string) {
 	}
 }
 
+// renewPresence resets the TTL of the user's presence key so it doesn't expire
+// while the WebSocket connection is still alive. Called on every pong received.
+func (h *Hub) renewPresence(userID string) {
+	if h.rdb == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := h.rdb.Expire(ctx, redisPresencePrefix+userID, presenceTTL).Err(); err != nil {
+		log.Printf("[WS] Redis renewPresence failed for user=%s: %v", userID, err)
+	}
+}
+
 // Register adds a client to the hub.
 func (h *Hub) Register(c *Client) {
 	h.mu.Lock()
@@ -205,11 +227,15 @@ func (h *Hub) Register(c *Client) {
 		return
 	}
 
-	// Truly first connection: set up Redis subscription + presence, then fire hook.
+	// Truly first connection: set up presence, then fire hook.
 	if firstConn {
 		if h.rdb != nil {
 			h.subscribeUser(c.userID)
 			h.setPresence(c.userID)
+		} else {
+			h.mu.Lock()
+			h.localPresence[c.userID] = struct{}{}
+			h.mu.Unlock()
 		}
 		if ConnectHook != nil {
 			go ConnectHook(c.userID)
@@ -250,6 +276,10 @@ func (h *Hub) Unregister(c *Client) {
 		if useRedis {
 			h.unsubscribeUser(userID)
 			h.clearPresence(userID)
+		} else {
+			h.mu.Lock()
+			delete(h.localPresence, userID)
+			h.mu.Unlock()
 		}
 		if DisconnectHook != nil {
 			DisconnectHook(userID)
@@ -320,9 +350,13 @@ func (h *Hub) SendEventToUser(userID, eventType string, id int64, payload map[st
 }
 
 // SendP2PSignalToUser delivers a P2P signal over WebSocket.
-func (h *Hub) SendP2PSignalToUser(targetUserID, senderID, signalType string, payload map[string]any) {
+// signalID is the database ID of the signal — the frontend uses it to deduplicate
+// against the polling fallback so that a WS-delivered signal is not processed again
+// 2.5 s later when the polling loop also picks it up.
+func (h *Hub) SendP2PSignalToUser(targetUserID, senderID, signalType string, signalID int64, payload map[string]any) {
 	msg, err := json.Marshal(map[string]any{
 		"type":        "p2p_signal",
+		"id":          signalID,
 		"from":        senderID,
 		"signal_type": signalType,
 		"payload":     payload,
@@ -336,6 +370,8 @@ func (h *Hub) SendP2PSignalToUser(targetUserID, senderID, signalType string, pay
 
 // IsConnected returns true if the user has at least one active WebSocket connection
 // on any pod (Redis mode) or locally (single-pod mode).
+// In single-pod mode, returns true during the reconnect grace period even if
+// h.clients is temporarily empty after Unregister.
 func (h *Hub) IsConnected(userID string) bool {
 	if h.rdb != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -348,7 +384,8 @@ func (h *Hub) IsConnected(userID string) bool {
 	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return len(h.clients[userID]) > 0
+	_, present := h.localPresence[userID]
+	return present
 }
 
 // writePump pumps messages from the send channel to the WebSocket connection.
@@ -391,6 +428,7 @@ func (c *Client) readPump() {
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		c.hub.renewPresence(c.userID)
 		return nil
 	})
 

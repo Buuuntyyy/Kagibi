@@ -389,6 +389,35 @@ func processShareKeys(ctx context.Context, tx bun.Tx, shareKeysJSON string, file
 	return nil
 }
 
+func processDirectShareKeys(ctx context.Context, tx bun.Tx, directShareKeysJSON string, file *pkg.File) error {
+	if directShareKeysJSON == "" {
+		return nil
+	}
+	var keysMap map[string]string
+	if err := json.Unmarshal([]byte(directShareKeysJSON), &keysMap); err != nil {
+		return err
+	}
+	var folderFileKeys []pkg.FolderFileKey
+	for folderIDStr, encKey := range keysMap {
+		folderID, _ := strconv.ParseInt(folderIDStr, 10, 64)
+		if folderID > 0 && encKey != "" {
+			folderFileKeys = append(folderFileKeys, pkg.FolderFileKey{
+				FolderID:     folderID,
+				FileID:       file.ID,
+				EncryptedKey: encKey,
+			})
+		}
+	}
+	if len(folderFileKeys) > 0 {
+		_, err := tx.NewInsert().Model(&folderFileKeys).
+			On("CONFLICT (folder_id, file_id) DO UPDATE").
+			Set("encrypted_key = EXCLUDED.encrypted_key").
+			Exec(ctx)
+		return err
+	}
+	return nil
+}
+
 func notifyStorageUpdate(ctx context.Context, db *bun.DB, userID string) {
 	planState, err := pkg.FindUserPlanByUserID(db, userID)
 	if err == nil {

@@ -3,15 +3,22 @@
 
 <template>
   <div class="app-container">
-    <Navbar v-if="!isLandingPage" />
-    <main :class="isLandingPage ? 'landing-content' : 'content'">
-      <router-view />
-    </main>
-    <P2PTransferDialog v-if="!isLandingPage" />
-    <WarnDialog v-if="!isLandingPage" />
-    <DeleteConfirmDialog v-if="!isLandingPage" />
-    <UploadManager v-if="!isLandingPage" />
-    <DownloadManager v-if="!isLandingPage" />
+    <template v-if="!isP2PSubdomain">
+      <Navbar v-if="!isLandingPage" />
+      <main :class="isLandingPage ? 'landing-content' : 'content'">
+        <router-view />
+      </main>
+      <P2PTransferDialog v-if="!isLandingPage" />
+      <WarnDialog v-if="!isLandingPage" />
+      <DeleteConfirmDialog v-if="!isLandingPage" />
+      <UploadManager v-if="!isLandingPage" />
+      <DownloadManager v-if="!isLandingPage" />
+    </template>
+    <template v-else>
+      <main class="landing-content">
+        <router-view />
+      </main>
+    </template>
   </div>
 </template>
 
@@ -28,6 +35,7 @@ import { useBillingStore } from './stores/billing'
 import { useRealtimeStore } from './stores/realtime'
 import { watch, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { isP2PSubdomain } from './composables/useSubdomain'
 
 const themeStore = useThemeStore()
 const authStore = useAuthStore()
@@ -37,7 +45,7 @@ const route = useRoute()
 
 // Check if current route is a landing page
 const isLandingPage = computed(() => {
-  return ['LandingHome', 'Pricing', 'Transfer', 'Compare'].includes(route.name)
+  return ['LandingHome', 'Pricing', 'Transfer', 'Compare', 'Security'].includes(route.name)
 })
 
 // Connect Supabase Realtime and fetch billing status when authenticated.
@@ -96,5 +104,18 @@ body {
 .landing-content {
   min-height: 100vh;
   width: 100%;
+}
+
+/* Global mobile resets */
+@media (max-width: 768px) {
+  /* Prevent iOS from zooming on input focus — requires font-size >= 16px */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }
 </style>
