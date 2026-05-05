@@ -12,13 +12,16 @@ import { useFileStore } from './stores/files'
 import { useP2PStore } from './stores/p2p'
 import { initSecurityMonitoring, getSecurityMonitor } from './utils/securityMonitoring'
 import { detectXSSAttempts, setupXSSMonitoring } from './utils/secureCrypto'
+import { createHead } from '@unhead/vue'
 
 const pinia = createPinia()
+const head = createHead()
 
 const app = createApp(App)
 
 app.use(pinia)
 app.use(i18n)
+app.use(head)
 const authStore = useAuthStore(pinia);
 const realtimeStore = useRealtimeStore(pinia);
 
