@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import { createHead } from '@unhead/vue'
 import App from './App.vue'
 import router from './router'
 import i18n from './i18n.js'
@@ -14,11 +15,13 @@ import { initSecurityMonitoring, getSecurityMonitor } from './utils/securityMoni
 import { detectXSSAttempts, setupXSSMonitoring } from './utils/secureCrypto'
 
 const pinia = createPinia()
+const head = createHead()
 
 const app = createApp(App)
 
 app.use(pinia)
 app.use(i18n)
+app.use(head)
 const authStore = useAuthStore(pinia);
 const realtimeStore = useRealtimeStore(pinia);
 
