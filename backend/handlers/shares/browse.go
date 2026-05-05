@@ -90,8 +90,8 @@ func BrowseSharedFolderHandler(c *gin.Context, db *bun.DB) {
 	}
 	type fileEntry struct {
 		pkg.File
-		CanDelete   bool   `json:"can_delete"`
-		CanDownload bool   `json:"can_download"`
+		CanDelete   bool `json:"can_delete"`
+		CanDownload bool `json:"can_download"`
 	}
 
 	filteredFolders := make([]folderEntry, 0, len(folders))

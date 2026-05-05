@@ -61,19 +61,19 @@ type PresignedPart struct {
 
 // CompleteMultipartRequest contains the parts info to complete upload
 type CompleteMultipartRequest struct {
-	UploadID     string         `json:"upload_id" binding:"required"`
-	Key          string         `json:"key" binding:"required"`
-	Parts        []CompletePart `json:"parts" binding:"required,min=1"`
-	FileName     string         `json:"file_name" binding:"required"`
-	FilePath     string         `json:"file_path"`
-	TotalSize    int64          `json:"total_size" binding:"required"`
-	ContentType  string         `json:"content_type"`
-	EncryptedKey string         `json:"encrypted_key" binding:"required"`
-	ShareKeys       string `json:"share_keys"`
-	DirectShareKeys string `json:"direct_share_keys"` // { "rootFolderId": "encryptedFileKey" } for folder shares
-	PreviewID       *int64 `json:"preview_id"`
-	IsPreview       bool   `json:"is_preview"`
-	Synced          bool   `json:"synced"`
+	UploadID        string         `json:"upload_id" binding:"required"`
+	Key             string         `json:"key" binding:"required"`
+	Parts           []CompletePart `json:"parts" binding:"required,min=1"`
+	FileName        string         `json:"file_name" binding:"required"`
+	FilePath        string         `json:"file_path"`
+	TotalSize       int64          `json:"total_size" binding:"required"`
+	ContentType     string         `json:"content_type"`
+	EncryptedKey    string         `json:"encrypted_key" binding:"required"`
+	ShareKeys       string         `json:"share_keys"`
+	DirectShareKeys string         `json:"direct_share_keys"` // { "rootFolderId": "encryptedFileKey" } for folder shares
+	PreviewID       *int64         `json:"preview_id"`
+	IsPreview       bool           `json:"is_preview"`
+	Synced          bool           `json:"synced"`
 }
 
 // CompletePart represents a completed part with ETag

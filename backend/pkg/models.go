@@ -190,12 +190,12 @@ type ShareLink struct {
 	ExpiresAt    *time.Time `bun:"expires_at"`            // Optionnel : expiration
 	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	Views        int64      `bun:"views,default:0"`
-	SingleUse    bool       `bun:"single_use,default:false"` // Link is invalidated after first download
-	UsedAt       *time.Time `bun:"used_at"`                  // Set when a single-use link is consumed
-	PermDownload bool       `bun:"perm_download,default:true"`  // Can download files
-	PermCreate   bool       `bun:"perm_create,default:false"`   // Folder: can create files/dirs
-	PermDelete   bool       `bun:"perm_delete,default:false"`   // Folder: can delete files/dirs
-	PermMove     bool       `bun:"perm_move,default:false"`     // Folder: can move files/dirs
+	SingleUse    bool       `bun:"single_use,default:false"`   // Link is invalidated after first download
+	UsedAt       *time.Time `bun:"used_at"`                    // Set when a single-use link is consumed
+	PermDownload bool       `bun:"perm_download,default:true"` // Can download files
+	PermCreate   bool       `bun:"perm_create,default:false"`  // Folder: can create files/dirs
+	PermDelete   bool       `bun:"perm_delete,default:false"`  // Folder: can delete files/dirs
+	PermMove     bool       `bun:"perm_move,default:false"`    // Folder: can move files/dirs
 }
 
 // ShareItemOverride stores per-item access restrictions within a shared folder.

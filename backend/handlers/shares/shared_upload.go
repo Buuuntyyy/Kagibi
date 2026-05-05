@@ -59,23 +59,23 @@ func upsertSharedFile(ctx context.Context, tx bun.Tx, file *pkg.File) (int64, er
 }
 
 type SharedInitiateRequest struct {
-	FileName    string `json:"file_name" binding:"required"`
-	FilePath    string `json:"file_path"`
-	ContentType string `json:"content_type"`
-	TotalSize   int64  `json:"total_size" binding:"required,min=1"`
-	TotalParts  int    `json:"total_parts" binding:"required,min=1"`
+	FileName     string `json:"file_name" binding:"required"`
+	FilePath     string `json:"file_path"`
+	ContentType  string `json:"content_type"`
+	TotalSize    int64  `json:"total_size" binding:"required,min=1"`
+	TotalParts   int    `json:"total_parts" binding:"required,min=1"`
 	EncryptedKey string `json:"encrypted_key" binding:"required"`
 }
 
 type SharedCompleteRequest struct {
-	UploadID     string              `json:"upload_id" binding:"required"`
-	Key          string              `json:"key" binding:"required"`
+	UploadID     string               `json:"upload_id" binding:"required"`
+	Key          string               `json:"key" binding:"required"`
 	Parts        []sharedCompletePart `json:"parts" binding:"required,min=1"`
-	FileName     string              `json:"file_name" binding:"required"`
-	FilePath     string              `json:"file_path"`
-	TotalSize    int64               `json:"total_size" binding:"required"`
-	ContentType  string              `json:"content_type"`
-	EncryptedKey string              `json:"encrypted_key" binding:"required"`
+	FileName     string               `json:"file_name" binding:"required"`
+	FilePath     string               `json:"file_path"`
+	TotalSize    int64                `json:"total_size" binding:"required"`
+	ContentType  string               `json:"content_type"`
+	EncryptedKey string               `json:"encrypted_key" binding:"required"`
 }
 
 type sharedCompletePart struct {
@@ -460,4 +460,3 @@ func sharedGeneratePresignedParts(ctx context.Context, presigner *s3.PresignClie
 	}
 	return result, nil
 }
-

@@ -3,8 +3,13 @@
  * Tests for AES-GCM nonce uniqueness and entropy
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
-import { 
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('../workers/cryptoWorkerPool.js', () => ({
+    cryptoWorkerPool: { run: vi.fn() }
+}));
+
+import {
     generateNonce, 
     generateBaseNonce, 
     generateChunkNonce,
