@@ -30,10 +30,10 @@ type CreateDirectShareRequest struct {
 	FriendID         string           `json:"friend_id"`
 	EncryptedKey     string           `json:"encrypted_key"` // FileKey (for file) OR FolderKey (for folder), encrypted with friend's PUBLIC key
 	Permission       string           `json:"permission"`
-	PermDownload     *bool            `json:"perm_download"` // nil defaults to true
-	PermCreate       *bool            `json:"perm_create"`   // nil defaults to false
-	PermDelete       *bool            `json:"perm_delete"`   // nil defaults to false
-	PermMove         *bool            `json:"perm_move"`     // nil defaults to false
+	PermDownload     *bool            `json:"perm_download"`      // nil defaults to true
+	PermCreate       *bool            `json:"perm_create"`        // nil defaults to false
+	PermDelete       *bool            `json:"perm_delete"`        // nil defaults to false
+	PermMove         *bool            `json:"perm_move"`          // nil defaults to false
 	FolderFileKeys   map[int64]string `json:"folder_file_keys"`   // For folders: Map of fileID -> FileKey encrypted with FolderKey
 	FolderFolderKeys map[int64]string `json:"folder_folder_keys"` // For folders: Map of subFolderID -> SubFolderKey encrypted with FolderKey
 }

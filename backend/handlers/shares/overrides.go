@@ -225,7 +225,7 @@ type bulkOverrideRequest struct {
 	ItemType    string `json:"item_type" binding:"required"` // "folder" | "file"
 	AccessLevel string `json:"access_level"`                 // for folders: "full"|"readonly"|"none"
 	CanDelete   *bool  `json:"can_delete"`                   // for files and folders
-	CanDownload *bool  `json:"can_download"`                  // for files and folders
+	CanDownload *bool  `json:"can_download"`                 // for files and folders
 }
 
 // BulkOverrideHandler applies a permission setting to ALL items of a given type under the share (owner only).
