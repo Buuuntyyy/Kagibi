@@ -116,8 +116,8 @@ async function encryptChunk(chunk, key, chunkIndex, baseNonce) {
 async function decryptChunk(encryptedChunk, key) {
   const data = new Uint8Array(encryptedChunk);
   
-  // Validate minimum size: nonce + tag + 1 byte
-  const MIN_SIZE = NONCE_LENGTH + TAG_LENGTH_BYTES + 1;
+  // Validate minimum size: nonce + tag (AES-GCM is valid with 0 bytes of ciphertext)
+  const MIN_SIZE = NONCE_LENGTH + TAG_LENGTH_BYTES;
   if (data.length < MIN_SIZE) {
     throw new Error(`Invalid encrypted chunk: too short (${data.length} < ${MIN_SIZE})`);
   }

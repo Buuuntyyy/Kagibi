@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import api from '../api'
 import { useAuthStore } from './auth'
 import { usePreferencesStore } from './preferences'
+import { useUIStore } from './ui'
 import { encryptFile, decryptFile, generateMasterKey, wrapMasterKey, unwrapMasterKey, deriveKeyFromToken, encryptFileName, decryptFileName } from '../utils/crypto'
 import { encryptChunkWorker, decryptChunkedFileWorker, CHUNK_SIZE } from '../utils/crypto'
 import { generatePreview } from '../utils/previewGenerator'
@@ -101,10 +102,12 @@ async function decryptFileKeyWithFolderKey(encryptedKeyB64, folderKey) {
 }
 
 /**
- * Builds a map of shareID → encryptedFileKey for all active shares on the given path.
+ * Builds maps of shareID → encryptedFileKey for all active shares on the given path.
+ * Returns { shareKeysMap: for public links, directShareKeys: for direct folder shares }.
  */
-async function buildShareKeysMap(uploadPath, fileKey) {
+async function buildShareKeysMap(uploadPath, fileKey, masterKey = null) {
   const shareKeysMap = {};
+  const directShareKeys = {};
   try {
     const shareRes = await api.get('/shares/check-path', { params: { path: uploadPath } });
     const activeShares = shareRes.data.shares || [];
@@ -113,9 +116,23 @@ async function buildShareKeysMap(uploadPath, fileKey) {
       shareKeysMap[share.ID] = await wrapMasterKey(fileKey, shareKey);
     }
   } catch (e) {
-    console.error('Error checking active shares:', e);
+    console.error('Error checking active public shares:', e);
   }
-  return shareKeysMap;
+  if (masterKey) {
+    try {
+      const directRes = await api.get('/shares/check-path-direct', { params: { path: uploadPath } });
+      const directShares = directRes.data.shares || [];
+      for (const share of directShares) {
+        if (share.folder_encrypted_key) {
+          const folderKey = await unwrapMasterKey(share.folder_encrypted_key, masterKey);
+          directShareKeys[share.root_folder_id] = await wrapMasterKey(fileKey, folderKey);
+        }
+      }
+    } catch (e) {
+      console.error('Error checking active direct shares:', e);
+    }
+  }
+  return { shareKeysMap, directShareKeys };
 }
 
 /**
@@ -206,6 +223,9 @@ export const useFileStore = defineStore('files', {
     viewMode: 'drive', // 'drive' or 'shared'
     sharedKey: null, // CryptoKey (AES-GCM) for the current shared root
     sharedBreadcrumbs: [], // Array of { id, name }
+    sharedShareId: null, // FolderShare.ID (direct share record ID)
+    sharedPermissions: { download: true, create: false, delete: false, move: false },
+    sharedCurrentPath: null, // Absolute path of the current shared folder (e.g. /documents)
     
     uploadProgress: 0,
     uploadSpeed: 0,
@@ -237,6 +257,7 @@ export const useFileStore = defineStore('files', {
     // Used to coordinate navigation from Suggestions
     pendingNavigatePath: null,
     pendingHighlight: null,     // { id, type } — item to select after navigation
+    pendingSearch: null,        // query to execute instead of fetchItems after navigation
     // Maps encrypted folder path → decrypted display name (populated when encrypt_filenames=true)
     folderNameCache: {},
   }),
@@ -340,6 +361,12 @@ export const useFileStore = defineStore('files', {
     },
     async fetchItems(path) {
       const preferenceStore = usePreferencesStore()
+        // If a pending search is set, run it instead of fetching the folder
+        if (this.pendingSearch) {
+          const q = this.pendingSearch
+          this.pendingSearch = null
+          return this.searchFiles(q)
+        }
         // If a pending navigation is set, consume it and use that path
         if (this.pendingNavigatePath) {
           path = this.pendingNavigatePath;
@@ -349,7 +376,10 @@ export const useFileStore = defineStore('files', {
       if (path === '/' && this.viewMode === 'shared') {
           this.viewMode = 'drive';
           this.sharedKey = null;
+          this.sharedShareId = null;
+          this.sharedPermissions = { download: true, create: false, delete: false, move: false };
           this.sharedBreadcrumbs = [];
+          this.sharedCurrentPath = null;
       }
 
       // If in shared mode, ignore normal fetch (or maybe redirect to fetchShared?)
@@ -410,6 +440,9 @@ export const useFileStore = defineStore('files', {
     async openSharedRoot(shareItem) {
         const authStore = useAuthStore();
         this.viewMode = 'shared';
+        this.sharedShareId = shareItem.id ? Number(shareItem.id) : null;
+        this.sharedCurrentPath = null;
+        this.sharedPermissions = { download: true, create: false, delete: false, move: false };
         this.sharedBreadcrumbs = [{ id: shareItem.resource_id, name: shareItem.name || shareItem.Name }];
         
         try {
@@ -437,13 +470,13 @@ export const useFileStore = defineStore('files', {
                 encryptedKeyBytes
             );
             
-            // Import as AES-GCM for file decryption later
+            // Import as AES-GCM for file encryption and decryption
             this.sharedKey = await window.crypto.subtle.importKey(
-                "raw", 
+                "raw",
                 folderKeyRaw,
                 "AES-GCM",
                 true,
-                ["decrypt"]
+                ["encrypt", "decrypt"]
             );
 
             // Fetch Content
@@ -469,6 +502,11 @@ export const useFileStore = defineStore('files', {
         if (this.sharedBreadcrumbs.length <= 1) {
             // Exit shared mode if asking to go up from root
             this.viewMode = 'drive';
+            this.sharedKey = null;
+            this.sharedShareId = null;
+            this.sharedPermissions = { download: true, create: false, delete: false, move: false };
+            this.sharedBreadcrumbs = [];
+            this.sharedCurrentPath = null;
             this.fetchItems('/');
             return;
         }
@@ -490,7 +528,24 @@ export const useFileStore = defineStore('files', {
         try {
             const response = await api.get(`/shares/direct/folder/${folderID}/content`);
             const data = response.data;
-            
+
+            // Store permissions from the response
+            if (data.permissions) {
+                this.sharedPermissions = {
+                    download: data.permissions.download ?? true,
+                    create:   data.permissions.create  ?? false,
+                    delete:   data.permissions.delete  ?? false,
+                    move:     data.permissions.move    ?? false,
+                };
+            }
+            // Keep share ID in sync (in case we navigate into a subfolder)
+            if (data.root_share_id) {
+                this.sharedShareId = Number(data.root_share_id);
+            }
+            if (data.current_folder_path) {
+                this.sharedCurrentPath = data.current_folder_path;
+            }
+
             // Normalize to match standard file structure (PascalCase for component compat)
             this.files = (data.files || []).map(f => ({
                 ...f,
@@ -500,19 +555,234 @@ export const useFileStore = defineStore('files', {
                 Size: f.Size || f.size,
                 file_id: f.ID || f.id // Ensure we have something component might look for
             }));
-            
+
             this.folders = (data.folders || []).map(f => ({
                 ...f,
                 Name: f.Name,
                 ID: f.ID
             }));
-            
+
             // We do NOT update currentPath string because it is path-based and we are ID-based
             // FileList.vue will need to read sharedBreadcrumbs instead
-            
+
         } catch (error) {
             console.error("Error fetching shared folder content:", error);
             alert("Erreur de chargement du contenu.");
+        }
+    },
+
+    // Called when the backend emits share_permissions_updated for this share
+    async refreshSharedPermissionsIfActive(shareId) {
+        if (this.viewMode !== 'shared' || this.sharedShareId !== Number(shareId)) return;
+        const current = this.sharedBreadcrumbs[this.sharedBreadcrumbs.length - 1];
+        if (!current) return;
+        await this.fetchSharedFolderContent(current.id);
+    },
+
+    async createSharedFolder(folderName, parentFolderId, encryptedKey = '') {
+        if (!this.sharedShareId) return;
+        if (!this.sharedPermissions.create) {
+            useUIStore().showError("Vous n'avez pas l'autorisation de créer des dossiers dans ce partage.");
+            return;
+        }
+        try {
+            const response = await api.post(`/shares/direct/${this.sharedShareId}/create-folder`, {
+                name: folderName,
+                parent_folder_id: parentFolderId,
+                encrypted_key: encryptedKey,
+            });
+            // Refresh current folder
+            const current = this.sharedBreadcrumbs[this.sharedBreadcrumbs.length - 1];
+            await this.fetchSharedFolderContent(current.id);
+            return response.data;
+        } catch (error) {
+            console.error('Create shared folder error:', error);
+            throw error;
+        }
+    },
+
+    async deleteFromShare(itemId, itemType) {
+        if (!this.sharedShareId) return;
+        if (!this.sharedPermissions.delete) {
+            useUIStore().showError("Vous n'avez pas l'autorisation de supprimer des éléments dans ce partage.");
+            return;
+        }
+        const endpoint = itemType === 'folder'
+            ? `/shares/direct/${this.sharedShareId}/folder/${itemId}`
+            : `/shares/direct/${this.sharedShareId}/file/${itemId}`;
+        try {
+            await api.delete(endpoint);
+            if (itemType === 'folder') {
+                this.folders = this.folders.filter(f => f.ID !== itemId);
+            } else {
+                this.files = this.files.filter(f => f.ID !== itemId);
+            }
+        } catch (error) {
+            console.error('Delete from share error:', error);
+            throw error;
+        }
+    },
+
+    async renameInShare(itemId, itemType, newName) {
+        if (!this.sharedShareId) return;
+        if (!this.sharedPermissions.move) {
+            useUIStore().showError("Vous n'avez pas l'autorisation de renommer des éléments dans ce partage.");
+            return;
+        }
+        try {
+            await api.post(`/shares/direct/${this.sharedShareId}/rename`, {
+                id: itemId,
+                type: itemType,
+                new_name: newName,
+            });
+            const current = this.sharedBreadcrumbs[this.sharedBreadcrumbs.length - 1];
+            await this.fetchSharedFolderContent(current.id);
+        } catch (error) {
+            console.error('Rename in share error:', error);
+            throw error;
+        }
+    },
+
+    /** Upload a file to the currently open direct-share folder. */
+    async uploadSharedFile(file) {
+        if (!this.sharedShareId || !this.sharedKey) {
+            useUIStore().showError("Partage non disponible.");
+            return;
+        }
+        if (!this.sharedPermissions.create) {
+            useUIStore().showError("Vous n'avez pas l'autorisation d'ajouter des fichiers dans ce partage.");
+            return;
+        }
+
+        this.isUploading = true;
+        this.uploadProgress = 0;
+        this.uploadingFileName = file.name;
+        this.uploadState = 'encrypting';
+        this.startHeartbeat();
+
+        try {
+            const fileKey = await generateMasterKey();
+            // Encrypt file chunks
+            const totalParts = Math.ceil(file.size / PART_SIZE);
+            const encryptedChunks = [];
+            let offset = 0;
+            let chunkIndex = 0;
+            while (offset < file.size) {
+                const chunkBlob = file.slice(offset, offset + PART_SIZE);
+                const chunkArrayBuffer = await chunkBlob.arrayBuffer();
+                const encryptedChunkBlob = await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex);
+                encryptedChunks.push(encryptedChunkBlob);
+                offset += PART_SIZE;
+                chunkIndex++;
+                this.uploadProgress = Math.round((chunkIndex / totalParts) * 30);
+            }
+            const totalEncryptedSize = encryptedChunks.reduce((s, c) => s + (c.size || c.byteLength || 0), 0);
+
+            // Wrap file key with folder key (sharedKey)
+            const encryptedFileKey = await wrapMasterKey(fileKey, this.sharedKey);
+
+            // Initiate shared multipart upload
+            const initiateRes = await api.post(`/shares/direct/${this.sharedShareId}/multipart/initiate`, {
+                file_name: file.name,
+                file_path: this.sharedCurrentPath || '',
+                content_type: 'application/octet-stream',
+                total_size: totalEncryptedSize,
+                total_parts: encryptedChunks.length,
+                encrypted_key: encryptedFileKey,
+            });
+
+            const uploadId = initiateRes.data.upload_id;
+            const s3Key = initiateRes.data.key;
+            const presignedURLs = initiateRes.data.presigned_urls;
+
+            // Upload parts directly to S3
+            this.uploadState = 'uploading';
+            const completedParts = [];
+            for (let i = 0; i < presignedURLs.length; i++) {
+                const { url } = presignedURLs[i];
+                const chunk = encryptedChunks[i];
+                const resp = await fetch(url, { method: 'PUT', body: chunk });
+                if (!resp.ok) throw new Error(`Part ${i + 1} upload failed`);
+                const etag = resp.headers.get('ETag') || '';
+                completedParts.push({ part_number: i + 1, etag });
+                this.uploadProgress = 30 + Math.round(((i + 1) / presignedURLs.length) * 60);
+            }
+
+            // Complete
+            this.uploadState = 'completing';
+            await api.post(`/shares/direct/${this.sharedShareId}/multipart/complete`, {
+                upload_id: uploadId,
+                key: s3Key,
+                parts: completedParts,
+                file_name: file.name,
+                file_path: this.sharedCurrentPath || '',
+                total_size: totalEncryptedSize,
+                content_type: 'application/octet-stream',
+                encrypted_key: encryptedFileKey,
+            });
+
+            this.uploadProgress = 100;
+            const current = this.sharedBreadcrumbs[this.sharedBreadcrumbs.length - 1];
+            await this.fetchSharedFolderContent(current.id);
+        } catch (error) {
+            console.error('Shared upload error:', error);
+            alert('Erreur upload partagé: ' + error.message);
+        } finally {
+            this.isUploading = false;
+            this.uploadProgress = 0;
+            this.uploadState = 'idle';
+            this.stopHeartbeat();
+        }
+    },
+
+    /** Download a shared folder as a ZIP. */
+    async downloadSharedFolderAsZip(folderId, folderName) {
+        if (!this.sharedShareId || !this.sharedKey) {
+            alert("Partage non disponible.");
+            return;
+        }
+        try {
+            const treeRes = await api.get(`/shares/direct/${this.sharedShareId}/folder/${folderId}/tree`);
+            const files = treeRes.data.files || [];
+            const rootPath = treeRes.data.root_path || '';
+
+            if (files.length === 0) {
+                alert('Ce dossier est vide.');
+                return;
+            }
+
+            // Get presigned URLs for all files
+            const fileIds = files.map(f => f.id);
+            const presignRes = await api.post('/files/batch-presign', { file_ids: fileIds });
+            const urlMap = {};
+            for (const u of presignRes.data.urls || []) {
+                urlMap[u.file_id] = u.url;
+            }
+
+            const fflate = await import('fflate');
+            const zipData = {};
+
+            for (const file of files) {
+                if (!file.encrypted_key) continue;
+                const url = urlMap[file.id];
+                if (!url) continue;
+                try {
+                    const fileKeyCrypto = await decryptFileKeyWithFolderKey(file.encrypted_key, this.sharedKey);
+                    const resp = await fetch(url);
+                    const encryptedBlob = await resp.blob();
+                    const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, file.mime_type || 'application/octet-stream');
+                    const relativePath = (file.path.startsWith(rootPath) ? file.path.slice(rootPath.length) : file.path).replace(/^\//, '');
+                    zipData[folderName + '/' + relativePath] = new Uint8Array(await decryptedBlob.arrayBuffer());
+                } catch (e) {
+                    console.warn('Skipping file in ZIP (decrypt failed):', file.name, e);
+                }
+            }
+
+            const zipped = fflate.zipSync(zipData, { level: 0 });
+            triggerBlobDownload(new Blob([zipped], { type: 'application/zip' }), folderName + '.zip');
+        } catch (e) {
+            console.error('Shared folder ZIP error:', e);
+            alert('Erreur téléchargement dossier: ' + e.message);
         }
     },
 
@@ -632,7 +902,7 @@ export const useFileStore = defineStore('files', {
       const { file, targetFileId, targetEncryptedKey, finalMimeType: resolvedMime } = this._resolveDownloadTarget(fileId, mimeType, encryptedKey, preview);
       let finalMimeType = resolvedMime;
 
-      let fileKey = authStore.masterKey;
+      let fileKey = null;
       if (targetEncryptedKey) {
         if (preview) this.preview.status = 'Préparation de la clé...';
         try {
@@ -640,6 +910,22 @@ export const useFileStore = defineStore('files', {
         } catch (e) {
           console.error('Failed to decrypt file key', e);
           alert('Erreur de déchiffrement de la clé du fichier.');
+          if (preview) this.preview.show = false;
+          if (!preview) this.stopHeartbeat();
+          return;
+        }
+      } else {
+        // No direct key — file was uploaded by a friend into a shared folder.
+        // Try to recover the key chain: folderKey = unwrap(folder.encrypted_key, masterKey)
+        //                               fileKey   = unwrap(fk.encrypted_key, folderKey)
+        if (preview) this.preview.status = 'Récupération de la clé...';
+        try {
+          const res = await api.get(`/files/${targetFileId}/folder-key`);
+          const folderKey = await unwrapMasterKey(res.data.folder_encrypted_key, authStore.masterKey);
+          fileKey = await unwrapMasterKey(res.data.file_encrypted_key, folderKey);
+        } catch (e) {
+          console.error('Folder-key fallback failed for file', targetFileId, e);
+          alert('Ce fichier ne peut pas être déchiffré (clé manquante).');
           if (preview) this.preview.show = false;
           if (!preview) this.stopHeartbeat();
           return;
@@ -713,8 +999,8 @@ export const useFileStore = defineStore('files', {
       // Encrypt this key with the user's master key
       const encryptedFileKey = await wrapMasterKey(fileKey, authStore.masterKey);
 
-      // Check for active shares on this path
-      const shareKeysMap = await buildShareKeysMap(uploadPath, fileKey);
+      // Check for active shares on this path (public links + direct folder shares)
+      const { shareKeysMap, directShareKeys } = await buildShareKeysMap(uploadPath, fileKey, authStore.masterKey);
 
       // Setup upload state
       this.isUploading = true;
@@ -809,6 +1095,7 @@ export const useFileStore = defineStore('files', {
           contentType: 'application/octet-stream',
           encryptedKey: encryptedFileKey,
           shareKeys: Object.keys(shareKeysMap).length > 0 ? JSON.stringify(shareKeysMap) : '',
+          directShareKeys: Object.keys(directShareKeys).length > 0 ? JSON.stringify(directShareKeys) : '',
           previewId: previewID,
           isPreview: isPreview
         });
@@ -909,6 +1196,17 @@ export const useFileStore = defineStore('files', {
         console.error('Error creating folder:', error)
       }
     },
+    async createFolderAtPath(folderName, targetPath) {
+      const authStore = useAuthStore()
+      let nameToSend = folderName;
+      if (authStore.user?.encrypt_filenames && authStore.masterKey) {
+        nameToSend = await encryptFileName(folderName, authStore.masterKey);
+      }
+      await api.post('/folders/create', {
+        name: nameToSend,
+        path: targetPath,
+      })
+    },
     async deleteFiles(fileIDs) {
     try {
       const authStore = useAuthStore()
@@ -971,7 +1269,7 @@ export const useFileStore = defineStore('files', {
         throw error
       }
     },
-    async createShareLink(resourceId, resourceType, expiresAt = null) {
+    async createShareLink(resourceId, resourceType, expiresAt = null, permissions = null, singleUse = false, password = '') {
       const authStore = useAuthStore();
       const token = generateShareToken();
 
@@ -996,6 +1294,12 @@ export const useFileStore = defineStore('files', {
           token,
           encrypted_key: encryptedKeyForShare,
           file_keys: fileKeys,
+          single_use: singleUse,
+          password: password || '',
+          perm_download: permissions?.download ?? true,
+          perm_create: permissions?.create ?? false,
+          perm_delete: permissions?.delete ?? false,
+          perm_move: permissions?.move ?? false,
         });
         return response.data;
       } catch (error) {

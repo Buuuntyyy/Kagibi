@@ -3,6 +3,7 @@
 **End-to-end encrypted cloud storage, without compromise.**
 
 Kagibi is a cloud storage platform built around a simple principle: **what you store is yours alone**. The server cannot read your files — not because we promise not to, but because we are technically incapable of doing so.
+
 This project was developed by [Buuuntyyy] with the assistance of AI for certain development and documentation tasks. The goal is to provide a secure, privacy-respecting, easy-to-use storage solution while being fully transparent about how it works internally.
 
 ---
@@ -16,6 +17,71 @@ Kagibi works differently. Your files are encrypted **on your device**, before be
 This *zero-knowledge* model comes with a trade-off: if you lose your password without a recovery code, your files cannot be recovered. This is an intentional design decision, not a bug.
 
 Kagibi is released under the **AGPLv3** license: the code is auditable, and self-hosting is fully supported.
+
+---
+
+## Features
+
+### File Management
+
+- **File upload** — drag-and-drop or file picker, with real-time progress (encryption phase then upload phase).
+- **Folder upload** — upload an entire directory tree in one operation. When a name conflict arises, three options are available: auto-rename, skip, or replace.
+- **Multipart upload** — large files (> 10 MB) are split into 10 MB chunks, individually encrypted and uploaded in parallel.
+- **Download** — client-side streaming decryption: the file is never fully reconstructed in plaintext in memory before being written to disk.
+- **Organization** — create folders, rename, move, delete (single file or recursive folder).
+- **Tags** — label your folders to find them quickly via search and filters.
+- **Preview** — view images and PDFs directly in the browser, without downloading.
+
+### Search and Filtering
+
+The global search bar (shortcut **Ctrl+K**) searches across all your files and folders.
+
+- **In-context results** — clicking a result navigates directly to the file's location in the tree, with visual highlighting.
+- **Available filters**:
+  - By category (All, Documents, Images, Archives)
+  - By extension (e.g. `.pdf`, `.mp4`)
+  - By tag (labels applied to folders)
+  - By element type (file or folder)
+- **Note**: search is disabled when filename encryption is active, since stored names are opaque to the server.
+
+### Sharing
+
+Three sharing mechanisms are available, described in detail in the [Three Sharing Systems](#the-three-sharing-systems) section.
+
+- **Link sharing** — public link (no account required), with the ability for visitors to upload files into a publicly shared folder.
+- **Friend sharing** — granular permissions (download, create, delete, move), visual green/red management UI. Files uploaded by a friend are always recoverable by the owner via the folder key chain.
+- **P2P transfer** — no server storage, end-to-end encrypted.
+
+### P2P Transfer
+
+Send a file directly from one device to another, end-to-end encrypted, without intermediate storage on our servers. See the dedicated section for details.
+
+### Friends and Presence
+
+- **Friend code** system (8 alphanumeric characters, e.g. `#A7KD92XZ`) for finding other users without exposing email addresses.
+- Send and accept friend requests.
+- Real-time **presence indicator** (green dot) with an 8-second grace period on disconnection to prevent status flickering.
+- Mutual friend removal (automatically revokes associated shares).
+
+### Account Security
+
+- **Two-factor authentication (MFA)** — TOTP (authenticator app), with a 15-minute lockout after 5 failed attempts.
+- **Recovery code** — generated at registration, allows regaining access to the master key if the password is lost.
+- **Session revocation** — instantly disconnect all devices.
+- **AAL2 elevation** — sensitive actions (password change, account deletion) require MFA confirmation even in an active session.
+
+### GDPR Compliance
+
+- **Right to erasure (Art. 17)** — account deletion triggers an immediate logical deletion, followed by permanent physical deletion (S3 blobs + database rows) after 30 days.
+- **Right to portability (Art. 20)** — export all your data on request.
+
+### Interface and Ergonomics
+
+- **Light / dark theme**, toggleable in one click.
+- **Multilingual interface**: French and English, with persistent preference.
+- **Keyboard navigation**: Ctrl+K for search, arrow keys in lists.
+- **Responsive design**: mobile-adapted navigation with a bottom bar and bottom sheets.
+- **Storage quota** displayed in real time in the sidebar (updated within 2 seconds of each operation).
 
 ---
 
@@ -133,6 +199,8 @@ You generate a public link that anyone can open, without an account.
 4. The recipient visits the link; Kagibi returns the encrypted blob and the `ShareKey`.
 5. Their browser decrypts the file locally.
 
+When the link targets a **folder**, the public page also allows visitors to **upload files** into that folder. Files sent by visitors are encrypted in their browser using the `FolderKey` before being transferred to the owner's S3 storage. The server never has access to plaintext content.
+
 The server stores: the token, the ShareKey-encrypted file key, the optional password hash, and the expiration date. It cannot read the file.
 
 ---
@@ -149,7 +217,7 @@ Direct sharing between accounts uses asymmetric cryptography to ensure only the 
 
 2. To add a friend, you use their **friend code** (8 alphanumeric characters, e.g. `#A7KD92XZ`), unique per account.
 
-3. To share a file:
+3. To share a **file**:
    - Kagibi retrieves the recipient's RSA public key.
    - The `FileKey` (the file's AES key) is encrypted with that public key.
    - The encrypted result is stored in the database, linked to the share.
@@ -159,24 +227,116 @@ Direct sharing between accounts uses asymmetric cryptography to ensure only the 
    - Their browser decrypts it using their RSA private key (itself decrypted with their MasterKey).
    - The file is decrypted locally.
 
+5. To share a **folder** (with granular permissions):
+   - The owner generates a `FolderKey` (AES-256), encrypted with their own MasterKey and stored server-side.
+   - They configure the permissions granted to the friend.
+   - The friend accesses folder contents according to the granted rights.
+
+#### Folder share permissions
+
+| Permission | Grants |
+|------------|--------|
+| Download | Access and download files |
+| Create | Upload files and create sub-folders |
+| Delete | Delete files in the shared folder |
+| Move | Rename and move elements |
+
+Default permissions when creating a new share: **Download + Create**.
+
+Permissions are displayed with color coding in the share management dialog: **green** = granted, **red** = denied. Any attempt to perform an action without the required permission triggers an explicit error message.
+
+Permissions are **editable at any time** after the share is created: clicking a chip toggles the right and syncs immediately with the server.
+
+#### Key chain for friend-uploaded files
+
+When a friend uploads a file into your shared folder, the file is encrypted with a key derived from the `FolderKey`. A dedicated backend endpoint allows the owner to recover the file key:
+
+```
+Owner's MasterKey
+        │
+        ▼
+  Unwrap folder.encrypted_key  →  FolderKey
+        │
+        ▼
+  Unwrap folder_file_key.encrypted_key  →  FileKey
+        │
+        ▼
+  Decrypt file content
+```
+
+This chain guarantees the owner can always access files uploaded by friends, while the zero-knowledge guarantee is preserved.
+
 The server stores: the encrypted `FileKey` (unusable without the recipient's private key), friendship relations, and permissions.
+
+---
+
+### Per-element restrictions in link shares
+
+For folders shared via public link, it is possible to define access rights **per sub-element**, independently of the link's global permissions. A side panel in the share management dialog lets you navigate the shared folder tree and configure each entry individually.
+
+#### Access levels for sub-folders
+
+| Level | Behavior |
+|-------|----------|
+| Full access | The visitor sees and can interact with the folder per the global link permissions |
+| Read-only | The visitor can browse the folder's content but cannot write to it |
+| Hidden | The folder is invisible to the visitor |
+
+For each file, two additional rights are independently configurable:
+- **Download**: allow or block download (and preview) of that specific file.
+- **Delete**: allow or protect that specific file from deletion.
+
+#### Bulk controls
+
+Bulk control buttons let you apply a uniform setting to all folders or all files at the current level in one click, then fine-tune element by element.
+
+#### Tree navigation
+
+The panel shows a clickable breadcrumb trail. You can drill down into any sub-folder to configure its restrictions, then navigate back up via the breadcrumb.
+
+---
+
+### Shares management view
+
+The "Shares" page centralises all your active shares in two collapsible sections:
+
+- **My shares** — deduplicated list of your shared resources with: type (file / folder), view counter, creation date, expiry date, one-click link copy, direct navigation to the shared folder in the file tree, and rights management.
+- **Shared with me** — list of resources that other users have shared with you.
 
 ---
 
 ### 3. P2P Transfer (device-to-device)
 
-P2P transfer sends files directly from one device to another, bypassing server storage.
-**However, modern internet networks often make direct connections impossible (NAT, firewalls). Kagibi uses a TURN server to relay data when necessary, while maintaining end-to-end encryption.**
-In practice, devices establish a WebRTC DataChannel connection, and data is encrypted with AES-GCM before being sent. The server only sees encrypted data streams, even during TURN relay.
+P2P transfer sends files directly from one device to another, end-to-end encrypted, without intermediate storage on our servers.
 
-**How it works:**
+Modern networks sometimes make direct connections impossible (NAT, firewalls). In those cases, Kagibi uses a TURN relay server owned by Kagibi. **Data passing through this relay remains AES-GCM encrypted — the server sees only opaque streams, not the content.**
 
-1. Both devices establish a **WebRTC DataChannel** connection via a signaling server (WebSocket).
-2. The backend relays only WebRTC negotiation messages (offer/answer/ICE candidates), temporarily stored in the `p2p_signals` table for offline delivery.
-3. Once the peer-to-peer connection is established, data flows **directly** between devices, encrypted at the application layer with AES-GCM.
-4. The server sees neither the transferred content nor the file metadata.
+#### Two transfer modes
 
-P2P transfers count against the user's plan (`p2p_max_exchanges`).
+**Direct mode (between registered friends)**
+
+1. The sender selects an online friend and a file, then starts the transfer.
+2. A random AES-256 file key is generated, encrypted with the recipient's RSA public key.
+3. The WebRTC connection is negotiated over WebSocket (signals stored in `p2p_signals`).
+4. Once the DataChannel is open, the file is sent in 16 KB chunks, each encrypted with a distinct random nonce.
+5. The recipient receives a sound + visual notification, accepts, and their browser decrypts and reassembles the file locally.
+
+**Invite mode (no account required)**
+
+1. The sender generates an **invitation link** from the P2P page.
+2. The link can be shared manually or sent by email (in French or English, your choice).
+3. The recipient opens the link on `send.kagibi.cloud` — **no account is needed**.
+4. They generate an ephemeral RSA key pair in their browser (never stored).
+5. The sender is notified of the acceptance and starts the WebRTC transfer.
+6. The invitation link is **single-use** and expires after 24 hours.
+
+#### Information displayed during transfer
+
+- **Progress** as a percentage with a visual bar.
+- **Transfer speed** (e.g. `4.2 MB/s`) calculated in real time.
+- **Estimated time remaining** (e.g. `~1m 30s`).
+- **Connection type**: direct (LAN), via STUN (NAT traversal), or via TURN relay.
+- **Re-notify**: the sender can send another sound alert to the recipient (up to 3 times, 30 s cooldown).
 
 ---
 
@@ -186,7 +346,7 @@ P2P transfers count against the user's plan (`p2p_max_exchanges`).
 
 | Data | Format | Why |
 |------|--------|-----|
-| Email address | Plaintext | Authentication |
+| Email address | Encrypted (AES-256-GCM) | Authentication, without plaintext exposure |
 | Display name | Plaintext | User interface |
 | Password | bcrypt (cost 12) | Login verification |
 | Argon2id salt | Random (16 bytes) | Client-side KEK derivation |
@@ -211,14 +371,13 @@ P2P transfers count against the user's plan (`p2p_max_exchanges`).
 - Friend list and status (pending / accepted)
 - Active shares: resource identifier + encrypted key + permissions
 - Public links: token + encrypted key + expiration + optional password hash
-- Recent activity (accessed files — optional)
+- P2P invitations: token + file name + size + expiration date (content never stored)
 
 ### What Is Not Collected
 
 - File content (never in plaintext on the server)
 - Browsing or search history
 - IP addresses (except temporary logging for security/abuse purposes)
-- Analytics or tracking pixels
 - Device or browser information
 
 ---
@@ -270,7 +429,7 @@ If the recovery code is also lost, the data is **permanently inaccessible**. Thi
 ```bash
 git clone https://github.com/Buuuntyyy/Kagibi.git
 cd Kagibi
-cp backend/.env.example backend/.env # Fill in S3 variables, JWT_SECRET, etc.
+cp backend/.env.example backend/.env   # Fill in S3 variables, JWT_SECRET, etc.
 cp frontend/.env.example frontend/.env # Fill in VITE_BACKEND_URL=http://localhost:8080
 
 cd backend

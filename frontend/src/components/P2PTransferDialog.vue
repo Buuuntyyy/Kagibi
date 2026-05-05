@@ -61,23 +61,55 @@
 
       <!-- ACTIVE TRANSFER -->
       <div v-else-if='p2pStore.activeTransfer' class='notification-body'>
+         <!-- Status row -->
          <div class='status-header'>
-             <span class='status-label'>{{ statusText }}</span>
-             <span class='pct-badge'>{{ p2pStore.activeTransfer.progress }}%</span>
+             <span class='status-label status-icon-row' :class='statusLabelClass'>
+                 <!-- Spinner: connecting or reconnecting -->
+                 <svg v-if='isConnecting || isReconnecting' class='spin-anim' xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='M21 12a9 9 0 1 1-6.219-8.56'/></svg>
+                 <!-- Checkmark: done -->
+                 <svg v-else-if='isDone' xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>
+                 <!-- Error X -->
+                 <svg v-else-if='isError' xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><line x1='18' y1='6' x2='6' y2='18'/><line x1='6' y1='6' x2='18' y2='18'/></svg>
+                 {{ statusText }}
+             </span>
+             <span class='pct-badge' :class='{ "pct-done": isDone, "pct-error": isError }'>{{ p2pStore.activeTransfer.progress }}%</span>
          </div>
+
+         <!-- Progress bar -->
          <div class='progress-track'>
-             <div class='progress-fill' :style='{ width: p2pStore.activeTransfer.progress + "%" }'></div>
+             <div class='progress-fill' :class='progressClass' :style='{ width: p2pStore.activeTransfer.progress + "%" }'></div>
          </div>
+
+         <!-- Reconnecting notice -->
+         <div v-if='isReconnecting' class='state-notice notice-reconnect'>
+             <svg class='spin-anim' xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 12a9 9 0 1 1-6.219-8.56'/></svg>
+             <span>{{ t('p2p.statusReconnecting') }}</span>
+             <span v-if='resumeAttempts > 0' class='attempt-badge'>{{ t('p2p.reconnectAttempt', { current: resumeAttempts, max: 3 }) }}</span>
+         </div>
+
+         <!-- Error notice -->
+         <div v-if='isError' class='state-notice notice-error'>
+             <svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='8' x2='12' y2='12'/><line x1='12' y1='16' x2='12.01' y2='16'/></svg>
+             <span>{{ t('p2p.transferError') }}</span>
+         </div>
+
+         <!-- Speed + ETA + elapsed -->
+         <div v-if='transferSpeed !== null || (isDone && formattedElapsed)' class='speed-eta-row'>
+             <span v-if='transferSpeed !== null' class='speed-value'>{{ formattedSpeed }}</span>
+             <span v-if='transferETA !== null' class='eta-value'>{{ formattedETA }}</span>
+             <span v-if='isDone && formattedElapsed' class='elapsed-value'>{{ t('p2p.elapsedTime') }}: {{ formattedElapsed }}</span>
+         </div>
+
          <p class='filename-display' :title='p2pStore.activeTransfer.fileName'>{{ p2pStore.activeTransfer.fileName }}</p>
-         
+
          <!-- Keep window active warning -->
-         <div v-if='!isDone' class='keep-active-notice'>
+         <div v-if='!isDone && !isError' class='keep-active-notice'>
            <svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'></path><line x1='12' y1='9' x2='12' y2='13'></line><line x1='12' y1='17' x2='12.01' y2='17'></line></svg>
            {{ t('p2p.keepWindowActive') }}
          </div>
 
-         <!-- Connection Info -->
-         <div v-if='p2pStore.activeTransfer.connectionInfo' class='connection-info'>
+         <!-- Connection Info — hidden during reconnect (stage text is redundant there) -->
+         <div v-if='p2pStore.activeTransfer.connectionInfo && !isReconnecting && !isError' class='connection-info'>
              <div class='info-row'>
                  <span class='info-label'>{{ t('common.state') }}:</span>
                  <span class='info-value'>{{ p2pStore.activeTransfer.connectionInfo.stage }}</span>
@@ -89,8 +121,8 @@
                  </span>
              </div>
          </div>
-         
-         <div class='actions-grid single' v-if='isDone'>
+
+         <div class='actions-grid single' v-if='isDone || isError'>
             <button @click='close' class='btn btn-primary'>{{ t('common.close') }}</button>
          </div>
          <div class='actions-grid single' v-else>
@@ -136,15 +168,43 @@ const senderName = computed(() => {
 
 const visible = computed(() => !!p2pStore.incomingOffer || !!p2pStore.activeTransfer || !!p2pStore.rejectedTransfer);
 const isDone = computed(() => p2pStore.activeTransfer?.status === 'Done' || p2pStore.activeTransfer?.status === 'Complete');
-const canClose = computed(() => isDone.value || !!p2pStore.incomingOffer || !!p2pStore.rejectedTransfer);
+const isConnecting = computed(() => p2pStore.activeTransfer?.status === 'Connecting...');
+const isReconnecting = computed(() => p2pStore.activeTransfer?.status === 'Reconnecting...');
+const isError = computed(() => p2pStore.activeTransfer?.status === 'Error');
+const canClose = computed(() => isDone.value || isError.value || !!p2pStore.incomingOffer || !!p2pStore.rejectedTransfer);
 const isWaitingForAcceptance = computed(() =>
     p2pStore.activeTransfer?.type === 'send' && p2pStore.activeTransfer?.status === 'Connecting...'
 );
 
+const STATUS_I18N = {
+    'Connecting...':   'p2p.statusConnecting',
+    'Sending...':      'p2p.statusSending',
+    'Receiving...':    'p2p.statusReceiving',
+    'Done':            'p2p.statusDone',
+    'Complete':        'p2p.statusComplete',
+    'Reconnecting...': 'p2p.statusReconnecting',
+    'Error':           'p2p.statusError',
+};
 const statusText = computed(() => {
-    if (!p2pStore.activeTransfer) return '';
-    return p2pStore.activeTransfer.status;
+    const status = p2pStore.activeTransfer?.status;
+    if (!status) return '';
+    const key = STATUS_I18N[status];
+    return key ? t(key) : status;
 });
+
+const statusLabelClass = computed(() => ({
+    'status-reconnecting': isReconnecting.value,
+    'status-error':        isError.value,
+    'status-done':         isDone.value,
+}));
+
+const progressClass = computed(() => ({
+    'progress-fill--reconnecting': isReconnecting.value,
+    'progress-fill--error':        isError.value,
+    'progress-fill--done':         isDone.value,
+}));
+
+const resumeAttempts = computed(() => p2pStore.activeTransfer?.resumeAttempts ?? 0);
 
 const isMinimized = ref(false);
 
@@ -248,6 +308,56 @@ const formatSize = (bytes) => {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
+
+// Speed in bytes/sec, null if not yet meaningful
+const transferSpeed = computed(() => {
+    const t = p2pStore.activeTransfer;
+    if (!t?.transferStartedAt) return null;
+    const elapsed = (now.value - t.transferStartedAt) / 1000;
+    if (elapsed < 1) return null;
+    const transferred = t.transferredBytes ?? t.receivedSize ?? 0;
+    return transferred / elapsed;
+});
+
+const transferETA = computed(() => {
+    const speed = transferSpeed.value;
+    if (!speed || speed < 512) return null;
+    const t = p2pStore.activeTransfer;
+    const total = t.totalBytes ?? t.fileSize ?? 0;
+    const transferred = t.transferredBytes ?? t.receivedSize ?? 0;
+    const remaining = total - transferred;
+    if (remaining <= 0) return null;
+    return remaining / speed; // seconds
+});
+
+const formattedSpeed = computed(() => {
+    const s = transferSpeed.value;
+    if (s === null) return '';
+    if (s >= 1024 * 1024) return `${(s / (1024 * 1024)).toFixed(1)} MB/s`;
+    if (s >= 1024) return `${(s / 1024).toFixed(0)} KB/s`;
+    return `${Math.round(s)} B/s`;
+});
+
+const formattedETA = computed(() => {
+    const secs = transferETA.value;
+    if (secs === null) return '';
+    if (secs < 5) return '< 5s';
+    if (secs < 60) return `~${Math.round(secs)}s`;
+    const m = Math.floor(secs / 60);
+    const s = Math.round(secs % 60);
+    return s > 0 ? `~${m}m ${s}s` : `~${m}m`;
+});
+
+// Elapsed time — shown once the transfer is complete
+const formattedElapsed = computed(() => {
+    const tr = p2pStore.activeTransfer;
+    if (!tr?.transferStartedAt) return null;
+    const secs = Math.floor((now.value - tr.transferStartedAt) / 1000);
+    if (secs < 60) return `${secs}s`;
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return s > 0 ? `${m}m ${s}s` : `${m}m`;
+});
 
 const accept = () => p2pStore.acceptTransfer();
 const reject = () => p2pStore.rejectTransfer();
@@ -429,6 +539,78 @@ const close = () => {
     background: var(--success-color, #2ecc71);
     transition: width 0.3s ease;
 }
+.progress-fill--done {
+    background: var(--primary-color, #3498db);
+}
+.progress-fill--reconnecting {
+    background: var(--warning-color, #f39c12);
+    animation: pulse-bar 1.4s ease-in-out infinite;
+}
+.progress-fill--error {
+    background: var(--error-color, #e74c3c);
+}
+@keyframes pulse-bar {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.55; }
+}
+
+/* Spinner animation */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+.spin-anim {
+    animation: spin 0.9s linear infinite;
+    flex-shrink: 0;
+}
+
+/* Status label variants */
+.status-icon-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.status-reconnecting { color: var(--warning-color, #f39c12); }
+.status-error        { color: var(--error-color, #e74c3c); }
+.status-done         { color: var(--success-color, #2ecc71); }
+
+.pct-done  { color: var(--success-color, #2ecc71); }
+.pct-error { color: var(--error-color, #e74c3c); }
+
+/* State notice banners */
+.state-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+.notice-reconnect {
+    background: var(--warning-bg-color, #fffbf0);
+    border: 1px solid var(--warning-color, #f39c12);
+    color: var(--warning-color, #f39c12);
+}
+.notice-error {
+    background: var(--error-bg-color, #fdf0f0);
+    border: 1px solid var(--error-color, #e74c3c);
+    color: var(--error-color, #e74c3c);
+}
+.attempt-badge {
+    margin-left: auto;
+    font-size: 0.75rem;
+    opacity: 0.85;
+    white-space: nowrap;
+}
+
+.elapsed-value {
+    color: var(--secondary-text-color, #888);
+    font-size: 0.78rem;
+    margin-left: auto;
+}
 
 .status-header {
     display: flex;
@@ -442,6 +624,23 @@ const close = () => {
     font-weight: 700;
     color: var(--primary-color, #3498db);
 }
+.speed-eta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
+    margin-bottom: 8px;
+}
+
+.speed-value {
+    font-weight: 600;
+    color: var(--primary-color, #3498db);
+}
+
+.eta-value {
+    color: var(--secondary-text-color, #888);
+}
+
 .filename-display {
     font-size: 0.85rem;
     color: var(--main-text-color, #333);

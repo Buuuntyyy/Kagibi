@@ -22,9 +22,26 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const errLinkExpired = "Link expired"
+const errLinkAlreadyUsed = "Link already used"
+
+// checkSharePassword validates the X-Share-Password header against the stored bcrypt hash.
+// Returns true if the link has no password or if the provided password matches.
+// Writes a 401 response and returns false when the password is missing or wrong.
+func checkSharePassword(c *gin.Context, shareLink *pkg.ShareLink) bool {
+	if shareLink.PasswordHash == "" {
+		return true
+	}
+	password := c.GetHeader("X-Share-Password")
+	if password == "" || bcrypt.CompareHashAndPassword([]byte(shareLink.PasswordHash), []byte(password)) != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "password_required"})
+		return false
+	}
+	return true
+}
 
 type createShareLinkRequest struct {
 	ResourceID   int64            `json:"resource_id"`
@@ -34,6 +51,11 @@ type createShareLinkRequest struct {
 	EncryptedKey string           `json:"encrypted_key"`
 	Token        string           `json:"token"`
 	FileKeys     map[int64]string `json:"file_keys"`
+	SingleUse    bool             `json:"single_use"`
+	PermDownload bool             `json:"perm_download"`
+	PermCreate   bool             `json:"perm_create"`
+	PermDelete   bool             `json:"perm_delete"`
+	PermMove     bool             `json:"perm_move"`
 }
 
 func generateToken() (string, error) {
@@ -106,13 +128,21 @@ func GetShareLinkHandler(c *gin.Context, db *bun.DB) {
 
 	shareLink, err := getValidShareLink(c.Request.Context(), db, token)
 	if err != nil {
-		if err.Error() == errLinkExpired {
+		switch err.Error() {
+		case errLinkExpired:
 			monitoring.RecordShareAccess("expired")
 			c.JSON(http.StatusGone, gin.H{"error": err.Error()})
-		} else {
+		case errLinkAlreadyUsed:
+			monitoring.RecordShareAccess("already_used")
+			c.JSON(http.StatusGone, gin.H{"error": err.Error()})
+		default:
 			monitoring.RecordShareAccess("not_found")
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		}
+		return
+	}
+
+	if !checkSharePassword(c, shareLink) {
 		return
 	}
 
@@ -136,16 +166,39 @@ func DownloadSharedFileHandler(c *gin.Context, db *bun.DB) {
 	shareLink, err := getValidShareLink(c.Request.Context(), db, token)
 	if err != nil {
 		status := http.StatusNotFound
-		if err.Error() == errLinkExpired {
+		if err.Error() == errLinkExpired || err.Error() == errLinkAlreadyUsed {
 			status = http.StatusGone
 		}
 		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 
+	if !checkSharePassword(c, shareLink) {
+		return
+	}
+
 	if shareLink.ResourceType != "file" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Not a file"})
 		return
+	}
+
+	if !shareLink.PermDownload {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Download not permitted on this share"})
+		return
+	}
+
+	// For single-use links, atomically mark as used before streaming.
+	// If another request already consumed it, abort with 410 Gone.
+	if shareLink.SingleUse {
+		marked, err := markShareLinkUsed(c.Request.Context(), db, shareLink.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process link"})
+			return
+		}
+		if !marked {
+			c.JSON(http.StatusGone, gin.H{"error": errLinkAlreadyUsed})
+			return
+		}
 	}
 
 	file, err := getSharedFile(c.Request.Context(), db, shareLink.ResourceID)
@@ -160,6 +213,62 @@ func DownloadSharedFileHandler(c *gin.Context, db *bun.DB) {
 		log.Printf("Error streaming file: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve file from storage"})
 	}
+}
+
+// UpdateSharePermissionsHandler updates the permission flags on an existing share link
+func UpdateSharePermissionsHandler(c *gin.Context, db *bun.DB) {
+	userID := c.GetString("user_id")
+	shareID, err := strconv.ParseInt(c.Param("shareID"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid share ID"})
+		return
+	}
+
+	var body struct {
+		PermDownload *bool `json:"perm_download"`
+		PermCreate   *bool `json:"perm_create"`
+		PermDelete   *bool `json:"perm_delete"`
+		PermMove     *bool `json:"perm_move"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	var share pkg.ShareLink
+	if err := db.NewSelect().Model(&share).Where("id = ? AND owner_id = ?", shareID, userID).Scan(c.Request.Context()); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Share not found"})
+		return
+	}
+
+	if body.PermDownload != nil {
+		share.PermDownload = *body.PermDownload
+	}
+	if body.PermCreate != nil {
+		share.PermCreate = *body.PermCreate
+	}
+	if body.PermDelete != nil {
+		share.PermDelete = *body.PermDelete
+	}
+	if body.PermMove != nil {
+		share.PermMove = *body.PermMove
+	}
+
+	_, err = db.NewUpdate().Model(&share).
+		Column("perm_download", "perm_create", "perm_delete", "perm_move").
+		Where("id = ?", shareID).
+		Exec(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update permissions"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"perm_download": share.PermDownload,
+		"perm_create":   share.PermCreate,
+		"perm_delete":   share.PermDelete,
+		"perm_move":     share.PermMove,
+	})
 }
 
 // GetShareForResourceHandler allows the owner to retrieve share link(s) for a given file
@@ -244,6 +353,19 @@ func createNewShareLink(ctx context.Context, db *bun.DB, userID, path string, re
 		Token:        token,
 		ExpiresAt:    req.ExpiresAt,
 		EncryptedKey: req.EncryptedKey,
+		SingleUse:    req.SingleUse,
+		PermDownload: req.PermDownload,
+		PermCreate:   req.PermCreate,
+		PermDelete:   req.PermDelete,
+		PermMove:     req.PermMove,
+	}
+
+	if req.Password != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+		if err != nil {
+			return nil, err
+		}
+		shareLink.PasswordHash = string(hash)
 	}
 
 	_, err := db.NewInsert().Model(shareLink).Exec(ctx)
@@ -275,7 +397,25 @@ func getValidShareLink(ctx context.Context, db *bun.DB, token string) (*pkg.Shar
 	if shareLink.ExpiresAt != nil && shareLink.ExpiresAt.Before(time.Now()) {
 		return nil, fmt.Errorf(errLinkExpired)
 	}
+	if shareLink.SingleUse && shareLink.UsedAt != nil {
+		return nil, fmt.Errorf(errLinkAlreadyUsed)
+	}
 	return &shareLink, nil
+}
+
+// markShareLinkUsed atomically sets used_at on a single-use link.
+// Returns true if the mark succeeded (link was not yet consumed).
+func markShareLinkUsed(ctx context.Context, db *bun.DB, id int64) (bool, error) {
+	now := time.Now()
+	res, err := db.NewUpdate().Model(&pkg.ShareLink{}).
+		Set("used_at = ?", now).
+		Where("id = ? AND single_use = true AND used_at IS NULL", id).
+		Exec(ctx)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
 }
 
 func incrementShareViews(ctx context.Context, db *bun.DB, id int64) {

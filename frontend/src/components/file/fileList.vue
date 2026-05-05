@@ -17,24 +17,9 @@
       </div>
     </div>
 
-    <div class="toolbar" v-if="preferenceStore.showToolBar">
-      <div class="toolbar-left">
-        <button @click="triggerFileInput" class="btn-add-file">{{ t('file.addFile') }}</button>
-        <button @click="createNewFolder" class="btn-add-file">{{ t('file.createFolder') }}</button>
-      </div>
-      <div class="toolbar-right">
-        <button @click="renameSelectedItem" :disabled="selectedItems.length !== 1" class="btn-rename">
-          {{ t('file.rename') }}
-        </button>
-        <button @click="downloadSelectedFiles" :disabled="selectedItems.length === 0" class="btn-download">
-          {{ t('file.download') }}
-        </button>
-        <button @click="deleteSelectedItems" :disabled="selectedItems.length === 0" class="btn-delete">
-          {{ t('common.delete') }}
-        </button>
-      </div>
-    </div>
     <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" multiple />
+    <input type="file" ref="sharedFileInput" @change="handleSharedFileUpload" style="display: none" multiple />
+    <input type="file" ref="folderInput" @change="handleFolderUpload" style="display: none" webkitdirectory />
     <div class="path-banner">
 
       <div class="breadcrumbs">
@@ -52,55 +37,111 @@
 
     </div>
 
-    <!-- Selection Action Bar / Security Tip Bar -->
-    <div class="selection-gap" :class="{ 'has-content': selectedItems.length > 0 || (!loadingSecuritySettings && !mfaSettings.mfa_enabled) }">
+    <!-- Selection Action Bar / Toolbar Bar -->
+    <div class="selection-gap" :class="{ 'has-content': selectedItems.length > 0 || preferenceStore.showToolBar }">
       <Transition name="selection-bar" mode="out-in">
-        <!-- Selection Actions -->
-        <div v-if="selectedItems.length > 0" key="selection-bar" class="selection-action-bar">
+        <!-- Toolbar Bar (always shown when enabled, with selection state integrated) -->
+        <div v-if="preferenceStore.showToolBar" key="toolbar-bar" class="toolbar-bar">
+          <div class="toolbar-left">
+            <template v-if="fileStore.viewMode !== 'shared'">
+              <button @click="triggerFileInput" class="tb-btn tb-btn--primary">
+                <svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 0 24 24" width="14px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+                <span>{{ t('file.addFile') }}</span>
+              </button>
+              <button @click="createNewFolder" class="tb-btn tb-btn--ghost">
+                <svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 0 24 24" width="14px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V6h5.17l2 2H20v10zm-8-4h2v2h2v-2h2v-2h-2v-2h-2v2h-2z"/></svg>
+                <span>{{ t('file.createFolder') }}</span>
+              </button>
+              <button @click="triggerFolderInput" :disabled="folderProgress.isOpen" class="tb-btn tb-btn--ghost">
+                <svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 0 24 24" width="14px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 12v-3h-4v-4h4V8l5 5-5 5z"/></svg>
+                <span>{{ t('file.uploadFolder') }}</span>
+              </button>
+            </template>
+            <template v-else>
+              <button v-if="fileStore.sharedPermissions.create" @click="triggerSharedFileInput" class="tb-btn tb-btn--primary">
+                <svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 0 24 24" width="14px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></svg>
+                <span>{{ t('file.addFile') }}</span>
+              </button>
+              <button v-if="fileStore.sharedPermissions.create" @click="createNewFolder" class="tb-btn tb-btn--ghost">
+                <svg xmlns="http://www.w3.org/2000/svg" height="14px" viewBox="0 0 24 24" width="14px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V6h5.17l2 2H20v10zm-8-4h2v2h2v-2h2v-2h-2v-2h-2v2h-2z"/></svg>
+                <span>{{ t('file.createFolder') }}</span>
+              </button>
+            </template>
+          </div>
+          <div class="toolbar-right">
+            <Transition name="popover-fade">
+              <span v-if="selectedItems.length > 0" class="tb-selection-badge">
+                {{ t('file.selectedItems', { count: selectedItems.length }) }}
+              </span>
+            </Transition>
+            <span class="toolbar-divider"></span>
+            <button v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.move"
+              @click="renameSelectedItem" :disabled="selectedItems.length !== 1" class="tb-btn tb-btn--icon" :title="t('file.rename')">
+              <svg xmlns="http://www.w3.org/2000/svg" height="17px" viewBox="0 0 24 24" width="17px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M14.06 9.02l.92.92L5.92 19H5v-.92l9.06-9.06M17.66 3c-.25 0-.51.1-.7.29l-1.83 1.83 3.75 3.75 1.83-1.83c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.2-.2-.45-.29-.71-.29zm-3.6 3.19L3 17.25V21h3.75L17.81 9.94l-3.75-3.75z"/></svg>
+            </button>
+            <button v-if="fileStore.viewMode !== 'shared'"
+              @click="openShareForSelected" :disabled="selectedItems.length !== 1" class="tb-btn tb-btn--icon" :title="t('file.share')">
+              <svg xmlns="http://www.w3.org/2000/svg" height="17px" viewBox="0 0 24 24" width="17px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+            </button>
+            <button v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.download"
+              @click="downloadSelectedFiles" :disabled="selectedItems.length === 0" class="tb-btn tb-btn--icon" :title="t('file.download')">
+              <svg xmlns="http://www.w3.org/2000/svg" height="17px" viewBox="0 0 24 24" width="17px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
+            </button>
+            <button v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.delete"
+              @click="deleteSelectedItems" :disabled="selectedItems.length === 0" class="tb-btn tb-btn--icon tb-btn--danger" :title="t('common.delete')">
+              <svg xmlns="http://www.w3.org/2000/svg" height="17px" viewBox="0 0 24 24" width="17px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/></svg>
+            </button>
+            <div class="security-tips-wrapper">
+              <button
+                class="tb-btn tb-btn--icon security-tips-btn"
+                @click.stop="toggleSecurityTips"
+                :title="t('file.securityTipsTitle')"
+                :class="{ 'is-warning': !loadingSecuritySettings && !mfaSettings.mfa_enabled, 'is-secured': !loadingSecuritySettings && mfaSettings.mfa_enabled }"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" height="17px" viewBox="0 0 24 24" width="17px" fill="currentColor">
+                  <path d="M0 0h24v24H0V0z" fill="none"/>
+                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+                </svg>
+              </button>
+              <Transition name="popover-fade">
+                <div v-if="showSecurityTips" class="security-tips-popover" @click.stop>
+                  <div v-if="!loadingSecuritySettings && !mfaSettings.mfa_enabled" class="tip-popover-content is-warning" @click="navigateToSecurity">
+                    <svg class="tip-popover-icon" xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 0 24 24" width="18px" fill="currentColor">
+                      <path d="M0 0h24v24H0V0z" fill="none"/>
+                      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+                    </svg>
+                    <span class="tip-popover-text"><strong>{{ t('file.securityTipWarningTitle') }}</strong> {{ t('file.securityTipWarningBody') }}</span>
+                  </div>
+                  <div v-else-if="!loadingSecuritySettings && mfaSettings.mfa_enabled" class="tip-popover-content is-secured">
+                    <svg class="tip-popover-icon" xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 0 24 24" width="18px" fill="currentColor">
+                      <path d="M0 0h24v24H0V0z" fill="none"/>
+                      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+                    </svg>
+                    <span class="tip-popover-text"><strong>{{ t('file.securityTipSuccessTitle') }}</strong> {{ t('file.securityTipSuccessBody') }}</span>
+                  </div>
+                </div>
+              </Transition>
+            </div>
+          </div>
+        </div>
+
+        <!-- Selection Action Bar (fallback quand toolbar désactivé) -->
+        <div v-else-if="selectedItems.length > 0" key="selection-bar" class="selection-action-bar">
           <div class="selection-actions">
             <button class="action-btn download-action" @click.stop="downloadSelectedFiles" :title="t('file.download')">
-            <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
-            <span>{{ t('file.download') }}</span>
-          </button>
-          <button class="action-btn share-action" @click.stop="openShareForSelected" :title="t('file.share')" :disabled="selectedItems.length !== 1">
-            <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
-            <span>{{ t('file.share') }}</span>
-          </button>
-          <button class="action-btn delete-action" @click.stop="deleteSelectedItems" :title="t('common.delete')">
-            <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/></svg>
-            <span>{{ t('common.delete') }}</span>
-          </button>
+              <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
+              <span>{{ t('file.download') }}</span>
+            </button>
+            <button class="action-btn share-action" @click.stop="openShareForSelected" :title="t('file.share')" :disabled="selectedItems.length !== 1">
+              <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
+              <span>{{ t('file.share') }}</span>
+            </button>
+            <button class="action-btn delete-action" @click.stop="deleteSelectedItems" :title="t('common.delete')">
+              <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/></svg>
+              <span>{{ t('common.delete') }}</span>
+            </button>
           </div>
           <span class="selection-count">{{ t('file.selectedItems', { count: selectedItems.length }) }}</span>
-        </div>
-
-        <!-- Security Tip Bar (shown when no items selected) -->
-        <div v-else-if="!loadingSecuritySettings && !mfaSettings.mfa_enabled" key="tip-warning" class="security-tip-bar" @click="navigateToSecurity">
-          <div class="tip-content">
-            <svg class="tip-icon" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor">
-              <path d="M0 0h24v24H0V0z" fill="none"/>
-              <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
-            </svg>
-            <span class="tip-text">💡 <strong>{{ t('file.securityTipWarningTitle') }}</strong> {{ t('file.securityTipWarningBody') }}</span>
-          </div>
-          <svg class="security-lock" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor">
-            <path d="M0 0h24v24H0V0z" fill="none"/>
-            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/>
-          </svg>
-        </div>
-
-        <div v-else-if="!loadingSecuritySettings && mfaSettings.mfa_enabled" key="tip-success" class="security-tip-bar success">
-          <div class="tip-content">
-            <svg class="tip-icon" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor">
-              <path d="M0 0h24v24H0V0z" fill="none"/>
-              <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
-            </svg>
-            <span class="tip-text">✅ <strong>{{ t('file.securityTipSuccessTitle') }}</strong> {{ t('file.securityTipSuccessBody') }}</span>
-          </div>
-          <svg class="security-lock" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="currentColor">
-            <path d="M0 0h24v24H0V0z" fill="none"/>
-            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/>
-          </svg>
         </div>
       </Transition>
     </div>
@@ -191,36 +232,42 @@
     v-if="contextMenu.visible"
     :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }">
       <template v-if="contextMenu.item">
-        <div class="menu-item" @click.stop="handleContextAction('preview')" v-if="contextMenu.item.type === 'file'">
+        <div class="menu-item" @click.stop="handleContextAction('preview')"
+          v-if="contextMenu.item.type === 'file' && (fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.download)">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></span> {{ t('file.preview') }}
         </div>
-        <div class="menu-item" @click.stop="handleContextAction('download')">
+        <div class="menu-item" @click.stop="handleContextAction('download')"
+          v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.download">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg></span> {{ contextMenu.item.type === 'folder' ? t('file.downloadZip') : t('file.download') }}
         </div>
-        <div class="menu-item" @click.stop="handleContextAction('rename')">
+        <div class="menu-item" @click.stop="handleContextAction('rename')"
+          v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.move">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M14.06 9.02l.92.92L5.92 19H5v-.92l9.06-9.06M17.66 3c-.25 0-.51.1-.7.29l-1.83 1.83 3.75 3.75 1.83-1.83c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.2-.2-.45-.29-.71-.29zm-3.6 3.19L3 17.25V21h3.75L17.81 9.94l-3.75-3.75z"/></svg></span> {{ t('file.rename') }}
         </div>
-        <div class="menu-item" @click.stop="handleContextAction('move')">
+        <div class="menu-item" @click.stop="handleContextAction('move')" v-if="fileStore.viewMode !== 'shared'">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 12v-3h-4v-4h4V8l5 5-5 5z"/></svg></span> {{ t('file.move') }}
         </div>
-        <div class="menu-item" @click.stop="handleContextAction('share')">
+        <div class="menu-item" @click.stop="handleContextAction('share')" v-if="fileStore.viewMode !== 'shared'">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg></span> {{ t('file.share') }}
         </div>
-        <div class="menu-item" v-if="contextMenu.item && contextMenu.item.shared" @click.stop="handleContextAction('get-share-link')">
+        <div class="menu-item" v-if="fileStore.viewMode !== 'shared' && contextMenu.item && contextMenu.item.shared" @click.stop="handleContextAction('get-share-link')">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></span> {{ t('share.openLink') }}
         </div>
-        <div class="menu-item" @click.stop="handleContextAction('tags')">
+        <div class="menu-item" @click.stop="handleContextAction('tags')" v-if="fileStore.viewMode !== 'shared'">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16zM16 17H5V7h11l3.55 5L16 17z"/></svg></span> {{ t('file.tags') }}
         </div>
-        <div class="menu-item delete" @click.stop="handleContextAction('delete')">
+        <div class="menu-item delete" @click.stop="handleContextAction('delete')"
+          v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.delete">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/></svg></span> {{ t('file.delete') }}
         </div>
       </template>
       <template v-else>
-        <div class="menu-item" @click.stop="handleContextAction('add-file')">
+        <div class="menu-item" @click.stop="handleContextAction('add-file')"
+          v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.create">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zM8 15.01l1.41 1.41L11 14.83V19h2v-4.17l1.59 1.59L16 15.01 12.01 11 8 15.01z"/></svg></span> {{ t('file.addFile') }}
         </div>
-        <div class="menu-item" @click.stop="handleContextAction('create-folder')">
+        <div class="menu-item" @click.stop="handleContextAction('create-folder')"
+          v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.create">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V6h5.17l2 2H20v10zm-8-4h2v2h2v-2h2v-2h-2v-2h-2v2h-2z"/></svg></span> {{ t('file.createFolder') }}
         </div>
       </template>
@@ -263,6 +310,38 @@
       @verified="onMFAVerified"
       @cancelled="onMFACancelled"
     />
+
+    <div v-if="folderProgress.isOpen" class="folder-conflict-overlay">
+      <div class="folder-conflict-content folder-progress-content">
+        <h3>Upload de dossier en cours</h3>
+        <p class="progress-phase-label">
+          <span v-if="folderProgress.phase === 'folders'">
+            Création de l'arborescence...
+          </span>
+          <span v-else>
+            Mise en file d'attente des fichiers...
+          </span>
+        </p>
+        <div class="progress-track">
+          <div class="progress-fill" :style="{ width: folderProgressPercent + '%' }"></div>
+        </div>
+        <p class="progress-counter">
+          {{ folderProgress.foldersCreated }} / {{ folderProgress.foldersTotal }} dossier{{ folderProgress.foldersTotal > 1 ? 's' : '' }} créé{{ folderProgress.foldersTotal > 1 ? 's' : '' }}
+        </p>
+      </div>
+    </div>
+
+    <div v-if="folderAlertModal.isOpen" class="folder-conflict-overlay" @click.self="folderAlertModal.isOpen = false">
+      <div class="folder-conflict-content">
+        <h3>{{ folderAlertModal.title }}</h3>
+        <p v-for="(line, i) in folderAlertModal.lines" :key="i" :class="i === folderAlertModal.lines.length - 1 ? 'folder-conflict-hint' : ''">
+          <span v-html="line"></span>
+        </p>
+        <div class="folder-conflict-actions">
+          <button @click="folderAlertModal.isOpen = false" class="btn-conflict-ok">OK</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -288,7 +367,7 @@ import MoveDialog from '../MoveDialog.vue';
 import ManageShareDialog from '../ManageShareDialog.vue';
 import FileTable from './FileTable.vue';
 import MFAChallengeModal from '../MFAChallengeModal.vue';
-import { formatSpeed } from '../../utils/format'
+import { formatSpeed, formatSize } from '../../utils/format'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -316,6 +395,32 @@ const loadingSecuritySettings = ref(true)
 const selectedItems = ref([])
 const lastClickedIndex = ref(-1) // Pour la sélection avec Shift
 const fileInput = ref(null)
+const sharedFileInput = ref(null)
+const folderInput = ref(null)
+const folderAlertModal = ref({ isOpen: false, title: '', lines: [] })
+const folderProgress = ref({ isOpen: false, foldersCreated: 0, foldersTotal: 0, phase: 'folders' })
+
+const folderProgressPercent = computed(() =>
+  folderProgress.value.foldersTotal === 0 ? 0
+    : Math.round((folderProgress.value.foldersCreated / folderProgress.value.foldersTotal) * 100)
+)
+
+const showFolderAlert = (title, lines) => {
+  folderAlertModal.value = { isOpen: true, title, lines }
+}
+
+const FOLDER_NAME_RE = /^[\p{L}\p{N}\s\-\._'\u2018\u2019]+$/u
+
+const invalidCharsOf = (name) => {
+  const chars = new Set()
+  for (const ch of name) {
+    if (!FOLDER_NAME_RE.test(ch)) {
+      const cp = ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')
+      chars.add(`"${ch}" (U+${cp})`)
+    }
+  }
+  return [...chars].join(', ')
+}
 const isDragging = ref(false)
 
 const uploadSpeedText = computed(() => {
@@ -779,6 +884,14 @@ const navigateToSecurity = () => {
   router.push({ name: 'Account' })
 }
 
+const showSecurityTips = ref(false)
+const toggleSecurityTips = () => {
+  showSecurityTips.value = !showSecurityTips.value
+}
+const closeSecurityTips = () => {
+  showSecurityTips.value = false
+}
+
 watch(() => fileStore.currentPath, async () => {
   selectedItems.value = []
   if (!fileStore.pendingHighlight) return
@@ -799,6 +912,15 @@ watch(() => fileStore.currentPath, async () => {
 onUnmounted(() => {
   document.removeEventListener('click', closeContextMenu)
   document.removeEventListener('keydown', handleKeyboardDelete)
+  document.removeEventListener('click', closeSecurityTips)
+})
+
+watch(showSecurityTips, (val) => {
+  if (val) {
+    document.addEventListener('click', closeSecurityTips)
+  } else {
+    document.removeEventListener('click', closeSecurityTips)
+  }
 })
 
 const openBackgroundContextMenu = async (event) => {
@@ -906,7 +1028,11 @@ const handleContextAction = (action) => {
   const item = contextMenu.value.item
 
   if (action === 'add-file') {
-    triggerFileInput()
+    if (fileStore.viewMode === 'shared') {
+      triggerSharedFileInput()
+    } else {
+      triggerFileInput()
+    }
     closeContextMenu()
     return
   }
@@ -923,6 +1049,12 @@ const handleContextAction = (action) => {
       // If multiple items are selected, download them all
       if (selectedItems.value.length > 1) {
         downloadSelectedFiles()
+      } else if (fileStore.viewMode === 'shared') {
+        if (item.type === 'file') {
+          fileStore.downloadFile(item.ID, item.Name, item.MimeType || 'application/octet-stream')
+        } else if (item.type === 'folder') {
+          fileStore.downloadSharedFolderAsZip(item.ID, item.Name)
+        }
       } else if (item.type === 'file') {
         // Use unified download popup for single file
         downloadStore.downloadSingleFile(item.ID, item.Name, item.EncryptedKey, item.Size || 0)
@@ -1130,6 +1262,17 @@ const downloadSelectedFiles = async () => {
 }
 
 const executeDownloadSelectedFiles = async (files, folders) => {
+  // Shared mode: use the store's shared download flows
+  if (fileStore.viewMode === 'shared') {
+    for (const file of files) {
+      await fileStore.downloadFile(file.ID, file.Name, file.MimeType || 'application/octet-stream');
+    }
+    for (const folder of folders) {
+      await fileStore.downloadSharedFolderAsZip(folder.ID, folder.Name);
+    }
+    return;
+  }
+
   // Single file: download with progress popup (unified UX)
   if (files.length === 1 && folders.length === 0) {
     const file = files[0];
@@ -1182,6 +1325,26 @@ const getDeleteWarningMessage = (items) => {
 const deleteSelectedItems = () => {
   if (selectedItems.value.length === 0) return;
 
+  if (fileStore.viewMode === 'shared') {
+    if (!fileStore.sharedPermissions.delete) {
+      uiStore.showError("Vous n'avez pas l'autorisation de supprimer des éléments dans ce partage.");
+      return;
+    }
+    uiStore.requestDeleteConfirmation({
+      title: "Supprimer les éléments",
+      message: '',
+      itemName: selectedItems.value.length === 1 ? selectedItems.value[0].Name : null,
+      itemsCount: selectedItems.value.length,
+      onConfirm: async () => {
+        for (const item of selectedItems.value) {
+          await fileStore.deleteFromShare(item.ID, item.type);
+        }
+        selectedItems.value = [];
+      }
+    });
+    return;
+  }
+
   const warningMessage = getDeleteWarningMessage(selectedItems.value)
 
   uiStore.requestDeleteConfirmation({
@@ -1220,8 +1383,12 @@ const renameSelectedItem = async () => {
 
   if (newName && newName !== item.Name) {
     try {
-      await fileStore.renameItem(item.ID, item.type, newName);
-      selectedItems.value = []; // Clear selection
+      if (fileStore.viewMode === 'shared') {
+        await fileStore.renameInShare(item.ID, item.type, newName);
+      } else {
+        await fileStore.renameItem(item.ID, item.type, newName);
+      }
+      selectedItems.value = [];
     } catch (error) {
       alert("Erreur lors du renommage : " + (error.response?.data?.error || error.message));
     }
@@ -1311,6 +1478,20 @@ const triggerFileInput = () => {
   fileInput.value.click()
 }
 
+const triggerSharedFileInput = () => {
+  sharedFileInput.value.click()
+}
+
+const handleSharedFileUpload = async (event) => {
+  const files = event.target.files
+  if (files && files.length > 0) {
+    for (const file of files) {
+      await fileStore.uploadSharedFile(file)
+    }
+    event.target.value = ''
+  }
+}
+
 const handleFileUpload = async (event) => {
   const files = event.target.files
   if (files && files.length > 0) {
@@ -1320,10 +1501,125 @@ const handleFileUpload = async (event) => {
   }
 }
 
+const triggerFolderInput = () => {
+  folderInput.value.click()
+}
+
+const handleFolderUpload = async (event) => {
+  const files = Array.from(event.target.files)
+  event.target.value = ''
+  if (!files.length) return
+
+  // --- Collect all unique folder names from the tree ---
+  const folderSet = new Set()
+  for (const file of files) {
+    const parts = file.webkitRelativePath.split('/')
+    for (let depth = 1; depth < parts.length; depth++) {
+      folderSet.add(parts.slice(0, depth).join('/'))
+    }
+  }
+
+  const sortedFolderPaths = [...folderSet].sort(
+    (a, b) => a.split('/').length - b.split('/').length
+  )
+
+  // --- Pre-flight 1: invalid characters ---
+  const invalidNames = sortedFolderPaths
+    .map(relPath => {
+      const name = relPath.split('/').pop()
+      const bad = invalidCharsOf(name)
+      return bad ? { relPath, name, bad } : null
+    })
+    .filter(Boolean)
+
+  if (invalidNames.length > 0) {
+    const lines = [
+      'Les dossiers suivants contiennent des caractères interdits :',
+      ...invalidNames.map(e => `<strong>${e.relPath}</strong> → caractère(s) interdit(s) : ${e.bad}`),
+      'Caractères autorisés : lettres, chiffres, espaces, <code>-</code> <code>.</code> <code>_</code>'
+    ]
+    showFolderAlert('Noms de dossiers invalides', lines)
+    return
+  }
+
+  // --- Pre-flight 2: conflict with existing folder at current path ---
+  const rootName = files[0].webkitRelativePath.split('/')[0]
+  const hasConflict = fileStore.folders.some(f => f.Name === rootName)
+  if (hasConflict) {
+    showFolderAlert(
+      t('file.folderConflictTitle'),
+      [
+        t('file.folderConflictMsg', { name: rootName }),
+        t('file.folderConflictHint')
+      ]
+    )
+    return
+  }
+
+  // --- Pre-flight 3: storage check ---
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0)
+  const storageLimit = authStore.user?.storage_limit ?? authStore.user?.plan_storage_limit ?? 0
+  const storageUsed = authStore.user?.storage_used ?? authStore.user?.plan_storage_used ?? 0
+  const available = storageLimit - storageUsed
+  if (storageLimit > 0 && totalSize > available) {
+    showFolderAlert('Espace insuffisant', [
+      `Taille du dossier sélectionné : <strong>${formatSize(totalSize)}</strong>`,
+      `Espace disponible : <strong>${formatSize(Math.max(0, available))}</strong>`,
+      'Libérez de l\'espace ou passez à un abonnement supérieur avant de réessayer.'
+    ])
+    return
+  }
+
+  // --- All checks passed — show progress and proceed ---
+  folderProgress.value = { isOpen: true, foldersCreated: 0, foldersTotal: sortedFolderPaths.length, phase: 'folders' }
+  await nextTick() // let Vue render the modal before the loop blocks the event loop
+
+  try {
+    for (let i = 0; i < sortedFolderPaths.length; i++) {
+      const relPath = sortedFolderPaths[i]
+      const segments = relPath.split('/')
+      const folderName = segments[segments.length - 1]
+      const parentRelPath = segments.slice(0, -1).join('/')
+      const base = fileStore.currentPath === '/' ? '' : fileStore.currentPath
+      const parentPath = parentRelPath ? `${base}/${parentRelPath}` : fileStore.currentPath
+      await fileStore.createFolderAtPath(folderName, parentPath)
+      folderProgress.value.foldersCreated = i + 1
+    }
+
+    folderProgress.value.phase = 'queuing'
+
+    const filesByTargetPath = new Map()
+    for (const file of files) {
+      const parts = file.webkitRelativePath.split('/')
+      const relDir = parts.slice(0, -1).join('/')
+      const base = fileStore.currentPath === '/' ? '' : fileStore.currentPath
+      const targetPath = relDir ? `${base}/${relDir}` : fileStore.currentPath
+      if (!filesByTargetPath.has(targetPath)) filesByTargetPath.set(targetPath, [])
+      filesByTargetPath.get(targetPath).push(file)
+    }
+
+    for (const [targetPath, pathFiles] of filesByTargetPath) {
+      await uploadQueueManager.addFiles(pathFiles, targetPath)
+    }
+
+    fileStore.fetchItems(fileStore.currentPath)
+  } catch (error) {
+    console.error('Folder upload failed:', error)
+    showFolderAlert('Erreur lors de l\'upload', [error.response?.data?.error || error.message])
+  } finally {
+    folderProgress.value.isOpen = false
+  }
+}
+
 const createNewFolder = async () => {
   const folderName = await openInputDialog(t('dialogs.rename.newFolderTitle'), '', t('dialogs.rename.newFolderPlaceholder'))
-  if (folderName) {
-    await fileStore.createFolder(folderName)
+  if (!folderName) return;
+
+  if (fileStore.viewMode === 'shared') {
+    const current = fileStore.sharedBreadcrumbs[fileStore.sharedBreadcrumbs.length - 1];
+    await fileStore.createSharedFolder(folderName, current.id);
+  } else {
+    await fileStore.createFolder(folderName);
   }
 }
 
@@ -1350,8 +1646,17 @@ const onDrop = async (e) => {
   isDragging.value = false
   const files = e.dataTransfer.files
   if (files.length > 0) {
-    // Use the new queue manager for multi-file uploads
-    await uploadQueueManager.addFiles(files, fileStore.currentPath)
+    if (fileStore.viewMode === 'shared') {
+      if (!fileStore.sharedPermissions.create) {
+        uiStore.showError("Vous n'avez pas l'autorisation d'ajouter des fichiers dans ce partage.");
+        return;
+      }
+      for (const file of files) {
+        await fileStore.uploadSharedFile(file)
+      }
+    } else {
+      await uploadQueueManager.addFiles(files, fileStore.currentPath)
+    }
   }
 }
 
@@ -1518,17 +1823,223 @@ const onMFACancelled = () => {
   border-color: var(--border-color);
 }
 
-.toolbar {
+.toolbar-bar {
+  position: absolute;
+  inset: 0 1rem 0 1rem;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 1rem;
+  justify-content: space-between;
+  padding: 0 0.75rem;
+  background: var(--card-color);
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+  margin-bottom: 0.8rem;
 }
 
 .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.4rem;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  margin: 0 0.35rem;
+  flex-shrink: 0;
+}
+
+.tb-selection-badge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primary-color);
+  background: var(--hover-background-color);
+  border: 1px solid var(--primary-color);
+  border-radius: 999px;
+  padding: 0.18rem 0.6rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* === Système de boutons toolbar (tb-btn) === */
+.tb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 500;
+  font-family: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  padding: 0.32rem 0.7rem;
+  background: transparent;
+  color: var(--main-text-color);
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.tb-btn svg {
+  flex-shrink: 0;
+}
+
+.tb-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.tb-btn--primary {
+  background: var(--primary-color);
+  color: #fff;
+  border-color: var(--primary-color);
+}
+
+.tb-btn--primary:hover:not(:disabled) {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.tb-btn--ghost {
+  background: transparent;
+  color: var(--secondary-text-color);
+  border-color: var(--border-color);
+}
+
+.tb-btn--ghost:hover:not(:disabled) {
+  background: var(--hover-background-color);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.tb-btn--icon {
+  padding: 0.32rem;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--secondary-text-color);
+  border-radius: 7px;
+  justify-content: center;
+}
+
+.tb-btn--icon:hover:not(:disabled) {
+  background: var(--hover-background-color);
+  color: var(--main-text-color);
+}
+
+.tb-btn--danger {
+  color: var(--error-color) !important;
+}
+
+.tb-btn--danger:hover:not(:disabled) {
+  background: rgba(230, 57, 70, 0.1) !important;
+  color: var(--error-color) !important;
+}
+
+/* Security Tips Button */
+.security-tips-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-left: 0.2rem;
+}
+
+.security-tips-btn {
+  color: var(--secondary-text-color);
+}
+
+.security-tips-btn.is-warning {
+  color: var(--warning-color) !important;
+}
+
+.security-tips-btn.is-warning:hover:not(:disabled) {
+  background: rgba(233, 168, 39, 0.12) !important;
+  color: var(--warning-color) !important;
+}
+
+.security-tips-btn.is-secured {
+  color: var(--success-color) !important;
+}
+
+.security-tips-btn.is-secured:hover:not(:disabled) {
+  background: rgba(42, 157, 143, 0.12) !important;
+  color: var(--success-color) !important;
+}
+
+/* Security Tips Popover */
+.security-tips-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 1500;
+  min-width: 270px;
+  max-width: 360px;
+  background: var(--card-color);
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 0.85rem 1rem;
+}
+
+.tip-popover-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.tip-popover-content.is-warning {
+  cursor: pointer;
+}
+
+.tip-popover-content.is-warning:hover .tip-popover-text {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tip-popover-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.tip-popover-content.is-warning .tip-popover-icon {
+  fill: var(--warning-color);
+}
+
+.tip-popover-content.is-secured .tip-popover-icon {
+  fill: var(--success-color);
+}
+
+.tip-popover-text {
+  font-size: 0.87rem;
+  line-height: 1.45;
+  color: var(--main-text-color);
+}
+
+.tip-popover-text strong {
+  font-weight: 600;
+}
+
+/* Popover entrance animation */
+.popover-fade-enter-active,
+.popover-fade-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.popover-fade-enter-from,
+.popover-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 
 .dashboard-title {
@@ -1600,28 +2111,6 @@ button {
   border-radius: 4px;
   cursor: pointer;
   font-weight: bold;
-}
-
-.btn-add-file {
-  background-color: var(--primary-color);
-  color: white;
-}
-
-.btn-rename {
-  background-color: var(--warning-color);
-  color: var(--main-text-color);
-  margin-right: 0.5rem;
-}
-
-.btn-rename:disabled {
-  background-color: var(--border-color);
-  color: var(--secondary-text-color);
-  cursor: not-allowed;
-}
-
-.btn-download {
-  background-color: var(--primary-color);
-  color: white;
 }
 
 .path-banner button {
@@ -1890,15 +2379,16 @@ button {
 /* Selection Action Bar / Security Tip Bar */
 .selection-gap {
   position: relative;
-  height: 56px;
-  margin: 0 0 0.5rem 0;
+  height: 0;
+  margin: 0;
   transition: all 0.3s ease;
-  z-index: 10;
+  z-index: 500;
   overflow: visible;
 }
 
 .selection-gap.has-content {
-  margin-bottom: 0.5rem;
+  height: 56px;
+  margin: 0 0 0.5rem 0;
 }
 
 .selection-action-bar {
@@ -1967,66 +2457,6 @@ button {
   background: rgba(244, 67, 54, 0.8);
 }
 
-/* Security Tip Bar */
-.security-tip-bar {
-  position: absolute;
-  inset: 0 1rem 0 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem 1rem;
-  background: linear-gradient(135deg, #ff9800 0%, #ff6f00 100%);
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.security-tip-bar:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 3px 12px rgba(255, 152, 0, 0.4);
-}
-
-.security-tip-bar.success {
-  background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
-  cursor: default;
-}
-
-.security-tip-bar.success:hover {
-  transform: none;
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
-}
-
-.tip-content {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex: 1;
-}
-
-.tip-icon {
-  flex-shrink: 0;
-  fill: white;
-  opacity: 0.9;
-}
-
-.tip-text {
-  color: white;
-  font-size: 0.9rem;
-  font-weight: 400;
-}
-
-.tip-text strong {
-  font-weight: 600;
-}
-
-.security-lock {
-  flex-shrink: 0;
-  fill: white;
-  opacity: 0.85;
-  margin-left: 1rem;
-}
 
 /* Selection Bar Animation */
 .selection-bar-enter-active,
@@ -2047,27 +2477,19 @@ button {
 }
 
 @media (max-width: 768px) {
-  .toolbar {
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 0.5rem;
+  .toolbar-bar {
+    padding: 0 0.4rem;
   }
 
   .toolbar-left,
   .toolbar-right {
-    width: 100%;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    gap: 0.2rem;
   }
 
-  .btn-add-file,
-  .btn-rename,
-  .btn-download,
-  .btn-delete {
-    font-size: 0.8rem;
-    padding: 0.4rem 0.75rem;
-    flex: 1;
-    min-width: 80px;
+  .tb-btn:not(.tb-btn--icon) {
+    font-size: 0.75rem;
+    padding: 0.28rem 0.55rem;
   }
 
   .breadcrumbs {
@@ -2079,6 +2501,11 @@ button {
     flex-wrap: wrap;
     gap: 0.4rem;
     padding: 0.5rem;
+  }
+
+  .security-tips-popover {
+    right: -0.5rem;
+    min-width: 220px;
   }
 }
 
@@ -2155,5 +2582,93 @@ button {
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+.folder-conflict-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.folder-conflict-content {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  width: 440px;
+  max-width: 90vw;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.folder-conflict-content h3 {
+  margin: 0 0 12px;
+  color: #c62828;
+  font-size: 1.1rem;
+}
+
+.folder-conflict-content p {
+  margin: 0 0 10px;
+  color: #333;
+  line-height: 1.5;
+}
+
+.folder-conflict-hint {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.folder-conflict-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.btn-conflict-ok {
+  padding: 8px 24px;
+  background-color: #42b983;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.btn-conflict-ok:hover {
+  background-color: #3aa876;
+}
+
+.folder-progress-content {
+  text-align: center;
+}
+
+.progress-phase-label {
+  color: #555;
+  margin-bottom: 16px;
+}
+
+.progress-track {
+  width: 100%;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #42b983;
+  border-radius: 4px;
+  transition: width 0.25s ease;
+}
+
+.progress-counter {
+  font-size: 0.88rem;
+  color: #888;
+  margin: 0;
 }
 </style>

@@ -18,6 +18,12 @@
           </svg>
           <span>{{ t('nav.uploadFile') }}</span>
         </div>
+        <div class="dropdown-item" @click="triggerFolderUpload">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10zm-8-4h2v2h2v-2h2v-2h-2v-2h-2v2h-2z" fill="currentColor"/>
+          </svg>
+          <span>{{ t('file.uploadFolder') }}</span>
+        </div>
         <div class="dropdown-item" @click="triggerCreateFolder">
           <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="currentColor"/>
@@ -136,6 +142,7 @@
   </div>
 
     <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none" multiple />
+    <input type="file" ref="folderInput" @change="handleFolderUpload" style="display: none" webkitdirectory />
     <div class="dialogs">
       <InputDialog
         v-model:isOpen="inputDialog.isOpen"
@@ -158,6 +165,7 @@ import { useFileStore } from '../../stores/files'
 import { useFriendStore } from '../../stores/friends'
 import { useBillingStore } from '../../stores/billing'
 import { uploadQueueManager } from '../../utils/uploadQueueManager'
+import { useUploadStore } from '../../stores/uploads'
 import InputDialog from '../InputDialog.vue'
 import FriendsSidebar from '../FriendsSidebar.vue'
 
@@ -170,6 +178,7 @@ const props = defineProps({
 const authStore = useAuthStore()
 const fileStore = useFileStore()
 const friendStore = useFriendStore()
+const uploadStore = useUploadStore()
 const billingStore = useBillingStore()
 const router = useRouter()
 const route = useRoute()
@@ -177,6 +186,7 @@ const route = useRoute()
 const showNewMenu = ref(false)
 const friendsOpen = ref(true) // Default open or closed
 const fileInput = ref(null)
+const folderInput = ref(null)
 const showAddFriendMenu = ref(false)
 const newFriendId = ref('')
 const showLeftInfo = ref(false)
@@ -294,12 +304,116 @@ const triggerUpload = () => {
   showNewMenu.value = false
 }
 
+const triggerFolderUpload = () => {
+  folderInput.value.click()
+  showNewMenu.value = false
+}
+
 const handleFileUpload = async (event) => {
   const files = event.target.files
   if (files && files.length > 0) {
     // Use the queue manager for multi-file uploads
     await uploadQueueManager.addFiles(files, fileStore.currentPath)
     event.target.value = ''
+  }
+}
+
+const FOLDER_NAME_RE = /^[\p{L}\p{N}\s\-\._'\u2018\u2019]+$/u
+
+const invalidCharsOf = (name) => {
+  const chars = new Set()
+  for (const ch of name) {
+    if (!FOLDER_NAME_RE.test(ch)) {
+      const cp = ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')
+      chars.add(`"${ch}" (U+${cp})`)
+    }
+  }
+  return [...chars].join(', ')
+}
+
+const handleFolderUpload = async (event) => {
+  const files = Array.from(event.target.files)
+  event.target.value = ''
+  if (!files.length) return
+
+  const folderSet = new Set()
+  for (const file of files) {
+    const parts = file.webkitRelativePath.split('/')
+    for (let depth = 1; depth < parts.length; depth++) {
+      folderSet.add(parts.slice(0, depth).join('/'))
+    }
+  }
+
+  const sortedFolderPaths = [...folderSet].sort(
+    (a, b) => a.split('/').length - b.split('/').length
+  )
+
+  // Pre-flight 1: invalid characters
+  const invalidNames = sortedFolderPaths
+    .map(relPath => {
+      const name = relPath.split('/').pop()
+      const bad = invalidCharsOf(name)
+      return bad ? { relPath, name, bad } : null
+    })
+    .filter(Boolean)
+
+  if (invalidNames.length > 0) {
+    const lines = invalidNames.map(e => `${e.relPath} → caractère(s) interdit(s) : ${e.bad}`)
+    alert('Noms de dossiers invalides :\n\n' + lines.join('\n') + '\n\nCaractères autorisés : lettres, chiffres, espaces, - . _')
+    return
+  }
+
+  // Pre-flight 2: conflict
+  const rootName = files[0].webkitRelativePath.split('/')[0]
+  const hasConflict = fileStore.folders.some(f => f.Name === rootName)
+  if (hasConflict) {
+    alert(t('file.folderConflictTitle') + '\n\n' + t('file.folderConflictMsg', { name: rootName }) + '\n' + t('file.folderConflictHint'))
+    return
+  }
+
+  // Pre-flight 3: storage check
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0)
+  const storageLimit = authStore.user?.storage_limit ?? authStore.user?.plan_storage_limit ?? 0
+  const storageUsed = authStore.user?.storage_used ?? authStore.user?.plan_storage_used ?? 0
+  const available = storageLimit - storageUsed
+  if (storageLimit > 0 && totalSize > available) {
+    alert(`Espace insuffisant\n\nTaille du dossier : ${formatSize(totalSize)}\nEspace disponible : ${formatSize(Math.max(0, available))}\n\nLibérez de l'espace ou passez à un abonnement supérieur.`)
+    return
+  }
+
+  try {
+    uploadStore.startFolderCreation(sortedFolderPaths.length)
+    for (let i = 0; i < sortedFolderPaths.length; i++) {
+      const relPath = sortedFolderPaths[i]
+      const segments = relPath.split('/')
+      const folderName = segments[segments.length - 1]
+      const parentRelPath = segments.slice(0, -1).join('/')
+      const base = fileStore.currentPath === '/' ? '' : fileStore.currentPath
+      const parentPath = parentRelPath ? `${base}/${parentRelPath}` : fileStore.currentPath
+      await fileStore.createFolderAtPath(folderName, parentPath)
+      uploadStore.incrementFolderCreation()
+    }
+    uploadStore.endFolderCreation()
+
+    const filesByTargetPath = new Map()
+    for (const file of files) {
+      const parts = file.webkitRelativePath.split('/')
+      const relDir = parts.slice(0, -1).join('/')
+      const base = fileStore.currentPath === '/' ? '' : fileStore.currentPath
+      const targetPath = relDir ? `${base}/${relDir}` : fileStore.currentPath
+      if (!filesByTargetPath.has(targetPath)) filesByTargetPath.set(targetPath, [])
+      filesByTargetPath.get(targetPath).push(file)
+    }
+
+    for (const [targetPath, pathFiles] of filesByTargetPath) {
+      await uploadQueueManager.addFiles(pathFiles, targetPath)
+    }
+
+    fileStore.fetchItems(fileStore.currentPath)
+  } catch (error) {
+    uploadStore.endFolderCreation()
+    console.error('Folder upload failed:', error)
+    alert('Erreur lors de l\'upload du dossier : ' + (error.response?.data?.error || error.message))
   }
 }
 
