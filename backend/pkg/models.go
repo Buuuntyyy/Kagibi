@@ -112,6 +112,7 @@ type FileShare struct {
 	SharedWithUserID string    `bun:"shared_with_user_id,notnull"`
 	EncryptedKey     string    `bun:"encrypted_key,notnull"` // File Key Encrypted with recipient's Public Key
 	Permission       string    `bun:"permission,notnull,default:'read'"`
+	PermDownload     bool      `bun:"perm_download,notnull,default:true"`
 	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 }
 
@@ -121,6 +122,10 @@ type FolderShare struct {
 	SharedWithUserID string    `bun:"shared_with_user_id,notnull"`
 	EncryptedKey     string    `bun:"encrypted_key"` // FolderKey encrypted with Recipient's Public Key
 	Permission       string    `bun:"permission,notnull,default:'read'"`
+	PermDownload     bool      `bun:"perm_download,notnull,default:true"`
+	PermCreate       bool      `bun:"perm_create,notnull,default:false"`
+	PermDelete       bool      `bun:"perm_delete,notnull,default:false"`
+	PermMove         bool      `bun:"perm_move,notnull,default:false"`
 	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 }
 
@@ -185,6 +190,25 @@ type ShareLink struct {
 	ExpiresAt    *time.Time `bun:"expires_at"`            // Optionnel : expiration
 	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	Views        int64      `bun:"views,default:0"`
+	SingleUse    bool       `bun:"single_use,default:false"`   // Link is invalidated after first download
+	UsedAt       *time.Time `bun:"used_at"`                    // Set when a single-use link is consumed
+	PermDownload bool       `bun:"perm_download,default:true"` // Can download files
+	PermCreate   bool       `bun:"perm_create,default:false"`  // Folder: can create files/dirs
+	PermDelete   bool       `bun:"perm_delete,default:false"`  // Folder: can delete files/dirs
+	PermMove     bool       `bun:"perm_move,default:false"`    // Folder: can move files/dirs
+}
+
+// ShareItemOverride stores per-item access restrictions within a shared folder.
+type ShareItemOverride struct {
+	bun.BaseModel `bun:"table:share_item_overrides,alias:sio"`
+
+	ID          int64  `bun:"id,pk,autoincrement" json:"id"`
+	ShareID     int64  `bun:"share_id,notnull" json:"share_id"`
+	ItemPath    string `bun:"item_path,notnull" json:"item_path"`
+	ItemType    string `bun:"item_type,notnull" json:"item_type"`       // "file" | "folder"
+	AccessLevel string `bun:"access_level,notnull" json:"access_level"` // "full" | "readonly" | "none"
+	CanDelete   bool   `bun:"can_delete,notnull,default:true" json:"can_delete"`
+	CanDownload bool   `bun:"can_download,notnull,default:true" json:"can_download"`
 }
 
 type ImportedShare struct {

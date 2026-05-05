@@ -237,6 +237,41 @@ import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LandingNav from '../../components/landing/LandingNav.vue'
 import { sendBaseUrl } from '../../composables/useSubdomain'
+import { useHead } from '@unhead/vue'
+
+useHead({
+  title: 'Kagibi - ' + useI18n().t('landing.home.pageTitle'),
+  meta: [
+    {
+      name: 'description',
+      content: useI18n().t('landing.home.pageDescription')
+    },
+    {
+      property: 'og:title',
+      content: 'Kagibi - ' + useI18n().t('landing.home.pageTitle')
+    },
+    {
+      property: 'og:description',
+      content: useI18n().t('landing.home.pageDescription')
+    },
+    {
+      property: 'og:image',
+      content: '/kagibi-og-image.png'
+    },
+    {
+      name: 'twitter:title',
+      content: 'Kagibi - ' + useI18n().t('landing.home.pageTitle')
+    },
+    {
+      name: 'twitter:description',
+      content: useI18n().t('landing.home.pageDescription')
+    },
+    {
+      name: 'twitter:image',
+      content: '/kagibi-og-image.png'
+    }
+  ]
+})
 
 const { t } = useI18n()
 

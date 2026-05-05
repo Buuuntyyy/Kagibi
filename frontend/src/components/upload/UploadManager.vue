@@ -3,7 +3,7 @@
 
 <template>
   <Transition name="slide-up">
-    <div v-if="uploadStore.showManager && uploadStore.uploadList.length > 0" class="upload-manager">
+    <div v-if="uploadStore.showManager && (uploadStore.uploadList.length > 0 || uploadStore.folderCreation.active)" class="upload-manager">
       <!-- Header -->
       <div class="manager-header" @click="toggleCollapsed">
         <div class="header-left">
@@ -34,7 +34,21 @@
         </div>
       </div>
 
-      <!-- Progress Bar (always visible) -->
+      <!-- Folder Creation Progress -->
+      <div v-if="uploadStore.folderCreation.active" class="folder-creation-banner">
+        <div class="folder-creation-info">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spinning">
+            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+          </svg>
+          <span>Création des répertoires</span>
+          <span class="folder-creation-count">{{ uploadStore.folderCreation.done }}/{{ uploadStore.folderCreation.total }}</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" :style="{ width: folderCreationProgress + '%' }"></div>
+        </div>
+      </div>
+
+      <!-- Upload Progress Bar (always visible when uploading) -->
       <div class="overall-progress" v-if="hasActiveUploads">
         <div class="progress-bar">
           <div class="progress-fill" :style="{ width: uploadStore.overallProgress + '%' }"></div>
@@ -150,16 +164,23 @@ const isCollapsed = ref(false)
 // Computed
 const hasActiveUploads = computed(() => uploadStore.hasActiveUploads)
 
+const folderCreationProgress = computed(() => {
+  const { total, done } = uploadStore.folderCreation
+  return total > 0 ? Math.round((done / total) * 100) : 0
+})
+
 const headerTitle = computed(() => {
   const counts = uploadStore.counts
-  if (counts.active > 0) {
-    return `Upload en cours (${counts.active}/${counts.total})`
+  const remaining = counts.pending + counts.active
+  if (remaining > 0) {
+    return `Upload en cours — ${counts.completed}/${counts.total} (${remaining} restant${remaining > 1 ? 's' : ''})`
   }
   if (counts.failed > 0 && counts.completed === 0) {
     return `${counts.failed} échec${counts.failed > 1 ? 's' : ''}`
   }
   if (counts.completed > 0) {
-    return `${counts.completed} terminé${counts.completed > 1 ? 's' : ''}`
+    const s = counts.failed > 0 ? `, ${counts.failed} échec${counts.failed > 1 ? 's' : ''}` : ''
+    return `${counts.completed} terminé${counts.completed > 1 ? 's' : ''}${s}`
   }
   return `${counts.total} fichier${counts.total > 1 ? 's' : ''}`
 })
@@ -319,6 +340,28 @@ function truncateError(error) {
 
 .btn-cancel:hover {
   color: var(--error-color, #e74c3c);
+}
+
+/* Folder Creation Banner */
+.folder-creation-banner {
+  padding: 8px 16px 10px;
+  background: var(--background-color, #f5f5f5);
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+}
+
+.folder-creation-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--secondary-text-color, #666);
+}
+
+.folder-creation-count {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--primary-color, #3498db);
 }
 
 /* Overall Progress */

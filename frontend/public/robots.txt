@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard/
+Disallow: /login
+
+Sitemap: https://kagibi.cloud/sitemap.xml

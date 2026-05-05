@@ -41,7 +41,7 @@ const inputRef = ref(null)
 
 // Mirrors the backend regex: Unicode letters, numbers, spaces, - . _
 // The `u` flag enables Unicode property escapes (\p{L}, \p{N}).
-const VALID_NAME_RE = /^[\p{L}\p{N}\s\-\._]+$/u
+const VALID_NAME_RE = /^[\p{L}\p{N}\s\-\._'\u2018\u2019]+$/u
 
 const validationError = computed(() => {
   const v = inputValue.value

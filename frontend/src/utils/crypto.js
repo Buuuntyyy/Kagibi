@@ -1,4 +1,5 @@
 import sodium from 'libsodium-wrappers-sumo';
+import { cryptoWorkerPool } from '../workers/cryptoWorkerPool.js';
 
 // ============================================================================
 // NIST SP 800-38D / ANSSI Compliant AES-GCM Configuration
@@ -199,49 +200,13 @@ export async function unwrapMasterKey(wrappedKeyBase64, kek) {
 }
 
 /**
- * Fonction helper pour traiter un chunk via le Worker
- * @param {string} type - 'ENCRYPT' ou 'DECRYPT'
- * @param {ArrayBuffer} chunk - Data to process
- * @param {CryptoKey} key - AES-GCM key
- * @param {number} chunkIndex - Chunk index
- * @param {Uint8Array} baseNonce - 8-byte base nonce (required for ENCRYPT)
+ * Dispatch a chunk to the shared worker pool (no per-chunk thread spawn).
+ * Workers are created once at module load and reused across all calls.
  */
 function processChunkInWorker(type, chunk, key, chunkIndex, baseNonce = null) {
-    return new Promise((resolve, reject) => {
-        const worker = new Worker(new URL('../workers/crypto.worker.js', import.meta.url), { type: 'module' });
-
-        const timeoutId = setTimeout(() => {
-            worker.terminate();
-            reject(new Error('Le traitement du chunk a expiré.'));
-        }, 30000); // 30 secondes timeout (increased for large chunks)
-
-        worker.onmessage = (e) => {
-            clearTimeout(timeoutId);
-            const { type: msgType, encryptedChunk, decryptedChunk, error } = e.data;
-
-            if (msgType === 'ERROR') {
-                reject(new Error(error));
-            } else if (msgType === 'ENCRYPT_SUCCESS' && type === 'ENCRYPT') {
-                resolve(encryptedChunk);
-            } else if (msgType === 'DECRYPT_SUCCESS' && type === 'DECRYPT') {
-                resolve(decryptedChunk);
-            }
-            worker.terminate();// Important : tuer le worker après usage pour libérer la mémoire
-        };
-
-        worker.onerror = (err) => {
-            clearTimeout(timeoutId);
-            reject(new Error(err.message));
-            worker.terminate();
-        }
-
-        // Transfer chunk ownership for zero-copy performance
-        const message = { type, fileChunk: chunk, key, chunkIndex };
-        if (baseNonce) {
-            message.baseNonce = baseNonce;
-        }
-        worker.postMessage(message, [chunk]);
-    });
+    const msg = { type, fileChunk: chunk, key, chunkIndex };
+    if (baseNonce) msg.baseNonce = baseNonce;
+    return cryptoWorkerPool.run(msg, [chunk]);
 }
 
 /**

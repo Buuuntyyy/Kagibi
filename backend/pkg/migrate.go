@@ -173,6 +173,53 @@ func migrateSchemaAlterations(ctx context.Context, db *bun.DB) error {
 		}
 	}
 
+	// Single-use link columns
+	for _, col := range []string{
+		`ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "single_use" BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "used_at" TIMESTAMPTZ`,
+	} {
+		if _, err := db.ExecContext(ctx, col); err != nil {
+			log.Printf("Warning: failed to add single_use/used_at column to share_links: %v", err)
+		}
+	}
+
+	// Share permissions columns
+	for _, col := range []string{
+		`ALTER TABLE "share_links"    ADD COLUMN IF NOT EXISTS "perm_download" BOOLEAN NOT NULL DEFAULT true`,
+		`ALTER TABLE "share_links"    ADD COLUMN IF NOT EXISTS "perm_create"   BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE "share_links"    ADD COLUMN IF NOT EXISTS "perm_delete"   BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE "share_links"    ADD COLUMN IF NOT EXISTS "perm_move"     BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE "file_shares"    ADD COLUMN IF NOT EXISTS "perm_download" BOOLEAN NOT NULL DEFAULT true`,
+		`ALTER TABLE "folder_shares"  ADD COLUMN IF NOT EXISTS "perm_download" BOOLEAN NOT NULL DEFAULT true`,
+		`ALTER TABLE "folder_shares"  ADD COLUMN IF NOT EXISTS "perm_create"   BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE "folder_shares"  ADD COLUMN IF NOT EXISTS "perm_delete"   BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE "folder_shares"  ADD COLUMN IF NOT EXISTS "perm_move"     BOOLEAN NOT NULL DEFAULT false`,
+	} {
+		if _, err := db.ExecContext(ctx, col); err != nil {
+			log.Printf("Warning: failed to add share permission column: %v", err)
+		}
+	}
+
+	// Per-item access overrides within a shared folder
+	_, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "share_item_overrides" (
+		"id"           BIGSERIAL PRIMARY KEY,
+		"share_id"     BIGINT NOT NULL REFERENCES "share_links"("id") ON DELETE CASCADE,
+		"item_path"    VARCHAR NOT NULL,
+		"item_type"    VARCHAR NOT NULL CHECK (item_type IN ('file', 'folder')),
+		"access_level" VARCHAR NOT NULL DEFAULT 'full' CHECK (access_level IN ('full', 'readonly', 'none')),
+		"can_delete"   BOOLEAN NOT NULL DEFAULT true,
+		"can_download" BOOLEAN NOT NULL DEFAULT true,
+		UNIQUE("share_id", "item_path")
+	);`)
+	if err != nil {
+		log.Printf("Warning: failed to create share_item_overrides table: %v", err)
+	}
+
+	// can_download added to share_item_overrides after initial table creation
+	if _, err := db.ExecContext(ctx, `ALTER TABLE "share_item_overrides" ADD COLUMN IF NOT EXISTS "can_download" BOOLEAN NOT NULL DEFAULT true`); err != nil {
+		log.Printf("Warning: failed to add can_download column to share_item_overrides: %v", err)
+	}
+
 	// The original p2p_signals_signal_type_check constraint omitted 'reject' and 'p2p_ping'.
 	// Drop it and replace with the full allowed set so reject signals can be stored.
 	_, err = db.ExecContext(ctx, `ALTER TABLE "p2p_signals" DROP CONSTRAINT IF EXISTS "p2p_signals_signal_type_check"`)

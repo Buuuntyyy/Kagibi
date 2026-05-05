@@ -53,6 +53,7 @@ func CreateInviteHandler(db *bun.DB) gin.HandlerFunc {
 			FileSize       int64  `json:"file_size" binding:"required"`
 			TransferID     string `json:"transfer_id" binding:"required"`
 			SendEmail      bool   `json:"send_email"`
+			EmailLang      string `json:"email_lang"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -121,8 +122,12 @@ func CreateInviteHandler(db *bun.DB) gin.HandlerFunc {
 		}
 
 		if req.SendEmail && req.RecipientEmail != "" {
+			lang := req.EmailLang
+			if lang != "en" && lang != "fr" {
+				lang = "fr"
+			}
 			go func() {
-				if err := mailer.SendP2PInvite(req.RecipientEmail, sender.Name, req.FileName, req.FileSize, token); err != nil {
+				if err := mailer.SendP2PInvite(req.RecipientEmail, sender.Name, req.FileName, req.FileSize, token, lang); err != nil {
 					log.Printf("[P2P] Invite email failed to %s: %v", req.RecipientEmail, err)
 				}
 			}()

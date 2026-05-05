@@ -13,14 +13,23 @@ import { useUploadStore, UploadStatus } from '../stores/uploads'
 import { useFileStore } from '../stores/files'
 import { useAuthStore } from '../stores/auth'
 import { MultipartUploadManager, PART_SIZE, UploadState } from './multipartUpload'
-import { encryptChunkWorker, generateBaseNonce } from './crypto'
+import { encryptChunkWorker, generateBaseNonce, NONCE_LENGTH, TAG_LENGTH_BYTES } from './crypto'
 import { generateMasterKey, wrapMasterKey, deriveKeyFromToken } from './crypto'
 import { generatePreview } from './previewGenerator'
 import api from '../api'
 
-// Configuration
-const MAX_CONCURRENT_FILES = 3
-const ENCRYPTION_PROGRESS_WEIGHT = 0.3 // 30% of progress is encryption
+const MB = 1024 * 1024
+
+/**
+ * Return the max number of concurrent uploads based on the next file's size.
+ * Smaller files tolerate more parallelism; large files saturate bandwidth alone.
+ */
+function getConcurrencyLimit(fileSize) {
+  if (fileSize < 1 * MB)   return 15  // tiny files  < 1 MB
+  if (fileSize < 10 * MB)  return 8   // small files < 10 MB
+  if (fileSize < 100 * MB) return 3   // medium      < 100 MB
+  return 1                             // large files ≥ 100 MB
+}
 
 /**
  * Upload Queue Manager - Singleton Service
@@ -90,7 +99,9 @@ class UploadQueueManager {
 
     while (true) {
       const activeCount = uploadStore.getActiveCount()
-      const availableSlots = MAX_CONCURRENT_FILES - activeCount
+      const nextPending = uploadStore.getNextPending()
+      const maxConcurrent = getConcurrencyLimit(nextPending?.fileSize ?? nextPending?.file?.size ?? 0)
+      const availableSlots = maxConcurrent - activeCount
 
       if (availableSlots <= 0) {
         await this.sleep(100)
@@ -151,35 +162,38 @@ class UploadQueueManager {
   }
 
   /**
-   * Encrypt all chunks of a file and return the encrypted blobs array.
+   * Async generator: yields encrypted Blobs one at a time, checking for cancellation
+   * between chunks. Keeps only one plaintext chunk in memory at a time.
+   * Empty files (0 bytes) yield a single 28-byte blob (AES-GCM nonce + auth tag, no ciphertext).
    */
-  async encryptFileChunks(uploadStore, id, file, fileKey) {
-    const totalParts = Math.ceil(file.size / PART_SIZE)
-    const encryptedChunks = []
+  async *_encryptChunksGen(file, fileKey, uploadStore, id) {
     const baseNonce = generateBaseNonce()
+
+    if (file.size === 0) {
+      yield await encryptChunkWorker(new ArrayBuffer(0), fileKey, 0, baseNonce)
+      return
+    }
+
     let offset = 0
     let chunkIndex = 0
     while (offset < file.size) {
       const currentUpload = uploadStore.uploads.get(id)
       if (currentUpload?.status === UploadStatus.CANCELLED) throw new Error('Upload cancelled')
       const chunkArrayBuffer = await file.slice(offset, offset + PART_SIZE).arrayBuffer()
-      encryptedChunks.push(await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex, baseNonce))
+      yield await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex, baseNonce)
       offset += PART_SIZE
       chunkIndex++
-      const encryptProgress = Math.round((chunkIndex / totalParts) * ENCRYPTION_PROGRESS_WEIGHT * 100)
-      uploadStore.setProgress(id, encryptProgress, 0)
     }
-    return encryptedChunks
   }
 
   /**
    * Create a MultipartUploadManager wired to uploadStore progress updates.
+   * Upload progress (0–100%) maps to overall progress 0–95%; the last 5% is the complete call.
    */
   createUploadManager(uploadStore, id) {
     return new MultipartUploadManager({
       onProgress: (percent, uploaded) => {
-        const uploadProgress = ENCRYPTION_PROGRESS_WEIGHT * 100 + (percent * (1 - ENCRYPTION_PROGRESS_WEIGHT - 0.05))
-        uploadStore.setProgress(id, Math.round(uploadProgress), uploaded)
+        uploadStore.setProgress(id, Math.round(percent * 0.95), uploaded)
       },
       onStateChange: (state) => {
         if (state === UploadState.FAILED) uploadStore.setStatus(id, UploadStatus.FAILED)
@@ -210,18 +224,22 @@ class UploadQueueManager {
       const encryptedFileKey = await wrapMasterKey(fileKey, authStore.masterKey)
       const shareKeysMap = await this.buildShareKeysMap(fileKey, targetPath)
 
-      uploadStore.setStatus(id, UploadStatus.ENCRYPTING)
-      const encryptedChunks = await this.encryptFileChunks(uploadStore, id, file, fileKey)
-      const totalEncryptedSize = encryptedChunks.reduce((sum, c) => sum + (c.size || c.byteLength || 0), 0)
+      // Pre-calculate encrypted size: AES-GCM adds exactly (nonce + tag) per chunk.
+      // Empty files produce 1 chunk of 28 bytes (nonce + auth tag, zero ciphertext).
+      const totalParts = file.size === 0 ? 1 : Math.ceil(file.size / PART_SIZE)
+      const totalEncryptedSize = file.size + totalParts * (NONCE_LENGTH + TAG_LENGTH_BYTES)
       uploadStore.updateUpload(id, { encryptedSize: totalEncryptedSize, totalBytes: totalEncryptedSize })
 
       uploadStore.setStatus(id, UploadStatus.UPLOADING)
       const manager = this.createUploadManager(uploadStore, id)
       uploadStore.updateUpload(id, { manager })
 
+      // Initiate multipart upload (gets all presigned URLs upfront, no backend change needed)
       await manager.initiate(file.name, targetPath, 'application/octet-stream', totalEncryptedSize, encryptedFileKey)
-      const completedParts = await manager.uploadParts(encryptedChunks)
-      encryptedChunks.length = 0
+
+      // Pipeline: encrypt chunk N and upload it immediately, without waiting for the rest
+      const chunkGen = this._encryptChunksGen(file, fileKey, uploadStore, id)
+      const completedParts = await manager.uploadPartsStreamed(chunkGen)
 
       uploadStore.setStatus(id, UploadStatus.COMPLETING)
       uploadStore.setProgress(id, 95, totalEncryptedSize)
@@ -271,22 +289,23 @@ class UploadQueueManager {
     const encryptedFileKey = await wrapMasterKey(fileKey, masterKey)
     
     // Encrypt
-    const totalParts = Math.ceil(file.size / PART_SIZE)
     const encryptedChunks = []
     const baseNonce = generateBaseNonce()
-    
-    let offset = 0
-    let chunkIndex = 0
-    
-    while (offset < file.size) {
-      const chunkBlob = file.slice(offset, offset + PART_SIZE)
-      const chunkArrayBuffer = await chunkBlob.arrayBuffer()
-      const encryptedChunkBlob = await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex, baseNonce)
-      encryptedChunks.push(encryptedChunkBlob)
-      offset += PART_SIZE
-      chunkIndex++
+
+    if (file.size === 0) {
+      encryptedChunks.push(await encryptChunkWorker(new ArrayBuffer(0), fileKey, 0, baseNonce))
+    } else {
+      let offset = 0
+      let chunkIndex = 0
+      while (offset < file.size) {
+        const chunkBlob = file.slice(offset, offset + PART_SIZE)
+        const chunkArrayBuffer = await chunkBlob.arrayBuffer()
+        encryptedChunks.push(await encryptChunkWorker(chunkArrayBuffer, fileKey, chunkIndex, baseNonce))
+        offset += PART_SIZE
+        chunkIndex++
+      }
     }
-    
+
     const totalEncryptedSize = encryptedChunks.reduce((sum, chunk) => sum + (chunk.size || 0), 0)
     
     // Upload
