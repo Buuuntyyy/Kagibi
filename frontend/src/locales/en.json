@@ -290,7 +290,8 @@
         "connecting": "Connecting to the network…",
         "waiting": "Waiting for the sender to start the transfer…",
         "transferring": "Transfer in progress…",
-        "done": "Transfer complete! Redirecting…",
+        "done": "Transfer complete!",
+        "leave": "Return to Kagibi",
         "error": "An error occurred. Please try the link again."
       }
     }

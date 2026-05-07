@@ -73,6 +73,11 @@
               <span class="guest-pct">{{ p2pStore.activeTransfer.progress }}%</span>
             </div>
 
+            <!-- Manual leave button once transfer is complete -->
+            <button v-if="guestState === 'done'" @click="guestLeave" class="btn btn-secondary guest-done-btn">
+              {{ t('p2p.invite.guest.leave') }}
+            </button>
+
             <p class="guest-privacy-note">
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               End-to-end encrypted · No account required · Powered by Kagibi
@@ -324,17 +329,18 @@ watch(() => p2pStore.incomingOffer, async (offer) => {
   await p2pStore.acceptTransfer()
 })
 
-// Watch for transfer completing (guest flow: redirect)
+// Watch for transfer completing (guest flow)
 watch(() => p2pStore.activeTransfer?.status, (status) => {
   if (!isGuestMode.value) return
   if (status === 'Complete' || status === 'Done') {
     guestState.value = 'done'
-    setTimeout(() => {
-      authClient.clearGuestToken()
-      window.location.href = 'https://kagibi.cloud'
-    }, 3000)
   }
 })
+
+function guestLeave() {
+  authClient.clearGuestToken()
+  window.location.href = 'https://kagibi.cloud'
+}
 
 async function guestAutoAuth(inviteToken) {
   guestError.value = ''
@@ -880,6 +886,11 @@ const startTransfer = async () => {
   color: var(--text-secondary, var(--secondary-text-color));
   min-width: 36px;
   text-align: right;
+}
+
+.guest-done-btn {
+  width: 100%;
+  margin-top: 0.5rem;
 }
 
 .guest-privacy-note {
