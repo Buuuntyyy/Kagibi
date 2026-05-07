@@ -803,7 +803,30 @@ export const useP2PStore = defineStore('p2p', {
         // Only finalise if this invocation is still the active one
         if (!this.activeTransfer || this.activeTransfer.sendGeneration !== myGeneration) return;
 
-        await waitForBuffer();
+        // Drain the send buffer completely before sending EOF — waitForBuffer() only
+        // blocks when bufferedAmount > 8 MB, so up to 8 MB could still be queued here.
+        // We must wait until bufferedAmount reaches 0 (SCTP-acknowledged by the remote).
+        if (dc.readyState === 'open' && dc.bufferedAmount > 0) {
+            await new Promise(resolve => {
+                const done = () => {
+                    dc.removeEventListener('bufferedamountlow', done);
+                    dc.removeEventListener('close', done);
+                    dc.removeEventListener('error', done);
+                    resolve();
+                };
+                dc.bufferedAmountLowThreshold = 0;
+                dc.addEventListener('bufferedamountlow', done);
+                dc.addEventListener('close', done);
+                dc.addEventListener('error', done);
+            });
+        }
+
+        if (!this.activeTransfer || this.activeTransfer.sendGeneration !== myGeneration) return;
+
+        // If the channel closed while draining (connection dropped), do not mark as Done —
+        // the ICE state handler will take over and trigger the resume negotiation.
+        if (dc.readyState !== 'open') return;
+
         try { dc.send(new TextEncoder().encode("EOF")); } catch (_) {}
         this.activeTransfer.status = 'Done';
 
@@ -815,12 +838,15 @@ export const useP2PStore = defineStore('p2p', {
             }
         }, 500);
 
+        // Keep activeTransfer alive long enough for the resume mechanism to complete
+        // if the receiver's connection dropped right at the end of the transfer.
+        // 32 s = 30 s (resume signal timeout) + 2 s margin.
         setTimeout(() => {
             if (this.activeTransfer && this.activeTransfer.sendGeneration === myGeneration) {
                 this.activeTransfer = null;
                 this.stopHeartbeat();
             }
-        }, 2000);
+        }, 32000);
     },
 
     async handleReceiveMessage(event) {
@@ -940,18 +966,14 @@ export const useP2PStore = defineStore('p2p', {
         window.URL.revokeObjectURL(url);
         
         this.activeTransfer.status = 'Complete';
-        
-        // Close PeerConnection after successful reception
+
+        // Close PeerConnection after successful reception; keep activeTransfer alive
+        // so the dialog stays open until the user explicitly closes it.
         setTimeout(() => {
             if (this.activeTransfer && this.activeTransfer.pc && this.activeTransfer.pc.connectionState !== 'closed') {
                 this.activeTransfer.pc.close();
             }
         }, 500);
-        
-        setTimeout(() => {
-            this.activeTransfer = null;
-            this.stopHeartbeat();
-        }, 2000);
     }
   }
 })

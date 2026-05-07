@@ -290,7 +290,8 @@
         "connecting": "Connexion au réseau…",
         "waiting": "En attente que l'expéditeur démarre le transfert…",
         "transferring": "Transfert en cours…",
-        "done": "Transfert terminé ! Redirection…",
+        "done": "Transfert terminé !",
+        "leave": "Retourner sur Kagibi",
         "error": "Une erreur est survenue. Veuillez réessayer via le lien."
       }
     }
