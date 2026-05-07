@@ -234,6 +234,21 @@ watch(() => p2pStore.inviteReady, (ready) => {
   if (ready && showInviteDialog.value) showInviteDialog.value = false
 })
 
+function resetWizard() {
+  selectedFriend.value    = null
+  selectedFile.value      = null
+  inviteMode.value        = false
+  showInviteDialog.value  = false
+  inviteTransferId.value  = ''
+  directLegalConsent.value = false
+}
+
+watch(() => p2pStore.activeTransfer, (current, previous) => {
+  if (!current && previous?.type === 'send' && previous?.status === 'Done') {
+    resetWizard()
+  }
+})
+
 onMounted(async () => {
     friendStore.fetchFriends()
     const token = route.query.invite
@@ -328,8 +343,6 @@ const startTransfer = async () => {
     if (!canSend.value) return
     try {
         await p2pStore.startTransfer(selectedFriend.value, selectedFile.value)
-        // Reset after send? Or keep?
-        // Let's keep for now so user sees feedback or can send again
     } catch (e) {
         console.error("Transfer failed", e)
         alert("Erreur: " + e.message)
