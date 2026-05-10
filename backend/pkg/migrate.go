@@ -38,6 +38,9 @@ func Migrate(db *bun.DB) error {
 	if err := migrateEmailEncryption(ctx, db); err != nil {
 		return err
 	}
+	if err := migrateOrganizationTables(ctx, db); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -96,6 +99,12 @@ func migrateCoreModels(ctx context.Context, db *bun.DB) error {
 		(*P2PSignal)(nil),
 		(*P2PInvite)(nil),
 		(*RealtimeEvent)(nil),
+		(*Organization)(nil),
+		(*OrgMember)(nil),
+		(*OrgInvitation)(nil),
+		(*OrgFolder)(nil),
+		(*OrgFile)(nil),
+		(*OrgFolderPermission)(nil),
 	}
 
 	for _, model := range models {
@@ -489,6 +498,61 @@ func migrateUserSettings(ctx context.Context, db *bun.DB) error {
 		log.Printf("Warning: failed to create idx_security_settings_user_id: %v", err)
 	}
 
+	return nil
+}
+
+func migrateOrganizationTables(ctx context.Context, db *bun.DB) error {
+	// storage_used_bytes added after initial org table creation (Phase 2)
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "storage_used_bytes" BIGINT NOT NULL DEFAULT 0`,
+	); err != nil {
+		log.Printf("Warning: failed to add storage_used_bytes to organizations: %v", err)
+	}
+
+	// Unique membership: one row per (org, user) pair
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_members_org_user ON org_members (org_id, user_id)`,
+	); err != nil {
+		log.Printf("Warning: failed to create org_members unique index: %v", err)
+	}
+
+	// Unique file path per org (prevents duplicate paths in same org)
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_files_org_path ON org_files (org_id, path) WHERE deleted_at IS NULL`,
+	); err != nil {
+		log.Printf("Warning: failed to create org_files unique path index: %v", err)
+	}
+
+	// Unique folder path per org
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_folders_org_path ON org_folders (org_id, path) WHERE deleted_at IS NULL`,
+	); err != nil {
+		log.Printf("Warning: failed to create org_folders unique path index: %v", err)
+	}
+
+	// Unique permission override per (org, user, folder_path)
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_permissions ON org_folder_permissions (org_id, user_id, folder_path)`,
+	); err != nil {
+		log.Printf("Warning: failed to create org_folder_permissions unique index: %v", err)
+	}
+
+	for _, idx := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_organizations_owner_id       ON organizations (owner_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_members_org_id           ON org_members (org_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_members_user_id          ON org_members (user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_invitations_org_id       ON org_invitations (org_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_invitations_token        ON org_invitations (token)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_invitations_target       ON org_invitations (target_user_id) WHERE target_user_id IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_org_files_org_folder         ON org_files (org_id, folder_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_files_uploaded_by        ON org_files (uploaded_by)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_folders_org_parent       ON org_folders (org_id, parent_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_folder_perms_org_user    ON org_folder_permissions (org_id, user_id)`,
+	} {
+		if _, err := db.ExecContext(ctx, idx); err != nil {
+			log.Printf("Warning: failed to create org index: %v", err)
+		}
+	}
 	return nil
 }
 

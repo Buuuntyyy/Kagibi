@@ -10,6 +10,8 @@ import TermsOfService from '../views/TermsOfService.vue'
 import PrivacyPolicy from '../views/PrivacyPolicy.vue'
 import Credits from '../views/Credits.vue'
 import FriendsView from '../views/FriendsView.vue'
+import OrganizationsView from '../views/OrganizationsView.vue'
+import OrgDetailView from '../views/OrgDetailView.vue'
 import P2PView from '../views/P2PView.vue'
 import HomeView from '../views/HomeView.vue'
 import UsageDashboard from '../components/usage/UsageDashboard.vue'
@@ -100,6 +102,16 @@ const routes = [
         path: 'friends',
         name: 'Friends',
         component: FriendsView
+      },
+      {
+        path: 'organizations',
+        name: 'Organizations',
+        component: OrganizationsView
+      },
+      {
+        path: 'organizations/:orgID',
+        name: 'OrgDetail',
+        component: OrgDetailView
       }
     ]
   },
