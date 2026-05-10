@@ -12,6 +12,7 @@ import (
 	"kagibi/backend/handlers/folders"
 	"kagibi/backend/handlers/friends"
 	"kagibi/backend/handlers/keys"
+	orghandlers "kagibi/backend/handlers/organizations"
 	p2phandlers "kagibi/backend/handlers/p2p"
 	"kagibi/backend/handlers/security"
 	"kagibi/backend/handlers/shares"
@@ -67,6 +68,7 @@ func main() {
 	workers.StartAccountCleanupWorker(db) // RGPD Article 17
 
 	friendHandler := friends.NewFriendHandler(db, wshandler.GlobalHub.IsConnected)
+	orgHandler := orghandlers.NewOrgHandler(db)
 	setupPresenceHooks(db)
 
 	metricsServer := monitoring.NewServer(9090)
@@ -77,7 +79,7 @@ func main() {
 	}
 
 	router := setupRouter(redisClient)
-	registerRoutes(router, db, redisClient, provider, friendHandler)
+	registerRoutes(router, db, redisClient, provider, friendHandler, orgHandler)
 	startServerWithGracefulShutdown(router, metricsServer, redisClient)
 }
 
@@ -168,7 +170,7 @@ func setupRouter(redisClient *redis.Client) *gin.Engine {
 	return router
 }
 
-func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, provider authprovider.AuthProvider, friendHandler *friends.FriendHandler) {
+func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, provider authprovider.AuthProvider, friendHandler *friends.FriendHandler, orgHandler *orghandlers.OrgHandler) {
 	api := router.Group("/api/v1")
 
 	// Public auth routes (no JWT required)
@@ -216,6 +218,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	registerFriendRoutes(protected, friendHandler)
 	registerShareRoutes(protected, db)
 	registerSecurityRoutes(protected)
+	registerOrganizationRoutes(protected, orgHandler)
 	registerBillingRoutes(api, protected, authMW, db)
 	registerP2PRoutes(protected, db)
 	registerP2PGuestRoutes(api, db, authMW)
@@ -345,6 +348,54 @@ func registerSecurityRoutes(g *gin.RouterGroup) {
 	securityG := g.Group("/security")
 	securityG.POST("/report", func(c *gin.Context) { security.ReportSecurityEvent(c) })
 	securityG.GET("/events", func(c *gin.Context) { security.GetSecurityEvents(c) })
+}
+
+func registerOrganizationRoutes(g *gin.RouterGroup, h *orghandlers.OrgHandler) {
+	orgsG := g.Group("/orgs")
+
+	// Organization CRUD
+	orgsG.POST("", h.CreateOrg)
+	orgsG.GET("", h.ListOrgs)
+	orgsG.GET("/:orgID", h.GetOrg)
+	orgsG.PATCH("/:orgID", h.UpdateOrg)
+	orgsG.DELETE("/:orgID", h.DeleteOrg)
+
+	// Member management
+	orgsG.GET("/:orgID/members", h.ListMembers)
+	orgsG.PATCH("/:orgID/members/:memberID", h.UpdateMemberRole)
+	orgsG.DELETE("/:orgID/members/:memberID", h.RemoveMember)
+	orgsG.PATCH("/:orgID/members/:memberID/key", h.SetMemberKey)
+
+	// Invitations
+	orgsG.POST("/:orgID/invitations", h.CreateInvitation)
+	orgsG.GET("/:orgID/invitations", h.ListInvitations)
+	orgsG.DELETE("/:orgID/invitations/:invID", h.RevokeInvitation)
+
+	// Shared file system — listing and folders
+	orgsG.GET("/:orgID/fs/list/*path", h.ListOrgItems)
+	orgsG.POST("/:orgID/fs/folder", h.CreateOrgFolder)
+	orgsG.DELETE("/:orgID/fs/folder/:folderID", h.DeleteOrgFolder)
+
+	// Shared file system — files
+	orgsG.GET("/:orgID/fs/file/:fileID/download", h.DownloadOrgFile)
+	orgsG.GET("/:orgID/fs/file/:fileID/key", h.GetOrgFileKey)
+	orgsG.DELETE("/:orgID/fs/file/:fileID", h.DeleteOrgFile)
+
+	// Shared file system — multipart upload
+	orgsG.POST("/:orgID/fs/multipart/initiate", h.InitiateOrgMultipart)
+	orgsG.POST("/:orgID/fs/multipart/complete", h.CompleteOrgMultipart)
+	orgsG.POST("/:orgID/fs/multipart/abort", h.AbortOrgMultipart)
+
+	// Folder permission overrides
+	orgsG.GET("/:orgID/permissions", h.ListPermissions)
+	orgsG.PUT("/:orgID/permissions", h.SetPermission)
+	orgsG.DELETE("/:orgID/permissions", h.DeletePermission)
+	orgsG.GET("/:orgID/permissions/me", h.GetMyPermission)
+
+	// Token-based join routes — no orgID in URL, token carries the context
+	joinG := g.Group("/org-invitations")
+	joinG.GET("/:token", h.GetInvitation)
+	joinG.POST("/:token/accept", h.AcceptInvitation)
 }
 
 func p2pSignalHandler(db *bun.DB) gin.HandlerFunc {
