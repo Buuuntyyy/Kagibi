@@ -55,6 +55,7 @@
                             <div class="friends-grid">
                                 <div v-if="onlineFriends.length === 0" class="no-friends">
                                     {{ t('p2p.noOnlineFriends') }}
+                                    <router-link to="/dashboard/friends" class="friends-page-link">{{ t('friends.myFriends') }} →</router-link>
                                 </div>
                                 <template v-else>
                                     <div
@@ -250,7 +251,14 @@ watch(() => p2pStore.activeTransfer, (current, previous) => {
 })
 
 onMounted(async () => {
-    friendStore.fetchFriends()
+    await friendStore.fetchFriends()
+
+    const friendId = route.query.friendId
+    if (friendId) {
+      const friend = friendStore.acceptedFriends.find(f => String(f.id) === String(friendId))
+      if (friend) selectedFriend.value = friend
+    }
+
     const token = route.query.invite
     if (token) {
       await loadInvite(token)
@@ -632,6 +640,20 @@ const startTransfer = async () => {
 @media (max-width: 768px) {
   .dashboard-container {
     padding-bottom: 64px; /* space for bottom nav */
+    flex-direction: column;
+  }
+
+  .main-content {
+    overflow-y: auto;
+    border-radius: 0;
+  }
+
+  .p2p-page {
+    min-height: unset;
+  }
+
+  .p2p-container {
+    overflow-y: unset;
   }
 }
 
@@ -656,6 +678,18 @@ const startTransfer = async () => {
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+
+.friends-page-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+.friends-page-link:hover {
+  text-decoration: underline;
 }
 
 .invite-option-chip {

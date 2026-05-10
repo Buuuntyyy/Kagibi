@@ -975,6 +975,39 @@ input:checked + .slider:before {
   width: 90%;
 }
 
+@media (max-width: 600px) {
+  .mfa-status-header {
+    flex-wrap: wrap;
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+
+  .btn-enable-mfa {
+    width: 100%;
+  }
+
+  .restrictions-summary {
+    padding: 1rem;
+  }
+
+  .restrictions-content {
+    padding: 0 1rem 1rem 1rem;
+  }
+
+  .restriction-item {
+    padding: 0.875rem;
+  }
+
+  .mfa-danger-zone {
+    margin-top: 1rem;
+    padding-top: 1rem;
+  }
+
+  .btn-disable-mfa {
+    width: 100%;
+  }
+}
+
 .modal-content h4 {
   margin: 0 0 1rem 0;
   color: var(--main-text-color);

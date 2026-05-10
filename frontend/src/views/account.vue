@@ -920,7 +920,9 @@ const executeDeleteAccount = async () => {
   background-color: var(--background-color);
   height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   box-sizing: border-box;
+  max-width: 100%;
 }
 
 .page-header {
@@ -1040,13 +1042,16 @@ const executeDeleteAccount = async () => {
   align-items: start;
 }
 
+@media (min-width: 901px) {
+  .user-card {
+    position: sticky;
+    top: 2rem;
+  }
+}
+
 @media (max-width: 900px) {
   .content-grid {
     grid-template-columns: 1fr;
-  }
-
-  .user-card {
-    position: static;
   }
 }
 
@@ -1071,9 +1076,19 @@ const executeDeleteAccount = async () => {
     padding: 1.25rem;
   }
 
+  .section-header,
+  .section-body {
+    padding: 1rem;
+  }
+
   .form-row {
     flex-direction: column;
+    align-items: stretch;
     gap: 0.75rem;
+  }
+
+  .form-row .input-group {
+    width: 100%;
   }
 
   .form-row button {
@@ -1082,6 +1097,32 @@ const executeDeleteAccount = async () => {
 
   .password-form {
     gap: 0.75rem;
+  }
+
+  .password-row {
+    flex-direction: column;
+  }
+
+  .danger-zone-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .danger-zone-item .btn-danger-outline {
+    width: 100%;
+  }
+
+  .form-actions {
+    justify-content: stretch;
+  }
+
+  .form-actions button,
+  .portability-actions button {
+    width: 100%;
+  }
+
+  .portability-actions {
+    justify-content: stretch;
   }
 }
 
@@ -1095,8 +1136,6 @@ const executeDeleteAccount = async () => {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  position: sticky;
-  top: 2rem;
 }
 
 .avatar-container {
@@ -1238,6 +1277,8 @@ input {
   color: var(--main-text-color);
   font-size: 1rem;
   transition: border-color 0.2s;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 input:focus {
