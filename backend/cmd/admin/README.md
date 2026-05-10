@@ -6,6 +6,14 @@
 
 ---
 
+> **Note sur le modèle d'exécution / Note on the execution model**
+>
+> 🇫🇷 Kagibi est un SaaS multi-tenant que *vous* hébergez pour vos clients — vous avez naturellement accès aux pods/conteneurs. Le CLI s'exécute donc directement dedans, exactement comme `occ` dans Nextcloud.
+>
+> 🇬🇧 Kagibi is a multi-tenant SaaS that *you* host for your clients — you naturally have access to the pods/containers. The CLI therefore runs directly inside them, exactly like `occ` in Nextcloud.
+
+---
+
 ## Français
 
 Outil en ligne de commande à usage interne pour provisionner les organisations clientes.  
@@ -126,6 +134,70 @@ Demande une confirmation interactive (`oui` pour valider). Passer `--yes` pour b
 **Ce que fait la commande :** révoque toutes les invitations actives, supprime tous les membres, puis supprime l'organisation (soft-delete).
 
 > Les fichiers stockés sur S3 ne sont **pas** supprimés automatiquement. Nettoyez-les manuellement via la console S3 ou AWS CLI si nécessaire.
+
+---
+
+### Exécution en production
+
+Le binaire `admin` est compilé dans la même image que le serveur backend. Trois approches sont disponibles selon l'environnement.
+
+#### Directement dans le pod (style `occ` Nextcloud)
+
+La plus simple. Vous avez accès au pod, vous l'utilisez.
+
+```bash
+# Kubernetes
+kubectl exec -it deploy/kagibi-backend -- \
+  /app/admin org create --name "Acme Corp" --quota 51200 --owner-email cto@acme.com
+
+# Docker Compose
+docker compose exec backend \
+  /app/admin org create --name "Acme Corp" --quota 51200 --owner-email cto@acme.com
+
+# Docker seul
+docker exec kagibi-backend \
+  /app/admin org create --name "Acme Corp" --quota 51200 --owner-email cto@acme.com
+```
+
+Les variables d'environnement (`DATABASE_URL`, `MAIL_*`, etc.) sont déjà présentes dans le conteneur — aucune configuration supplémentaire.
+
+#### Job éphémère (recommandé sur Kubernetes)
+
+Le conteneur démarre, exécute la commande, et s'autodétruit. Traçable dans les logs k8s.
+
+```bash
+kubectl create job provision-acme \
+  --image=registry.example.com/kagibi-backend:latest \
+  -- /app/admin org create --name "Acme Corp" --quota 51200 --owner-email cto@acme.com
+```
+
+#### En local avec tunnel (hors cluster)
+
+Compilez le CLI pour Linux et lancez-le depuis votre machine en redirigeant la connexion base de données.
+
+```bash
+# Compilation cross-platform
+GOOS=linux GOARCH=amd64 go build -o admin ./cmd/admin
+
+# Tunnel vers la base via kubectl ou un bastion
+kubectl port-forward svc/postgres 5432:5432
+
+# Exécution locale
+DATABASE_URL="postgresql://user:pass@localhost:5432/kagibi" \
+APP_URL="https://kagibi.cloud" \
+  ./admin org create --name "Acme Corp" --quota 51200 --owner-email cto@acme.com
+```
+
+#### Intégration dans le Dockerfile
+
+Pour que le binaire soit disponible dans l'image, ajoutez une ligne à votre `Dockerfile` :
+
+```dockerfile
+RUN go build -o /app/server ./cmd/server
+RUN go build -o /app/admin  ./cmd/admin   # ← ajouter cette ligne
+```
+
+Les deux binaires cohabitent dans la même image. Le serveur est lancé par défaut (`CMD ["/app/server"]`), le CLI n'est invoqué qu'à la demande.
 
 ---
 
@@ -262,6 +334,70 @@ Prompts for interactive confirmation (`oui` to confirm). Pass `--yes` to skip (s
 **What it does:** revokes all active invitations, removes all members, then soft-deletes the organisation.
 
 > Files stored on S3 are **not** deleted automatically. Clean them up manually via the S3 console or AWS CLI if needed.
+
+---
+
+### Running in production
+
+The `admin` binary is compiled into the same image as the backend server. Three approaches are available depending on your environment.
+
+#### Directly inside the pod (Nextcloud `occ` style)
+
+The simplest approach. You have access to the pod, you use it.
+
+```bash
+# Kubernetes
+kubectl exec -it deploy/kagibi-backend -- \
+  /app/admin org create --name "Acme Corp" --quota 51200 --owner-email cto@acme.com
+
+# Docker Compose
+docker compose exec backend \
+  /app/admin org create --name "Acme Corp" --quota 51200 --owner-email cto@acme.com
+
+# Docker standalone
+docker exec kagibi-backend \
+  /app/admin org create --name "Acme Corp" --quota 51200 --owner-email cto@acme.com
+```
+
+Environment variables (`DATABASE_URL`, `MAIL_*`, etc.) are already present in the container — no additional configuration needed.
+
+#### Ephemeral Job (recommended on Kubernetes)
+
+The container starts, runs the command, and self-destructs. Fully traceable in k8s logs.
+
+```bash
+kubectl create job provision-acme \
+  --image=registry.example.com/kagibi-backend:latest \
+  -- /app/admin org create --name "Acme Corp" --quota 51200 --owner-email cto@acme.com
+```
+
+#### Locally with a tunnel (outside the cluster)
+
+Build the CLI for Linux and run it from your machine by forwarding the database connection.
+
+```bash
+# Cross-platform build
+GOOS=linux GOARCH=amd64 go build -o admin ./cmd/admin
+
+# Tunnel to the database via kubectl or a bastion
+kubectl port-forward svc/postgres 5432:5432
+
+# Local execution
+DATABASE_URL="postgresql://user:pass@localhost:5432/kagibi" \
+APP_URL="https://kagibi.cloud" \
+  ./admin org create --name "Acme Corp" --quota 51200 --owner-email cto@acme.com
+```
+
+#### Dockerfile integration
+
+To include the binary in your image, add one line to your `Dockerfile`:
+
+```dockerfile
+RUN go build -o /app/server ./cmd/server
+RUN go build -o /app/admin  ./cmd/admin   # ← add this line
+```
+
+Both binaries coexist in the same image. The server is launched by default (`CMD ["/app/server"]`); the CLI is only invoked on demand.
 
 ---
 
