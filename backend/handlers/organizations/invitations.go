@@ -273,6 +273,14 @@ func (h *OrgHandler) AcceptInvitation(c *gin.Context) {
 		return
 	}
 
+	// When an admin-provisioned org is claimed, promote the accepting user to owner_id.
+	if inv.Role == "owner" {
+		_, _ = h.DB.NewUpdate().Model((*pkg.Organization)(nil)).
+			Set("owner_id = ?", userID).
+			Where("id = ? AND owner_id = 'pending'", inv.OrgID).
+			Exec(ctx)
+	}
+
 	_, _ = h.DB.NewUpdate().Model((*pkg.OrgInvitation)(nil)).
 		Set("uses = uses + 1").
 		Where("id = ?", inv.ID).
