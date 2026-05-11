@@ -226,6 +226,10 @@ func (h *OrgHandler) GetInvitation(c *gin.Context) {
 // AcceptInvitation adds the authenticated caller as a member of the org.
 func (h *OrgHandler) AcceptInvitation(c *gin.Context) {
 	userID := c.GetString("user_id")
+	if !h.hasOrgAccess(userID) {
+		c.JSON(http.StatusPaymentRequired, gin.H{"error": "organizations require a paid plan on the cloud"})
+		return
+	}
 	token := c.Param("token")
 
 	var req struct {

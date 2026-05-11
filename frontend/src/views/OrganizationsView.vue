@@ -5,58 +5,106 @@
   <div class="orgs-container">
     <div class="header">
       <h2>{{ t('orgs.title') }}</h2>
-      <button class="btn-primary" @click="showCreateModal = true">
+      <button v-if="isPremium" class="btn-primary" @click="showCreateModal = true">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
         {{ t('orgs.createOrg') }}
       </button>
     </div>
 
-    <div v-if="orgStore.loading" class="loading-state">
+    <!-- Billing status loading (and initial fetch) -->
+    <div v-if="!billingReady" class="loading-state">
       <div class="spinner"></div>
       <span>{{ t('common.loading') }}</span>
     </div>
 
-    <div v-else-if="orgStore.error" class="error-state">
-      <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor" class="error-icon"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-      <p>{{ orgStore.error }}</p>
-    </div>
-
-    <div v-else-if="orgStore.orgs.length === 0" class="empty-state">
-      <div class="empty-icon">
-        <svg viewBox="0 0 24 24" width="64" height="64" fill="currentColor"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>
-      </div>
-      <h3>{{ t('orgs.noOrgs') }}</h3>
-      <p>{{ t('orgs.noOrgsDesc') }}</p>
-      <button class="btn-primary" @click="showCreateModal = true">{{ t('orgs.createOrg') }}</button>
-    </div>
-
-    <div v-else class="orgs-grid">
-      <div
-        v-for="org in orgStore.orgs"
-        :key="org.id"
-        class="org-card"
-        @click="router.push(`/dashboard/organizations/${org.id}`)"
-      >
-        <div class="org-card-header">
-          <div class="org-avatar">{{ org.name.charAt(0).toUpperCase() }}</div>
-          <div class="org-info">
-            <h3 class="org-name">{{ org.name }}</h3>
-            <p class="org-desc">{{ org.description || '—' }}</p>
-          </div>
-          <div class="role-badge" :class="org.my_role">{{ t(`orgs.${org.my_role}`) }}</div>
+    <!-- Paywall — cloud + free plan -->
+    <div v-else-if="!isPremium" class="paywall-wrapper">
+      <div class="paywall-card">
+        <div class="paywall-icon-wrap">
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>
         </div>
 
-        <div class="org-storage">
-          <div class="storage-row">
-            <span class="storage-label">{{ t('orgs.storageUsed') }}</span>
-            <span class="storage-value">{{ formatSize(org.storage_used_bytes) }} / {{ formatSize(org.storage_quota_mb * 1024 * 1024) }}</span>
+        <div class="paywall-badge">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+          {{ t('orgs.premiumBadge') }}
+        </div>
+
+        <h3 class="paywall-title">{{ t('orgs.premiumTitle') }}</h3>
+        <p class="paywall-desc">{{ t('orgs.premiumDesc') }}</p>
+
+        <ul class="paywall-features">
+          <li v-for="n in 5" :key="n">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+            {{ t(`orgs.premiumFeature${n}`) }}
+          </li>
+        </ul>
+
+        <button class="btn-upgrade" @click="router.push('/dashboard/account')">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm.99-5C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>
+          {{ t('orgs.upgradeCta') }}
+        </button>
+
+        <p class="paywall-note">{{ t('orgs.upgradeNote') }}</p>
+      </div>
+    </div>
+
+    <!-- Premium users -->
+    <template v-else>
+      <div v-if="orgStore.loading" class="loading-state">
+        <div class="spinner"></div>
+        <span>{{ t('common.loading') }}</span>
+      </div>
+
+      <div v-else-if="orgStore.error" class="error-state">
+        <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor" class="error-icon"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+        <p>{{ orgStore.error }}</p>
+      </div>
+
+      <div v-else-if="orgStore.orgs.length === 0" class="empty-state">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" width="64" height="64" fill="currentColor"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>
+        </div>
+        <h3>{{ t('orgs.noOrgs') }}</h3>
+        <p>{{ t('orgs.noOrgsDesc') }}</p>
+
+        <ul class="empty-features">
+          <li v-for="n in 5" :key="n">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+            {{ t(`orgs.premiumFeature${n}`) }}
+          </li>
+        </ul>
+
+        <button class="btn-primary" @click="showCreateModal = true">{{ t('orgs.createOrg') }}</button>
+      </div>
+
+      <div v-else class="orgs-grid">
+        <div
+          v-for="org in orgStore.orgs"
+          :key="org.id"
+          class="org-card"
+          @click="router.push(`/dashboard/organizations/${org.id}`)"
+        >
+          <div class="org-card-header">
+            <div class="org-avatar">{{ org.name.charAt(0).toUpperCase() }}</div>
+            <div class="org-info">
+              <h3 class="org-name">{{ org.name }}</h3>
+              <p class="org-desc">{{ org.description || '—' }}</p>
+            </div>
+            <div class="role-badge" :class="org.my_role">{{ t(`orgs.${org.my_role}`) }}</div>
           </div>
-          <div class="storage-bar">
-            <div class="storage-fill" :style="{ width: storagePercent(org) + '%', background: storageColor(org) }"></div>
+
+          <div class="org-storage">
+            <div class="storage-row">
+              <span class="storage-label">{{ t('orgs.storageUsed') }}</span>
+              <span class="storage-value">{{ formatSize(org.storage_used_bytes) }} / {{ formatSize(org.storage_quota_mb * 1024 * 1024) }}</span>
+            </div>
+            <div class="storage-bar">
+              <div class="storage-fill" :style="{ width: storagePercent(org) + '%', background: storageColor(org) }"></div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </template>
 
     <!-- Create org modal -->
     <Transition name="modal">
@@ -97,15 +145,25 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useOrgStore } from '../stores/organizations'
+import { useAuthStore } from '../stores/auth'
+import { useBillingStore } from '../stores/billing'
 
 const { t } = useI18n()
 const router = useRouter()
 const orgStore = useOrgStore()
+const authStore = useAuthStore()
+const billingStore = useBillingStore()
 
+// Access gate: self-hosted always allowed; cloud requires paid plan.
+const isPremium = computed(() =>
+  billingStore.isSelfHosted || (authStore.user?.plan ?? 'free') !== 'free'
+)
+
+const billingReady = ref(false)
 const showCreateModal = ref(false)
 const creating = ref(false)
 const createError = ref('')
@@ -116,7 +174,11 @@ const form = ref({
   storageQuotaMB: 10240,
 })
 
-onMounted(() => orgStore.fetchOrgs())
+onMounted(async () => {
+  await billingStore.fetchBillingStatus()
+  billingReady.value = true
+  if (isPremium.value) orgStore.fetchOrgs()
+})
 
 const handleCreate = async () => {
   if (!form.value.name) return
@@ -209,13 +271,123 @@ const storageColor = (org) => {
 
 .btn-secondary:hover { background: var(--hover-background-color); }
 
+/* ── Paywall ── */
+.paywall-wrapper {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
+}
+
+.paywall-card {
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 40px 48px;
+  max-width: 520px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.paywall-icon-wrap {
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.paywall-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  color: var(--primary-color);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 20px;
+  letter-spacing: 0.03em;
+}
+
+.paywall-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--main-text-color);
+  margin: 0;
+}
+
+.paywall-desc {
+  font-size: 0.9rem;
+  color: var(--secondary-text-color);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.paywall-features {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+
+.paywall-features li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.875rem;
+  color: var(--main-text-color);
+}
+
+.paywall-features li svg {
+  color: var(--primary-color);
+  flex-shrink: 0;
+}
+
+.btn-upgrade {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 28px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+.btn-upgrade:hover { opacity: 0.9; }
+.btn-upgrade:active { transform: scale(0.98); }
+
+.paywall-note {
+  font-size: 0.75rem;
+  color: var(--secondary-text-color);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── Empty state ── */
 .loading-state, .error-state, .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 16px;
-  padding: 80px 24px;
+  padding: 60px 24px;
   text-align: center;
   color: var(--secondary-text-color);
 }
@@ -236,6 +408,30 @@ const storageColor = (org) => {
   margin: 0;
   font-size: 0.9rem;
 }
+
+.empty-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 14px 18px;
+}
+
+.empty-features li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--secondary-text-color);
+}
+
+.empty-features li svg { color: var(--primary-color); flex-shrink: 0; }
 
 .error-icon { color: #ef4444; }
 
@@ -260,6 +456,7 @@ const storageColor = (org) => {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Org grid ── */
 .orgs-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -358,7 +555,7 @@ const storageColor = (org) => {
   transition: width 0.3s ease;
 }
 
-/* Modal */
+/* ── Modal ── */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -464,5 +661,6 @@ const storageColor = (org) => {
   .orgs-container { padding: 16px; }
   .orgs-grid { grid-template-columns: 1fr; }
   .header { flex-wrap: wrap; gap: 12px; }
+  .paywall-card { padding: 28px 20px; }
 }
 </style>

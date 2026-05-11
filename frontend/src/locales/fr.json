@@ -614,7 +614,17 @@
     "audit_invitation_created": "Invitation créée",
     "audit_invitation_revoked": "Invitation révoquée",
     "audit_key_rotated": "Clé tournée",
-    "audit_key_provisioned": "Clé provisionnée"
+    "audit_key_provisioned": "Clé provisionnée",
+    "premiumBadge": "Fonctionnalité Premium",
+    "premiumTitle": "Travaillez en équipe en toute sécurité",
+    "premiumDesc": "Les organisations vous permettent de partager des fichiers avec votre équipe, avec un chiffrement de bout en bout et une gestion fine des accès par rôle.",
+    "premiumFeature1": "Stockage partagé chiffré de bout en bout",
+    "premiumFeature2": "Rôles granulaires : propriétaire, admin, membre, lecteur",
+    "premiumFeature3": "Permissions personnalisables par dossier",
+    "premiumFeature4": "Invitations par lien ou directes",
+    "premiumFeature5": "Journal d'audit et rotation des clés",
+    "upgradeCta": "Passer à Pro",
+    "upgradeNote": "Inclus dans tous les abonnements payants · Accès illimité sur les instances auto-hébergées"
   },
   "join": {
     "loading": "Vérification de l'invitation...",

@@ -13,6 +13,10 @@ import (
 
 func (h *OrgHandler) CreateOrg(c *gin.Context) {
 	userID := c.GetString("user_id")
+	if !h.hasOrgAccess(userID) {
+		c.JSON(http.StatusPaymentRequired, gin.H{"error": "organizations require a paid plan on the cloud"})
+		return
+	}
 	var req struct {
 		Name            string `json:"name" binding:"required"`
 		Description     string `json:"description"`
