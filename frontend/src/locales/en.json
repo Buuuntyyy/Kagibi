@@ -614,7 +614,17 @@
     "audit_invitation_created": "Invite created",
     "audit_invitation_revoked": "Invite revoked",
     "audit_key_rotated": "Key rotated",
-    "audit_key_provisioned": "Key provisioned"
+    "audit_key_provisioned": "Key provisioned",
+    "premiumBadge": "Premium Feature",
+    "premiumTitle": "Collaborate as a team, securely",
+    "premiumDesc": "Organizations let you share files with your team, backed by end-to-end encryption and granular role-based access control.",
+    "premiumFeature1": "End-to-end encrypted shared storage",
+    "premiumFeature2": "Granular roles: owner, admin, member, viewer",
+    "premiumFeature3": "Per-folder custom permissions",
+    "premiumFeature4": "Link-based or direct invitations",
+    "premiumFeature5": "Audit log and encryption key rotation",
+    "upgradeCta": "Upgrade to Pro",
+    "upgradeNote": "Included in all paid plans · Unlimited access on self-hosted instances"
   },
   "join": {
     "loading": "Verifying invitation...",

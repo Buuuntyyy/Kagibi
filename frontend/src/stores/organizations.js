@@ -103,10 +103,10 @@ export const useOrgStore = defineStore('organizations', () => {
     const authStore = useAuthStore()
 
     const orgKey = await generateOrgKey()
-    const publicKeyPEM = authStore.user?.public_key
-    if (!publicKeyPEM) throw new Error('Clé publique manquante. Reconnectez-vous.')
+    const rsaPublicKey = authStore.publicKey || authStore.user?.public_key
+    if (!rsaPublicKey) throw new Error('Clé publique manquante. Reconnectez-vous.')
 
-    const encryptedOrgKey = await encryptOrgKeyForUser(orgKey, publicKeyPEM)
+    const encryptedOrgKey = await encryptOrgKeyForUser(orgKey, rsaPublicKey)
 
     const { data } = await api.post('/orgs', {
       name,
@@ -535,9 +535,9 @@ export const useOrgStore = defineStore('organizations', () => {
     orgKeyCache.set(orgID, newOrgKey)
 
     // Update my_encrypted_org_key on currentOrg so next load doesn't re-fetch
-    const myPublicKey = authStore.user?.public_key
-    if (myPublicKey && currentOrg.value) {
-      const myNewKey = await encryptOrgKeyForUser(newOrgKey, myPublicKey)
+    const myRsaKey = authStore.publicKey || authStore.user?.public_key
+    if (myRsaKey && currentOrg.value) {
+      const myNewKey = await encryptOrgKeyForUser(newOrgKey, myRsaKey)
       currentOrg.value = { ...currentOrg.value, my_encrypted_org_key: myNewKey }
     }
   }
@@ -550,15 +550,25 @@ export const useOrgStore = defineStore('organizations', () => {
    */
   async function initializeOrgKey(orgID) {
     const authStore = useAuthStore()
-    if (!authStore.user?.public_key) throw new Error('Clé publique manquante. Reconnectez-vous.')
+    // Prefer the pre-imported CryptoKey so we skip the PEM re-import step,
+    // which can fail with NotSupportedError on some browser/key combinations.
+    const rsaPublicKey = authStore.publicKey || authStore.user?.public_key
+    if (!rsaPublicKey) throw new Error('Clé publique manquante. Reconnectez-vous.')
 
     if (!members.value.length) await fetchMembers(orgID)
     const myID = authStore.user?.id || authStore.user?.user_id
     const myMember = members.value.find(m => m.user_id === myID)
     if (!myMember) throw new Error('Membre introuvable dans cette organisation.')
 
-    const newOrgKey = await generateOrgKey()
-    const encryptedOrgKey = await encryptOrgKeyForUser(newOrgKey, authStore.user.public_key)
+    let newOrgKey
+    try { newOrgKey = await generateOrgKey() } catch (e) {
+      throw new Error(`Génération clé org échouée: ${e.message}`)
+    }
+
+    let encryptedOrgKey
+    try { encryptedOrgKey = await encryptOrgKeyForUser(newOrgKey, rsaPublicKey) } catch (e) {
+      throw new Error(`Chiffrement clé org échoué (clé RSA ${typeof rsaPublicKey}): ${e.message}`)
+    }
 
     await api.patch(`/orgs/${orgID}/members/${myMember.id}/key`, { encrypted_org_key: encryptedOrgKey })
 

@@ -22,6 +22,10 @@ type OrgResponse struct {
 
 func (h *OrgHandler) ListOrgs(c *gin.Context) {
 	userID := c.GetString("user_id")
+	if !h.hasOrgAccess(userID) {
+		c.JSON(http.StatusPaymentRequired, gin.H{"error": "organizations require a paid plan on the cloud"})
+		return
+	}
 	ctx := c.Request.Context()
 
 	var memberships []pkg.OrgMember

@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"os"
 	"path"
 	"strings"
 
@@ -174,3 +175,17 @@ func (h *OrgHandler) logAudit(ctx context.Context, orgID int64, actorID, action,
 
 func canManage(role string) bool { return role == "owner" || role == "admin" }
 func isOwner(role string) bool   { return role == "owner" }
+
+// hasOrgAccess reports whether userID may use the Organizations feature.
+// Self-hosted instances (BILLING_ENABLED=false) grant access to everyone.
+// On cloud, only paid-plan users (Pro / Business) may create, list or join orgs.
+func (h *OrgHandler) hasOrgAccess(userID string) bool {
+	if os.Getenv("BILLING_ENABLED") == "false" {
+		return true
+	}
+	plan, err := pkg.FindUserPlanByUserID(h.DB, userID)
+	if err != nil || plan == nil {
+		return false
+	}
+	return plan.Plan != pkg.PlanFree
+}

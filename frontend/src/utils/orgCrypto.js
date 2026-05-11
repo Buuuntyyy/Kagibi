@@ -56,9 +56,11 @@ export function generateOrgKey() {
  * @param {string} publicKeyPEM  RSA-4096 public key in PEM/SPKI format
  * @returns {Promise<string>} base64-encoded encrypted key
  */
-export async function encryptOrgKeyForUser(orgKey, publicKeyPEM) {
+export async function encryptOrgKeyForUser(orgKey, publicKeyOrPEM) {
   const rawKey = await crypto.subtle.exportKey('raw', orgKey)
-  const rsaPublicKey = await importKeyFromPEM(publicKeyPEM, 'spki')
+  const rsaPublicKey = typeof publicKeyOrPEM === 'string'
+    ? await importKeyFromPEM(publicKeyOrPEM, 'spki')
+    : publicKeyOrPEM
   return encryptKeyWithPublicKey(rawKey, rsaPublicKey)
 }
 
