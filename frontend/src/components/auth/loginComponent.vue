@@ -46,11 +46,14 @@
 <script setup>
 import { ref } from 'vue'
 import { useAuthStore } from '../../stores/auth'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import MFAChallengeModal from '../MFAChallengeModal.vue'
 import { isP2PSubdomain } from '../../composables/useSubdomain'
 
-const postLoginRoute = isP2PSubdomain ? '/' : { name: 'Home' }
+const route = useRoute()
+const postLoginRoute = isP2PSubdomain
+  ? '/'
+  : (route.query.redirect ? decodeURIComponent(route.query.redirect) : { name: 'Home' })
 
 const email = ref('')
 const password = ref('')

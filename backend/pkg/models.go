@@ -376,6 +376,21 @@ type OrgFolderPermission struct {
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
+// OrgAuditLog records security-relevant events within an organization.
+// The log is append-only — records are never updated or deleted.
+type OrgAuditLog struct {
+	bun.BaseModel `bun:"table:org_audit_logs,alias:oal"`
+
+	ID         int64     `bun:"id,pk,autoincrement" json:"id"`
+	OrgID      int64     `bun:"org_id,notnull" json:"org_id"`
+	ActorID    string    `bun:"actor_id,notnull" json:"actor_id"`
+	Action     string    `bun:"action,notnull" json:"action"` // member_joined | member_removed | role_changed | file_uploaded | file_downloaded | file_deleted | permission_set | permission_removed | invitation_created | invitation_revoked | key_rotated | key_provisioned
+	TargetID   string    `bun:"target_id,notnull,default:''" json:"target_id,omitempty"`
+	TargetType string    `bun:"target_type,notnull,default:''" json:"target_type,omitempty"`
+	Detail     string    `bun:"detail,notnull,default:''" json:"detail,omitempty"`
+	CreatedAt  time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
 // EmitRealtimeEvent inserts an event into the realtime_events table and
 // pushes it immediately over WebSocket if the user is connected.
 func EmitRealtimeEvent(ctx context.Context, db *bun.DB, userID, eventType string, payload map[string]any) error {

@@ -218,7 +218,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	registerFriendRoutes(protected, friendHandler)
 	registerShareRoutes(protected, db)
 	registerSecurityRoutes(protected)
-	registerOrganizationRoutes(protected, orgHandler)
+	registerOrganizationRoutes(api, protected, orgHandler)
 	registerBillingRoutes(api, protected, authMW, db)
 	registerP2PRoutes(protected, db)
 	registerP2PGuestRoutes(api, db, authMW)
@@ -350,7 +350,7 @@ func registerSecurityRoutes(g *gin.RouterGroup) {
 	securityG.GET("/events", func(c *gin.Context) { security.GetSecurityEvents(c) })
 }
 
-func registerOrganizationRoutes(g *gin.RouterGroup, h *orghandlers.OrgHandler) {
+func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHandler) {
 	orgsG := g.Group("/orgs")
 
 	// Organization CRUD
@@ -392,10 +392,16 @@ func registerOrganizationRoutes(g *gin.RouterGroup, h *orghandlers.OrgHandler) {
 	orgsG.DELETE("/:orgID/permissions", h.DeletePermission)
 	orgsG.GET("/:orgID/permissions/me", h.GetMyPermission)
 
-	// Token-based join routes — no orgID in URL, token carries the context
-	joinG := g.Group("/org-invitations")
-	joinG.GET("/:token", h.GetInvitation)
-	joinG.POST("/:token/accept", h.AcceptInvitation)
+	// Audit log (admin/owner only)
+	orgsG.GET("/:orgID/audit", h.ListAuditLog)
+
+	// Key management
+	orgsG.GET("/:orgID/fs/all-keys", h.GetOrgAllFileKeys)
+	orgsG.POST("/:orgID/rotate-key", h.RotateOrgKey)
+
+	// Token-based join routes — GET is public (unauthenticated preview), POST requires auth
+	public.GET("/org-invitations/:token", h.GetInvitation)
+	g.POST("/org-invitations/:token/accept", h.AcceptInvitation)
 }
 
 func p2pSignalHandler(db *bun.DB) gin.HandlerFunc {

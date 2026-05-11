@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"path"
 	"strconv"
@@ -63,6 +64,17 @@ func (h *OrgHandler) DownloadOrgFile(c *gin.Context) {
 		return
 	}
 
+	allowed, err := h.resolveDownloadAllowed(ctx, orgID, userID, file.FolderPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check download permission"})
+		return
+	}
+	if !allowed {
+		log.Printf("SECURITY: org file download blocked by perm_download=false - user=%s org=%d file=%d", userID, orgID, fileID)
+		c.JSON(http.StatusForbidden, gin.H{"error": "download access denied"})
+		return
+	}
+
 	s3Key := orgS3Key(orgID, file.Path)
 	output, err := s3storage.Client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s3storage.BucketName),
@@ -83,10 +95,15 @@ func (h *OrgHandler) DownloadOrgFile(c *gin.Context) {
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	c.Header("Content-Disposition", disposition+`; filename="`+file.Name+`"`)
+	cd := mime.FormatMediaType(disposition, map[string]string{"filename": file.Name})
+	if cd == "" {
+		cd = disposition
+	}
+	c.Header("Content-Disposition", cd)
 	c.Header("Content-Type", contentType)
 	c.Header("Content-Length", strconv.FormatInt(file.Size, 10))
 
+	h.logAudit(ctx, orgID, userID, "file_downloaded", strconv.FormatInt(fileID, 10), "file", file.Name)
 	if _, err := io.Copy(c.Writer, output.Body); err != nil {
 		log.Printf("Error streaming org file %d: %v", fileID, err)
 	}
@@ -139,6 +156,7 @@ func (h *OrgHandler) DeleteOrgFile(c *gin.Context) {
 		Where("id = ?", orgID).
 		Exec(ctx)
 
+	h.logAudit(ctx, orgID, userID, "file_deleted", strconv.FormatInt(fileID, 10), "file", file.Name)
 	c.JSON(http.StatusOK, gin.H{"message": "file deleted", "freed_bytes": file.Size})
 }
 

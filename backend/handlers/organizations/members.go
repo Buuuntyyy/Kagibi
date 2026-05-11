@@ -18,7 +18,9 @@ type MemberResponse struct {
 	ID              int64     `json:"id"`
 	UserID          string    `json:"user_id"`
 	Name            string    `json:"name"`
+	Email           string    `json:"email,omitempty"`
 	AvatarURL       string    `json:"avatar_url"`
+	PublicKey       string    `json:"public_key,omitempty"`
 	Role            string    `json:"role"`
 	EncryptedOrgKey string    `json:"encrypted_org_key,omitempty"`
 	JoinedAt        time.Time `json:"joined_at"`
@@ -63,23 +65,35 @@ func (h *OrgHandler) ListMembers(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch member profiles"})
 		return
 	}
+	// Decrypt emails before indexing so the map holds plaintext values.
+	for i := range users {
+		_ = pkg.DecryptUserEmail(&users[i])
+	}
 	userByID := make(map[string]pkg.User, len(users))
 	for _, u := range users {
 		userByID[u.ID] = u
 	}
 
+	isAdmin := canManage(role)
 	result := make([]MemberResponse, len(members))
 	for i, m := range members {
 		u := userByID[m.UserID]
-		result[i] = MemberResponse{
-			ID:              m.ID,
-			UserID:          m.UserID,
-			Name:            u.Name,
-			AvatarURL:       u.AvatarURL,
-			Role:            m.Role,
-			EncryptedOrgKey: m.EncryptedOrgKey,
-			JoinedAt:        m.JoinedAt,
+		res := MemberResponse{
+			ID:        m.ID,
+			UserID:    m.UserID,
+			Name:      u.Name,
+			Email:     u.Email,
+			AvatarURL: u.AvatarURL,
+			Role:      m.Role,
+			JoinedAt:  m.JoinedAt,
 		}
+		// Key material and raw public keys are only exposed to admins/owners.
+		// Regular members and viewers have no legitimate use for this data.
+		if isAdmin {
+			res.PublicKey = u.PublicKey
+			res.EncryptedOrgKey = m.EncryptedOrgKey
+		}
+		result[i] = res
 	}
 	c.JSON(http.StatusOK, result)
 }
@@ -141,11 +155,14 @@ func (h *OrgHandler) UpdateMemberRole(c *gin.Context) {
 		return
 	}
 
+	previousRole := target.Role
 	target.Role = req.Role
 	if _, err := h.DB.NewUpdate().Model(&target).WherePK().Column("role").Exec(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update role"})
 		return
 	}
+	h.logAudit(ctx, orgID, callerID, "role_changed", target.UserID, "user",
+		previousRole+" → "+req.Role)
 	c.JSON(http.StatusOK, gin.H{"id": target.ID, "role": target.Role})
 }
 
@@ -199,6 +216,11 @@ func (h *OrgHandler) RemoveMember(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove member"})
 		return
 	}
+	detail := "self-removal"
+	if !isSelf {
+		detail = "removed by " + callerID
+	}
+	h.logAudit(ctx, orgID, callerID, "member_removed", target.UserID, "user", detail)
 	c.JSON(http.StatusOK, gin.H{"message": "member removed"})
 }
 
@@ -236,13 +258,20 @@ func (h *OrgHandler) SetMemberKey(c *gin.Context) {
 		return
 	}
 
-	_, err = h.DB.NewUpdate().Model((*pkg.OrgMember)(nil)).
+	var target pkg.OrgMember
+	if err := h.DB.NewSelect().Model(&target).
+		Where("id = ? AND org_id = ?", memberID, orgID).
+		Scan(ctx); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "member not found"})
+		return
+	}
+	if _, err = h.DB.NewUpdate().Model((*pkg.OrgMember)(nil)).
 		Set("encrypted_org_key = ?", req.EncryptedOrgKey).
 		Where("id = ? AND org_id = ?", memberID, orgID).
-		Exec(ctx)
-	if err != nil {
+		Exec(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set member key"})
 		return
 	}
+	h.logAudit(ctx, orgID, callerID, "key_provisioned", target.UserID, "user", "")
 	c.JSON(http.StatusOK, gin.H{"message": "key updated"})
 }

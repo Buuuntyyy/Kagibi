@@ -114,6 +114,12 @@ func (h *OrgHandler) CreateInvitation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create invitation"})
 		return
 	}
+	targetDesc := "link invite"
+	if req.TargetUserID != nil {
+		targetDesc = "direct invite for " + *req.TargetUserID
+	}
+	h.logAudit(ctx, orgID, callerID, "invitation_created", strconv.FormatInt(inv.ID, 10), "invitation",
+		req.Role+" / "+targetDesc)
 	c.JSON(http.StatusCreated, inv)
 }
 
@@ -138,7 +144,7 @@ func (h *OrgHandler) ListInvitations(c *gin.Context) {
 
 	var invitations []pkg.OrgInvitation
 	if err := h.DB.NewSelect().Model(&invitations).
-		Where("org_id = ?", orgID).
+		Where("org_id = ? AND status = 'active'", orgID).
 		OrderExpr("created_at DESC").
 		Scan(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list invitations"})
@@ -183,6 +189,7 @@ func (h *OrgHandler) RevokeInvitation(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "invitation not found or already revoked"})
 		return
 	}
+	h.logAudit(ctx, orgID, callerID, "invitation_revoked", strconv.FormatInt(invID, 10), "invitation", "")
 	c.JSON(http.StatusOK, gin.H{"message": "invitation revoked"})
 }
 
@@ -292,6 +299,20 @@ func (h *OrgHandler) AcceptInvitation(c *gin.Context) {
 			Set("status = ?", "revoked").
 			Where("id = ?", inv.ID).
 			Exec(ctx)
+	}
+
+	h.logAudit(ctx, inv.OrgID, userID, "member_joined", userID, "user", inv.Role)
+
+	// Notify all existing org members so they can refresh the member list in real time.
+	var existingMembers []pkg.OrgMember
+	if err := h.DB.NewSelect().Model(&existingMembers).
+		Column("user_id").
+		Where("org_id = ? AND user_id != ?", inv.OrgID, userID).
+		Scan(ctx); err == nil {
+		payload := map[string]any{"org_id": inv.OrgID, "action": "member_joined", "user_id": userID}
+		for _, m := range existingMembers {
+			_ = pkg.EmitRealtimeEvent(ctx, h.DB, m.UserID, "org_update", payload)
+		}
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"org_id": inv.OrgID, "role": inv.Role})

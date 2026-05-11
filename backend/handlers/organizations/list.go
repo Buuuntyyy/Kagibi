@@ -16,7 +16,8 @@ import (
 
 type OrgResponse struct {
 	pkg.Organization
-	MyRole string `json:"my_role"`
+	MyRole            string `json:"my_role"`
+	MyEncryptedOrgKey string `json:"my_encrypted_org_key,omitempty"`
 }
 
 func (h *OrgHandler) ListOrgs(c *gin.Context) {
@@ -37,9 +38,11 @@ func (h *OrgHandler) ListOrgs(c *gin.Context) {
 
 	orgIDs := make([]int64, len(memberships))
 	roleByOrg := make(map[int64]string, len(memberships))
+	keyByOrg := make(map[int64]string, len(memberships))
 	for i, m := range memberships {
 		orgIDs[i] = m.OrgID
 		roleByOrg[m.OrgID] = m.Role
+		keyByOrg[m.OrgID] = m.EncryptedOrgKey
 	}
 
 	var orgs []pkg.Organization
@@ -52,7 +55,11 @@ func (h *OrgHandler) ListOrgs(c *gin.Context) {
 
 	result := make([]OrgResponse, len(orgs))
 	for i, org := range orgs {
-		result[i] = OrgResponse{Organization: org, MyRole: roleByOrg[org.ID]}
+		result[i] = OrgResponse{
+			Organization:      org,
+			MyRole:            roleByOrg[org.ID],
+			MyEncryptedOrgKey: keyByOrg[org.ID],
+		}
 	}
 	c.JSON(http.StatusOK, result)
 }
@@ -86,5 +93,14 @@ func (h *OrgHandler) GetOrg(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, OrgResponse{Organization: org, MyRole: role})
+	var membership pkg.OrgMember
+	_ = h.DB.NewSelect().Model(&membership).
+		Where("org_id = ? AND user_id = ?", orgID, userID).
+		Scan(ctx)
+
+	c.JSON(http.StatusOK, OrgResponse{
+		Organization:      org,
+		MyRole:            role,
+		MyEncryptedOrgKey: membership.EncryptedOrgKey,
+	})
 }
