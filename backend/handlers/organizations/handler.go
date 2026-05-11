@@ -6,6 +6,7 @@ package organizations
 import (
 	"context"
 	"database/sql"
+	"log"
 	"path"
 	"strings"
 
@@ -120,6 +121,54 @@ func roleDefaultLevel(role string) PermLevel {
 		return PermRead
 	default:
 		return PermNone
+	}
+}
+
+// resolveDownloadAllowed reports whether userID may download files from folderPath.
+// It walks the path hierarchy (most-specific first) and returns the perm_download flag
+// of the first matching override. If no override is found, download is allowed by default.
+// Owners and admins cannot have their download access restricted (no perm records apply to them).
+func (h *OrgHandler) resolveDownloadAllowed(ctx context.Context, orgID int64, userID, folderPath string) (bool, error) {
+	role, err := h.memberRole(ctx, orgID, userID)
+	if err != nil {
+		return false, err
+	}
+	if role == "" {
+		return false, nil
+	}
+	if canManage(role) {
+		return true, nil
+	}
+
+	p := normPath(folderPath)
+	for {
+		var perm pkg.OrgFolderPermission
+		if err := h.DB.NewSelect().Model(&perm).
+			Where("org_id = ? AND user_id = ? AND folder_path = ?", orgID, userID, p).
+			Scan(ctx); err == nil {
+			return perm.PermDownload, nil
+		}
+		if p == "/" {
+			break
+		}
+		p = path.Dir(p)
+	}
+	return true, nil
+}
+
+// logAudit inserts an audit entry. Errors are printed to stderr but never
+// propagated — audit failures must not interrupt the main operation.
+func (h *OrgHandler) logAudit(ctx context.Context, orgID int64, actorID, action, targetID, targetType, detail string) {
+	entry := &pkg.OrgAuditLog{
+		OrgID:      orgID,
+		ActorID:    actorID,
+		Action:     action,
+		TargetID:   targetID,
+		TargetType: targetType,
+		Detail:     detail,
+	}
+	if _, err := h.DB.NewInsert().Model(entry).Exec(ctx); err != nil {
+		log.Printf("AUDIT LOG ERROR org=%d action=%s: %v", orgID, action, err)
 	}
 }
 

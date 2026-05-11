@@ -237,11 +237,13 @@ func (h *OrgHandler) CompleteOrgMultipart(c *gin.Context) {
 		Where("id = ?", orgID).
 		Exec(ctx)
 
+	h.logAudit(ctx, orgID, userID, "file_uploaded", strconv.FormatInt(file.ID, 10), "file", file.Name)
 	c.JSON(http.StatusCreated, gin.H{"file": file})
 }
 
 // AbortOrgMultipart cancels an in-progress S3 multipart upload.
 func (h *OrgHandler) AbortOrgMultipart(c *gin.Context) {
+	userID := c.GetString("user_id")
 	orgID, err := strconv.ParseInt(c.Param("orgID"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization id"})
@@ -262,6 +264,20 @@ func (h *OrgHandler) AbortOrgMultipart(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
 	defer cancel()
+
+	// Derive the folder path from the S3 key and enforce write permission.
+	// The key format is orgs/{orgID}{fullFilePath}, e.g. orgs/7/documents/report.pdf
+	filePath := strings.TrimPrefix(req.Key, fmt.Sprintf("orgs/%d", orgID))
+	folderPath := path.Dir(normPath(filePath))
+	perm, err := h.resolvePermission(ctx, orgID, userID, folderPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
+		return
+	}
+	if perm < PermWrite {
+		c.JSON(http.StatusForbidden, gin.H{"error": "write access required to abort an upload"})
+		return
+	}
 
 	if _, err := s3storage.Client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
 		Bucket:   aws.String(s3storage.BucketName),

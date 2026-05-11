@@ -56,7 +56,7 @@
             </button>
             <template v-for="(seg, idx) in pathSegments" :key="idx">
               <span class="bc-sep">/</span>
-              <button class="bc-item" @click="navigateToPath(buildPath(idx))">{{ seg }}</button>
+              <button class="bc-item" @click="navigateToPath(buildPath(idx))">{{ orgStore.folderNameCache[seg] || seg }}</button>
             </template>
           </div>
           <div class="fs-actions" v-if="canWrite">
@@ -69,6 +69,27 @@
               {{ t('orgs.uploadFile') }}
               <input type="file" multiple style="display:none" @change="handleFileUpload" />
             </label>
+          </div>
+        </div>
+
+        <!-- Key not yet initialized for this owner (org created before encryption was added) -->
+        <div v-if="!orgStore.currentOrg?.my_encrypted_org_key && canManage" class="key-init-banner">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+          <span>{{ t('orgs.keyNotInitialized') }}</span>
+          <button class="btn-init-key" @click="handleInitKey" :disabled="initializingKey">
+            <span v-if="initializingKey" class="spinner-sm"></span>
+            <span v-else>{{ t('orgs.initKey') }}</span>
+          </button>
+        </div>
+
+        <!-- Active upload progress -->
+        <div v-if="Object.keys(uploadProgress).length > 0" class="upload-queue">
+          <div v-for="(pct, name) in uploadProgress" :key="name" class="upload-row">
+            <span class="upload-name">{{ name }}</span>
+            <div class="upload-bar-track">
+              <div class="upload-bar-fill" :style="{ width: pct + '%' }"></div>
+            </div>
+            <span class="upload-pct">{{ pct }}%</span>
           </div>
         </div>
 
@@ -133,6 +154,25 @@
               <div class="member-email">{{ m.email }}</div>
             </div>
             <div class="member-meta">
+              <!-- Key missing indicator — visible to admins/owner only -->
+              <span
+                v-if="canManage && !m.encrypted_org_key && m.user_id !== myUserID"
+                class="key-missing-badge"
+                :title="t('orgs.keyMissing')"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                {{ t('orgs.needAdminKey') }}
+              </span>
+              <button
+                v-if="canManage && !m.encrypted_org_key && m.public_key && m.user_id !== myUserID"
+                class="btn-sm btn-provision"
+                @click="handleProvisionKey(m)"
+                :disabled="provisioningKey === m.id"
+                :title="t('orgs.provisionKey')"
+              >
+                <span v-if="provisioningKey === m.id" class="spinner-sm-dark"></span>
+                <span v-else>{{ t('orgs.provisionKey') }}</span>
+              </button>
               <select
                 v-if="canManage && m.role !== 'owner' && m.user_id !== myUserID"
                 class="role-select"
@@ -209,7 +249,7 @@
           <div v-for="perm in orgStore.permissions" :key="perm.id" class="perm-row">
             <div class="perm-info">
               <code class="perm-path">{{ perm.folder_path }}</code>
-              <span class="perm-user">{{ perm.user_id }}</span>
+              <span class="perm-user">{{ orgStore.members.find(m => m.user_id === perm.user_id)?.name || orgStore.members.find(m => m.user_id === perm.user_id)?.email || perm.user_id }}</span>
             </div>
             <div class="perm-level">
               <span class="level-badge" :class="perm.level">{{ t(`orgs.perm${capitalize(perm.level)}`) }}</span>
@@ -217,6 +257,29 @@
             <button v-if="canManage" class="btn-icon-danger" @click="handleDeletePerm(perm)" :title="t('orgs.deletePermission')">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
             </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: AUDIT LOG -->
+      <div v-if="activeTab === 'audit'" class="tab-content">
+        <div class="section-header">
+          <h3>{{ t('orgs.auditLog') }}</h3>
+          <button class="btn-sm" @click="orgStore.fetchAuditLog(orgID)">{{ t('orgs.refresh') }}</button>
+        </div>
+        <div v-if="orgStore.auditLog.length === 0" class="empty-tab">
+          <p>{{ t('orgs.noAuditEvents') }}</p>
+        </div>
+        <div v-else class="audit-list">
+          <div v-for="entry in orgStore.auditLog" :key="entry.id" class="audit-row">
+            <div class="audit-action">
+              <span class="audit-badge" :class="entry.action">{{ t(`orgs.audit_${entry.action}`) }}</span>
+              <span v-if="entry.detail" class="audit-detail">{{ entry.detail }}</span>
+            </div>
+            <div class="audit-meta">
+              <span class="audit-actor" :title="entry.actor_id">{{ entry.actor_id.slice(0, 8) }}</span>
+              <span class="audit-time">{{ formatDate(entry.created_at) }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -244,10 +307,29 @@
           </button>
         </div>
 
-        <div class="danger-zone" v-if="orgStore.currentOrg.my_role === 'owner' || orgStore.currentOrg.my_role === 'member' || orgStore.currentOrg.my_role === 'viewer'">
-          <h4>Zone sensible</h4>
-          <button v-if="!isOwner" class="btn-danger" @click="handleLeaveOrg">{{ t('orgs.leaveOrg') }}</button>
-          <button v-if="isOwner" class="btn-danger" @click="handleDeleteOrg">{{ t('orgs.deleteOrg') }}</button>
+        <div class="danger-zone" v-if="isOwner">
+          <h4>{{ t('orgs.dangerZone') }}</h4>
+          <div class="danger-action">
+            <div>
+              <strong>{{ t('orgs.rotateKeyTitle') }}</strong>
+              <p class="hint-sm">{{ t('orgs.rotateKeyDesc') }}</p>
+            </div>
+            <button class="btn-danger-outline" @click="handleRotateKey" :disabled="rotatingKey">
+              <span v-if="rotatingKey" class="spinner-sm"></span>
+              {{ t('orgs.rotateKey') }}
+            </button>
+          </div>
+          <div class="danger-action">
+            <div>
+              <strong>{{ t('orgs.deleteOrg') }}</strong>
+              <p class="hint-sm">{{ t('orgs.deleteOrgConfirmHint') }}</p>
+            </div>
+            <button class="btn-danger" @click="handleDeleteOrg">{{ t('orgs.deleteOrg') }}</button>
+          </div>
+        </div>
+        <div class="danger-zone" v-else-if="orgStore.currentOrg.my_role !== 'owner'">
+          <h4>{{ t('orgs.dangerZone') }}</h4>
+          <button class="btn-danger" @click="handleLeaveOrg">{{ t('orgs.leaveOrg') }}</button>
         </div>
       </div>
     </template>
@@ -370,17 +452,19 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useOrgStore } from '../stores/organizations'
 import { useAuthStore } from '../stores/auth'
+import { useRealtimeStore } from '../stores/realtime'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const orgStore = useOrgStore()
 const authStore = useAuthStore()
+const realtimeStore = useRealtimeStore()
 
 const activeTab = ref('files')
 const currentPath = ref('/')
@@ -390,13 +474,21 @@ const toast = ref(null)
 
 const TabIcon = (paths) => ({ render: () => h('svg', { viewBox: '0 0 24 24', width: 18, height: 18, fill: 'currentColor' }, paths.map(d => h('path', { d }))) })
 
-const tabs = computed(() => [
-  { key: 'files', label: t('orgs.files'), icon: TabIcon(['M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z']) },
-  { key: 'members', label: t('orgs.members'), icon: TabIcon(['M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z']) },
-  { key: 'invitations', label: t('orgs.invitations'), icon: TabIcon(['M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z']) },
-  { key: 'permissions', label: t('orgs.permissions'), icon: TabIcon(['M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z']) },
-  { key: 'settings', label: t('orgs.settings'), icon: TabIcon(['M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z']) },
-])
+const tabs = computed(() => {
+  const base = [
+    { key: 'files', label: t('orgs.files'), icon: TabIcon(['M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z']) },
+    { key: 'members', label: t('orgs.members'), icon: TabIcon(['M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z']) },
+  ]
+  if (canManage.value) {
+    base.push(
+      { key: 'invitations', label: t('orgs.invitations'), icon: TabIcon(['M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z']) },
+      { key: 'permissions', label: t('orgs.permissions'), icon: TabIcon(['M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z']) },
+      { key: 'audit', label: t('orgs.auditLog'), icon: TabIcon(['M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z']) },
+      { key: 'settings', label: t('orgs.settings'), icon: TabIcon(['M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z']) },
+    )
+  }
+  return base
+})
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 
@@ -408,10 +500,12 @@ const canWrite = computed(() => ['owner', 'admin', 'member'].includes(orgStore.c
 
 const pathSegments = computed(() => {
   if (currentPath.value === '/') return []
-  return currentPath.value.replace(/^\//, '').split('/')
+  return currentPath.value.replace(/^\//, '').split('/').filter(s => s)
 })
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+
+let _unsubOrgUpdate = null
 
 onMounted(async () => {
   await orgStore.fetchOrg(orgID.value)
@@ -423,12 +517,26 @@ onMounted(async () => {
     description: orgStore.currentOrg.description,
     storageQuotaMB: orgStore.currentOrg.storage_quota_mb,
   }
+
+  // Refresh members list when someone joins or leaves this org
+  _unsubOrgUpdate = realtimeStore.onEvent('org_update', (payload) => {
+    if (payload?.org_id !== orgID.value) return
+    orgStore.fetchMembers(orgID.value)
+  })
 })
 
+onUnmounted(() => {
+  if (_unsubOrgUpdate) _unsubOrgUpdate()
+})
+
+const restrictedTabs = new Set(['invitations', 'permissions', 'audit', 'settings'])
+
 const switchTab = async (tab) => {
+  if (restrictedTabs.has(tab) && !canManage.value) return
   activeTab.value = tab
   if (tab === 'invitations' && orgStore.invitations.length === 0) await orgStore.fetchInvitations(orgID.value)
   if (tab === 'permissions') await orgStore.fetchPermissions(orgID.value)
+  if (tab === 'audit') await orgStore.fetchAuditLog(orgID.value)
 }
 
 // ── File system ───────────────────────────────────────────────────────────────
@@ -462,6 +570,8 @@ const handleCreateFolder = async () => {
 }
 
 // Upload
+const uploadProgress = ref({}) // fileName -> 0-100
+
 const handleFileUpload = async (event) => {
   const files = Array.from(event.target.files)
   event.target.value = ''
@@ -471,41 +581,16 @@ const handleFileUpload = async (event) => {
 }
 
 const uploadFile = async (file) => {
+  uploadProgress.value[file.name] = 0
   try {
-    const CHUNK_SIZE = 10 * 1024 * 1024
-    const totalParts = Math.ceil(file.size / CHUNK_SIZE)
-    const initData = await orgStore.initiateUpload(orgID.value, {
-      file_name: file.name,
-      file_path: currentPath.value,
-      content_type: file.type || 'application/octet-stream',
-      total_size: file.size,
-      total_parts: totalParts,
-      encrypted_key: '',
-    })
-
-    const parts = []
-    for (let i = 0; i < initData.presigned_urls.length; i++) {
-      const { part_number, url } = initData.presigned_urls[i]
-      const start = (part_number - 1) * CHUNK_SIZE
-      const chunk = file.slice(start, start + CHUNK_SIZE)
-      const res = await fetch(url, { method: 'PUT', body: chunk })
-      const etag = res.headers.get('ETag') || ''
-      parts.push({ part_number, etag })
-    }
-
-    await orgStore.completeUpload(orgID.value, {
-      upload_id: initData.upload_id,
-      key: initData.key,
-      parts,
-      file_name: file.name,
-      file_path: currentPath.value,
-      total_size: file.size,
-      content_type: file.type || 'application/octet-stream',
-      encrypted_key: '',
+    await orgStore.uploadOrgFile(orgID.value, file, currentPath.value, (p) => {
+      uploadProgress.value[file.name] = p
     })
     showToast(file.name + ' importé')
   } catch (e) {
     showToast(e.response?.data?.error || e.message, 'error')
+  } finally {
+    delete uploadProgress.value[file.name]
   }
 }
 
@@ -534,7 +619,7 @@ const confirmDeleteFolder = async (folder) => {
 // Download
 const handleDownload = async (file) => {
   try {
-    await orgStore.downloadFile(orgID.value, file.id, file.name)
+    await orgStore.downloadFile(orgID.value, file.id, file.name, file.mime_type)
   } catch (e) {
     showToast(e.response?.data?.error || e.message, 'error')
   }
@@ -542,9 +627,43 @@ const handleDownload = async (file) => {
 
 // ── Members ───────────────────────────────────────────────────────────────────
 
+// ── Key initialization (owner with no key) ────────────────────────────────────
+
+const initializingKey = ref(false)
+
+const handleInitKey = async () => {
+  initializingKey.value = true
+  try {
+    await orgStore.initializeOrgKey(orgID.value)
+    showToast(t('orgs.keyInitialized'))
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  } finally {
+    initializingKey.value = false
+  }
+}
+
+// ── Key provisioning ──────────────────────────────────────────────────────────
+
+const provisioningKey = ref(null) // member.id being provisioned
+
+const handleProvisionKey = async (member) => {
+  provisioningKey.value = member.id
+  try {
+    await orgStore.provisionMemberKey(orgID.value, member)
+    showToast(t('orgs.keyProvisioned'))
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  } finally {
+    provisioningKey.value = null
+  }
+}
+
+// ── Members ───────────────────────────────────────────────────────────────────
+
 const handleRoleChange = async (member, role) => {
   try {
-    await orgStore.updateMemberRole(orgID.value, member.user_id, role)
+    await orgStore.updateMemberRole(orgID.value, member.id, role)
     showToast(t('orgs.role') + ' mis à jour')
   } catch (e) {
     showToast(e.response?.data?.error || e.message, 'error')
@@ -554,7 +673,7 @@ const handleRoleChange = async (member, role) => {
 const handleRemoveMember = async (member) => {
   if (!confirm(t('orgs.confirmRemoveMember'))) return
   try {
-    await orgStore.removeMember(orgID.value, member.user_id)
+    await orgStore.removeMember(orgID.value, member.id)
     showToast(t('orgs.memberRemoved'))
     if (member.user_id === myUserID.value) {
       router.push('/dashboard/organizations')
@@ -603,7 +722,7 @@ const handleRevokeInvite = async (inv) => {
 }
 
 const inviteURL = (token) => {
-  return `${window.location.origin}/invite/${token}`
+  return `${window.location.origin}/join/${token}`
 }
 
 const copyInviteLink = (token) => {
@@ -670,12 +789,29 @@ const handleSaveSettings = async () => {
 
 const handleLeaveOrg = async () => {
   if (!confirm(t('orgs.leaveOrgConfirm', { name: orgStore.currentOrg.name }))) return
+  const myMember = orgStore.members.find(m => m.user_id === myUserID.value)
+  if (!myMember) return
   try {
-    await orgStore.removeMember(orgID.value, myUserID.value)
+    await orgStore.removeMember(orgID.value, myMember.id)
     showToast(t('orgs.orgLeft'))
     router.push('/dashboard/organizations')
   } catch (e) {
     showToast(e.response?.data?.error || e.message, 'error')
+  }
+}
+
+const rotatingKey = ref(false)
+
+const handleRotateKey = async () => {
+  if (!confirm(t('orgs.rotateKeyConfirm'))) return
+  rotatingKey.value = true
+  try {
+    await orgStore.rotateOrgKey(orgID.value)
+    showToast(t('orgs.keyRotated'))
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  } finally {
+    rotatingKey.value = false
   }
 }
 
@@ -1194,6 +1330,105 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 
 .btn-danger:hover { background: rgba(239,68,68,0.18); }
 
+.btn-danger-outline {
+  background: none;
+  color: #ef4444;
+  border: 1px solid rgba(239,68,68,0.5);
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-danger-outline:hover:not(:disabled) { background: rgba(239,68,68,0.08); }
+.btn-danger-outline:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.danger-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(239,68,68,0.15);
+}
+.danger-action:last-child { border-bottom: none; padding-bottom: 0; }
+.danger-action > div { flex: 1; }
+.danger-action strong { font-size: 0.9rem; color: var(--main-text-color); }
+.hint-sm { font-size: 0.8rem; color: var(--secondary-text-color); margin: 4px 0 0 0; }
+
+/* Audit log */
+.audit-list { display: flex; flex-direction: column; gap: 1px; }
+
+.audit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 8px;
+  transition: background 0.1s;
+}
+.audit-row:hover { background: var(--hover-background-color); }
+
+.audit-action { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+
+.audit-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--hover-background-color);
+  color: var(--secondary-text-color);
+}
+.audit-badge.file_uploaded, .audit-badge.file_deleted { background: rgba(99,102,241,0.12); color: #818cf8; }
+.audit-badge.file_downloaded { background: rgba(34,197,94,0.1); color: #22c55e; }
+.audit-badge.member_joined { background: rgba(34,197,94,0.12); color: #22c55e; }
+.audit-badge.member_removed { background: rgba(239,68,68,0.12); color: #ef4444; }
+.audit-badge.role_changed { background: rgba(251,191,36,0.12); color: #f59e0b; }
+.audit-badge.key_rotated, .audit-badge.key_provisioned { background: rgba(239,68,68,0.1); color: #ef4444; }
+.audit-badge.permission_set, .audit-badge.permission_removed { background: rgba(251,191,36,0.1); color: #f59e0b; }
+
+.audit-detail { font-size: 0.83rem; color: var(--secondary-text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.audit-meta { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.audit-actor { font-size: 0.78rem; font-family: monospace; color: var(--secondary-text-color); }
+.audit-time { font-size: 0.78rem; color: var(--secondary-text-color); }
+
+/* Key provisioning */
+.key-missing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: rgba(239,68,68,0.1);
+  color: #ef4444;
+}
+
+.btn-provision {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  background: rgba(99,102,241,0.1);
+  color: var(--primary-color);
+  border: 1px solid rgba(99,102,241,0.3);
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+
+.btn-provision:hover:not(:disabled) { background: rgba(99,102,241,0.18); }
+.btn-provision:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* Shared badges */
 .role-badge {
   font-size: 0.72rem;
@@ -1388,6 +1623,93 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 .modal-enter-active, .modal-leave-active { transition: opacity 0.2s; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
 
+/* Key init banner */
+.key-init-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: rgba(239,68,68,0.07);
+  border: 1px solid rgba(239,68,68,0.25);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #ef4444;
+}
+
+.key-init-banner span { flex: 1; }
+
+.btn-init-key {
+  background: rgba(239,68,68,0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.btn-init-key:hover:not(:disabled) { background: rgba(239,68,68,0.2); }
+.btn-init-key:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Upload progress queue */
+.upload-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.upload-name {
+  flex: 1;
+  font-size: 0.82rem;
+  color: var(--main-text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.upload-bar-track {
+  width: 120px;
+  flex-shrink: 0;
+  height: 4px;
+  background: var(--border-color);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.upload-bar-fill {
+  height: 100%;
+  background: var(--primary-color);
+  border-radius: 2px;
+  transition: width 0.2s ease;
+}
+
+.upload-pct {
+  font-size: 0.75rem;
+  color: var(--secondary-text-color);
+  width: 30px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
 /* Toast */
 .toast {
   position: fixed;
@@ -1410,6 +1732,56 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 
 .toast-enter-active, .toast-leave-active { transition: opacity 0.25s, transform 0.25s; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(12px); }
+
+/* Upload progress queue */
+.upload-queue {
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.upload-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--hover-background-color);
+  border-radius: 8px;
+  font-size: 0.82rem;
+}
+
+.upload-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--main-text-color);
+}
+
+.upload-bar-track {
+  width: 120px;
+  height: 5px;
+  background: var(--border-color);
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.upload-bar-fill {
+  height: 100%;
+  background: var(--primary-color);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.upload-pct {
+  width: 36px;
+  text-align: right;
+  color: var(--secondary-text-color);
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
 
 @media (max-width: 768px) {
   .top-bar { padding: 12px 16px 0; }

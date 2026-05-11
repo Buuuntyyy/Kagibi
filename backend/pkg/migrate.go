@@ -105,6 +105,7 @@ func migrateCoreModels(ctx context.Context, db *bun.DB) error {
 		(*OrgFolder)(nil),
 		(*OrgFile)(nil),
 		(*OrgFolderPermission)(nil),
+		(*OrgAuditLog)(nil),
 	}
 
 	for _, model := range models {
@@ -227,6 +228,17 @@ func migrateSchemaAlterations(ctx context.Context, db *bun.DB) error {
 	// can_download added to share_item_overrides after initial table creation
 	if _, err := db.ExecContext(ctx, `ALTER TABLE "share_item_overrides" ADD COLUMN IF NOT EXISTS "can_download" BOOLEAN NOT NULL DEFAULT true`); err != nil {
 		log.Printf("Warning: failed to add can_download column to share_item_overrides: %v", err)
+	}
+
+	// Org E2E encryption columns — added when the organisation crypto layer was introduced.
+	// Tables created before this migration will be missing these columns.
+	for _, col := range []string{
+		`ALTER TABLE "org_members"     ADD COLUMN IF NOT EXISTS "encrypted_org_key" TEXT`,
+		`ALTER TABLE "org_invitations" ADD COLUMN IF NOT EXISTS "encrypted_org_key" TEXT`,
+	} {
+		if _, err := db.ExecContext(ctx, col); err != nil {
+			log.Printf("Warning: failed to add encrypted_org_key column: %v", err)
+		}
 	}
 
 	// The original p2p_signals_signal_type_check constraint omitted 'reject' and 'p2p_ping'.
@@ -548,6 +560,7 @@ func migrateOrganizationTables(ctx context.Context, db *bun.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_org_files_uploaded_by        ON org_files (uploaded_by)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_folders_org_parent       ON org_folders (org_id, parent_path)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_folder_perms_org_user    ON org_folder_permissions (org_id, user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_audit_logs_org_created    ON org_audit_logs (org_id, created_at DESC)`,
 	} {
 		if _, err := db.ExecContext(ctx, idx); err != nil {
 			log.Printf("Warning: failed to create org index: %v", err)

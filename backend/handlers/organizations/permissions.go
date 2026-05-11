@@ -136,6 +136,8 @@ func (h *OrgHandler) SetPermission(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set permission"})
 		return
 	}
+	h.logAudit(ctx, orgID, callerID, "permission_set", req.UserID, "permission",
+		req.Level+" on "+folderPath)
 	c.JSON(http.StatusOK, perm)
 }
 
@@ -181,6 +183,7 @@ func (h *OrgHandler) DeletePermission(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "permission override not found"})
 		return
 	}
+	h.logAudit(ctx, orgID, callerID, "permission_removed", req.UserID, "permission", folderPath)
 	c.JSON(http.StatusOK, gin.H{"message": "permission removed"})
 }
 

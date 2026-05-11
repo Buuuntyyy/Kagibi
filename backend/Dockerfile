@@ -21,11 +21,17 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the binary with optimizations
+# Build the server binary with optimizations
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-w -s" \
     -o /app/bin/kagibi \
     .
+
+# Build the operator CLI
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-w -s" \
+    -o /app/bin/admin \
+    ./cmd/admin
 
 # Stage 2: Runtime
 FROM alpine:3.21
@@ -40,8 +46,9 @@ RUN addgroup -g 1000 appuser && \
 # Set working directory
 WORKDIR /app
 
-# Copy binary from builder
+# Copy binaries from builder
 COPY --from=builder /app/bin/kagibi /app/kagibi
+COPY --from=builder /app/bin/admin /app/admin
 
 # Change ownership
 RUN chown -R appuser:appuser /app

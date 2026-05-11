@@ -274,7 +274,6 @@ const now = ref(Date.now());
 let nowInterval = null;
 onMounted(() => {
     nowInterval = setInterval(() => { now.value = Date.now(); }, 1000);
-    requestNotificationPermission();
 });
 onUnmounted(() => {
     if (nowInterval) clearInterval(nowInterval);
@@ -359,7 +358,7 @@ const formattedElapsed = computed(() => {
     return s > 0 ? `${m}m ${s}s` : `${m}m`;
 });
 
-const accept = () => p2pStore.acceptTransfer();
+const accept = () => { requestNotificationPermission(); p2pStore.acceptTransfer(); };
 const reject = () => p2pStore.rejectTransfer();
 const cancel = () => p2pStore.cancelTransfer();
 const close = () => {

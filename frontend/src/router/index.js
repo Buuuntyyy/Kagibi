@@ -12,6 +12,7 @@ import Credits from '../views/Credits.vue'
 import FriendsView from '../views/FriendsView.vue'
 import OrganizationsView from '../views/OrganizationsView.vue'
 import OrgDetailView from '../views/OrgDetailView.vue'
+import JoinView from '../views/JoinView.vue'
 import P2PView from '../views/P2PView.vue'
 import HomeView from '../views/HomeView.vue'
 import UsageDashboard from '../components/usage/UsageDashboard.vue'
@@ -132,6 +133,11 @@ const routes = [
     name: 'Account',
     component: Account,
     meta: { requiresAuth: true },
+  },
+  {
+    path: '/join/:token',
+    name: 'JoinOrg',
+    component: JoinView,
   },
   {
     path: '/s/:token',
