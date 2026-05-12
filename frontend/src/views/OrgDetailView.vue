@@ -265,21 +265,36 @@
       <div v-if="activeTab === 'audit'" class="tab-content">
         <div class="section-header">
           <h3>{{ t('orgs.auditLog') }}</h3>
-          <button class="btn-sm" @click="orgStore.fetchAuditLog(orgID)">{{ t('orgs.refresh') }}</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="audit-retention-note">{{ t('orgs.auditRetentionNote') }}</span>
+            <button class="btn-sm" @click="refreshAudit">{{ t('orgs.refresh') }}</button>
+            <button v-if="canManage" class="btn-sm btn-clean" @click="openCleanModal">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+              {{ t('orgs.cleanAudit') }}
+            </button>
+          </div>
         </div>
         <div v-if="orgStore.auditLog.length === 0" class="empty-tab">
           <p>{{ t('orgs.noAuditEvents') }}</p>
         </div>
-        <div v-else class="audit-list">
-          <div v-for="entry in orgStore.auditLog" :key="entry.id" class="audit-row">
-            <div class="audit-action">
-              <span class="audit-badge" :class="entry.action">{{ t(`orgs.audit_${entry.action}`) }}</span>
-              <span v-if="entry.detail" class="audit-detail">{{ entry.detail }}</span>
+        <div v-else>
+          <div class="audit-list">
+            <div v-for="entry in orgStore.auditLog" :key="entry.id" class="audit-row">
+              <div class="audit-action">
+                <span class="audit-badge" :class="entry.action">{{ t(`orgs.audit_${entry.action}`, entry.action) }}</span>
+                <span v-if="entry.detail" class="audit-detail">{{ entry.detail }}</span>
+              </div>
+              <div class="audit-meta">
+                <span class="audit-actor" :title="entry.actor_id">{{ entry.actor_id.slice(0, 8) }}</span>
+                <span class="audit-time">{{ formatDate(entry.created_at) }}</span>
+              </div>
             </div>
-            <div class="audit-meta">
-              <span class="audit-actor" :title="entry.actor_id">{{ entry.actor_id.slice(0, 8) }}</span>
-              <span class="audit-time">{{ formatDate(entry.created_at) }}</span>
-            </div>
+          </div>
+          <div class="audit-load-more" v-if="auditHasMore">
+            <button class="btn-sm" @click="loadMoreAudit" :disabled="loadingMoreAudit">
+              <span v-if="loadingMoreAudit" class="spinner-sm-dark" style="width:14px;height:14px"></span>
+              <span v-else>{{ t('orgs.loadMore') }}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -444,6 +459,94 @@
       </div>
     </Transition>
 
+    <!-- Clean audit modal -->
+    <Transition name="modal">
+      <div v-if="showCleanModal" class="modal-overlay" @click.self="showCleanModal = false">
+        <div class="modal modal-clean">
+          <div class="modal-header">
+            <h3>{{ t('orgs.cleanAuditTitle') }}</h3>
+            <button class="btn-close" @click="showCleanModal = false">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <!-- Mode tabs -->
+            <div class="clean-tabs">
+              <button class="clean-tab" :class="{ active: cleanMode === 'all' }" @click="cleanMode = 'all'">{{ t('orgs.cleanAll') }}</button>
+              <button class="clean-tab" :class="{ active: cleanMode === 'months' }" @click="cleanMode = 'months'">{{ t('orgs.cleanByMonth') }}</button>
+              <button class="clean-tab" :class="{ active: cleanMode === 'days' }" @click="cleanMode = 'days'">{{ t('orgs.cleanByDay') }}</button>
+            </div>
+
+            <!-- All mode -->
+            <div v-if="cleanMode === 'all'" class="clean-panel">
+              <p class="clean-warn">{{ t('orgs.confirmDeleteAllAudit') }}</p>
+            </div>
+
+            <!-- By month mode -->
+            <div v-else-if="cleanMode === 'months'" class="clean-panel">
+              <div v-if="availableMonths.length === 0" class="clean-empty">{{ t('orgs.noAuditMonth') }}</div>
+              <div v-else class="month-grid">
+                <button
+                  v-for="m in availableMonths"
+                  :key="m"
+                  class="month-chip"
+                  :class="{ selected: selectedMonths.includes(m) }"
+                  @click="toggleMonth(m)"
+                >
+                  <span class="month-label">{{ formatMonthLabel(m) }}</span>
+                  <span class="month-count">{{ monthCount(m) }}</span>
+                </button>
+              </div>
+              <p v-if="selectedMonths.length" class="clean-selection-hint">{{ t('orgs.selectedMonths', { count: selectedMonths.length }) }}</p>
+            </div>
+
+            <!-- By day mode -->
+            <div v-else class="clean-panel">
+              <div class="cal-nav">
+                <button class="cal-nav-btn" :disabled="!canGoPrevMonth" @click="prevCalMonth">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+                </button>
+                <span class="cal-month-label">{{ calMonthLabel }}</span>
+                <button class="cal-nav-btn" :disabled="!canGoNextMonth" @click="nextCalMonth">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+                </button>
+              </div>
+              <div class="cal-grid">
+                <div class="cal-dow" v-for="d in calDowLabels" :key="d">{{ d }}</div>
+                <div
+                  v-for="(cell, i) in calGrid"
+                  :key="i"
+                  class="cal-cell"
+                  :class="{
+                    'cal-empty': !cell,
+                    'cal-has': cell && cell.count > 0,
+                    'cal-selected': cell && selectedDays.includes(cell.dateStr),
+                    'cal-none': cell && cell.count === 0,
+                  }"
+                  @click="cell && toggleDay(cell.dateStr)"
+                >
+                  <span v-if="cell" class="cal-day-num">{{ cell.day }}</span>
+                  <span v-if="cell && cell.count" class="cal-day-count">{{ cell.count }}</span>
+                </div>
+              </div>
+              <p v-if="selectedDays.length" class="clean-selection-hint">{{ t('orgs.selectedDays', { count: selectedDays.length }) }}</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-secondary" @click="showCleanModal = false">{{ t('orgs.cancel') }}</button>
+            <button
+              class="btn-danger"
+              :disabled="cleaningAudit || (cleanMode === 'months' && !selectedMonths.length) || (cleanMode === 'days' && !selectedDays.length)"
+              @click="handleCleanAudit"
+            >
+              <span v-if="cleaningAudit" class="spinner-sm"></span>
+              {{ t('orgs.cleanDeleteBtn') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Toast notification -->
     <Transition name="toast">
       <div v-if="toast" class="toast" :class="toast.type">{{ toast.message }}</div>
@@ -459,7 +562,7 @@ import { useOrgStore } from '../stores/organizations'
 import { useAuthStore } from '../stores/auth'
 import { useRealtimeStore } from '../stores/realtime'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const orgStore = useOrgStore()
@@ -469,6 +572,20 @@ const realtimeStore = useRealtimeStore()
 const activeTab = ref('files')
 const currentPath = ref('/')
 const toast = ref(null)
+
+// ── Audit log pagination & cleanup ───────────────────────────────────────────
+
+const auditPage = ref(1)
+const auditHasMore = ref(false)
+const loadingMoreAudit = ref(false)
+
+const showCleanModal = ref(false)
+const cleanMode = ref('all')
+const selectedMonths = ref([])
+const selectedDays = ref([])
+const cleaningAudit = ref(false)
+const calYear = ref(new Date().getFullYear())
+const calMonth = ref(new Date().getMonth())
 
 // ── Tab config ────────────────────────────────────────────────────────────────
 
@@ -503,6 +620,67 @@ const pathSegments = computed(() => {
   return currentPath.value.replace(/^\//, '').split('/').filter(s => s)
 })
 
+// ── Audit calendar computed ───────────────────────────────────────────────────
+
+const auditSummaryDays = computed(() => orgStore.auditSummary || {})
+
+const availableMonths = computed(() => {
+  const months = new Set()
+  for (const day of Object.keys(auditSummaryDays.value)) {
+    months.add(day.slice(0, 7))
+  }
+  return [...months].sort().reverse()
+})
+
+const calMonthLabel = computed(() => {
+  return new Date(calYear.value, calMonth.value, 1).toLocaleDateString(locale.value, { month: 'long', year: 'numeric' })
+})
+
+const calDowLabels = computed(() => {
+  // Monday-based day names from locale
+  const days = []
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(2024, 0, i) // Jan 1 2024 is Monday
+    days.push(d.toLocaleDateString(locale.value, { weekday: 'short' }).slice(0, 2))
+  }
+  return days
+})
+
+const calGrid = computed(() => {
+  const year = calYear.value
+  const month = calMonth.value
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  let startDow = (new Date(year, month, 1).getDay() + 6) % 7 // Monday = 0
+  const cells = []
+  for (let i = 0; i < startDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    cells.push({ day: d, dateStr: ds, count: auditSummaryDays.value[ds] || 0 })
+  }
+  return cells
+})
+
+const canGoPrevMonth = computed(() => {
+  const limit = new Date()
+  limit.setFullYear(limit.getFullYear() - 1)
+  return new Date(calYear.value, calMonth.value, 1) > limit
+})
+
+const canGoNextMonth = computed(() => {
+  const now = new Date()
+  return !(calYear.value === now.getFullYear() && calMonth.value === now.getMonth())
+})
+
+const monthCount = (m) =>
+  Object.entries(auditSummaryDays.value)
+    .filter(([day]) => day.startsWith(m))
+    .reduce((sum, [, c]) => sum + c, 0)
+
+const formatMonthLabel = (m) => {
+  const [year, month] = m.split('-')
+  return new Date(parseInt(year), parseInt(month) - 1, 1).toLocaleDateString(locale.value, { month: 'long', year: 'numeric' })
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 let _unsubOrgUpdate = null
@@ -536,7 +714,12 @@ const switchTab = async (tab) => {
   activeTab.value = tab
   if (tab === 'invitations' && orgStore.invitations.length === 0) await orgStore.fetchInvitations(orgID.value)
   if (tab === 'permissions') await orgStore.fetchPermissions(orgID.value)
-  if (tab === 'audit') await orgStore.fetchAuditLog(orgID.value)
+  if (tab === 'audit') {
+    auditPage.value = 1
+    auditHasMore.value = false
+    const entries = await orgStore.fetchAuditLog(orgID.value, 1)
+    auditHasMore.value = entries.length === 50
+  }
 }
 
 // ── File system ───────────────────────────────────────────────────────────────
@@ -823,6 +1006,85 @@ const handleDeleteOrg = async () => {
     router.push('/dashboard/organizations')
   } catch (e) {
     showToast(e.response?.data?.error || e.message, 'error')
+  }
+}
+
+// ── Audit log actions ─────────────────────────────────────────────────────────
+
+const refreshAudit = async () => {
+  auditPage.value = 1
+  auditHasMore.value = false
+  const entries = await orgStore.fetchAuditLog(orgID.value, 1)
+  auditHasMore.value = entries.length === 50
+}
+
+const loadMoreAudit = async () => {
+  loadingMoreAudit.value = true
+  try {
+    auditPage.value++
+    const entries = await orgStore.fetchAuditLog(orgID.value, auditPage.value)
+    auditHasMore.value = entries.length === 50
+  } finally {
+    loadingMoreAudit.value = false
+  }
+}
+
+const openCleanModal = async () => {
+  cleanMode.value = 'all'
+  selectedMonths.value = []
+  selectedDays.value = []
+  calYear.value = new Date().getFullYear()
+  calMonth.value = new Date().getMonth()
+  await orgStore.fetchAuditSummary(orgID.value)
+  showCleanModal.value = true
+}
+
+const toggleMonth = (m) => {
+  const idx = selectedMonths.value.indexOf(m)
+  if (idx >= 0) selectedMonths.value.splice(idx, 1)
+  else selectedMonths.value.push(m)
+}
+
+const toggleDay = (dateStr) => {
+  if (!auditSummaryDays.value[dateStr]) return
+  const idx = selectedDays.value.indexOf(dateStr)
+  if (idx >= 0) selectedDays.value.splice(idx, 1)
+  else selectedDays.value.push(dateStr)
+}
+
+const prevCalMonth = () => {
+  if (!canGoPrevMonth.value) return
+  if (calMonth.value === 0) { calMonth.value = 11; calYear.value-- }
+  else calMonth.value--
+}
+
+const nextCalMonth = () => {
+  if (!canGoNextMonth.value) return
+  if (calMonth.value === 11) { calMonth.value = 0; calYear.value++ }
+  else calMonth.value++
+}
+
+const handleCleanAudit = async () => {
+  let payload
+  if (cleanMode.value === 'all') {
+    payload = { mode: 'all' }
+  } else if (cleanMode.value === 'months') {
+    if (!selectedMonths.value.length) return
+    payload = { mode: 'months', months: [...selectedMonths.value] }
+  } else {
+    if (!selectedDays.value.length) return
+    payload = { mode: 'days', days: [...selectedDays.value] }
+  }
+  cleaningAudit.value = true
+  try {
+    const res = await orgStore.deleteAuditLog(orgID.value, payload)
+    showCleanModal.value = false
+    showToast(t('orgs.auditDeleted', { count: res.deleted }))
+    await refreshAudit()
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  } finally {
+    cleaningAudit.value = false
   }
 }
 
@@ -1400,6 +1662,213 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 .audit-meta { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 .audit-actor { font-size: 0.78rem; font-family: monospace; color: var(--secondary-text-color); }
 .audit-time { font-size: 0.78rem; color: var(--secondary-text-color); }
+
+/* Audit log — load more / retention */
+.audit-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 4px;
+}
+
+.audit-retention-note {
+  font-size: 0.72rem;
+  color: var(--secondary-text-color);
+  white-space: nowrap;
+}
+
+.btn-clean {
+  color: #ef4444;
+  border-color: rgba(239,68,68,0.3);
+}
+.btn-clean:hover { background: rgba(239,68,68,0.07); }
+
+/* Clean modal */
+.modal-clean { max-width: 520px; }
+
+.clean-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  background: var(--background-color);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.clean-tab {
+  flex: 1;
+  padding: 7px 10px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--secondary-text-color);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.clean-tab.active {
+  background: var(--card-color);
+  color: var(--main-text-color);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.clean-panel { min-height: 180px; }
+
+.clean-warn {
+  font-size: 0.88rem;
+  color: #ef4444;
+  background: rgba(239,68,68,0.07);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 0;
+}
+
+.clean-empty {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--secondary-text-color);
+  font-size: 0.85rem;
+}
+
+.clean-selection-hint {
+  font-size: 0.78rem;
+  color: var(--secondary-text-color);
+  margin: 10px 0 0;
+  text-align: center;
+}
+
+/* Month grid */
+.month-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.month-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--background-color);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--main-text-color);
+  transition: background 0.15s, border-color 0.15s;
+}
+.month-chip:hover { background: var(--hover-background-color); }
+.month-chip.selected {
+  background: rgba(239,68,68,0.08);
+  border-color: rgba(239,68,68,0.4);
+  color: #ef4444;
+}
+
+.month-label { white-space: nowrap; }
+
+.month-count {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--border-color);
+  color: var(--secondary-text-color);
+}
+.month-chip.selected .month-count {
+  background: rgba(239,68,68,0.2);
+  color: #ef4444;
+}
+
+/* Calendar */
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.cal-month-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--main-text-color);
+  text-transform: capitalize;
+}
+
+.cal-nav-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--secondary-text-color);
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s, color 0.15s;
+}
+.cal-nav-btn:hover:not(:disabled) { background: var(--hover-background-color); color: var(--main-text-color); }
+.cal-nav-btn:disabled { opacity: 0.3; cursor: default; }
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.cal-dow {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--secondary-text-color);
+  text-align: center;
+  padding: 4px 0;
+  text-transform: uppercase;
+}
+
+.cal-cell {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: default;
+  position: relative;
+  gap: 1px;
+  transition: background 0.1s;
+}
+
+.cal-cell.cal-empty { visibility: hidden; }
+
+.cal-cell.cal-none {
+  color: var(--secondary-text-color);
+  opacity: 0.4;
+}
+
+.cal-cell.cal-has {
+  cursor: pointer;
+  background: rgba(99,102,241,0.07);
+  color: var(--primary-color);
+}
+.cal-cell.cal-has:hover { background: rgba(99,102,241,0.15); }
+
+.cal-cell.cal-selected {
+  background: rgba(239,68,68,0.12) !important;
+  color: #ef4444 !important;
+}
+.cal-cell.cal-selected:hover { background: rgba(239,68,68,0.2) !important; }
+
+.cal-day-num {
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.cal-day-count {
+  font-size: 0.58rem;
+  font-weight: 700;
+  opacity: 0.75;
+}
 
 /* Key provisioning */
 .key-missing-badge {

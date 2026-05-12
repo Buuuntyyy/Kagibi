@@ -394,6 +394,8 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 
 	// Audit log (admin/owner only)
 	orgsG.GET("/:orgID/audit", h.ListAuditLog)
+	orgsG.GET("/:orgID/audit/summary", h.AuditSummary)
+	orgsG.DELETE("/:orgID/audit", h.DeleteAuditLog)
 
 	// Key management
 	orgsG.GET("/:orgID/fs/all-keys", h.GetOrgAllFileKeys)
