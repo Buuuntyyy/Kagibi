@@ -187,7 +187,21 @@ Owner (frontend)
 
 ### Journal d'audit
 
-Le journal d'audit est accessible aux admins et propriétaires via `GET /orgs/:id/audit` (50 entrées par page, ordre chronologique inverse).
+Le journal d'audit est accessible aux admins et propriétaires via `GET /orgs/:id/audit` (50 entrées par page, ordre chronologique inverse). Seules les entrées des **12 derniers mois** sont retournées ; les entrées plus anciennes sont automatiquement masquées.
+
+#### Suppression des logs
+
+Les admins et propriétaires peuvent supprimer des entrées via `DELETE /orgs/:id/audit` avec trois modes :
+
+| Mode | Corps JSON | Effet |
+|------|-----------|-------|
+| `"all"` | `{ "mode": "all" }` | Supprime toutes les entrées de l'organisation |
+| `"months"` | `{ "mode": "months", "months": ["2026-01", "2026-02"] }` | Supprime les entrées des mois YYYY-MM indiqués |
+| `"days"` | `{ "mode": "days", "days": ["2026-01-15"] }` | Supprime les entrées des jours YYYY-MM-DD indiqués |
+
+La suppression elle-même est tracée dans le journal (`audit_cleared`).
+
+Le résumé par jour (pour construire l'interface calendrier) est disponible via `GET /orgs/:id/audit/summary` — retourne `{ "days": { "YYYY-MM-DD": count } }` pour la dernière année.
 
 #### Actions enregistrées
 
@@ -205,6 +219,7 @@ Le journal d'audit est accessible aux admins et propriétaires via `GET /orgs/:i
 | `invitation_revoked` | Révocation d'une invitation |
 | `permission_set` | Création ou mise à jour d'un override de permission |
 | `permission_removed` | Suppression d'un override de permission |
+| `audit_cleared` | Suppression d'entrées du journal d'audit |
 
 ---
 
@@ -339,7 +354,9 @@ Sur le cloud, les routes marquées ★ renvoient HTTP 402 pour les utilisateurs 
 
 | Méthode | Route | Auth | Description |
 |---------|-------|------|-------------|
-| `GET` | `/api/v1/orgs/:orgID/audit` | JWT (admin+) | Journal d'audit (50/page) |
+| `GET` | `/api/v1/orgs/:orgID/audit` | JWT (admin+) | Journal d'audit (50/page, dernière année) |
+| `GET` | `/api/v1/orgs/:orgID/audit/summary` | JWT (admin+) | Comptage par jour pour la dernière année |
+| `DELETE` | `/api/v1/orgs/:orgID/audit` | JWT (admin+) | Supprimer des entrées (all / months / days) |
 | `GET` | `/api/v1/orgs/:orgID/fs/all-keys` | JWT (admin+) | Toutes les FileKeys (pour rotation) |
 | `POST` | `/api/v1/orgs/:orgID/rotate-key` | JWT (owner) | Pivoter la clé d'organisation |
 
@@ -553,7 +570,21 @@ Owner (frontend)
 
 ### Audit log
 
-The audit log is accessible to admins and the owner via `GET /orgs/:id/audit` (50 entries per page, reverse chronological order).
+The audit log is accessible to admins and the owner via `GET /orgs/:id/audit` (50 entries per page, reverse chronological order). Only entries from the **last 12 months** are returned; older entries are automatically hidden.
+
+#### Log deletion
+
+Admins and the owner can delete entries via `DELETE /orgs/:id/audit` using three modes:
+
+| Mode | JSON body | Effect |
+|------|-----------|--------|
+| `"all"` | `{ "mode": "all" }` | Deletes all entries for this organisation |
+| `"months"` | `{ "mode": "months", "months": ["2026-01", "2026-02"] }` | Deletes entries for the specified YYYY-MM months |
+| `"days"` | `{ "mode": "days", "days": ["2026-01-15"] }` | Deletes entries for the specified YYYY-MM-DD days |
+
+The deletion itself is recorded in the log (`audit_cleared`).
+
+The per-day summary (used to build the calendar UI) is available via `GET /orgs/:id/audit/summary` — returns `{ "days": { "YYYY-MM-DD": count } }` for the past year.
 
 #### Recorded actions
 
@@ -571,6 +602,7 @@ The audit log is accessible to admins and the owner via `GET /orgs/:id/audit` (5
 | `invitation_revoked` | Invitation revoked |
 | `permission_set` | Permission override created or updated |
 | `permission_removed` | Permission override deleted |
+| `audit_cleared` | Audit log entries deleted |
 
 ---
 
@@ -705,7 +737,9 @@ On cloud, routes marked ★ return HTTP 402 for users on the free plan.
 
 | Method | Route | Auth | Description |
 |--------|-------|------|-------------|
-| `GET` | `/api/v1/orgs/:orgID/audit` | JWT (admin+) | Audit log (50 per page) |
+| `GET` | `/api/v1/orgs/:orgID/audit` | JWT (admin+) | Audit log (50 per page, last year) |
+| `GET` | `/api/v1/orgs/:orgID/audit/summary` | JWT (admin+) | Per-day entry counts for the last year |
+| `DELETE` | `/api/v1/orgs/:orgID/audit` | JWT (admin+) | Delete entries (all / months / days) |
 | `GET` | `/api/v1/orgs/:orgID/fs/all-keys` | JWT (admin+) | All file keys (for rotation) |
 | `POST` | `/api/v1/orgs/:orgID/rotate-key` | JWT (owner) | Rotate the organisation key |
 

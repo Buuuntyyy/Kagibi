@@ -29,6 +29,7 @@ export const useOrgStore = defineStore('organizations', () => {
   const currentItems = ref({ folders: [], files: [], current_path: '/' })
   const permissions = ref([])
   const auditLog = ref([])
+  const auditSummary = ref({})
   // Maps encrypted folder/file name segment → decrypted display name.
   // Populated during fetchItems so breadcrumb and file-list displays stay in sync.
   const folderNameCache = ref({})
@@ -475,8 +476,23 @@ export const useOrgStore = defineStore('organizations', () => {
 
   async function fetchAuditLog(orgID, page = 1) {
     const { data } = await api.get(`/orgs/${orgID}/audit`, { params: { page } })
-    auditLog.value = data || []
-    return auditLog.value
+    const entries = data || []
+    if (page === 1) {
+      auditLog.value = entries
+    } else {
+      auditLog.value = [...auditLog.value, ...entries]
+    }
+    return entries
+  }
+
+  async function fetchAuditSummary(orgID) {
+    const { data } = await api.get(`/orgs/${orgID}/audit/summary`)
+    auditSummary.value = data?.days || {}
+  }
+
+  async function deleteAuditLog(orgID, payload) {
+    const { data } = await api.delete(`/orgs/${orgID}/audit`, { data: payload })
+    return data
   }
 
   // ── Key rotation ──────────────────────────────────────────────────────────
@@ -585,6 +601,7 @@ export const useOrgStore = defineStore('organizations', () => {
     currentItems.value = { folders: [], files: [], current_path: '/' }
     permissions.value = []
     auditLog.value = []
+    auditSummary.value = {}
     folderNameCache.value = {}
     loading.value = false
     error.value = null
@@ -592,14 +609,14 @@ export const useOrgStore = defineStore('organizations', () => {
   }
 
   return {
-    orgs, currentOrg, members, invitations, currentItems, permissions, auditLog, folderNameCache, loading, error,
+    orgs, currentOrg, members, invitations, currentItems, permissions, auditLog, auditSummary, folderNameCache, loading, error,
     fetchOrgs, fetchOrg, createOrg, updateOrg, deleteOrg,
     fetchMembers, updateMemberRole, removeMember, provisionMemberKey, setMemberKey,
     fetchInvitations, createInvitation, revokeInvitation, getInvitation, acceptInvitation,
     fetchItems, createFolder, deleteFolder, deleteFile, downloadFile, getFileKey,
     uploadOrgFile, initiateUpload, completeUpload, abortUpload,
     fetchPermissions, setPermission, deletePermission,
-    fetchAuditLog, fetchAllFileKeys, rotateOrgKey, initializeOrgKey,
+    fetchAuditLog, fetchAuditSummary, deleteAuditLog, fetchAllFileKeys, rotateOrgKey, initializeOrgKey,
     $reset,
   }
 })
