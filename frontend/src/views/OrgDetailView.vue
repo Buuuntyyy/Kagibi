@@ -624,6 +624,14 @@
       :folder="accessDialogFolder"
       :canManage="canManage"
     />
+
+    <!-- Onboarding wizard (first org creation only) -->
+    <OrgOnboardingWizard
+      v-if="showOnboardingWizard && orgStore.currentOrg"
+      :orgId="orgID"
+      :orgName="orgStore.currentOrg.name"
+      @close="showOnboardingWizard = false"
+    />
   </div>
 </template>
 
@@ -636,6 +644,7 @@ import { useAuthStore } from '../stores/auth'
 import { useRealtimeStore } from '../stores/realtime'
 import OrgGroupsPanel from '../components/organizations/OrgGroupsPanel.vue'
 import OrgFolderAccessDialog from '../components/organizations/OrgFolderAccessDialog.vue'
+import OrgOnboardingWizard from '../components/organizations/OrgOnboardingWizard.vue'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -785,6 +794,8 @@ const formatMonthLabel = (m) => {
 
 let _unsubOrgUpdate = null
 
+const showOnboardingWizard = ref(false)
+
 onMounted(async () => {
   await orgStore.fetchOrg(orgID.value)
   await orgStore.fetchItems(orgID.value, '/')
@@ -794,6 +805,12 @@ onMounted(async () => {
     name: orgStore.currentOrg.name,
     description: orgStore.currentOrg.description,
     storageQuotaMB: orgStore.currentOrg.storage_quota_mb,
+  }
+
+  const pendingOrgId = localStorage.getItem('kagibi_org_onboarding')
+  if (pendingOrgId && parseInt(pendingOrgId) === orgID.value) {
+    localStorage.removeItem('kagibi_org_onboarding')
+    showOnboardingWizard.value = true
   }
 
   // Refresh members list when someone joins or leaves this org
