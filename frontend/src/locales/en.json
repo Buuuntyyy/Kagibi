@@ -683,7 +683,31 @@
     "removeLogo": "Remove logo",
     "removeLogoConfirm": "Remove the organization logo?",
     "logoUpdated": "Logo updated",
-    "logoRemoved": "Logo removed"
+    "logoRemoved": "Logo removed",
+    "wizard": {
+      "welcomeTitle": "Welcome to {name}!",
+      "welcomeDesc": "Your organization is ready. Follow these two quick steps to get started.",
+      "step2Title": "Invite your team",
+      "step2Desc": "Generate a secure invite link. Each member gets their own encrypted access — no manual key setup needed.",
+      "generateInvite": "Generate an invite link",
+      "inviteGenerated": "Invite link ready",
+      "inviteHint": "Anyone with this link can join as a member. You can revoke it at any time from the Invitations tab.",
+      "step3Title": "Create your first folder",
+      "step3Desc": "Organize your team's files into encrypted shared folders. You can create as many as you need.",
+      "folderPlaceholder": "Folder name",
+      "folderSuggestions": "Documents,Projects,Resources,Shared",
+      "createFolder": "Create",
+      "folderCreatedMsg": "\"{name}\" created!",
+      "doneTitle": "Your workspace is ready!",
+      "doneDesc": "Start uploading files and collaborating with your team.",
+      "checkKey": "End-to-end encryption active",
+      "checkInvite": "Invite link generated",
+      "checkFolder": "First folder created",
+      "next": "Next",
+      "skip": "Skip this step",
+      "finish": "Finish",
+      "startUsing": "Start using Kagibi"
+    }
   },
   "join": {
     "loading": "Verifying invitation...",

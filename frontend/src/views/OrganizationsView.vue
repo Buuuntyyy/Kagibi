@@ -183,6 +183,7 @@ const handleCreate = async () => {
     const org = await orgStore.createOrg(form.value.name, form.value.description, form.value.storageQuotaMB)
     showCreateModal.value = false
     form.value = { name: '', description: '', storageQuotaMB: 10240 }
+    localStorage.setItem('kagibi_org_onboarding', String(org.id))
     router.push(`/dashboard/organizations/${org.id}`)
   } catch (e) {
     createError.value = e.response?.data?.error || e.message

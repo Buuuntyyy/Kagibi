@@ -683,7 +683,31 @@
     "removeLogo": "Supprimer le logo",
     "removeLogoConfirm": "Supprimer le logo de l'organisation ?",
     "logoUpdated": "Logo mis à jour",
-    "logoRemoved": "Logo supprimé"
+    "logoRemoved": "Logo supprimé",
+    "wizard": {
+      "welcomeTitle": "Bienvenue dans {name} !",
+      "welcomeDesc": "Votre organisation est prête. Suivez ces deux étapes rapides pour démarrer.",
+      "step2Title": "Invitez votre équipe",
+      "step2Desc": "Générez un lien d'invitation sécurisé. Chaque membre obtient son propre accès chiffré — sans configuration manuelle des clés.",
+      "generateInvite": "Générer un lien d'invitation",
+      "inviteGenerated": "Lien d'invitation prêt",
+      "inviteHint": "Toute personne avec ce lien peut rejoindre en tant que membre. Révoquez-le à tout moment depuis l'onglet Invitations.",
+      "step3Title": "Créez votre premier dossier",
+      "step3Desc": "Organisez les fichiers de votre équipe dans des dossiers partagés chiffrés. Créez-en autant que nécessaire.",
+      "folderPlaceholder": "Nom du dossier",
+      "folderSuggestions": "Documents,Projets,Ressources,Partagé",
+      "createFolder": "Créer",
+      "folderCreatedMsg": "« {name} » créé !",
+      "doneTitle": "Votre espace est prêt !",
+      "doneDesc": "Commencez à importer des fichiers et à collaborer avec votre équipe.",
+      "checkKey": "Chiffrement de bout en bout actif",
+      "checkInvite": "Lien d'invitation généré",
+      "checkFolder": "Premier dossier créé",
+      "next": "Suivant",
+      "skip": "Passer cette étape",
+      "finish": "Terminer",
+      "startUsing": "Commencer à utiliser Kagibi"
+    }
   },
   "join": {
     "loading": "Vérification de l'invitation...",
