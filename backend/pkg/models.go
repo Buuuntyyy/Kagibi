@@ -283,15 +283,16 @@ type P2PSignal struct {
 type Organization struct {
 	bun.BaseModel `bun:"table:organizations,alias:org"`
 
-	ID             int64      `bun:"id,pk,autoincrement" json:"id"`
-	Name           string     `bun:"name,notnull" json:"name"`
-	Description    string     `bun:"description" json:"description"`
-	OwnerID        string     `bun:"owner_id,notnull" json:"owner_id"`
+	ID               int64      `bun:"id,pk,autoincrement" json:"id"`
+	Name             string     `bun:"name,notnull" json:"name"`
+	Description      string     `bun:"description" json:"description"`
+	OwnerID          string     `bun:"owner_id,notnull" json:"owner_id"`
+	LogoPath         string     `bun:"logo_path,notnull,default:''" json:"logo_path,omitempty"`
 	StorageQuotaMB   int64      `bun:"storage_quota_mb,notnull,default:10240" json:"storage_quota_mb"` // 10 GB default
 	StorageUsedBytes int64      `bun:"storage_used_bytes,notnull,default:0" json:"storage_used_bytes"`
-	CreatedAt      time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt      time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
-	DeletedAt      *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
+	CreatedAt        time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt        time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	DeletedAt        *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
 }
 
 // OrgMember represents a user's membership in an organization.
@@ -374,6 +375,62 @@ type OrgFolderPermission struct {
 	PermDownload bool      `bun:"perm_download,notnull,default:true" json:"perm_download"`
 	PermMove     bool      `bun:"perm_move,notnull,default:false" json:"perm_move"`
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// OrgGroup is a named collection of org members used for bulk permission assignment.
+// source = "internal" for manually managed groups; "ldap" for directory-synced groups.
+type OrgGroup struct {
+	bun.BaseModel `bun:"table:org_groups,alias:og"`
+
+	ID          int64      `bun:"id,pk,autoincrement" json:"id"`
+	OrgID       int64      `bun:"org_id,notnull" json:"org_id"`
+	Name        string     `bun:"name,notnull" json:"name"`
+	Description string     `bun:"description" json:"description"`
+	CreatedBy   string     `bun:"created_by,notnull" json:"created_by"`
+
+	// LDAP fields — populated only when source = "ldap"
+	Source       string     `bun:"source,notnull,default:'internal'" json:"source"` // "internal" | "ldap"
+	LdapDN       string     `bun:"ldap_dn" json:"ldap_dn,omitempty"`
+	LdapGUID     string     `bun:"ldap_guid" json:"ldap_guid,omitempty"`
+	LastSyncedAt *time.Time `bun:"last_synced_at" json:"last_synced_at,omitempty"`
+
+	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
+// OrgGroupMember records a user's membership in an org group.
+// AddedBy is empty when the membership originates from an LDAP sync.
+type OrgGroupMember struct {
+	bun.BaseModel `bun:"table:org_group_members,alias:ogm"`
+
+	ID       int64     `bun:"id,pk,autoincrement" json:"id"`
+	GroupID  int64     `bun:"group_id,notnull" json:"group_id"`
+	UserID   string    `bun:"user_id,notnull" json:"user_id"`
+	Role     string    `bun:"role,notnull,default:'member'" json:"role"` // admin | member
+	AddedBy  string    `bun:"added_by" json:"added_by,omitempty"`
+	JoinedAt time.Time `bun:"joined_at,nullzero,notnull,default:current_timestamp" json:"joined_at"`
+}
+
+// OrgGroupPermission stores folder-level access overrides for a group.
+// Resolution rule: direct user overrides beat group overrides; among multiple
+// group overrides the most permissive wins ("none" at group level never blocks).
+type OrgGroupPermission struct {
+	bun.BaseModel `bun:"table:org_group_permissions,alias:ogp"`
+
+	ID           int64     `bun:"id,pk,autoincrement" json:"id"`
+	OrgID        int64     `bun:"org_id,notnull" json:"org_id"`
+	GroupID      int64     `bun:"group_id,notnull" json:"group_id"`
+	FolderPath       string    `bun:"folder_path,notnull,default:'/'" json:"folder_path"`
+	Level            string    `bun:"level,notnull" json:"level"` // read | write | manage | none
+	PermCreate       bool      `bun:"perm_create,notnull,default:false" json:"perm_create"`
+	PermDelete       bool      `bun:"perm_delete,notnull,default:false" json:"perm_delete"`
+	PermDownload     bool      `bun:"perm_download,notnull,default:true" json:"perm_download"`
+	PermMove         bool      `bun:"perm_move,notnull,default:false" json:"perm_move"`
+	// RestrictToGroups, when true, makes this path inaccessible to org members
+	// who are not in any group with an explicit permission on this path.
+	// Owners and admins are never affected.
+	RestrictToGroups bool      `bun:"restrict_to_groups,notnull,default:false" json:"restrict_to_groups"`
+	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 // OrgAuditLog records security-relevant events within an organization.

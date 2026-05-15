@@ -4,12 +4,17 @@
 package organizations
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"strconv"
+	"time"
 
 	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/s3storage"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	s3svc "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
@@ -18,6 +23,25 @@ type OrgResponse struct {
 	pkg.Organization
 	MyRole            string `json:"my_role"`
 	MyEncryptedOrgKey string `json:"my_encrypted_org_key,omitempty"`
+	IsGroupAdmin      bool   `json:"is_group_admin"`
+	LogoURL           string `json:"logo_url,omitempty"`
+}
+
+// presignLogoURL generates a 1-hour presigned GET URL for the given S3 key.
+// Returns "" if S3 is not configured or the key is empty.
+func presignLogoURL(ctx context.Context, key string) string {
+	if key == "" || s3storage.Client == nil {
+		return ""
+	}
+	presigner := s3svc.NewPresignClient(s3storage.Client)
+	req, err := presigner.PresignGetObject(ctx, &s3svc.GetObjectInput{
+		Bucket: aws.String(s3storage.BucketName),
+		Key:    aws.String(key),
+	}, s3svc.WithPresignExpires(time.Hour))
+	if err != nil {
+		return ""
+	}
+	return req.URL
 }
 
 func (h *OrgHandler) ListOrgs(c *gin.Context) {
@@ -63,6 +87,7 @@ func (h *OrgHandler) ListOrgs(c *gin.Context) {
 			Organization:      org,
 			MyRole:            roleByOrg[org.ID],
 			MyEncryptedOrgKey: keyByOrg[org.ID],
+			LogoURL:           presignLogoURL(ctx, org.LogoPath),
 		}
 	}
 	c.JSON(http.StatusOK, result)
@@ -102,9 +127,19 @@ func (h *OrgHandler) GetOrg(c *gin.Context) {
 		Where("org_id = ? AND user_id = ?", orgID, userID).
 		Scan(ctx)
 
+	var adminGroupCount int
+	_ = h.DB.NewSelect().
+		TableExpr("org_group_members ogm").
+		ColumnExpr("COUNT(*)").
+		Join("JOIN org_groups og ON og.id = ogm.group_id").
+		Where("og.org_id = ? AND ogm.user_id = ? AND ogm.role = 'admin'", orgID, userID).
+		Scan(ctx, &adminGroupCount)
+
 	c.JSON(http.StatusOK, OrgResponse{
 		Organization:      org,
 		MyRole:            role,
 		MyEncryptedOrgKey: membership.EncryptedOrgKey,
+		IsGroupAdmin:      adminGroupCount > 0,
+		LogoURL:           presignLogoURL(ctx, org.LogoPath),
 	})
 }

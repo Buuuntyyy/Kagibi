@@ -391,11 +391,31 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	orgsG.PUT("/:orgID/permissions", h.SetPermission)
 	orgsG.DELETE("/:orgID/permissions", h.DeletePermission)
 	orgsG.GET("/:orgID/permissions/me", h.GetMyPermission)
+	orgsG.GET("/:orgID/permissions/folder", h.GetFolderAccess)
+
+	// Groups (list/read: all members; create/update/delete: admin+owner)
+	orgsG.GET("/:orgID/groups", h.ListGroups)
+	orgsG.POST("/:orgID/groups", h.CreateGroup)
+	orgsG.GET("/:orgID/groups/me", h.ListMyGroups)
+	orgsG.GET("/:orgID/groups/:groupID", h.GetGroup)
+	orgsG.PATCH("/:orgID/groups/:groupID", h.UpdateGroup)
+	orgsG.DELETE("/:orgID/groups/:groupID", h.DeleteGroup)
+	orgsG.GET("/:orgID/groups/:groupID/members", h.ListGroupMembers)
+	orgsG.POST("/:orgID/groups/:groupID/members", h.AddGroupMember)
+	orgsG.DELETE("/:orgID/groups/:groupID/members/:memberID", h.RemoveGroupMember)
+	orgsG.PATCH("/:orgID/groups/:groupID/members/:memberID", h.SetGroupMemberRole)
+	orgsG.GET("/:orgID/groups/:groupID/permissions", h.ListGroupPermissions)
+	orgsG.PUT("/:orgID/groups/:groupID/permissions", h.SetGroupPermission)
+	orgsG.DELETE("/:orgID/groups/:groupID/permissions", h.DeleteGroupPermission)
 
 	// Audit log (admin/owner only)
 	orgsG.GET("/:orgID/audit", h.ListAuditLog)
 	orgsG.GET("/:orgID/audit/summary", h.AuditSummary)
 	orgsG.DELETE("/:orgID/audit", h.DeleteAuditLog)
+
+	// Custom logo
+	orgsG.PUT("/:orgID/logo", h.UploadOrgLogo)
+	orgsG.DELETE("/:orgID/logo", h.DeleteOrgLogo)
 
 	// Key management
 	orgsG.GET("/:orgID/fs/all-keys", h.GetOrgAllFileKeys)

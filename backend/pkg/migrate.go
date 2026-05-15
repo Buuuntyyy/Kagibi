@@ -106,6 +106,9 @@ func migrateCoreModels(ctx context.Context, db *bun.DB) error {
 		(*OrgFile)(nil),
 		(*OrgFolderPermission)(nil),
 		(*OrgAuditLog)(nil),
+		(*OrgGroup)(nil),
+		(*OrgGroupMember)(nil),
+		(*OrgGroupPermission)(nil),
 	}
 
 	for _, model := range models {
@@ -191,6 +194,20 @@ func migrateSchemaAlterations(ctx context.Context, db *bun.DB) error {
 		if _, err := db.ExecContext(ctx, col); err != nil {
 			log.Printf("Warning: failed to add single_use/used_at column to share_links: %v", err)
 		}
+	}
+
+	// restrict_to_groups column added after initial table creation
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "org_group_permissions" ADD COLUMN IF NOT EXISTS "restrict_to_groups" BOOLEAN NOT NULL DEFAULT false`,
+	); err != nil {
+		log.Printf("Warning: failed to add restrict_to_groups column: %v", err)
+	}
+
+	// role column for group members (admin | member)
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "org_group_members" ADD COLUMN IF NOT EXISTS "role" VARCHAR NOT NULL DEFAULT 'member'`,
+	); err != nil {
+		log.Printf("Warning: failed to add role column to org_group_members: %v", err)
 	}
 
 	// Share permissions columns
@@ -521,6 +538,13 @@ func migrateOrganizationTables(ctx context.Context, db *bun.DB) error {
 		log.Printf("Warning: failed to add storage_used_bytes to organizations: %v", err)
 	}
 
+	// logo_path stores the S3 object key for the org's custom logo (empty = no logo)
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "logo_path" TEXT NOT NULL DEFAULT ''`,
+	); err != nil {
+		log.Printf("Warning: failed to add logo_path to organizations: %v", err)
+	}
+
 	// Unique membership: one row per (org, user) pair
 	if _, err := db.ExecContext(ctx,
 		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_members_org_user ON org_members (org_id, user_id)`,
@@ -549,6 +573,28 @@ func migrateOrganizationTables(ctx context.Context, db *bun.DB) error {
 		log.Printf("Warning: failed to create org_folder_permissions unique index: %v", err)
 	}
 
+	// Groups: unique name per org, unique LDAP GUID per org
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_groups_name ON org_groups (org_id, name)`,
+	); err != nil {
+		log.Printf("Warning: failed to create uq_org_groups_name: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_groups_ldap_guid ON org_groups (org_id, ldap_guid) WHERE ldap_guid IS NOT NULL AND ldap_guid != ''`,
+	); err != nil {
+		log.Printf("Warning: failed to create uq_org_groups_ldap_guid: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_group_members ON org_group_members (group_id, user_id)`,
+	); err != nil {
+		log.Printf("Warning: failed to create uq_org_group_members: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_group_permissions ON org_group_permissions (org_id, group_id, folder_path)`,
+	); err != nil {
+		log.Printf("Warning: failed to create uq_org_group_permissions: %v", err)
+	}
+
 	for _, idx := range []string{
 		`CREATE INDEX IF NOT EXISTS idx_organizations_owner_id       ON organizations (owner_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_members_org_id           ON org_members (org_id)`,
@@ -561,6 +607,10 @@ func migrateOrganizationTables(ctx context.Context, db *bun.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_org_folders_org_parent       ON org_folders (org_id, parent_path)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_folder_perms_org_user    ON org_folder_permissions (org_id, user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_audit_logs_org_created    ON org_audit_logs (org_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_groups_org_id            ON org_groups (org_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_group_members_group_id   ON org_group_members (group_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_group_members_user_id    ON org_group_members (user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_group_perms_org_group    ON org_group_permissions (org_id, group_id)`,
 	} {
 		if _, err := db.ExecContext(ctx, idx); err != nil {
 			log.Printf("Warning: failed to create org index: %v", err)
