@@ -87,6 +87,15 @@
           </div>
         </div>
 
+        <!-- Member joined via link but admin hasn't provisioned their key yet -->
+        <div v-if="!orgStore.currentOrg?.my_encrypted_org_key && !canManage" class="key-pending-banner">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+          <div class="key-pending-text">
+            <strong>{{ t('orgs.keyPending') }}</strong>
+            <span>{{ t('orgs.keyPendingHint') }}</span>
+          </div>
+        </div>
+
         <!-- Key not yet initialized for this owner (org created before encryption was added) -->
         <div v-if="!orgStore.currentOrg?.my_encrypted_org_key && canManage" class="key-init-banner">
           <div class="key-init-icon">
@@ -210,9 +219,24 @@
         <div class="section-header">
           <h3>{{ t('orgs.members') }}</h3>
         </div>
+
+        <!-- Provision-all banner — shown when ≥1 provisionable member exists -->
+        <div v-if="canManage && membersNeedingKey.length > 0" class="provision-banner">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+          <span>{{ t('orgs.nMembersNeedKey', { count: membersNeedingKey.length }) }}</span>
+          <button
+            class="btn-provision-all"
+            @click="handleProvisionAll"
+            :disabled="provisioningAll"
+          >
+            <span v-if="provisioningAll" class="spinner-sm"></span>
+            <span v-else>{{ t('orgs.provisionAll') }}</span>
+          </button>
+        </div>
+
         <div v-if="orgStore.loading" class="loading-inline"><div class="spinner-sm-dark"></div></div>
         <div v-else class="members-list">
-          <div v-for="m in orgStore.members" :key="m.user_id" class="member-row">
+          <div v-for="m in sortedMembers" :key="m.user_id" class="member-row" :class="{ 'needs-key': canManage && !m.encrypted_org_key }">
             <div class="member-avatar">{{ (m.name || m.email || '?').charAt(0).toUpperCase() }}</div>
             <div class="member-info">
               <div class="member-name">{{ m.name || m.email }}</div>
@@ -288,6 +312,10 @@
                 <span class="role-badge" :class="inv.role">{{ t(`orgs.${inv.role}`) }}</span>
                 <span class="invite-detail">{{ inv.uses }}/{{ inv.max_uses || '∞' }} uses</span>
                 <span v-if="inv.expires_at" class="invite-detail">expires {{ formatDate(inv.expires_at) }}</span>
+                <span v-if="inv.email_notified" class="invite-email-badge">
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                  {{ t('orgs.inviteEmailSent') }}
+                </span>
               </div>
             </div>
             <button v-if="canManage" class="btn-icon-danger" @click="handleRevokeInvite(inv)" :title="t('orgs.revokeInvite')">
@@ -362,6 +390,99 @@
             </button>
           </div>
         </div>
+      </div>
+
+      <!-- TAB: DASHBOARD -->
+      <div v-if="activeTab === 'dashboard'" class="tab-content">
+        <div class="section-header">
+          <h3>{{ t('orgs.dashboard') }}</h3>
+          <button class="btn-sm" @click="refreshDashboard">{{ t('orgs.refresh') }}</button>
+        </div>
+
+        <div v-if="loadingStats" class="loading-center"><div class="spinner"></div></div>
+        <template v-else-if="orgStore.orgStats">
+          <!-- Alert: members without org key -->
+          <div v-if="orgStore.orgStats.members_no_key > 0" class="dash-alert">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+            {{ t('orgs.dashMembersNoKey', { count: orgStore.orgStats.members_no_key }) }}
+            <button class="btn-link" @click="switchTab('members')">{{ t('orgs.dashGoProvision') }}</button>
+          </div>
+
+          <!-- KPI cards -->
+          <div class="dash-kpis">
+            <div class="dash-kpi">
+              <div class="dash-kpi-value">{{ orgStore.members.length }}</div>
+              <div class="dash-kpi-label">{{ t('orgs.dashMembers') }}</div>
+            </div>
+            <div class="dash-kpi">
+              <div class="dash-kpi-value">{{ orgStore.orgStats.file_count }}</div>
+              <div class="dash-kpi-label">{{ t('orgs.dashFiles') }}</div>
+            </div>
+            <div class="dash-kpi">
+              <div class="dash-kpi-value">{{ orgStore.orgStats.folder_count }}</div>
+              <div class="dash-kpi-label">{{ t('orgs.dashFolders') }}</div>
+            </div>
+            <div class="dash-kpi">
+              <div class="dash-kpi-value">{{ orgStore.orgStats.activity_7d }}</div>
+              <div class="dash-kpi-label">{{ t('orgs.dashActivity7d') }}</div>
+            </div>
+            <div class="dash-kpi">
+              <div class="dash-kpi-value">{{ orgStore.invitations.length }}</div>
+              <div class="dash-kpi-label">{{ t('orgs.dashActiveInvites') }}</div>
+            </div>
+          </div>
+
+          <!-- Storage breakdown by member -->
+          <div class="dash-section">
+            <h4 class="dash-section-title">{{ t('orgs.dashStorageByMember') }}</h4>
+            <div v-if="orgStore.orgStats.storage_by_member.length === 0" class="empty-tab">
+              <p>{{ t('orgs.dashNoFiles') }}</p>
+            </div>
+            <div v-else class="dash-storage-list">
+              <div
+                v-for="stat in orgStore.orgStats.storage_by_member"
+                :key="stat.user_id"
+                class="dash-storage-row"
+              >
+                <div class="dash-storage-identity">
+                  <div class="member-avatar small">{{ (stat.name || stat.user_id).charAt(0).toUpperCase() }}</div>
+                  <div class="dash-storage-name">{{ stat.name || stat.user_id.slice(0, 8) }}</div>
+                </div>
+                <div class="dash-storage-bar-wrap">
+                  <div
+                    class="dash-storage-bar"
+                    :style="{ width: memberStoragePercent(stat) + '%' }"
+                  ></div>
+                </div>
+                <div class="dash-storage-meta">
+                  <span>{{ formatSize(stat.storage_bytes) }}</span>
+                  <span class="dash-file-count">{{ stat.file_count }} {{ t('orgs.dashFileCount') }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent audit activity -->
+          <div class="dash-section" v-if="canManage">
+            <h4 class="dash-section-title">{{ t('orgs.dashRecentActivity') }}</h4>
+            <div v-if="orgStore.auditLog.length === 0" class="empty-tab">
+              <p>{{ t('orgs.noAuditEvents') }}</p>
+            </div>
+            <div v-else class="audit-list">
+              <div v-for="entry in orgStore.auditLog.slice(0, 8)" :key="entry.id" class="audit-row">
+                <div class="audit-action">
+                  <span class="audit-badge" :class="entry.action">{{ t(`orgs.audit_${entry.action}`, entry.action) }}</span>
+                  <span v-if="entry.detail" class="audit-detail">{{ entry.detail }}</span>
+                </div>
+                <div class="audit-meta">
+                  <span class="audit-actor" :title="entry.actor_id">{{ entry.actor_id.slice(0, 8) }}</span>
+                  <span class="audit-time">{{ formatDate(entry.created_at) }}</span>
+                </div>
+              </div>
+            </div>
+            <button class="btn-link dash-audit-link" @click="switchTab('audit')">{{ t('orgs.dashViewAllActivity') }} →</button>
+          </div>
+        </template>
       </div>
 
       <!-- TAB: SETTINGS -->
@@ -465,6 +586,40 @@
               <label>{{ t('orgs.inviteExpiry') }}</label>
               <input v-model="inviteForm.expiresAt" class="input-field" type="datetime-local" />
             </div>
+
+            <div class="invite-email-section">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="inviteForm.sendEmail" />
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                {{ t('orgs.inviteEmailSection') }}
+              </label>
+              <template v-if="inviteForm.sendEmail">
+                <div class="form-group" style="margin-bottom:0">
+                  <input
+                    v-model="inviteForm.recipientEmail"
+                    class="input-field"
+                    type="email"
+                    :placeholder="t('orgs.inviteEmailPlaceholder')"
+                  />
+                </div>
+                <div class="invite-lang-row">
+                  <span class="invite-lang-label">{{ t('orgs.inviteEmailLang') }}</span>
+                  <div class="lang-toggle">
+                    <button
+                      class="lang-btn"
+                      :class="{ active: inviteForm.emailLang === 'fr' }"
+                      @click="inviteForm.emailLang = 'fr'"
+                    >🇫🇷 {{ t('orgs.inviteEmailLangFr') }}</button>
+                    <button
+                      class="lang-btn"
+                      :class="{ active: inviteForm.emailLang === 'en' }"
+                      @click="inviteForm.emailLang = 'en'"
+                    >🇬🇧 {{ t('orgs.inviteEmailLangEn') }}</button>
+                  </div>
+                </div>
+              </template>
+            </div>
+
             <p v-if="inviteError" class="form-error">{{ inviteError }}</p>
           </div>
           <div class="modal-footer">
@@ -683,6 +838,7 @@ const tabs = computed(() => {
     { key: 'files', label: t('orgs.files'), icon: TabIcon(['M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z']) },
     { key: 'members', label: t('orgs.members'), icon: TabIcon(['M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z']), count: orgStore.members.length || null },
     { key: 'profile', label: t('orgs.myProfile'), icon: TabIcon(['M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z']) },
+    { key: 'dashboard', label: t('orgs.dashboard'), icon: TabIcon(['M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z']) },
   ]
   if (canManage.value || isGroupAdmin.value) {
     base.push(
@@ -790,6 +946,39 @@ const formatMonthLabel = (m) => {
   return new Date(parseInt(year), parseInt(month) - 1, 1).toLocaleDateString(locale.value, { month: 'long', year: 'numeric' })
 }
 
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
+const loadingStats = ref(false)
+
+const loadDashboard = async () => {
+  loadingStats.value = true
+  try {
+    await Promise.all([
+      orgStore.fetchOrgStats(orgID.value),
+      canManage.value && orgStore.auditLog.length === 0
+        ? orgStore.fetchAuditLog(orgID.value, 1)
+        : Promise.resolve(),
+      orgStore.invitations.length === 0
+        ? orgStore.fetchInvitations(orgID.value)
+        : Promise.resolve(),
+    ])
+  } finally {
+    loadingStats.value = false
+  }
+}
+
+const refreshDashboard = () => loadDashboard()
+
+const maxMemberStorage = computed(() => {
+  const s = orgStore.orgStats?.storage_by_member
+  if (!s || s.length === 0) return 1
+  return Math.max(...s.map(m => m.storage_bytes), 1)
+})
+
+const memberStoragePercent = (stat) => {
+  return Math.round((stat.storage_bytes / maxMemberStorage.value) * 100)
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 let _unsubOrgUpdate = null
@@ -813,10 +1002,20 @@ onMounted(async () => {
     showOnboardingWizard.value = true
   }
 
-  // Refresh members list when someone joins or leaves this org
-  _unsubOrgUpdate = realtimeStore.onEvent('org_update', (payload) => {
+  // Refresh members list and notify admin when someone joins or leaves this org
+  _unsubOrgUpdate = realtimeStore.onEvent('org_update', async (payload) => {
     if (payload?.org_id !== orgID.value) return
-    orgStore.fetchMembers(orgID.value)
+    await orgStore.fetchMembers(orgID.value)
+
+    if (payload?.action === 'member_joined' && canManage.value) {
+      const newMember = orgStore.members.find(m => m.user_id === payload.user_id)
+      const displayName = newMember?.name || payload.user_id?.slice(0, 8) || '?'
+      if (newMember && !newMember.encrypted_org_key && newMember.public_key) {
+        showToast(t('orgs.memberJoinedNeedsKey', { name: displayName }), 'info')
+      } else {
+        showToast(t('orgs.memberJoined', { name: displayName }))
+      }
+    }
   })
 })
 
@@ -839,6 +1038,7 @@ const switchTab = async (tab) => {
     const entries = await orgStore.fetchAuditLog(orgID.value, 1)
     auditHasMore.value = entries.length === 50
   }
+  if (tab === 'dashboard') await loadDashboard()
 }
 
 // ── File system ───────────────────────────────────────────────────────────────
@@ -991,6 +1191,22 @@ const handleInitKey = async () => {
 // ── Key provisioning ──────────────────────────────────────────────────────────
 
 const provisioningKey = ref(null) // member.id being provisioned
+const provisioningAll = ref(false)
+
+// Members who can be provisioned right now (have a public key but no org key yet).
+const membersNeedingKey = computed(() =>
+  orgStore.members.filter(m => !m.encrypted_org_key && m.public_key && m.user_id !== myUserID.value)
+)
+
+// Sort: members needing provisioning first, then alphabetically by name.
+const sortedMembers = computed(() => {
+  return [...orgStore.members].sort((a, b) => {
+    const aNeedsKey = !a.encrypted_org_key ? 0 : 1
+    const bNeedsKey = !b.encrypted_org_key ? 0 : 1
+    if (aNeedsKey !== bNeedsKey) return aNeedsKey - bNeedsKey
+    return (a.name || '').localeCompare(b.name || '')
+  })
+})
 
 const handleProvisionKey = async (member) => {
   provisioningKey.value = member.id
@@ -1001,6 +1217,18 @@ const handleProvisionKey = async (member) => {
     showToast(e.response?.data?.error || e.message, 'error')
   } finally {
     provisioningKey.value = null
+  }
+}
+
+const handleProvisionAll = async () => {
+  provisioningAll.value = true
+  try {
+    const count = await orgStore.provisionAllMissingKeys(orgID.value)
+    showToast(t('orgs.allKeysProvisioned', { count }))
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  } finally {
+    provisioningAll.value = false
   }
 }
 
@@ -1033,7 +1261,7 @@ const handleRemoveMember = async (member) => {
 const showInviteModal = ref(false)
 const creatingInvite = ref(false)
 const inviteError = ref('')
-const inviteForm = ref({ role: 'member', maxUses: 0, expiresAt: '' })
+const inviteForm = ref({ role: 'member', maxUses: 0, expiresAt: '', sendEmail: false, recipientEmail: '', emailLang: locale.value === 'fr' ? 'fr' : 'en' })
 
 const handleCreateInvite = async () => {
   creatingInvite.value = true
@@ -1042,14 +1270,21 @@ const handleCreateInvite = async () => {
     const payload = {
       role: inviteForm.value.role,
       max_uses: inviteForm.value.maxUses,
+      send_email: inviteForm.value.sendEmail,
+      recipient_email: inviteForm.value.recipientEmail,
+      email_lang: inviteForm.value.emailLang,
     }
     if (inviteForm.value.expiresAt) {
       payload.expires_at = new Date(inviteForm.value.expiresAt).toISOString()
     }
-    await orgStore.createInvitation(orgID.value, payload)
+    const inv = await orgStore.createInvitation(orgID.value, payload)
     showInviteModal.value = false
-    inviteForm.value = { role: 'member', maxUses: 0, expiresAt: '' }
-    showToast(t('orgs.inviteCreated'))
+    inviteForm.value = { role: 'member', maxUses: 0, expiresAt: '', sendEmail: false, recipientEmail: '', emailLang: locale.value === 'fr' ? 'fr' : 'en' }
+    if (inv.email_notified) {
+      showToast(t('orgs.inviteCreatedWithEmail'))
+    } else {
+      showToast(t('orgs.inviteCreated'))
+    }
   } catch (e) {
     inviteError.value = e.response?.data?.error || e.message
   } finally {
@@ -1855,9 +2090,93 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 
 .btn-copy:hover { color: var(--primary-color); }
 
-.invite-meta { display: flex; align-items: center; gap: 8px; }
+.invite-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .invite-detail { font-size: 0.75rem; color: var(--secondary-text-color); }
+
+.invite-email-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: #2A9D8F;
+  background: color-mix(in srgb, #2A9D8F 10%, transparent);
+  padding: 2px 7px;
+  border-radius: 10px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Email section in invite modal */
+.invite-email-section {
+  border-top: 1px solid var(--border-color);
+  padding-top: 14px;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--secondary-text-color);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  user-select: none;
+}
+
+.invite-email-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--secondary-text-color);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.invite-lang-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.invite-lang-label {
+  font-size: 0.82rem;
+  color: var(--secondary-text-color);
+  white-space: nowrap;
+}
+
+.lang-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.lang-btn {
+  background: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--secondary-text-color);
+  transition: border-color 0.15s, color 0.15s;
+}
+.lang-btn:hover { border-color: var(--primary-color); }
+.lang-btn.active {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+}
 
 /* Permissions */
 .permissions-list { display: flex; flex-direction: column; gap: 8px; }
@@ -2504,6 +2823,69 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 .btn-init-key:hover:not(:disabled) { opacity: 0.87; }
 .btn-init-key:disabled { opacity: 0.6; cursor: not-allowed; }
 
+/* Key-pending banner — for members waiting on admin provisioning */
+.key-pending-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background: color-mix(in srgb, var(--primary-color) 6%, var(--card-color));
+  border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent);
+  border-radius: 10px;
+  color: var(--secondary-text-color);
+}
+
+.key-pending-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.key-pending-text strong { font-size: 0.84rem; color: var(--main-text-color); font-weight: 600; }
+.key-pending-text span   { font-size: 0.75rem; color: var(--secondary-text-color); }
+
+/* Provision-all banner in members tab */
+.provision-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent);
+  border-radius: 8px;
+  font-size: 0.83rem;
+  color: var(--main-text-color);
+}
+
+.provision-banner svg { flex-shrink: 0; color: var(--primary-color); }
+
+.btn-provision-all {
+  margin-left: auto;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.btn-provision-all:hover:not(:disabled) { opacity: 0.87; }
+.btn-provision-all:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Highlight member rows needing key provision */
+.member-row.needs-key {
+  border-left: 3px solid color-mix(in srgb, var(--primary-color) 60%, transparent);
+  padding-left: calc(var(--member-row-padding, 12px) - 3px);
+}
+
 /* Upload progress queue */
 .upload-queue {
   display: flex;
@@ -2575,6 +2957,7 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 
 .toast.error { background: #dc2626; }
 .toast.success { background: #16a34a; }
+.toast.info { background: #2563eb; }
 
 .toast-enter-active, .toast-leave-active { transition: opacity 0.25s, transform 0.25s; }
 .toast-enter-from, .toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(12px); }
@@ -2637,5 +3020,140 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   .storage-indicator { display: none; }
   .tab-btn     { padding: 10px 10px; font-size: 0.8rem; gap: 4px; }
   .tab-count   { display: none; }
+}
+
+/* ── Dashboard ─────────────────────────────────────────────────────────────── */
+.dash-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: color-mix(in srgb, var(--warning-color, #f59e0b) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warning-color, #f59e0b) 35%, transparent);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  color: var(--main-text-color);
+  margin-bottom: 16px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--primary-color);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: underline;
+  margin-left: 4px;
+}
+
+.dash-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.dash-kpi {
+  background: var(--card-background-color, var(--hover-background-color));
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 16px 14px;
+  text-align: center;
+}
+
+.dash-kpi-value {
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  line-height: 1;
+}
+
+.dash-kpi-label {
+  font-size: 0.75rem;
+  color: var(--secondary-text-color);
+  margin-top: 6px;
+}
+
+.dash-section {
+  margin-top: 24px;
+}
+
+.dash-section-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--secondary-text-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 12px;
+}
+
+.dash-storage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dash-storage-row {
+  display: grid;
+  grid-template-columns: 160px 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.dash-storage-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.member-avatar.small {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  font-size: 0.72rem;
+}
+
+.dash-storage-name {
+  font-size: 0.84rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-storage-bar-wrap {
+  height: 8px;
+  background: var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.dash-storage-bar {
+  height: 100%;
+  background: var(--primary-color);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+  min-width: 2px;
+}
+
+.dash-storage-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.dash-file-count {
+  font-size: 0.75rem;
+  color: var(--secondary-text-color);
+}
+
+.dash-audit-link {
+  display: block;
+  margin-top: 10px;
+  font-size: 0.83rem;
 }
 </style>

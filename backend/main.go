@@ -421,6 +421,9 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	orgsG.GET("/:orgID/fs/all-keys", h.GetOrgAllFileKeys)
 	orgsG.POST("/:orgID/rotate-key", h.RotateOrgKey)
 
+	// Dashboard stats
+	orgsG.GET("/:orgID/stats", h.GetOrgStats)
+
 	// Token-based join routes — GET is public (unauthenticated preview), POST requires auth
 	public.GET("/org-invitations/:token", h.GetInvitation)
 	g.POST("/org-invitations/:token/accept", h.AcceptInvitation)

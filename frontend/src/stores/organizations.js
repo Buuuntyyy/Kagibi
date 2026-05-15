@@ -32,6 +32,7 @@ export const useOrgStore = defineStore('organizations', () => {
   const myGroups = ref([])
   const auditLog = ref([])
   const auditSummary = ref({})
+  const orgStats = ref(null)
   // Maps encrypted folder/file name segment → decrypted display name.
   // Populated during fetchItems so breadcrumb and file-list displays stay in sync.
   const folderNameCache = ref({})
@@ -202,6 +203,25 @@ export const useOrgStore = defineStore('organizations', () => {
     // Update local state so the UI refreshes immediately
     const m = members.value.find(m => m.id === member.id)
     if (m) m.encrypted_org_key = encryptedOrgKey
+  }
+
+  /**
+   * Provision the org key for every member who is missing it and has a public key.
+   * Decrypts the org key once, then wraps it for each member in sequence.
+   * Returns the count of successfully provisioned members.
+   */
+  async function provisionAllMissingKeys(orgID) {
+    const orgKey = await getOrgKey(orgID)
+    const targets = members.value.filter(m => !m.encrypted_org_key && m.public_key)
+    let count = 0
+    for (const member of targets) {
+      const encryptedOrgKey = await encryptOrgKeyForUser(orgKey, member.public_key)
+      await api.patch(`/orgs/${orgID}/members/${member.id}/key`, { encrypted_org_key: encryptedOrgKey })
+      const m = members.value.find(x => x.id === member.id)
+      if (m) m.encrypted_org_key = encryptedOrgKey
+      count++
+    }
+    return count
   }
 
   // Low-level setMemberKey (raw, for JoinView owner flow)
@@ -588,6 +608,12 @@ export const useOrgStore = defineStore('organizations', () => {
     return data
   }
 
+  async function fetchOrgStats(orgID) {
+    const { data } = await api.get(`/orgs/${orgID}/stats`)
+    orgStats.value = data
+    return data
+  }
+
   // ── Key rotation ──────────────────────────────────────────────────────────
 
   async function fetchAllFileKeys(orgID) {
@@ -704,9 +730,9 @@ export const useOrgStore = defineStore('organizations', () => {
   }
 
   return {
-    orgs, currentOrg, members, invitations, currentItems, permissions, groups, myGroups, auditLog, auditSummary, folderNameCache, loading, error,
+    orgs, currentOrg, members, invitations, currentItems, permissions, groups, myGroups, auditLog, auditSummary, orgStats, folderNameCache, loading, error,
     fetchOrgs, fetchOrg, createOrg, updateOrg, deleteOrg, uploadOrgLogo, deleteOrgLogo,
-    fetchMembers, updateMemberRole, removeMember, provisionMemberKey, setMemberKey,
+    fetchMembers, updateMemberRole, removeMember, provisionMemberKey, provisionAllMissingKeys, setMemberKey,
     fetchInvitations, createInvitation, revokeInvitation, getInvitation, acceptInvitation,
     fetchItems, createFolder, deleteFolder, deleteFile, downloadFile, getFileKey,
     uploadOrgFile, initiateUpload, completeUpload, abortUpload,
@@ -715,6 +741,7 @@ export const useOrgStore = defineStore('organizations', () => {
     addGroupMember, removeGroupMember, updateGroupMemberRole, fetchGroupMembers,
     setGroupPermission, deleteGroupPermission, fetchGroupPermissions,
     fetchAuditLog, fetchAuditSummary, deleteAuditLog, fetchAllFileKeys, rotateOrgKey, initializeOrgKey,
+    fetchOrgStats,
     $reset,
   }
 })

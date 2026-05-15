@@ -311,18 +311,19 @@ type OrgMember struct {
 type OrgInvitation struct {
 	bun.BaseModel `bun:"table:org_invitations,alias:oi"`
 
-	ID              int64      `bun:"id,pk,autoincrement" json:"id"`
-	OrgID           int64      `bun:"org_id,notnull" json:"org_id"`
-	InvitedBy       string     `bun:"invited_by,notnull" json:"invited_by"`
-	Token           string     `bun:"token,unique,notnull" json:"token"`
-	TargetUserID    *string    `bun:"target_user_id" json:"target_user_id,omitempty"`    // set for direct invites
-	EncryptedOrgKey string     `bun:"encrypted_org_key" json:"encrypted_org_key,omitempty"` // pre-encrypted for direct invites
-	Role            string     `bun:"role,notnull,default:'member'" json:"role"`
-	MaxUses         int        `bun:"max_uses,notnull,default:0" json:"max_uses"` // 0 = unlimited
-	Uses            int        `bun:"uses,notnull,default:0" json:"uses"`
-	ExpiresAt       *time.Time `bun:"expires_at" json:"expires_at,omitempty"`
-	Status          string     `bun:"status,notnull,default:'active'" json:"status"` // active | revoked
-	CreatedAt       time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	ID                     int64      `bun:"id,pk,autoincrement" json:"id"`
+	OrgID                  int64      `bun:"org_id,notnull" json:"org_id"`
+	InvitedBy              string     `bun:"invited_by,notnull" json:"invited_by"`
+	Token                  string     `bun:"token,unique,notnull" json:"token"`
+	TargetUserID           *string    `bun:"target_user_id" json:"target_user_id,omitempty"`       // set for direct invites
+	EncryptedOrgKey        string     `bun:"encrypted_org_key" json:"encrypted_org_key,omitempty"` // pre-encrypted for direct invites
+	NotifiedEmailEncrypted string     `bun:"notified_email_encrypted" json:"-"`                    // AES-256-GCM encrypted recipient email
+	Role                   string     `bun:"role,notnull,default:'member'" json:"role"`
+	MaxUses                int        `bun:"max_uses,notnull,default:0" json:"max_uses"` // 0 = unlimited
+	Uses                   int        `bun:"uses,notnull,default:0" json:"uses"`
+	ExpiresAt              *time.Time `bun:"expires_at" json:"expires_at,omitempty"`
+	Status                 string     `bun:"status,notnull,default:'active'" json:"status"` // active | revoked
+	CreatedAt              time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 // OrgFolder is a directory inside an organization's shared storage.

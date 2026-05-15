@@ -4,14 +4,20 @@
 package organizations
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/emailcrypto"
+	"kagibi/backend/pkg/mailer"
 
 	"github.com/gin-gonic/gin"
 )
@@ -47,6 +53,9 @@ func (h *OrgHandler) CreateInvitation(c *gin.Context) {
 		ExpiresAt       *time.Time `json:"expires_at"`
 		TargetUserID    *string    `json:"target_user_id"`    // nil = link invite, set = direct invite
 		EncryptedOrgKey string     `json:"encrypted_org_key"` // pre-encrypted for direct invites
+		SendEmail       bool       `json:"send_email"`        // whether to send a notification email
+		RecipientEmail  string     `json:"recipient_email"`   // address to notify (not stored in plaintext)
+		EmailLang       string     `json:"email_lang"`        // "fr" or "en"
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -99,16 +108,31 @@ func (h *OrgHandler) CreateInvitation(c *gin.Context) {
 		return
 	}
 
+	// Normalise and encrypt the recipient email when the caller requests a notification.
+	recipientEmail := strings.ToLower(strings.TrimSpace(req.RecipientEmail))
+	emailQueued := req.SendEmail && recipientEmail != ""
+
+	var notifiedEmailEncrypted string
+	if emailQueued {
+		enc, err := emailcrypto.Encrypt(recipientEmail)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encrypt recipient email"})
+			return
+		}
+		notifiedEmailEncrypted = enc
+	}
+
 	inv := &pkg.OrgInvitation{
-		OrgID:           orgID,
-		InvitedBy:       callerID,
-		Token:           token,
-		TargetUserID:    req.TargetUserID,
-		EncryptedOrgKey: req.EncryptedOrgKey,
-		Role:            req.Role,
-		MaxUses:         req.MaxUses,
-		ExpiresAt:       req.ExpiresAt,
-		Status:          "active",
+		OrgID:                  orgID,
+		InvitedBy:              callerID,
+		Token:                  token,
+		TargetUserID:           req.TargetUserID,
+		EncryptedOrgKey:        req.EncryptedOrgKey,
+		NotifiedEmailEncrypted: notifiedEmailEncrypted,
+		Role:                   req.Role,
+		MaxUses:                req.MaxUses,
+		ExpiresAt:              req.ExpiresAt,
+		Status:                 "active",
 	}
 	if _, err := h.DB.NewInsert().Model(inv).Exec(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create invitation"})
@@ -120,7 +144,47 @@ func (h *OrgHandler) CreateInvitation(c *gin.Context) {
 	}
 	h.logAudit(ctx, orgID, callerID, "invitation_created", strconv.FormatInt(inv.ID, 10), "invitation",
 		req.Role+" / "+targetDesc)
-	c.JSON(http.StatusCreated, inv)
+
+	// Send notification email asynchronously.
+	if emailQueued {
+		go func(tok, toEmail, lang string) {
+			bgCtx := context.Background()
+
+			var inviter pkg.User
+			if err := h.DB.NewSelect().Model(&inviter).Where("id = ?", callerID).Scan(bgCtx); err != nil {
+				log.Printf("[OrgInvite] fetch inviter name: %v", err)
+				return
+			}
+			var org pkg.Organization
+			if err := h.DB.NewSelect().Model(&org).Where("id = ?", orgID).Scan(bgCtx); err != nil {
+				log.Printf("[OrgInvite] fetch org name: %v", err)
+				return
+			}
+
+			appURL := os.Getenv("APP_URL")
+			if appURL == "" {
+				appURL = "https://kagibi.cloud"
+			}
+			joinURL := appURL + "/join/" + tok
+
+			if lang != "en" {
+				lang = "fr"
+			}
+			if err := mailer.SendOrgInvite(toEmail, inviter.Name, org.Name, req.Role, joinURL, lang); err != nil {
+				log.Printf("[OrgInvite] email failed to %s: %v", toEmail, err)
+			} else {
+				log.Printf("[OrgInvite] email sent to %s for org %d", toEmail, orgID)
+			}
+		}(token, recipientEmail, req.EmailLang)
+	}
+
+	c.JSON(http.StatusCreated, struct {
+		*pkg.OrgInvitation
+		EmailNotified bool `json:"email_notified,omitempty"`
+	}{
+		OrgInvitation: inv,
+		EmailNotified: emailQueued,
+	})
 }
 
 func (h *OrgHandler) ListInvitations(c *gin.Context) {
