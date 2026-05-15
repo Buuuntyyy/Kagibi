@@ -250,8 +250,9 @@ func migrateSchemaAlterations(ctx context.Context, db *bun.DB) error {
 	// Org E2E encryption columns — added when the organisation crypto layer was introduced.
 	// Tables created before this migration will be missing these columns.
 	for _, col := range []string{
-		`ALTER TABLE "org_members"     ADD COLUMN IF NOT EXISTS "encrypted_org_key" TEXT`,
-		`ALTER TABLE "org_invitations" ADD COLUMN IF NOT EXISTS "encrypted_org_key" TEXT`,
+		`ALTER TABLE "org_members"     ADD COLUMN IF NOT EXISTS "encrypted_org_key"        TEXT`,
+		`ALTER TABLE "org_invitations" ADD COLUMN IF NOT EXISTS "encrypted_org_key"        TEXT`,
+		`ALTER TABLE "org_invitations" ADD COLUMN IF NOT EXISTS "notified_email_encrypted" TEXT`,
 	} {
 		if _, err := db.ExecContext(ctx, col); err != nil {
 			log.Printf("Warning: failed to add encrypted_org_key column: %v", err)
