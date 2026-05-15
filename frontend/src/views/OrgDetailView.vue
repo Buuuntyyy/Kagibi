@@ -3,30 +3,44 @@
 
 <template>
   <div class="org-detail">
-    <!-- Top bar -->
-    <div class="top-bar">
+    <!-- Header -->
+    <header class="org-header">
       <button class="btn-back" @click="router.push('/dashboard/organizations')">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
         {{ t('orgs.back') }}
       </button>
 
-      <div class="org-title-row" v-if="orgStore.currentOrg">
-        <div class="org-avatar">{{ orgStore.currentOrg.name.charAt(0).toUpperCase() }}</div>
-        <div>
-          <h1 class="org-name">{{ orgStore.currentOrg.name }}</h1>
-          <p class="org-desc-sub">{{ orgStore.currentOrg.description }}</p>
+      <div v-if="orgStore.currentOrg" class="org-identity">
+        <!-- Logo / avatar — click to upload (admins only) -->
+        <div class="org-avatar-wrap" :class="{ 'is-admin': canManage }" @click="canManage && logoInputRef?.click()">
+          <img v-if="orgStore.currentOrg.logo_url" class="org-avatar org-avatar-img" :src="orgStore.currentOrg.logo_url" :alt="orgStore.currentOrg.name" />
+          <div v-else class="org-avatar">{{ orgStore.currentOrg.name.charAt(0).toUpperCase() }}</div>
+          <div v-if="canManage" class="org-avatar-overlay">
+            <span v-if="uploadingLogo" class="spinner-sm"></span>
+            <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 15.2A3.2 3.2 0 0 1 8.8 12 3.2 3.2 0 0 1 12 8.8 3.2 3.2 0 0 1 15.2 12 3.2 3.2 0 0 1 12 15.2M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2z"/></svg>
+          </div>
+          <button v-if="canManage && orgStore.currentOrg.logo_url" class="logo-remove-btn" @click.stop="handleRemoveLogo" :title="t('orgs.removeLogo')">
+            <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+          <input ref="logoInputRef" type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml" style="display:none" @change="handleLogoChange" />
         </div>
-        <div class="role-badge" :class="orgStore.currentOrg.my_role" v-if="orgStore.currentOrg.my_role">
-          {{ t(`orgs.${orgStore.currentOrg.my_role}`) }}
+        <div class="org-identity-body">
+          <div class="org-identity-top">
+            <h1 class="org-name">{{ orgStore.currentOrg.name }}</h1>
+            <span class="role-badge" :class="orgStore.currentOrg.my_role" v-if="orgStore.currentOrg.my_role">
+              {{ t(`orgs.${orgStore.currentOrg.my_role}`) }}
+            </span>
+          </div>
+          <p v-if="orgStore.currentOrg.description" class="org-desc">{{ orgStore.currentOrg.description }}</p>
+          <div class="storage-indicator">
+            <div class="storage-track">
+              <div class="storage-fill" :class="storageClass" :style="{ width: storagePercent + '%' }"></div>
+            </div>
+            <span class="storage-text">{{ formatSize(orgStore.currentOrg.storage_used_bytes) }} / {{ formatSize(orgStore.currentOrg.storage_quota_mb * 1024 * 1024) }}</span>
+          </div>
         </div>
       </div>
-
-      <!-- Storage bar -->
-      <div class="storage-pill" v-if="orgStore.currentOrg">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 6h-2.18c.07-.44.18-.86.18-1 0-2.21-1.79-4-4-4s-4 1.79-4 4c0 .14.11.56.18 1H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-3c1.1 0 2 .9 2 2 0 .14-.05.31-.08.5h-3.84A6.17 6.17 0 0 1 12 5c0-1.1.9-2 2-2zm-4 11v-1h8v1h-8zm0-3V9h8v2h-8z"/></svg>
-        <span>{{ formatSize(orgStore.currentOrg.storage_used_bytes) }} / {{ formatSize(orgStore.currentOrg.storage_quota_mb * 1024 * 1024) }}</span>
-      </div>
-    </div>
+    </header>
 
     <div v-if="orgStore.loading && !orgStore.currentOrg" class="loading-center">
       <div class="spinner"></div>
@@ -44,6 +58,7 @@
         >
           <component :is="tab.icon" class="tab-icon" />
           {{ tab.label }}
+          <span v-if="tab.count" class="tab-count">{{ tab.count }}</span>
         </button>
       </div>
 
@@ -74,8 +89,13 @@
 
         <!-- Key not yet initialized for this owner (org created before encryption was added) -->
         <div v-if="!orgStore.currentOrg?.my_encrypted_org_key && canManage" class="key-init-banner">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
-          <span>{{ t('orgs.keyNotInitialized') }}</span>
+          <div class="key-init-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+          </div>
+          <div class="key-init-text">
+            <strong>{{ t('orgs.keyNotInitialized') }}</strong>
+            <span>{{ t('orgs.keyNotInitializedHint') }}</span>
+          </div>
           <button class="btn-init-key" @click="handleInitKey" :disabled="initializingKey">
             <span v-if="initializingKey" class="spinner-sm"></span>
             <span v-else>{{ t('orgs.initKey') }}</span>
@@ -110,12 +130,17 @@
               class="item-row folder-row"
               @click="navigateToPath(folder.path)"
             >
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" class="item-icon folder-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" class="item-icon folder-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
               <span class="item-name">{{ folder.name }}</span>
               <span class="item-meta">{{ formatDate(folder.created_at) }}</span>
-              <button v-if="canWrite" class="btn-icon-danger" @click.stop="confirmDeleteFolder(folder)" :title="t('orgs.deleteFolder')">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-              </button>
+              <div class="item-actions">
+                <button v-if="canManage || isGroupAdmin" class="btn-icon" @click.stop="openAccessDialog(folder)" :title="t('orgs.manageAccess')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                </button>
+                <button v-if="canWrite" class="btn-icon-danger" @click.stop="confirmDeleteFolder(folder)" :title="t('orgs.deleteFolder')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                </button>
+              </div>
             </div>
 
             <!-- Files -->
@@ -124,17 +149,57 @@
               :key="'file-' + file.id"
               class="item-row"
             >
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" class="item-icon file-icon"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" class="item-icon file-icon"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
               <span class="item-name">{{ file.name }}</span>
               <span class="item-meta">{{ formatSize(file.size) }} · {{ formatDate(file.created_at) }}</span>
               <div class="item-actions">
                 <button class="btn-icon" @click.stop="handleDownload(file)" :title="t('file.download')">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                 </button>
                 <button v-if="canWrite" class="btn-icon-danger" @click.stop="confirmDeleteFile(file)" :title="t('orgs.deleteFile')">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: GROUPS -->
+      <div v-if="activeTab === 'groups'" class="tab-content">
+        <OrgGroupsPanel :orgID="orgID" />
+      </div>
+
+      <!-- TAB: PROFILE -->
+      <div v-if="activeTab === 'profile'" class="tab-content">
+        <div class="section-header">
+          <h3>{{ t('orgs.myProfile') }}</h3>
+        </div>
+        <div class="profile-section">
+          <div class="profile-label">{{ t('orgs.myRole') }}</div>
+          <div class="profile-role-row">
+            <div class="member-avatar">{{ (authStore.user?.name || authStore.user?.email || '?').charAt(0).toUpperCase() }}</div>
+            <div class="member-info">
+              <div class="member-name">{{ authStore.user?.name || authStore.user?.email }}</div>
+              <div class="member-email">{{ authStore.user?.email }}</div>
+            </div>
+            <span class="role-badge" :class="orgStore.currentOrg.my_role">{{ t(`orgs.${orgStore.currentOrg.my_role}`) }}</span>
+          </div>
+        </div>
+        <div class="profile-section">
+          <div class="profile-label">{{ t('orgs.myGroups') }}</div>
+          <div v-if="orgStore.loading" class="loading-inline"><div class="spinner-sm-dark"></div></div>
+          <div v-else-if="orgStore.myGroups.length === 0" class="profile-empty">{{ t('orgs.notInAnyGroup') }}</div>
+          <div v-else class="profile-groups-list">
+            <div v-for="g in orgStore.myGroups" :key="g.id" class="profile-group-row">
+              <div class="group-avatar-sm">{{ g.name.charAt(0).toUpperCase() }}</div>
+              <div class="member-info">
+                <div class="member-name">{{ g.name }}</div>
+                <div v-if="g.description" class="member-email">{{ g.description }}</div>
+              </div>
+              <span class="role-badge" :class="'group-' + g.my_role">
+                {{ t(`orgs.group${capitalize(g.my_role)}`) }}
+              </span>
             </div>
           </div>
         </div>
@@ -551,6 +616,14 @@
     <Transition name="toast">
       <div v-if="toast" class="toast" :class="toast.type">{{ toast.message }}</div>
     </Transition>
+
+    <!-- Folder access dialog -->
+    <OrgFolderAccessDialog
+      v-model="showAccessDialog"
+      :orgID="orgID"
+      :folder="accessDialogFolder"
+      :canManage="canManage"
+    />
   </div>
 </template>
 
@@ -561,6 +634,8 @@ import { useI18n } from 'vue-i18n'
 import { useOrgStore } from '../stores/organizations'
 import { useAuthStore } from '../stores/auth'
 import { useRealtimeStore } from '../stores/realtime'
+import OrgGroupsPanel from '../components/organizations/OrgGroupsPanel.vue'
+import OrgFolderAccessDialog from '../components/organizations/OrgFolderAccessDialog.vue'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -572,6 +647,9 @@ const realtimeStore = useRealtimeStore()
 const activeTab = ref('files')
 const currentPath = ref('/')
 const toast = ref(null)
+
+const showAccessDialog = ref(false)
+const accessDialogFolder = ref(null)
 
 // ── Audit log pagination & cleanup ───────────────────────────────────────────
 
@@ -594,8 +672,14 @@ const TabIcon = (paths) => ({ render: () => h('svg', { viewBox: '0 0 24 24', wid
 const tabs = computed(() => {
   const base = [
     { key: 'files', label: t('orgs.files'), icon: TabIcon(['M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z']) },
-    { key: 'members', label: t('orgs.members'), icon: TabIcon(['M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z']) },
+    { key: 'members', label: t('orgs.members'), icon: TabIcon(['M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z']), count: orgStore.members.length || null },
+    { key: 'profile', label: t('orgs.myProfile'), icon: TabIcon(['M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z']) },
   ]
+  if (canManage.value || isGroupAdmin.value) {
+    base.push(
+      { key: 'groups', label: t('orgs.groups'), icon: TabIcon(['M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z', 'M23 14h-2v-2h-2v2h-2v2h2v2h2v-2h2z']) },
+    )
+  }
   if (canManage.value) {
     base.push(
       { key: 'invitations', label: t('orgs.invitations'), icon: TabIcon(['M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z']) },
@@ -614,6 +698,22 @@ const myUserID = computed(() => authStore.user?.id || authStore.user?.user_id)
 const isOwner = computed(() => orgStore.currentOrg?.my_role === 'owner')
 const canManage = computed(() => ['owner', 'admin'].includes(orgStore.currentOrg?.my_role))
 const canWrite = computed(() => ['owner', 'admin', 'member'].includes(orgStore.currentOrg?.my_role))
+const isGroupAdmin = computed(() => orgStore.currentOrg?.is_group_admin === true)
+
+const storagePercent = computed(() => {
+  const org = orgStore.currentOrg
+  if (!org) return 0
+  const quota = org.storage_quota_mb * 1024 * 1024
+  if (!quota) return 0
+  return Math.min(100, (org.storage_used_bytes / quota) * 100)
+})
+
+const storageClass = computed(() => {
+  const p = storagePercent.value
+  if (p >= 90) return 'critical'
+  if (p >= 75) return 'warning'
+  return 'ok'
+})
 
 const pathSegments = computed(() => {
   if (currentPath.value === '/') return []
@@ -707,11 +807,13 @@ onUnmounted(() => {
   if (_unsubOrgUpdate) _unsubOrgUpdate()
 })
 
-const restrictedTabs = new Set(['invitations', 'permissions', 'audit', 'settings'])
+const orgAdminTabs = new Set(['invitations', 'permissions', 'audit', 'settings'])
 
 const switchTab = async (tab) => {
-  if (restrictedTabs.has(tab) && !canManage.value) return
+  if (orgAdminTabs.has(tab) && !canManage.value) return
+  if (tab === 'groups' && !canManage.value && !isGroupAdmin.value) return
   activeTab.value = tab
+  if (tab === 'profile') await orgStore.fetchMyGroups(orgID.value)
   if (tab === 'invitations' && orgStore.invitations.length === 0) await orgStore.fetchInvitations(orgID.value)
   if (tab === 'permissions') await orgStore.fetchPermissions(orgID.value)
   if (tab === 'audit') {
@@ -725,8 +827,21 @@ const switchTab = async (tab) => {
 // ── File system ───────────────────────────────────────────────────────────────
 
 const navigateToPath = async (path) => {
+  const prevPath = currentPath.value
   currentPath.value = path || '/'
-  await orgStore.fetchItems(orgID.value, currentPath.value)
+  try {
+    await orgStore.fetchItems(orgID.value, currentPath.value)
+  } catch (e) {
+    currentPath.value = prevPath
+    if (e.response?.status === 403) {
+      showToast(t('orgs.noReadAccess'), 'error')
+    }
+  }
+}
+
+const openAccessDialog = (folder) => {
+  accessDialogFolder.value = { path: folder.path, name: folder.name }
+  showAccessDialog.value = true
 }
 
 const buildPath = (idx) => {
@@ -809,6 +924,36 @@ const handleDownload = async (file) => {
 }
 
 // ── Members ───────────────────────────────────────────────────────────────────
+
+// ── Logo upload ───────────────────────────────────────────────────────────────
+
+const logoInputRef = ref(null)
+const uploadingLogo = ref(false)
+
+const handleLogoChange = async (event) => {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  uploadingLogo.value = true
+  try {
+    await orgStore.uploadOrgLogo(orgID.value, file)
+    showToast(t('orgs.logoUpdated'))
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  } finally {
+    uploadingLogo.value = false
+  }
+}
+
+const handleRemoveLogo = async () => {
+  if (!confirm(t('orgs.removeLogoConfirm'))) return
+  try {
+    await orgStore.deleteOrgLogo(orgID.value)
+    showToast(t('orgs.logoRemoved'))
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  }
+}
 
 // ── Key initialization (owner with no key) ────────────────────────────────────
 
@@ -1119,57 +1264,119 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   overflow: hidden;
 }
 
-/* Top bar */
-.top-bar {
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.org-header {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 24px 0;
-  flex-wrap: wrap;
-}
-
-.btn-back {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  color: var(--secondary-text-color);
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 6px;
-  transition: background 0.15s, color 0.15s;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 24px 16px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--card-color);
   flex-shrink: 0;
 }
 
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: var(--secondary-text-color);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 5px;
+  transition: background 0.15s, color 0.15s;
+  align-self: flex-start;
+}
 .btn-back:hover { background: var(--hover-background-color); color: var(--main-text-color); }
 
-.org-title-row {
+.org-identity {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex: 1;
-  min-width: 0;
+  gap: 14px;
 }
 
+.org-avatar-wrap {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.org-avatar-wrap.is-admin { cursor: pointer; }
+.org-avatar-wrap.is-admin:hover .org-avatar-overlay { opacity: 1; }
+.org-avatar-wrap.is-admin:hover .logo-remove-btn { opacity: 1; }
+
 .org-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: var(--primary-color);
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
   color: white;
-  font-size: 1.2rem;
-  font-weight: 700;
+  font-size: 1.3rem;
+  font-weight: 800;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color) 40%, transparent);
+}
+
+.org-avatar-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--card-color);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color) 20%, transparent);
+}
+
+.org-avatar-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+.logo-remove-btn {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--error-color);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 1;
+  padding: 0;
+}
+
+.org-identity-body { flex: 1; min-width: 0; }
+
+.org-identity-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 2px;
 }
 
 .org-name {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: var(--main-text-color);
   margin: 0;
@@ -1178,12 +1385,47 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   white-space: nowrap;
 }
 
-.org-desc-sub {
+.org-desc {
   font-size: 0.78rem;
   color: var(--secondary-text-color);
-  margin: 0;
+  margin: 0 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+/* Storage bar */
+.storage-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.storage-track {
+  flex: 1;
+  max-width: 180px;
+  height: 4px;
+  background: var(--border-color);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.storage-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.storage-fill.ok       { background: var(--success-color); }
+.storage-fill.warning  { background: var(--warning-color); }
+.storage-fill.critical { background: var(--error-color); }
+
+.storage-text {
+  font-size: 0.72rem;
+  color: var(--secondary-text-color);
+  white-space: nowrap;
+}
+
+/* legacy alias kept for any refs that remain */
 .storage-pill {
   display: flex;
   align-items: center;
@@ -1197,36 +1439,62 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   flex-shrink: 0;
 }
 
-/* Tabs */
+/* ── Tabs ───────────────────────────────────────────────────────────────── */
 .tabs-bar {
   display: flex;
   gap: 0;
   border-bottom: 1px solid var(--border-color);
-  padding: 12px 24px 0;
+  padding: 0 24px;
   overflow-x: auto;
+  flex-shrink: 0;
+  scrollbar-width: none;
 }
+.tabs-bar::-webkit-scrollbar { display: none; }
 
 .tab-btn {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 10px 16px;
+  gap: 6px;
+  padding: 12px 14px;
   border: none;
   background: none;
   cursor: pointer;
   color: var(--secondary-text-color);
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   font-weight: 500;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s;
   white-space: nowrap;
+  position: relative;
+}
+.tab-btn:hover { color: var(--main-text-color); }
+.tab-btn.active { color: var(--primary-color); font-weight: 600; }
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 14px;
+  right: 14px;
+  height: 2px;
+  background: var(--primary-color);
+  border-radius: 2px 2px 0 0;
 }
 
-.tab-btn:hover { color: var(--main-text-color); }
-.tab-btn.active { color: var(--primary-color); border-bottom-color: var(--primary-color); }
-
 .tab-icon { flex-shrink: 0; }
+
+.tab-count {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--hover-background-color);
+  color: var(--secondary-text-color);
+  min-width: 18px;
+  text-align: center;
+}
+.tab-btn.active .tab-count {
+  background: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  color: var(--primary-color);
+}
 
 /* Tab content */
 .tab-content {
@@ -1305,43 +1573,54 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 .items-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .item-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 7px;
   cursor: default;
   transition: background 0.1s;
+  position: relative;
 }
-
 .item-row:hover { background: var(--hover-background-color); }
 
 .folder-row { cursor: pointer; }
+.folder-row:hover .item-name { color: var(--primary-color); }
 
 .item-icon { flex-shrink: 0; }
-.folder-icon { color: #f59e0b; }
-.file-icon { color: var(--secondary-text-color); }
+.folder-icon { color: var(--warning-color); }
+.file-icon { color: var(--secondary-text-color); opacity: 0.7; }
 
 .item-name {
   flex: 1;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
+  font-weight: 500;
   color: var(--main-text-color);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 0.12s;
 }
 
 .item-meta {
-  font-size: 0.75rem;
+  font-size: 0.73rem;
   color: var(--secondary-text-color);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.item-actions { display: flex; gap: 4px; }
+.item-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.item-row:hover .item-actions { opacity: 1; }
 
 .btn-icon {
   background: none;
@@ -1375,13 +1654,13 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 60px 24px;
+  gap: 12px;
+  padding: 64px 24px;
   color: var(--secondary-text-color);
   text-align: center;
 }
-
-.empty-folder p { margin: 0; font-size: 0.88rem; }
+.empty-folder svg { opacity: 0.18; }
+.empty-folder p { margin: 0; font-size: 0.88rem; line-height: 1.5; }
 
 /* Members */
 .section-header {
@@ -1396,6 +1675,62 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   font-weight: 700;
   color: var(--main-text-color);
   margin: 0;
+}
+
+/* Profile tab */
+.profile-section {
+  margin-bottom: 24px;
+}
+
+.profile-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--secondary-text-color);
+  margin-bottom: 10px;
+}
+
+.profile-role-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.profile-groups-list { display: flex; flex-direction: column; gap: 8px; }
+
+.profile-group-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+}
+
+.group-avatar-sm {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--primary-color);
+  color: white;
+  font-weight: 700;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profile-empty {
+  color: var(--secondary-text-color);
+  font-size: 0.88rem;
+  padding: 16px 0;
 }
 
 .members-list { display: flex; flex-direction: column; gap: 8px; }
@@ -1543,10 +1878,10 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   border-radius: 20px;
 }
 
-.level-badge.none { background: rgba(107,114,128,0.12); color: #6b7280; }
-.level-badge.read { background: rgba(34,197,94,0.12); color: #22c55e; }
-.level-badge.write { background: rgba(99,102,241,0.12); color: #6366f1; }
-.level-badge.manage { background: rgba(245,158,11,0.12); color: #f59e0b; }
+.level-badge.none   { background: color-mix(in srgb, var(--secondary-text-color) 10%, transparent); color: var(--secondary-text-color); }
+.level-badge.read   { background: color-mix(in srgb, var(--success-color) 12%, transparent);        color: var(--success-color); }
+.level-badge.write  { background: color-mix(in srgb, var(--primary-color) 12%, transparent);        color: var(--primary-color); }
+.level-badge.manage { background: color-mix(in srgb, var(--secondary-color) 12%, transparent);      color: var(--secondary-color); }
 
 /* Settings */
 .settings-section {
@@ -1649,13 +1984,13 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   background: var(--hover-background-color);
   color: var(--secondary-text-color);
 }
-.audit-badge.file_uploaded, .audit-badge.file_deleted { background: rgba(99,102,241,0.12); color: #818cf8; }
-.audit-badge.file_downloaded { background: rgba(34,197,94,0.1); color: #22c55e; }
-.audit-badge.member_joined { background: rgba(34,197,94,0.12); color: #22c55e; }
-.audit-badge.member_removed { background: rgba(239,68,68,0.12); color: #ef4444; }
-.audit-badge.role_changed { background: rgba(251,191,36,0.12); color: #f59e0b; }
-.audit-badge.key_rotated, .audit-badge.key_provisioned { background: rgba(239,68,68,0.1); color: #ef4444; }
-.audit-badge.permission_set, .audit-badge.permission_removed { background: rgba(251,191,36,0.1); color: #f59e0b; }
+.audit-badge.file_uploaded, .audit-badge.file_deleted { background: color-mix(in srgb, var(--primary-color) 12%, transparent); color: var(--primary-color); }
+.audit-badge.file_downloaded  { background: color-mix(in srgb, var(--success-color) 10%, transparent);       color: var(--success-color); }
+.audit-badge.member_joined    { background: color-mix(in srgb, var(--success-color) 12%, transparent);       color: var(--success-color); }
+.audit-badge.member_removed   { background: color-mix(in srgb, var(--error-color) 12%, transparent);         color: var(--error-color); }
+.audit-badge.role_changed     { background: color-mix(in srgb, var(--warning-color) 12%, transparent);       color: var(--warning-color); }
+.audit-badge.key_rotated, .audit-badge.key_provisioned     { background: color-mix(in srgb, var(--secondary-color) 12%, transparent); color: var(--secondary-color); }
+.audit-badge.permission_set, .audit-badge.permission_removed { background: color-mix(in srgb, var(--warning-color) 10%, transparent); color: var(--warning-color); }
 
 .audit-detail { font-size: 0.83rem; color: var(--secondary-text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1885,31 +2220,39 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 
 .btn-provision {
   font-size: 0.75rem;
-  padding: 4px 10px;
-  background: rgba(99,102,241,0.1);
+  padding: 5px 12px;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
   color: var(--primary-color);
-  border: 1px solid rgba(99,102,241,0.3);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
   border-radius: 6px;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
   transition: background 0.15s;
+  white-space: nowrap;
 }
-
-.btn-provision:hover:not(:disabled) { background: rgba(99,102,241,0.18); }
+.btn-provision:hover:not(:disabled) { background: color-mix(in srgb, var(--primary-color) 20%, transparent); }
 .btn-provision:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* Shared badges */
+/* ── Shared badges ───────────────────────────────────────────────────────── */
 .role-badge {
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 3px 8px;
+  font-size: 0.69rem;
+  font-weight: 700;
+  padding: 3px 9px;
   border-radius: 20px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.role-badge.owner { background: rgba(245,158,11,0.15); color: #f59e0b; }
-.role-badge.admin { background: rgba(99,102,241,0.15); color: #6366f1; }
-.role-badge.member { background: rgba(34,197,94,0.15); color: #22c55e; }
-.role-badge.viewer { background: rgba(107,114,128,0.12); color: #6b7280; }
+/* Org roles — Kagibi palette */
+.role-badge.owner   { background: color-mix(in srgb, var(--primary-color) 18%, transparent);   color: var(--primary-color); }
+.role-badge.admin   { background: color-mix(in srgb, var(--secondary-color) 15%, transparent); color: var(--secondary-color); }
+.role-badge.member  { background: color-mix(in srgb, var(--success-color) 14%, transparent);   color: var(--success-color); }
+.role-badge.viewer  { background: color-mix(in srgb, var(--secondary-text-color) 10%, transparent); color: var(--secondary-text-color); }
+
+/* Group roles */
+.role-badge.group-admin  { background: color-mix(in srgb, var(--accent-color) 14%, transparent); color: var(--accent-color); }
+.role-badge.group-member { background: color-mix(in srgb, var(--secondary-text-color) 8%, transparent); color: var(--secondary-text-color); }
 
 /* Modal */
 .modal-overlay {
@@ -2092,28 +2435,45 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 .modal-enter-active, .modal-leave-active { transition: opacity 0.2s; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
 
-/* Key init banner */
+/* ── Key init banner ────────────────────────────────────────────────────── */
 .key-init-banner {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  margin-bottom: 12px;
-  background: rgba(239,68,68,0.07);
-  border: 1px solid rgba(239,68,68,0.25);
-  border-radius: 8px;
-  font-size: 0.85rem;
-  color: #ef4444;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background: color-mix(in srgb, var(--warning-color) 8%, var(--card-color));
+  border: 1px solid color-mix(in srgb, var(--warning-color) 30%, transparent);
+  border-radius: 10px;
 }
 
-.key-init-banner span { flex: 1; }
+.key-init-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warning-color) 15%, transparent);
+  color: var(--warning-color);
+  flex-shrink: 0;
+}
+
+.key-init-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.key-init-text strong { font-size: 0.84rem; color: var(--main-text-color); font-weight: 600; }
+.key-init-text span   { font-size: 0.75rem; color: var(--secondary-text-color); }
 
 .btn-init-key {
-  background: rgba(239,68,68,0.12);
-  color: #ef4444;
-  border: 1px solid rgba(239,68,68,0.3);
-  border-radius: 6px;
-  padding: 5px 12px;
+  background: var(--warning-color);
+  color: white;
+  border: none;
+  border-radius: 7px;
+  padding: 7px 14px;
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
@@ -2121,10 +2481,10 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   align-items: center;
   gap: 6px;
   white-space: nowrap;
-  transition: background 0.15s;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
 }
-
-.btn-init-key:hover:not(:disabled) { background: rgba(239,68,68,0.2); }
+.btn-init-key:hover:not(:disabled) { opacity: 0.87; }
 .btn-init-key:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* Upload progress queue */
@@ -2253,12 +2613,12 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 }
 
 @media (max-width: 768px) {
-  .top-bar { padding: 12px 16px 0; }
-  .tabs-bar { padding: 10px 16px 0; }
-  .tab-content { padding: 16px; }
-  .org-name { font-size: 1rem; }
-  .storage-pill { display: none; }
-  .tab-btn { padding: 8px 10px; font-size: 0.8rem; }
-  .tabs-bar { gap: 0; }
+  .org-header  { padding: 10px 16px 12px; }
+  .tabs-bar    { padding: 0 16px; }
+  .tab-content { padding: 14px 16px; }
+  .org-name    { font-size: 0.96rem; }
+  .storage-indicator { display: none; }
+  .tab-btn     { padding: 10px 10px; font-size: 0.8rem; gap: 4px; }
+  .tab-count   { display: none; }
 }
 </style>

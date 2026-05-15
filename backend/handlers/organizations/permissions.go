@@ -10,7 +10,95 @@ import (
 	"kagibi/backend/pkg"
 
 	"github.com/gin-gonic/gin"
+	"github.com/uptrace/bun"
 )
+
+// GetFolderAccess returns all user and group permission overrides for a specific folder path.
+func (h *OrgHandler) GetFolderAccess(c *gin.Context) {
+	callerID := c.GetString("user_id")
+	orgID, err := strconv.ParseInt(c.Param("orgID"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization id"})
+		return
+	}
+	ctx := c.Request.Context()
+
+	caps, err := h.resolveCallerCaps(ctx, orgID, callerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check permissions"})
+		return
+	}
+	if caps.OrgRole == "" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "not a member of this organization"})
+		return
+	}
+	if !caps.IsOrgAdmin() && !caps.IsGroupAdmin() {
+		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+		return
+	}
+
+	folderPath := normPath(c.Query("path"))
+
+	// User-level permissions — org admins only (group admins have no business seeing individual overrides).
+	userPerms := []pkg.OrgFolderPermission{}
+	if caps.IsOrgAdmin() {
+		if err := h.DB.NewSelect().Model(&userPerms).
+			Where("org_id = ? AND folder_path = ?", orgID, folderPath).
+			OrderExpr("user_id ASC").
+			Scan(ctx); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list user permissions"})
+			return
+		}
+	}
+
+	// Group permissions — org admins see all; group admins see only the groups they admin.
+	type GroupAccess struct {
+		Group      pkg.OrgGroup           `json:"group"`
+		Permission pkg.OrgGroupPermission `json:"permission"`
+	}
+
+	var groupPerms []pkg.OrgGroupPermission
+	q := h.DB.NewSelect().Model(&groupPerms).
+		Where("org_id = ? AND folder_path = ?", orgID, folderPath)
+	if !caps.IsOrgAdmin() {
+		adminIDs := make([]int64, 0, len(caps.AdminGroupIDs))
+		for id := range caps.AdminGroupIDs {
+			adminIDs = append(adminIDs, id)
+		}
+		q = q.Where("group_id IN (?)", bun.In(adminIDs))
+	}
+	if err := q.Scan(ctx); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list group permissions"})
+		return
+	}
+
+	groupAccesses := make([]GroupAccess, 0, len(groupPerms))
+	if len(groupPerms) > 0 {
+		groupIDs := make([]int64, len(groupPerms))
+		for i, gp := range groupPerms {
+			groupIDs[i] = gp.GroupID
+		}
+		var groups []pkg.OrgGroup
+		if err := h.DB.NewSelect().Model(&groups).
+			Where("id IN (?)", bun.In(groupIDs)).
+			Scan(ctx); err == nil {
+			groupMap := make(map[int64]pkg.OrgGroup, len(groups))
+			for _, g := range groups {
+				groupMap[g.ID] = g
+			}
+			for _, gp := range groupPerms {
+				if g, ok := groupMap[gp.GroupID]; ok {
+					groupAccesses = append(groupAccesses, GroupAccess{Group: g, Permission: gp})
+				}
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"users":  userPerms,
+		"groups": groupAccesses,
+	})
+}
 
 // ListPermissions returns all folder permission overrides for an org (admins/owners only).
 func (h *OrgHandler) ListPermissions(c *gin.Context) {

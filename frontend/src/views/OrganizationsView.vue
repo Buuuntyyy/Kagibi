@@ -5,7 +5,7 @@
   <div class="orgs-container">
     <div class="header">
       <h2>{{ t('orgs.title') }}</h2>
-      <button v-if="isPremium" class="btn-primary" @click="showCreateModal = true">
+      <button v-if="isPremium && orgStore.orgs.length > 0" class="btn-primary" @click="showCreateModal = true">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
         {{ t('orgs.createOrg') }}
       </button>
@@ -66,15 +66,10 @@
         </div>
         <h3>{{ t('orgs.noOrgs') }}</h3>
         <p>{{ t('orgs.noOrgsDesc') }}</p>
-
-        <ul class="empty-features">
-          <li v-for="n in 5" :key="n">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
-            {{ t(`orgs.premiumFeature${n}`) }}
-          </li>
-        </ul>
-
-        <button class="btn-primary" @click="showCreateModal = true">{{ t('orgs.createOrg') }}</button>
+        <button class="btn-primary" @click="showCreateModal = true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          {{ t('orgs.createOrg') }}
+        </button>
       </div>
 
       <div v-else class="orgs-grid">
@@ -222,6 +217,9 @@ const storageColor = (org) => {
   padding: 24px;
   max-width: 1200px;
   margin: 0 auto;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .header {
@@ -409,29 +407,6 @@ const storageColor = (org) => {
   font-size: 0.9rem;
 }
 
-.empty-features {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  text-align: left;
-  background: var(--card-color);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 14px 18px;
-}
-
-.empty-features li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.82rem;
-  color: var(--secondary-text-color);
-}
-
-.empty-features li svg { color: var(--primary-color); flex-shrink: 0; }
 
 .error-icon { color: #ef4444; }
 

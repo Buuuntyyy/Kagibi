@@ -28,6 +28,8 @@ export const useOrgStore = defineStore('organizations', () => {
   const invitations = ref([])
   const currentItems = ref({ folders: [], files: [], current_path: '/' })
   const permissions = ref([])
+  const groups = ref([])
+  const myGroups = ref([])
   const auditLog = ref([])
   const auditSummary = ref({})
   // Maps encrypted folder/file name segment → decrypted display name.
@@ -134,6 +136,25 @@ export const useOrgStore = defineStore('organizations', () => {
     const idx = orgs.value.findIndex(o => o.id === orgID)
     if (idx !== -1) orgs.value[idx] = { ...orgs.value[idx], ...data }
     return data
+  }
+
+  async function uploadOrgLogo(orgID, file) {
+    const form = new FormData()
+    form.append('logo', file)
+    const { data } = await api.put(`/orgs/${orgID}/logo`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    if (currentOrg.value?.id === orgID) currentOrg.value = { ...currentOrg.value, logo_url: data.logo_url, logo_path: data.logo_path }
+    const idx = orgs.value.findIndex(o => o.id === orgID)
+    if (idx !== -1) orgs.value[idx] = { ...orgs.value[idx], logo_url: data.logo_url, logo_path: data.logo_path }
+    return data
+  }
+
+  async function deleteOrgLogo(orgID) {
+    await api.delete(`/orgs/${orgID}/logo`)
+    if (currentOrg.value?.id === orgID) currentOrg.value = { ...currentOrg.value, logo_url: '', logo_path: '' }
+    const idx = orgs.value.findIndex(o => o.id === orgID)
+    if (idx !== -1) orgs.value[idx] = { ...orgs.value[idx], logo_url: '', logo_path: '' }
   }
 
   async function deleteOrg(orgID) {
@@ -445,7 +466,79 @@ export const useOrgStore = defineStore('organizations', () => {
     await api.post(`/orgs/${orgID}/fs/multipart/abort`, { upload_id: uploadID, key })
   }
 
+  // ── Groups ────────────────────────────────────────────────────────────────
+
+  async function fetchGroups(orgID) {
+    const { data } = await api.get(`/orgs/${orgID}/groups`)
+    groups.value = data || []
+    return data
+  }
+
+  async function fetchMyGroups(orgID) {
+    const { data } = await api.get(`/orgs/${orgID}/groups/me`)
+    myGroups.value = data || []
+    return myGroups.value
+  }
+
+  async function createGroup(orgID, name, description) {
+    const { data } = await api.post(`/orgs/${orgID}/groups`, { name, description })
+    groups.value.push(data)
+    return data
+  }
+
+  async function updateGroup(orgID, groupID, payload) {
+    const { data } = await api.patch(`/orgs/${orgID}/groups/${groupID}`, payload)
+    const idx = groups.value.findIndex(g => g.id === groupID)
+    if (idx !== -1) groups.value[idx] = { ...groups.value[idx], ...data }
+    return data
+  }
+
+  async function deleteGroup(orgID, groupID) {
+    await api.delete(`/orgs/${orgID}/groups/${groupID}`)
+    groups.value = groups.value.filter(g => g.id !== groupID)
+  }
+
+  async function addGroupMember(orgID, groupID, userID, role = 'member') {
+    const { data } = await api.post(`/orgs/${orgID}/groups/${groupID}/members`, { user_id: userID, role })
+    return data
+  }
+
+  async function removeGroupMember(orgID, groupID, memberID) {
+    await api.delete(`/orgs/${orgID}/groups/${groupID}/members/${memberID}`)
+  }
+
+  async function updateGroupMemberRole(orgID, groupID, memberID, role) {
+    const { data } = await api.patch(`/orgs/${orgID}/groups/${groupID}/members/${memberID}`, { role })
+    return data
+  }
+
+  async function fetchGroupMembers(orgID, groupID) {
+    const { data } = await api.get(`/orgs/${orgID}/groups/${groupID}/members`)
+    return data || []
+  }
+
+  async function setGroupPermission(orgID, groupID, payload) {
+    const { data } = await api.put(`/orgs/${orgID}/groups/${groupID}/permissions`, payload)
+    return data
+  }
+
+  async function deleteGroupPermission(orgID, groupID, folderPath) {
+    await api.delete(`/orgs/${orgID}/groups/${groupID}/permissions`, {
+      data: { folder_path: folderPath },
+    })
+  }
+
+  async function fetchGroupPermissions(orgID, groupID) {
+    const { data } = await api.get(`/orgs/${orgID}/groups/${groupID}/permissions`)
+    return data || []
+  }
+
   // ── Permissions ───────────────────────────────────────────────────────────
+
+  async function fetchFolderAccess(orgID, folderPath) {
+    const { data } = await api.get(`/orgs/${orgID}/permissions/folder`, { params: { path: folderPath } })
+    return data // { users: [...], groups: [{group, permission}, ...] }
+  }
 
   async function fetchPermissions(orgID) {
     const { data } = await api.get(`/orgs/${orgID}/permissions`)
@@ -600,6 +693,8 @@ export const useOrgStore = defineStore('organizations', () => {
     invitations.value = []
     currentItems.value = { folders: [], files: [], current_path: '/' }
     permissions.value = []
+    groups.value = []
+    myGroups.value = []
     auditLog.value = []
     auditSummary.value = {}
     folderNameCache.value = {}
@@ -609,13 +704,16 @@ export const useOrgStore = defineStore('organizations', () => {
   }
 
   return {
-    orgs, currentOrg, members, invitations, currentItems, permissions, auditLog, auditSummary, folderNameCache, loading, error,
-    fetchOrgs, fetchOrg, createOrg, updateOrg, deleteOrg,
+    orgs, currentOrg, members, invitations, currentItems, permissions, groups, myGroups, auditLog, auditSummary, folderNameCache, loading, error,
+    fetchOrgs, fetchOrg, createOrg, updateOrg, deleteOrg, uploadOrgLogo, deleteOrgLogo,
     fetchMembers, updateMemberRole, removeMember, provisionMemberKey, setMemberKey,
     fetchInvitations, createInvitation, revokeInvitation, getInvitation, acceptInvitation,
     fetchItems, createFolder, deleteFolder, deleteFile, downloadFile, getFileKey,
     uploadOrgFile, initiateUpload, completeUpload, abortUpload,
-    fetchPermissions, setPermission, deletePermission,
+    fetchFolderAccess, fetchPermissions, setPermission, deletePermission,
+    fetchGroups, fetchMyGroups, createGroup, updateGroup, deleteGroup,
+    addGroupMember, removeGroupMember, updateGroupMemberRole, fetchGroupMembers,
+    setGroupPermission, deleteGroupPermission, fetchGroupPermissions,
     fetchAuditLog, fetchAuditSummary, deleteAuditLog, fetchAllFileKeys, rotateOrgKey, initializeOrgKey,
     $reset,
   }
