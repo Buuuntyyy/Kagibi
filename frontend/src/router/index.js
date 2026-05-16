@@ -6,6 +6,7 @@ import SharedElements from '../components/sharedElements.vue'
 import FileBrowser from '../components/FileBrowser.vue'
 import PublicShare from '../views/PublicShare.vue'
 import PublicBrowse from '../views/PublicBrowse.vue'
+import OrgPublicShare from '../views/OrgPublicShare.vue'
 import TermsOfService from '../views/TermsOfService.vue'
 import PrivacyPolicy from '../views/PrivacyPolicy.vue'
 import Credits from '../views/Credits.vue'
@@ -140,6 +141,11 @@ const routes = [
     component: JoinView,
   },
   {
+    path: '/s/org/:token',
+    name: 'OrgPublicShare',
+    component: OrgPublicShare,
+  },
+  {
     path: '/s/:token',
     name: 'PublicShare',
     component: PublicShare,
@@ -170,7 +176,7 @@ router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
 
   // Skip auth check for public routes to avoid 401 errors for non-authenticated users
-  if (to.name === 'PublicShare' || to.name === 'PublicBrowse') {
+  if (to.name === 'PublicShare' || to.name === 'PublicBrowse' || to.name === 'OrgPublicShare') {
     next()
     return
   }

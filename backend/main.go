@@ -68,7 +68,7 @@ func main() {
 	workers.StartAccountCleanupWorker(db) // RGPD Article 17
 
 	friendHandler := friends.NewFriendHandler(db, wshandler.GlobalHub.IsConnected)
-	orgHandler := orghandlers.NewOrgHandler(db)
+	orgHandler := orghandlers.NewOrgHandler(db, redisClient)
 	setupPresenceHooks(db)
 
 	metricsServer := monitoring.NewServer(9090)
@@ -180,6 +180,11 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	authGroup.POST("/refresh", auth.LocalRefreshHandler(provider, redisClient))
 	authGroup.POST("/recovery/init", func(c *gin.Context) { auth.RecoveryInitHandler(c, db) })
 	authGroup.POST("/recovery/finish", func(c *gin.Context) { auth.RecoveryFinishHandler(c, db, provider, redisClient) })
+
+	// Public org-file share routes (no auth required)
+	publicOrgShareRoutes := api.Group("/public/org-share")
+	publicOrgShareRoutes.GET("/:token", func(c *gin.Context) { orghandlers.GetOrgShare(c, db) })
+	publicOrgShareRoutes.GET("/:token/download", func(c *gin.Context) { orghandlers.DownloadOrgShare(c, db) })
 
 	// Public share routes
 	publicShareRoutes := api.Group("/public/share")
@@ -380,6 +385,11 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	orgsG.GET("/:orgID/fs/file/:fileID/download", h.DownloadOrgFile)
 	orgsG.GET("/:orgID/fs/file/:fileID/key", h.GetOrgFileKey)
 	orgsG.DELETE("/:orgID/fs/file/:fileID", h.DeleteOrgFile)
+	orgsG.POST("/:orgID/fs/file/:fileID/share", h.CreateOrgFileShare)
+	orgsG.PATCH("/:orgID/fs/file/:fileID/rename", h.RenameOrgFile)
+	orgsG.PATCH("/:orgID/fs/folder/:folderID/rename", h.RenameOrgFolder)
+	orgsG.PATCH("/:orgID/fs/file/:fileID/move", h.MoveOrgFile)
+	orgsG.PATCH("/:orgID/fs/folder/:folderID/move", h.MoveOrgFolder)
 
 	// Shared file system — multipart upload
 	orgsG.POST("/:orgID/fs/multipart/initiate", h.InitiateOrgMultipart)
@@ -423,6 +433,9 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 
 	// Dashboard stats
 	orgsG.GET("/:orgID/stats", h.GetOrgStats)
+
+	// Client-side search index (encrypted names, client decrypts + filters)
+	orgsG.GET("/:orgID/fs/all-items", h.GetAllOrgItems)
 
 	// Token-based join routes — GET is public (unauthenticated preview), POST requires auth
 	public.GET("/org-invitations/:token", h.GetInvitation)

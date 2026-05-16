@@ -64,7 +64,49 @@
 
       <!-- TAB: FILES -->
       <div v-if="activeTab === 'files'" class="tab-content">
-        <div class="fs-toolbar">
+        <!-- Search bar -->
+        <div class="search-bar-wrap">
+          <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+          <input
+            ref="searchInputRef"
+            v-model="searchQuery"
+            class="search-input"
+            type="text"
+            :placeholder="t('orgs.searchPlaceholder')"
+            @input="onSearchInput"
+            @keydown.escape="clearSearch"
+          />
+          <button v-if="searchQuery" class="search-clear" @click="clearSearch">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+          <span v-if="searchLoading" class="spinner-sm-dark" style="margin-left:6px;flex-shrink:0"></span>
+        </div>
+
+        <!-- Search results panel -->
+        <div v-if="searchQuery && !searchLoading" class="search-results">
+          <div v-if="searchResults.length === 0" class="search-empty">
+            {{ t('orgs.searchNoResults', { q: searchQuery }) }}
+          </div>
+          <template v-else>
+            <div class="search-count">{{ t('orgs.searchResultCount', { count: searchResults.length }) }}</div>
+            <div
+              v-for="item in searchResults"
+              :key="item.type + '-' + item.id"
+              class="search-result-row"
+              @click="navigateToSearchResult(item)"
+            >
+              <svg v-if="item.type === 'folder'" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="search-result-icon folder"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+              <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="search-result-icon file"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+              <div class="search-result-body">
+                <span class="search-result-name" v-html="highlightMatch(item.decrypted_name, searchQuery)"></span>
+                <span class="search-result-path">{{ item.parent_path === '/' ? '/' : item.parent_path }}</span>
+              </div>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" class="search-result-arrow"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+            </div>
+          </template>
+        </div>
+
+        <div class="fs-toolbar" v-show="!searchQuery">
           <div class="breadcrumb">
             <button class="bc-item" @click="navigateToPath('/')">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
@@ -137,14 +179,31 @@
               v-for="folder in orgStore.currentItems.folders"
               :key="'f-' + folder.id"
               class="item-row folder-row"
-              @click="navigateToPath(folder.path)"
+              @click="renamingItem?.id !== folder.id && navigateToPath(folder.path)"
             >
               <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" class="item-icon folder-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
-              <span class="item-name">{{ folder.name }}</span>
-              <span class="item-meta">{{ formatDate(folder.created_at) }}</span>
+              <input
+                v-if="renamingItem?.id === folder.id"
+                :id="`rename-input-${folder.id}`"
+                class="item-rename-input"
+                v-model="renamingItem.value"
+                :placeholder="t('orgs.renamePlaceholder')"
+                @keydown.enter.prevent="saveRename"
+                @keydown.escape.prevent="cancelRename"
+                @blur="saveRename"
+                @click.stop
+              />
+              <span v-else class="item-name">{{ folder.name }}</span>
+              <span v-if="renamingItem?.id !== folder.id" class="item-meta">{{ formatDate(folder.created_at) }}</span>
               <div class="item-actions">
                 <button v-if="canManage || isGroupAdmin" class="btn-icon" @click.stop="openAccessDialog(folder)" :title="t('orgs.manageAccess')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                </button>
+                <button v-if="canWrite && renamingItem?.id !== folder.id" class="btn-icon" @click.stop="openMoveDialog(folder, 'folder')" :title="t('orgs.moveFolder')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-2 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg>
+                </button>
+                <button v-if="canWrite && renamingItem?.id !== folder.id" class="btn-icon" @click.stop="startRename(folder, 'folder')" :title="t('orgs.renameFolder')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                 </button>
                 <button v-if="canWrite" class="btn-icon-danger" @click.stop="confirmDeleteFolder(folder)" :title="t('orgs.deleteFolder')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
@@ -159,11 +218,31 @@
               class="item-row"
             >
               <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" class="item-icon file-icon"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-              <span class="item-name">{{ file.name }}</span>
-              <span class="item-meta">{{ formatSize(file.size) }} · {{ formatDate(file.created_at) }}</span>
+              <input
+                v-if="renamingItem?.id === file.id"
+                :id="`rename-input-${file.id}`"
+                class="item-rename-input"
+                v-model="renamingItem.value"
+                :placeholder="t('orgs.renamePlaceholder')"
+                @keydown.enter.prevent="saveRename"
+                @keydown.escape.prevent="cancelRename"
+                @blur="saveRename"
+                @click.stop
+              />
+              <span v-else class="item-name">{{ file.name }}</span>
+              <span v-if="renamingItem?.id !== file.id" class="item-meta">{{ formatSize(file.size) }} · {{ formatDate(file.created_at) }}</span>
               <div class="item-actions">
                 <button class="btn-icon" @click.stop="handleDownload(file)" :title="t('file.download')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                </button>
+                <button class="btn-icon" @click.stop="openShareModal(file)" :title="t('orgs.shareFile')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+                </button>
+                <button v-if="canWrite && renamingItem?.id !== file.id" class="btn-icon" @click.stop="openMoveDialog(file, 'file')" :title="t('orgs.moveFile')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-2 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg>
+                </button>
+                <button v-if="canWrite && renamingItem?.id !== file.id" class="btn-icon" @click.stop="startRename(file, 'file')" :title="t('orgs.renameFile')">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                 </button>
                 <button v-if="canWrite" class="btn-icon-danger" @click.stop="confirmDeleteFile(file)" :title="t('orgs.deleteFile')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
@@ -787,11 +866,100 @@
       :orgName="orgStore.currentOrg.name"
       @close="showOnboardingWizard = false"
     />
+
+    <!-- Move file/folder modal -->
+    <Transition name="modal">
+      <div v-if="showMoveModal" class="modal-overlay" @click.self="closeMoveDialog">
+        <div class="modal move-modal">
+          <div class="modal-header">
+            <h3>{{ t('orgs.moveTo') }}</h3>
+            <button class="btn-close" @click="closeMoveDialog">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p class="move-item-label">{{ movingItem?.name }}</p>
+            <input
+              class="move-search-input"
+              v-model="moveSearch"
+              :placeholder="t('orgs.moveSearch')"
+              autofocus
+            />
+            <div v-if="moveFetching" class="move-fetching">
+              <div class="spinner-sm-dark"></div>
+            </div>
+            <div v-else class="move-folder-list">
+              <button
+                v-for="folder in filteredMoveDestinations"
+                :key="folder.path"
+                class="move-folder-item"
+                :class="{
+                  'is-selected': moveDestination?.path === folder.path,
+                  'is-current': folder.path === movingItem?.currentPath
+                }"
+                @click="moveDestination = folder"
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="move-folder-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+                <div class="move-folder-info">
+                  <span class="move-folder-name">{{ folder.name }}</span>
+                  <span class="move-folder-path">{{ displayFolderPath(folder) }}</span>
+                </div>
+                <span v-if="folder.path === movingItem?.currentPath" class="move-current-badge">{{ t('orgs.moveCurrentFolder') }}</span>
+                <svg v-if="moveDestination?.path === folder.path" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" class="move-check"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+              </button>
+              <p v-if="filteredMoveDestinations.length === 0" class="move-empty">{{ t('orgs.moveNoFolders') }}</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-secondary" @click="closeMoveDialog">{{ t('orgs.cancel') }}</button>
+            <button class="btn-primary" @click="confirmMove" :disabled="!moveDestination || moveLoading || moveDestination.path === movingItem?.currentPath">
+              <span v-if="moveLoading" class="spinner-sm"></span>
+              <span v-else>{{ t('orgs.moveHere') }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Share file modal -->
+    <Transition name="modal">
+      <div v-if="showShareModal" class="modal-overlay" @click.self="closeShareModal">
+        <div class="modal">
+          <div class="modal-header">
+            <h3>{{ t('orgs.shareFileTitle') }}</h3>
+            <button class="btn-close" @click="closeShareModal">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div v-if="shareLoading" class="share-loading">
+              <span class="spinner"></span>
+              <span>{{ t('orgs.shareGenerating') }}</span>
+            </div>
+            <div v-else-if="shareLink" class="share-result">
+              <p class="share-hint">{{ t('orgs.shareHint') }}</p>
+              <div class="share-link-row">
+                <input class="share-link-input" readonly :value="shareLink" @focus="$event.target.select()" />
+                <button class="btn-copy" @click="copyShareLink" :title="t('orgs.copyLink')">
+                  <svg v-if="!shareCopied" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                  <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                </button>
+              </div>
+              <p class="share-warning">{{ t('orgs.shareKeyWarning') }}</p>
+            </div>
+            <div v-else-if="shareError" class="share-error-msg">{{ shareError }}</div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-secondary" @click="closeShareModal">{{ t('orgs.close') }}</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, h, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useOrgStore } from '../stores/organizations'
@@ -800,6 +968,8 @@ import { useRealtimeStore } from '../stores/realtime'
 import OrgGroupsPanel from '../components/organizations/OrgGroupsPanel.vue'
 import OrgFolderAccessDialog from '../components/organizations/OrgFolderAccessDialog.vue'
 import OrgOnboardingWizard from '../components/organizations/OrgOnboardingWizard.vue'
+import { generateOrgKey, decryptOrgKey, unwrapFileKey, wrapFileKey } from '../utils/orgCrypto.js'
+import api from '../api'
 
 const { t, locale } = useI18n()
 const route = useRoute()
@@ -1041,6 +1211,60 @@ const switchTab = async (tab) => {
   if (tab === 'dashboard') await loadDashboard()
 }
 
+// ── Search ────────────────────────────────────────────────────────────────────
+
+const searchInputRef = ref(null)
+const searchQuery = ref('')
+const searchResults = ref([])
+const searchLoading = ref(false)
+let _searchDebounce = null
+
+const onSearchInput = () => {
+  clearTimeout(_searchDebounce)
+  if (!searchQuery.value.trim()) {
+    searchResults.value = []
+    return
+  }
+  searchLoading.value = true
+  _searchDebounce = setTimeout(async () => {
+    try {
+      searchResults.value = await orgStore.searchOrgItems(orgID.value, searchQuery.value)
+    } catch (e) {
+      searchResults.value = []
+    } finally {
+      searchLoading.value = false
+    }
+  }, 280)
+}
+
+const clearSearch = () => {
+  searchQuery.value = ''
+  searchResults.value = []
+  searchLoading.value = false
+}
+
+const navigateToSearchResult = (item) => {
+  clearSearch()
+  if (item.type === 'folder') {
+    navigateToPath(item.path)
+  } else {
+    navigateToPath(item.parent_path)
+  }
+}
+
+const highlightMatch = (text, query) => {
+  if (!query) return text
+  const idx = text.toLowerCase().indexOf(query.toLowerCase())
+  if (idx === -1) return text
+  return (
+    text.slice(0, idx) +
+    '<mark class="search-highlight">' +
+    text.slice(idx, idx + query.length) +
+    '</mark>' +
+    text.slice(idx + query.length)
+  )
+}
+
 // ── File system ───────────────────────────────────────────────────────────────
 
 const navigateToPath = async (path) => {
@@ -1137,6 +1361,200 @@ const handleDownload = async (file) => {
     await orgStore.downloadFile(orgID.value, file.id, file.name, file.mime_type)
   } catch (e) {
     showToast(e.response?.data?.error || e.message, 'error')
+  }
+}
+
+// ── Public file share ─────────────────────────────────────────────────────────
+
+const showShareModal = ref(false)
+const shareLoading = ref(false)
+const shareLink = ref('')
+const shareError = ref('')
+const shareCopied = ref(false)
+
+const openShareModal = async (file) => {
+  showShareModal.value = true
+  shareLoading.value = true
+  shareLink.value = ''
+  shareError.value = ''
+  shareCopied.value = false
+  try {
+    // 1. Fetch the file's wrapped key from the server
+    const { data: keyData } = await api.get(`/orgs/${orgID.value}/fs/file/${file.id}/key`)
+    const encryptedFileKey = keyData.encrypted_key
+
+    // 2. Decrypt the org key with the user's RSA private key
+    if (!authStore.privateKey) throw new Error('Clé privée introuvable. Reconnectez-vous.')
+    const orgKey = await decryptOrgKey(
+      orgStore.currentOrg?.my_encrypted_org_key,
+      authStore.privateKey,
+    )
+
+    // 3. Unwrap the file key with the org key
+    const fileKey = await unwrapFileKey(encryptedFileKey, orgKey)
+
+    // 4. Generate a fresh share key (AES-256-GCM) and re-wrap the file key
+    const shareKey = await generateOrgKey()
+    const encryptedKeyForShare = await wrapFileKey(fileKey, shareKey)
+
+    // 5. Export share key to base64url (goes in the URL fragment)
+    const shareKeyRaw = await crypto.subtle.exportKey('raw', shareKey)
+    const shareKeyB64 = btoa(String.fromCharCode(...new Uint8Array(shareKeyRaw)))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+
+    // 6. Store the share on the server
+    const result = await orgStore.createOrgFileShare(orgID.value, file.id, {
+      encryptedKey: encryptedKeyForShare,
+    })
+
+    shareLink.value = `${window.location.origin}/s/org/${result.token}#${shareKeyB64}`
+  } catch (e) {
+    shareError.value = e.response?.data?.error || e.message
+  } finally {
+    shareLoading.value = false
+  }
+}
+
+const closeShareModal = () => {
+  showShareModal.value = false
+  shareLink.value = ''
+  shareError.value = ''
+  shareCopied.value = false
+}
+
+const copyShareLink = async () => {
+  try {
+    await navigator.clipboard.writeText(shareLink.value)
+    shareCopied.value = true
+    setTimeout(() => { shareCopied.value = false }, 2000)
+  } catch {
+    // fallback
+    const el = document.createElement('textarea')
+    el.value = shareLink.value
+    document.body.appendChild(el)
+    el.select()
+    document.execCommand('copy')
+    document.body.removeChild(el)
+    shareCopied.value = true
+    setTimeout(() => { shareCopied.value = false }, 2000)
+  }
+}
+
+// ── Inline rename ─────────────────────────────────────────────────────────────
+
+const renamingItem = ref(null)  // { id, type: 'file'|'folder', value: string }
+const renameLoading = ref(false)
+
+function startRename(item, type) {
+  renamingItem.value = { id: item.id, type, value: item.name }
+  nextTick(() => {
+    const el = document.getElementById(`rename-input-${item.id}`)
+    if (el) { el.focus(); el.select() }
+  })
+}
+
+function cancelRename() {
+  renamingItem.value = null
+}
+
+async function saveRename() {
+  if (!renamingItem.value) return
+  const { id, type, value } = renamingItem.value
+  const trimmed = value.trim()
+  renamingItem.value = null
+  if (!trimmed) return
+
+  const items = orgStore.currentItems
+  const existing = type === 'folder'
+    ? items.folders.find(f => f.id === id)
+    : items.files.find(f => f.id === id)
+  if (!existing || existing.name === trimmed) return
+
+  renameLoading.value = true
+  try {
+    if (type === 'folder') {
+      await orgStore.renameOrgFolder(orgID.value, id, trimmed)
+    } else {
+      await orgStore.renameOrgFile(orgID.value, id, trimmed)
+    }
+    showToast(t('orgs.renameSuccess'))
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  } finally {
+    renameLoading.value = false
+  }
+}
+
+// ── Move dialog ───────────────────────────────────────────────────────────────
+
+const showMoveModal = ref(false)
+const movingItem = ref(null)  // { id, name, type, currentPath }
+const moveDestination = ref(null)  // { id, name, path }
+const moveSearch = ref('')
+const allOrgFolders = ref([])
+const moveLoading = ref(false)
+const moveFetching = ref(false)
+
+const filteredMoveDestinations = computed(() => {
+  const root = { id: 0, name: '/ ' + t('orgs.moveRoot'), path: '/' }
+  const all = [root, ...allOrgFolders.value]
+  const q = moveSearch.value.trim().toLowerCase()
+  if (!q) return all
+  return all.filter(f =>
+    f.name.toLowerCase().includes(q) ||
+    displayFolderPath(f).toLowerCase().includes(q)
+  )
+})
+
+function displayFolderPath(folder) {
+  if (folder.path === '/') return '/'
+  return folder.path.split('/').filter(s => s).map(seg =>
+    orgStore.folderNameCache[seg] || seg.slice(0, 6) + '…'
+  ).join(' / ')
+}
+
+async function openMoveDialog(item, type) {
+  movingItem.value = {
+    id: item.id,
+    name: item.name,
+    type,
+    currentPath: type === 'file' ? item.folder_path : item.parent_path,
+  }
+  moveDestination.value = null
+  moveSearch.value = ''
+  showMoveModal.value = true
+  moveFetching.value = true
+  try {
+    allOrgFolders.value = await orgStore.getAllOrgFolders(orgID.value)
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+    showMoveModal.value = false
+  } finally {
+    moveFetching.value = false
+  }
+}
+
+function closeMoveDialog() {
+  showMoveModal.value = false
+  movingItem.value = null
+  moveDestination.value = null
+}
+
+async function confirmMove() {
+  if (!movingItem.value || !moveDestination.value) return
+  moveLoading.value = true
+  try {
+    if (movingItem.value.type === 'file') {
+      await orgStore.moveOrgFile(orgID.value, movingItem.value.id, moveDestination.value.path)
+    } else {
+      await orgStore.moveOrgFolder(orgID.value, movingItem.value.id, moveDestination.value.path)
+    }
+    showToast(t('orgs.moveSuccess'))
+    closeMoveDialog()
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  } finally {
+    moveLoading.value = false
   }
 }
 
@@ -1864,6 +2282,74 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   white-space: nowrap;
   flex-shrink: 0;
 }
+
+.item-rename-input {
+  flex: 1;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--main-text-color);
+  background: var(--input-background-color, var(--background-secondary-color));
+  border: 1px solid var(--primary-color);
+  border-radius: 4px;
+  padding: 2px 6px;
+  outline: none;
+  min-width: 0;
+}
+
+.move-modal { max-width: 420px; width: 100%; }
+.move-item-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--main-text-color);
+  margin: 0 0 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.move-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--background-secondary-color);
+  color: var(--main-text-color);
+  font-size: 0.85rem;
+  outline: none;
+  margin-bottom: 8px;
+}
+.move-search-input:focus { border-color: var(--primary-color); }
+.move-fetching { display: flex; justify-content: center; padding: 20px; }
+.move-folder-list {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+.move-folder-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  transition: background 0.12s;
+}
+.move-folder-item:last-child { border-bottom: none; }
+.move-folder-item:hover { background: var(--hover-background-color); }
+.move-folder-item.is-selected { background: color-mix(in srgb, var(--primary-color) 12%, transparent); }
+.move-folder-item.is-current { opacity: 0.55; cursor: default; }
+.move-folder-icon { flex-shrink: 0; color: var(--secondary-text-color); }
+.move-folder-info { flex: 1; min-width: 0; }
+.move-folder-name { display: block; font-size: 0.85rem; font-weight: 500; color: var(--main-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.move-folder-path { display: block; font-size: 0.72rem; color: var(--secondary-text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.move-current-badge { font-size: 0.7rem; color: var(--secondary-text-color); white-space: nowrap; flex-shrink: 0; }
+.move-check { flex-shrink: 0; color: var(--primary-color); }
+.move-empty { text-align: center; padding: 16px; font-size: 0.85rem; color: var(--secondary-text-color); }
 
 .item-actions {
   display: flex;
@@ -3022,6 +3508,127 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   .tab-count   { display: none; }
 }
 
+/* ── Search ─────────────────────────────────────────────────────────────────── */
+.search-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--hover-background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0 10px;
+  margin-bottom: 12px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.search-bar-wrap:focus-within {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 18%, transparent);
+}
+
+.search-icon {
+  color: var(--secondary-text-color);
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 9px 0;
+  font-size: 0.88rem;
+  color: var(--main-text-color);
+}
+.search-input::placeholder { color: var(--secondary-text-color); }
+
+.search-clear {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--secondary-text-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.search-clear:hover { color: var(--main-text-color); }
+
+.search-results {
+  background: var(--card-background-color, var(--background-color));
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.search-empty {
+  padding: 20px 16px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--secondary-text-color);
+}
+
+.search-count {
+  padding: 7px 14px;
+  font-size: 0.75rem;
+  color: var(--secondary-text-color);
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.search-result-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid var(--border-color);
+}
+.search-result-row:last-child { border-bottom: none; }
+.search-result-row:hover { background: var(--hover-background-color); }
+
+.search-result-icon { flex-shrink: 0; }
+.search-result-icon.folder { color: #f59e0b; }
+.search-result-icon.file   { color: var(--secondary-text-color); }
+
+.search-result-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.search-result-name {
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--main-text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result-path {
+  font-size: 0.74rem;
+  color: var(--secondary-text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result-arrow { color: var(--secondary-text-color); flex-shrink: 0; }
+
+:deep(.search-highlight) {
+  background: color-mix(in srgb, var(--primary-color) 22%, transparent);
+  color: var(--primary-color);
+  border-radius: 2px;
+  font-weight: 600;
+  padding: 0 1px;
+}
+
 /* ── Dashboard ─────────────────────────────────────────────────────────────── */
 .dash-alert {
   display: flex;
@@ -3155,5 +3762,65 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   display: block;
   margin-top: 10px;
   font-size: 0.83rem;
+}
+
+/* ── Share modal ─────────────────────────────────────────────────────────── */
+
+.share-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--secondary-text-color);
+  font-size: 0.9rem;
+}
+
+.share-hint {
+  font-size: 0.87rem;
+  color: var(--secondary-text-color);
+  margin: 0 0 12px;
+}
+
+.share-link-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.share-link-input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--input-background);
+  color: var(--main-text-color);
+  font-size: 0.8rem;
+  font-family: monospace;
+  min-width: 0;
+}
+
+.btn-copy {
+  flex-shrink: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-color);
+  color: var(--main-text-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btn-copy:hover { background: var(--hover-background-color); color: var(--primary-color); }
+
+.share-warning {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  color: var(--warning-color, #f59e0b);
+}
+
+.share-error-msg {
+  color: var(--error-color);
+  font-size: 0.87rem;
 }
 </style>

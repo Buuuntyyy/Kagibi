@@ -181,7 +181,7 @@ type ShareLink struct {
 
 	ID           int64      `bun:"id,pk,autoincrement"`
 	ResourceID   int64      `bun:"resource_id,notnull"`   // ID du fichier ou dossier
-	ResourceType string     `bun:"resource_type,notnull"` // "file" ou "folder"
+	ResourceType string     `bun:"resource_type,notnull"` // "file" | "folder" | "org_file"
 	Path         string     `bun:"path"`                  // Base path of the shared resource
 	OwnerID      string     `bun:"owner_id,notnull"`      // Créateur du lien
 	Token        string     `bun:"token,unique,notnull"`  // Le code dans l'URL (ex: "xYz123")
@@ -196,6 +196,7 @@ type ShareLink struct {
 	PermCreate   bool       `bun:"perm_create,default:false"`  // Folder: can create files/dirs
 	PermDelete   bool       `bun:"perm_delete,default:false"`  // Folder: can delete files/dirs
 	PermMove     bool       `bun:"perm_move,default:false"`    // Folder: can move files/dirs
+	OrgID        *int64     `bun:"org_id" json:"org_id,omitempty"` // set for org_file shares
 }
 
 // ShareItemOverride stores per-item access restrictions within a shared folder.
