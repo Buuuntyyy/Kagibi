@@ -36,6 +36,8 @@ export const useOrgStore = defineStore('organizations', () => {
   // Maps encrypted folder/file name segment → decrypted display name.
   // Populated during fetchItems so breadcrumb and file-list displays stay in sync.
   const folderNameCache = ref({})
+  // Search index cache: { orgID, items: OrgItemResult[] with decrypted_name populated }
+  const searchCache = ref(null)
   const loading = ref(false)
   const error = ref(null)
 
@@ -329,12 +331,14 @@ export const useOrgStore = defineStore('organizations', () => {
     // Server echoes back the encrypted name; replace with plaintext for immediate display.
     data.name = name
     currentItems.value.folders = [...(currentItems.value.folders || []), data]
+    searchCache.value = null
     return data
   }
 
   async function deleteFolder(orgID, folderID) {
     await api.delete(`/orgs/${orgID}/fs/folder/${folderID}`)
     currentItems.value.folders = currentItems.value.folders.filter(f => f.id !== folderID)
+    searchCache.value = null
   }
 
   /**
@@ -457,6 +461,7 @@ export const useOrgStore = defineStore('organizations', () => {
         (currentOrg.value.storage_used_bytes || 0) - file.size,
       )
     }
+    searchCache.value = null
   }
 
   async function getFileKey(orgID, fileID) {
@@ -479,11 +484,45 @@ export const useOrgStore = defineStore('organizations', () => {
           (currentOrg.value.storage_used_bytes || 0) + data.file.size
       }
     }
+    searchCache.value = null
     return data
   }
 
   async function abortUpload(orgID, uploadID, key) {
     await api.post(`/orgs/${orgID}/fs/multipart/abort`, { upload_id: uploadID, key })
+  }
+
+  // ── Search ────────────────────────────────────────────────────────────────
+
+  /**
+   * Full-text search over all org files and folders.
+   * Fetches the full item list once (per orgID) and decrypts names client-side;
+   * subsequent calls reuse the cache until a mutation invalidates it.
+   */
+  async function searchOrgItems(orgID, query) {
+    if (!searchCache.value || searchCache.value.orgID !== orgID) {
+      const { data } = await api.get(`/orgs/${orgID}/fs/all-items`)
+      let items = data || []
+      try {
+        const orgKey = await getOrgKey(orgID)
+        for (const item of items) {
+          const plain = await decryptOrgName(item.name, orgKey)
+          item.decrypted_name = plain
+          if (item.type === 'folder') folderNameCache.value[item.name] = plain
+        }
+      } catch (_) {
+        for (const item of items) {
+          item.decrypted_name = item.name
+        }
+      }
+      searchCache.value = { orgID, items }
+    }
+
+    const q = query.trim().toLowerCase()
+    if (!q) return []
+    return searchCache.value.items.filter(item =>
+      item.decrypted_name.toLowerCase().includes(q)
+    )
   }
 
   // ── Groups ────────────────────────────────────────────────────────────────
@@ -608,6 +647,93 @@ export const useOrgStore = defineStore('organizations', () => {
     return data
   }
 
+  async function moveOrgFile(orgID, fileID, newFolderPath) {
+    const { data } = await api.patch(`/orgs/${orgID}/fs/file/${fileID}/move`, {
+      new_folder_path: newFolderPath,
+    })
+    currentItems.value.files = currentItems.value.files.filter(f => f.id !== fileID)
+    searchCache.value = null
+    return data
+  }
+
+  async function moveOrgFolder(orgID, folderID, newParentPath) {
+    const { data } = await api.patch(`/orgs/${orgID}/fs/folder/${folderID}/move`, {
+      new_parent_path: newParentPath,
+    })
+    currentItems.value.folders = currentItems.value.folders.filter(f => f.id !== folderID)
+    searchCache.value = null
+    return data
+  }
+
+  async function getAllOrgFolders(orgID) {
+    if (!searchCache.value || searchCache.value.orgID !== orgID) {
+      const { data } = await api.get(`/orgs/${orgID}/fs/all-items`)
+      const items = data || []
+      try {
+        const orgKey = await getOrgKey(orgID)
+        for (const item of items) {
+          const plain = await decryptOrgName(item.name, orgKey)
+          item.decrypted_name = plain
+          if (item.type === 'folder') folderNameCache.value[item.name] = plain
+        }
+      } catch (_) {
+        for (const item of items) item.decrypted_name = item.name
+      }
+      searchCache.value = { orgID, items }
+    }
+    return (searchCache.value.items || [])
+      .filter(item => item.type === 'folder')
+      .map(item => ({ id: item.id, name: item.decrypted_name, path: item.path, parent_path: item.parent_path }))
+  }
+
+  async function renameOrgFile(orgID, fileID, newPlainName) {
+    const orgKey = await getOrgKey(orgID)
+    const encryptedName = await encryptOrgName(newPlainName, orgKey)
+    const { data } = await api.patch(`/orgs/${orgID}/fs/file/${fileID}/rename`, {
+      encrypted_name: encryptedName,
+    })
+    const file = currentItems.value.files.find(f => f.id === fileID)
+    if (file) {
+      file.name = newPlainName
+      file.path = data.new_path
+    }
+    searchCache.value = null
+    return data
+  }
+
+  async function renameOrgFolder(orgID, folderID, newPlainName) {
+    const orgKey = await getOrgKey(orgID)
+    const encryptedName = await encryptOrgName(newPlainName, orgKey)
+    const { data } = await api.patch(`/orgs/${orgID}/fs/folder/${folderID}/rename`, {
+      encrypted_name: encryptedName,
+    })
+    const folder = currentItems.value.folders.find(f => f.id === folderID)
+    if (folder) {
+      folderNameCache.value[encryptedName] = newPlainName
+      folder.name = newPlainName
+      folder.path = data.new_path
+    }
+    searchCache.value = null
+    return data
+  }
+
+  /**
+   * Create a public share link for an org file.
+   * The caller must have already:
+   *   1. Unwrapped the file key with the org key
+   *   2. Re-wrapped it with a fresh share key
+   *   3. Encoded the share key as a URL-safe base64 string (used as the #fragment)
+   *
+   * Returns { token, link } from the server.
+   */
+  async function createOrgFileShare(orgID, fileID, { encryptedKey, expiresAt }) {
+    const { data } = await api.post(`/orgs/${orgID}/fs/file/${fileID}/share`, {
+      encrypted_key: encryptedKey,
+      expires_at: expiresAt ?? null,
+    })
+    return data
+  }
+
   async function fetchOrgStats(orgID) {
     const { data } = await api.get(`/orgs/${orgID}/stats`)
     orgStats.value = data
@@ -723,6 +849,8 @@ export const useOrgStore = defineStore('organizations', () => {
     myGroups.value = []
     auditLog.value = []
     auditSummary.value = {}
+    orgStats.value = null
+    searchCache.value = null
     folderNameCache.value = {}
     loading.value = false
     error.value = null
@@ -735,13 +863,16 @@ export const useOrgStore = defineStore('organizations', () => {
     fetchMembers, updateMemberRole, removeMember, provisionMemberKey, provisionAllMissingKeys, setMemberKey,
     fetchInvitations, createInvitation, revokeInvitation, getInvitation, acceptInvitation,
     fetchItems, createFolder, deleteFolder, deleteFile, downloadFile, getFileKey,
+    renameOrgFile, renameOrgFolder,
+    moveOrgFile, moveOrgFolder, getAllOrgFolders,
     uploadOrgFile, initiateUpload, completeUpload, abortUpload,
+    searchOrgItems,
     fetchFolderAccess, fetchPermissions, setPermission, deletePermission,
     fetchGroups, fetchMyGroups, createGroup, updateGroup, deleteGroup,
     addGroupMember, removeGroupMember, updateGroupMemberRole, fetchGroupMembers,
     setGroupPermission, deleteGroupPermission, fetchGroupPermissions,
     fetchAuditLog, fetchAuditSummary, deleteAuditLog, fetchAllFileKeys, rotateOrgKey, initializeOrgKey,
-    fetchOrgStats,
+    fetchOrgStats, createOrgFileShare,
     $reset,
   }
 })

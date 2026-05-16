@@ -13,6 +13,7 @@ import (
 
 	"kagibi/backend/pkg"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/uptrace/bun"
 )
 
@@ -27,11 +28,12 @@ const (
 )
 
 type OrgHandler struct {
-	DB *bun.DB
+	DB          *bun.DB
+	RedisClient *redis.Client
 }
 
-func NewOrgHandler(db *bun.DB) *OrgHandler {
-	return &OrgHandler{DB: db}
+func NewOrgHandler(db *bun.DB, redisClient *redis.Client) *OrgHandler {
+	return &OrgHandler{DB: db, RedisClient: redisClient}
 }
 
 // CallerCaps holds pre-resolved authorization context for a caller within an org.

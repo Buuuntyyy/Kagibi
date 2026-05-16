@@ -390,7 +390,9 @@ func saveShareFileKeys(ctx context.Context, db *bun.DB, shareID int64, keys map[
 
 func getValidShareLink(ctx context.Context, db *bun.DB, token string) (*pkg.ShareLink, error) {
 	var shareLink pkg.ShareLink
-	err := db.NewSelect().Model(&shareLink).Where("token = ?", token).Scan(ctx)
+	err := db.NewSelect().Model(&shareLink).
+		Where("token = ? AND resource_type IN ('file', 'folder')", token).
+		Scan(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Link not found")
 	}

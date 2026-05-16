@@ -186,6 +186,13 @@ func migrateSchemaAlterations(ctx context.Context, db *bun.DB) error {
 		}
 	}
 
+	// Org file public share: link a share_link back to its source org
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "org_id" BIGINT`,
+	); err != nil {
+		log.Printf("Warning: failed to add org_id column to share_links: %v", err)
+	}
+
 	// Single-use link columns
 	for _, col := range []string{
 		`ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "single_use" BOOLEAN NOT NULL DEFAULT false`,
