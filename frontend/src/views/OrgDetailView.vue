@@ -63,7 +63,17 @@
       </div>
 
       <!-- TAB: FILES -->
-      <div v-if="activeTab === 'files'" class="tab-content">
+      <div v-if="activeTab === 'files'" class="tab-content"
+        :class="{ 'drop-zone-active': isDragOver }"
+        @dragenter.prevent="onDragEnterZone"
+        @dragleave="onDragLeaveZone"
+        @dragover.prevent="onDragOverZone"
+        @drop.prevent="onDropFiles"
+      >
+        <div v-if="isDragOver && canWrite" class="drop-overlay">
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          <p>{{ t('orgs.dropToUpload') }}</p>
+        </div>
         <!-- Search bar -->
         <div class="search-bar-wrap">
           <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
@@ -108,12 +118,22 @@
 
         <div class="fs-toolbar" v-show="!searchQuery">
           <div class="breadcrumb">
-            <button class="bc-item" @click="navigateToPath('/')">
+            <button class="bc-item" @click="navigateToPath('/')"
+              :class="{ 'bc-drag-over': dragOverBcPath === '/' }"
+              @dragover="onBcDragOver($event, '/')"
+              @dragleave="onBcDragLeave('/')"
+              @drop.prevent="onDropOnPath($event, '/')"
+            >
               <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
             </button>
             <template v-for="(seg, idx) in pathSegments" :key="idx">
               <span class="bc-sep">/</span>
-              <button class="bc-item" @click="navigateToPath(buildPath(idx))">{{ orgStore.folderNameCache[seg] || seg }}</button>
+              <button class="bc-item" @click="navigateToPath(buildPath(idx))"
+                :class="{ 'bc-drag-over': dragOverBcPath === buildPath(idx) }"
+                @dragover="onBcDragOver($event, buildPath(idx))"
+                @dragleave="onBcDragLeave(buildPath(idx))"
+                @drop.prevent="onDropOnPath($event, buildPath(idx))"
+              >{{ orgStore.folderNameCache[seg] || seg }}</button>
             </template>
           </div>
           <div class="fs-actions" v-if="canWrite">
@@ -204,14 +224,53 @@
             <p>{{ filterType !== 'all' ? t('orgs.filterNoResults') : t('orgs.emptyFolder') }}</p>
           </div>
 
+          <!-- Bulk action bar -->
+          <div v-if="hasSelection && canWrite" class="bulk-bar">
+            <span class="bulk-count">{{ t('orgs.bulkSelected', { count: selectedCount }) }}</span>
+            <div class="bulk-actions">
+              <button class="btn-sm" @click="bulkDownload" :disabled="bulkLoading || selectedFileItems.length === 0" :title="t('orgs.bulkDownload')">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                {{ t('orgs.bulkDownload') }}
+              </button>
+              <button class="btn-sm" @click="openBulkMoveDialog" :disabled="bulkLoading">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-2 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg>
+                {{ t('orgs.bulkMove') }}
+              </button>
+              <button class="btn-sm btn-danger" @click="bulkDelete" :disabled="bulkLoading">
+                <span v-if="bulkLoading" class="spinner-sm"></span>
+                <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                {{ t('orgs.bulkDelete') }}
+              </button>
+              <button class="btn-sm btn-ghost" @click="clearSelection">{{ t('orgs.bulkCancel') }}</button>
+            </div>
+          </div>
+
           <div class="items-list">
+            <!-- Select-all row -->
+            <div v-if="sortedFolders.length + sortedFiles.length > 0" class="select-all-row">
+              <label class="checkbox-wrap" @click.stop>
+                <input type="checkbox" :checked="allVisibleSelected" @change="toggleSelectAll" class="item-checkbox" />
+              </label>
+              <span class="select-all-label">{{ allVisibleSelected ? t('orgs.deselectAll') : t('orgs.selectAll') }}</span>
+            </div>
+
             <!-- Folders -->
             <div
               v-for="folder in sortedFolders"
               :key="'f-' + folder.id"
               class="item-row folder-row"
+              :class="{ selected: isSelected('folder', folder.id), 'drag-over': dragOverFolderID === folder.id }"
+              :draggable="canWrite"
+              @dragstart="onItemDragStart($event, folder, 'folder')"
+              @dragend="onItemDragEnd"
+              @dragover="onFolderDragOver($event, folder)"
+              @dragleave="onFolderDragLeave(folder)"
+              @drop="onDropOnFolder($event, folder)"
               @click="renamingItem?.id !== folder.id && navigateToPath(folder.path)"
             >
+              <label class="checkbox-wrap" @click.stop>
+                <input type="checkbox" :checked="isSelected('folder', folder.id)" @change="e => toggleSelect(e, 'folder', folder.id)" class="item-checkbox" />
+              </label>
               <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" class="item-icon folder-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
               <input
                 v-if="renamingItem?.id === folder.id"
@@ -247,7 +306,14 @@
               v-for="file in sortedFiles"
               :key="'file-' + file.id"
               class="item-row"
+              :class="{ selected: isSelected('file', file.id) }"
+              :draggable="canWrite"
+              @dragstart="onItemDragStart($event, file, 'file')"
+              @dragend="onItemDragEnd"
             >
+              <label class="checkbox-wrap" @click.stop>
+                <input type="checkbox" :checked="isSelected('file', file.id)" @change="e => toggleSelect(e, 'file', file.id)" class="item-checkbox" />
+              </label>
               <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" class="item-icon file-icon"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
               <input
                 v-if="renamingItem?.id === file.id"
@@ -1187,6 +1253,7 @@ let _unsubOrgUpdate = null
 const showOnboardingWizard = ref(false)
 
 onMounted(async () => {
+  document.addEventListener('keydown', _onKeydown)
   await orgStore.fetchOrg(orgID.value)
   await orgStore.fetchItems(orgID.value, '/')
   await orgStore.fetchMembers(orgID.value)
@@ -1220,8 +1287,13 @@ onMounted(async () => {
   })
 })
 
+const _onKeydown = (e) => {
+  if (e.key === 'Escape' && hasSelection.value && !showMoveModal.value) clearSelection()
+}
+
 onUnmounted(() => {
   if (_unsubOrgUpdate) _unsubOrgUpdate()
+  document.removeEventListener('keydown', _onKeydown)
 })
 
 const orgAdminTabs = new Set(['invitations', 'permissions', 'audit', 'settings'])
@@ -1301,6 +1373,7 @@ const highlightMatch = (text, query) => {
 const navigateToPath = async (path) => {
   const prevPath = currentPath.value
   currentPath.value = path || '/'
+  clearSelection()
   try {
     await orgStore.fetchItems(orgID.value, currentPath.value)
   } catch (e) {
@@ -1569,23 +1642,249 @@ function closeMoveDialog() {
   showMoveModal.value = false
   movingItem.value = null
   moveDestination.value = null
+  bulkMoveMode.value = false
 }
 
 async function confirmMove() {
-  if (!movingItem.value || !moveDestination.value) return
+  if (!moveDestination.value) return
   moveLoading.value = true
   try {
-    if (movingItem.value.type === 'file') {
-      await orgStore.moveOrgFile(orgID.value, movingItem.value.id, moveDestination.value.path)
+    if (bulkMoveMode.value) {
+      let failed = 0
+      for (const folder of selectedFolderItems.value) {
+        try { await orgStore.moveOrgFolder(orgID.value, folder.id, moveDestination.value.path) }
+        catch { failed++ }
+      }
+      for (const file of selectedFileItems.value) {
+        try { await orgStore.moveOrgFile(orgID.value, file.id, moveDestination.value.path) }
+        catch { failed++ }
+      }
+      const done = selectedCount.value - failed
+      clearSelection()
+      if (failed > 0) showToast(t('orgs.bulkMovePartial', { done, failed }), 'error')
+      else showToast(t('orgs.bulkMoveSuccess', { count: done }))
     } else {
-      await orgStore.moveOrgFolder(orgID.value, movingItem.value.id, moveDestination.value.path)
+      if (!movingItem.value) return
+      if (movingItem.value.type === 'file') {
+        await orgStore.moveOrgFile(orgID.value, movingItem.value.id, moveDestination.value.path)
+      } else {
+        await orgStore.moveOrgFolder(orgID.value, movingItem.value.id, moveDestination.value.path)
+      }
+      showToast(t('orgs.moveSuccess'))
     }
-    showToast(t('orgs.moveSuccess'))
     closeMoveDialog()
   } catch (e) {
     showToast(e.response?.data?.error || e.message, 'error')
   } finally {
     moveLoading.value = false
+  }
+}
+
+// ── Drag & drop upload ────────────────────────────────────────────────────────
+
+const isDragOver = ref(false)
+let _dragDepth = 0
+
+function onDragEnterZone(e) {
+  if (!e.dataTransfer.types.includes('Files')) return
+  _dragDepth++
+  isDragOver.value = true
+}
+
+function onDragLeaveZone(e) {
+  if (!e.dataTransfer.types.includes('Files')) return
+  _dragDepth--
+  if (_dragDepth <= 0) { _dragDepth = 0; isDragOver.value = false }
+}
+
+function onDragOverZone(e) {
+  if (e.dataTransfer.types.includes('Files')) e.dataTransfer.dropEffect = 'copy'
+}
+
+function onDropFiles(e) {
+  _dragDepth = 0
+  isDragOver.value = false
+  if (!canWrite.value) return
+  const files = Array.from(e.dataTransfer.files)
+  files.forEach(f => uploadFile(f))
+}
+
+// ── Drag & drop move ──────────────────────────────────────────────────────────
+
+let _dragItem = null  // { id, type, path, currentPath }
+const dragOverFolderID = ref(null)
+const dragOverBcPath = ref(null)
+
+function onItemDragStart(e, item, type) {
+  _dragItem = {
+    id: item.id,
+    type,
+    path: type === 'folder' ? item.path : null,
+    currentPath: type === 'file' ? item.folder_path : item.parent_path,
+  }
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', `${type}-${item.id}`)
+}
+
+function onItemDragEnd() {
+  _dragItem = null
+  dragOverFolderID.value = null
+  dragOverBcPath.value = null
+}
+
+function _canDropOnPath(targetPath) {
+  if (!_dragItem) return false
+  if (targetPath === _dragItem.currentPath) return false
+  if (_dragItem.type === 'folder' && _dragItem.path) {
+    if (targetPath === _dragItem.path) return false
+    if (targetPath.startsWith(_dragItem.path + '/')) return false
+  }
+  return true
+}
+
+function onFolderDragOver(e, folder) {
+  if (!_canDropOnPath(folder.path)) return
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'move'
+  dragOverFolderID.value = folder.id
+}
+
+function onFolderDragLeave(folder) {
+  if (dragOverFolderID.value === folder.id) dragOverFolderID.value = null
+}
+
+async function onDropOnFolder(e, folder) {
+  e.preventDefault()
+  dragOverFolderID.value = null
+  if (!_dragItem || !_canDropOnPath(folder.path)) return
+  const { id, type } = _dragItem
+  _dragItem = null
+  try {
+    if (type === 'file') await orgStore.moveOrgFile(orgID.value, id, folder.path)
+    else await orgStore.moveOrgFolder(orgID.value, id, folder.path)
+    showToast(t('orgs.moveSuccess'))
+  } catch (err) {
+    showToast(err.response?.data?.error || err.message, 'error')
+  }
+}
+
+function onBcDragOver(e, path) {
+  if (!_canDropOnPath(path)) return
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'move'
+  dragOverBcPath.value = path
+}
+
+function onBcDragLeave(path) {
+  if (dragOverBcPath.value === path) dragOverBcPath.value = null
+}
+
+async function onDropOnPath(e, path) {
+  e.preventDefault()
+  dragOverBcPath.value = null
+  if (!_dragItem || !_canDropOnPath(path)) return
+  const { id, type } = _dragItem
+  _dragItem = null
+  try {
+    if (type === 'file') await orgStore.moveOrgFile(orgID.value, id, path)
+    else await orgStore.moveOrgFolder(orgID.value, id, path)
+    showToast(t('orgs.moveSuccess'))
+  } catch (err) {
+    showToast(err.response?.data?.error || err.message, 'error')
+  }
+}
+
+// ── Bulk selection ────────────────────────────────────────────────────────────
+
+const selectedIDs = ref(new Set())
+const bulkLoading = ref(false)
+const bulkMoveMode = ref(false)
+
+function selKey(type, id) { return `${type}-${id}` }
+function isSelected(type, id) { return selectedIDs.value.has(selKey(type, id)) }
+
+function toggleSelect(e, type, id) {
+  e.stopPropagation()
+  const key = selKey(type, id)
+  const s = new Set(selectedIDs.value)
+  if (s.has(key)) s.delete(key)
+  else s.add(key)
+  selectedIDs.value = s
+}
+
+const hasSelection = computed(() => selectedIDs.value.size > 0)
+const selectedCount = computed(() => selectedIDs.value.size)
+
+const allVisibleSelected = computed(() => {
+  const total = sortedFolders.value.length + sortedFiles.value.length
+  return total > 0 && selectedIDs.value.size === total
+})
+
+function toggleSelectAll() {
+  if (allVisibleSelected.value) {
+    selectedIDs.value = new Set()
+  } else {
+    const s = new Set()
+    sortedFolders.value.forEach(f => s.add(selKey('folder', f.id)))
+    sortedFiles.value.forEach(f => s.add(selKey('file', f.id)))
+    selectedIDs.value = s
+  }
+}
+
+function clearSelection() { selectedIDs.value = new Set() }
+
+const selectedFileItems = computed(() =>
+  sortedFiles.value.filter(f => isSelected('file', f.id))
+)
+const selectedFolderItems = computed(() =>
+  sortedFolders.value.filter(f => isSelected('folder', f.id))
+)
+
+async function bulkDelete() {
+  if (!confirm(t('orgs.bulkDeleteConfirm', { count: selectedCount.value }))) return
+  bulkLoading.value = true
+  let failed = 0
+  for (const folder of selectedFolderItems.value) {
+    try { await orgStore.deleteFolder(orgID.value, folder.id) }
+    catch { failed++ }
+  }
+  for (const file of selectedFileItems.value) {
+    try { await orgStore.deleteFile(orgID.value, file.id) }
+    catch { failed++ }
+  }
+  const done = selectedCount.value - failed
+  clearSelection()
+  bulkLoading.value = false
+  if (failed > 0) showToast(t('orgs.bulkDeletePartial', { done, failed }), 'error')
+  else showToast(t('orgs.bulkDeleteSuccess', { count: done }))
+}
+
+async function openBulkMoveDialog() {
+  bulkMoveMode.value = true
+  const first = selectedFolderItems.value[0] || selectedFileItems.value[0]
+  movingItem.value = {
+    id: null,
+    name: t('orgs.bulkSelected', { count: selectedCount.value }),
+    type: 'bulk',
+    currentPath: null,
+  }
+  moveDestination.value = null
+  moveSearch.value = ''
+  showMoveModal.value = true
+  moveFetching.value = true
+  try {
+    allOrgFolders.value = await orgStore.getAllOrgFolders(orgID.value)
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+    showMoveModal.value = false
+  } finally {
+    moveFetching.value = false
+  }
+}
+
+async function bulkDownload() {
+  for (const file of selectedFileItems.value) {
+    await handleDownload(file)
   }
 }
 
@@ -2262,7 +2561,38 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
   flex: 1;
   overflow-y: auto;
   padding: 20px 24px;
+  position: relative;
 }
+.tab-content.drop-zone-active { outline: 2px dashed var(--primary-color, #6366f1); outline-offset: -4px; border-radius: 8px; }
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: var(--primary-color-light, rgba(99,102,241,0.12));
+  border-radius: 8px;
+  z-index: 20;
+  pointer-events: none;
+  color: var(--primary-color, #6366f1);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.folder-row.drag-over {
+  background: var(--primary-color-light, rgba(99,102,241,0.15)) !important;
+  outline: 1px dashed var(--primary-color, #6366f1);
+  border-radius: 6px;
+}
+.bc-item.bc-drag-over {
+  background: var(--primary-color-light, rgba(99,102,241,0.15));
+  color: var(--primary-color, #6366f1);
+  border-radius: 4px;
+}
+.item-row[draggable="true"] { cursor: grab; }
+.item-row[draggable="true"]:active { cursor: grabbing; }
 
 /* File system */
 .fs-toolbar {
@@ -2441,6 +2771,60 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 .move-current-badge { font-size: 0.7rem; color: var(--secondary-text-color); white-space: nowrap; flex-shrink: 0; }
 .move-check { flex-shrink: 0; color: var(--primary-color); }
 .move-empty { text-align: center; padding: 16px; font-size: 0.85rem; color: var(--secondary-text-color); }
+
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--primary-color-light, rgba(99,102,241,0.12));
+  border: 1px solid var(--primary-color, #6366f1);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.bulk-count { font-size: 0.85rem; font-weight: 600; color: var(--primary-color, #6366f1); white-space: nowrap; }
+.bulk-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn-danger {
+  background: rgba(239,68,68,0.12) !important;
+  border-color: #ef4444 !important;
+  color: #ef4444 !important;
+}
+.btn-danger:hover { background: rgba(239,68,68,0.22) !important; }
+.btn-ghost { background: none !important; border-color: transparent !important; }
+.btn-ghost:hover { background: var(--hover-bg, rgba(255,255,255,0.06)) !important; }
+
+.select-all-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  color: var(--secondary-text-color);
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+  margin-bottom: 2px;
+}
+.select-all-label { cursor: pointer; user-select: none; }
+
+.checkbox-wrap {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.item-checkbox {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--primary-color, #6366f1);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.item-row:hover .item-checkbox,
+.item-row.selected .item-checkbox { opacity: 1; }
+
+.item-row.selected { background: var(--primary-color-light, rgba(99,102,241,0.08)); }
 
 .sort-filter-bar {
   display: flex;
