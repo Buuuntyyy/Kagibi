@@ -306,10 +306,11 @@
               v-for="file in sortedFiles"
               :key="'file-' + file.id"
               class="item-row"
-              :class="{ selected: isSelected('file', file.id) }"
+              :class="{ selected: isSelected('file', file.id), previewable: canPreview(file.mime_type) }"
               :draggable="canWrite"
               @dragstart="onItemDragStart($event, file, 'file')"
               @dragend="onItemDragEnd"
+              @click="openPreview(file)"
             >
               <label class="checkbox-wrap" @click.stop>
                 <input type="checkbox" :checked="isSelected('file', file.id)" @change="e => toggleSelect(e, 'file', file.id)" class="item-checkbox" />
@@ -964,6 +965,64 @@
       @close="showOnboardingWizard = false"
     />
 
+    <!-- File preview modal -->
+    <Transition name="modal">
+      <div v-if="previewFile" class="modal-overlay preview-overlay" @click.self="closePreview" @keydown.escape="closePreview">
+        <div class="preview-modal">
+          <div class="preview-header">
+            <div class="preview-title">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="preview-file-icon"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+              <span class="preview-filename">{{ previewFile.name }}</span>
+            </div>
+            <div class="preview-header-actions">
+              <button class="btn-sm" @click="handleDownload(previewFile)" :title="t('file.download')">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                {{ t('file.download') }}
+              </button>
+              <button class="btn-close" @click="closePreview">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="preview-body">
+            <div v-if="previewLoading" class="preview-loading">
+              <div class="spinner"></div>
+              <p>{{ t('orgs.previewDecrypting') }}</p>
+            </div>
+            <template v-else-if="previewKind(previewFile.mime_type) === 'image'">
+              <img v-if="previewUrl" :src="previewUrl" class="preview-image" :alt="previewFile.name" />
+            </template>
+            <template v-else-if="previewKind(previewFile.mime_type) === 'video'">
+              <video v-if="previewUrl" :src="previewUrl" class="preview-video" controls />
+            </template>
+            <template v-else-if="previewKind(previewFile.mime_type) === 'audio'">
+              <div class="preview-audio-wrap">
+                <svg viewBox="0 0 24 24" width="64" height="64" fill="currentColor" style="opacity:0.3"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                <audio v-if="previewUrl" :src="previewUrl" controls class="preview-audio" />
+              </div>
+            </template>
+            <template v-else-if="previewKind(previewFile.mime_type) === 'pdf'">
+              <iframe v-if="previewUrl" :src="previewUrl" class="preview-pdf" frameborder="0" />
+            </template>
+            <template v-else-if="previewKind(previewFile.mime_type) === 'text'">
+              <pre v-if="previewText !== null" class="preview-text">{{ previewText }}</pre>
+            </template>
+            <div v-else class="preview-unsupported">
+              <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor" style="opacity:0.25"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+              <p>{{ t('orgs.previewUnsupported') }}</p>
+            </div>
+          </div>
+
+          <div class="preview-footer">
+            <span class="preview-meta">{{ previewFile.mime_type || t('orgs.unknownType') }}</span>
+            <span class="preview-meta">{{ formatSize(previewFile.size) }}</span>
+            <span class="preview-meta">{{ formatDate(previewFile.created_at) }}</span>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Move file/folder modal -->
     <Transition name="modal">
       <div v-if="showMoveModal" class="modal-overlay" @click.self="closeMoveDialog">
@@ -1288,7 +1347,10 @@ onMounted(async () => {
 })
 
 const _onKeydown = (e) => {
-  if (e.key === 'Escape' && hasSelection.value && !showMoveModal.value) clearSelection()
+  if (e.key === 'Escape') {
+    if (previewFile.value) { closePreview(); return }
+    if (hasSelection.value && !showMoveModal.value) clearSelection()
+  }
 }
 
 onUnmounted(() => {
@@ -1678,6 +1740,65 @@ async function confirmMove() {
   } finally {
     moveLoading.value = false
   }
+}
+
+// ── File preview ──────────────────────────────────────────────────────────────
+
+const previewFile = ref(null)
+const previewUrl = ref(null)
+const previewText = ref(null)
+const previewLoading = ref(false)
+const TEXT_PREVIEW_LIMIT = 1024 * 512  // 512 KB
+
+function canPreview(mimeType) {
+  if (!mimeType) return false
+  return mimeType.startsWith('image/') ||
+    mimeType.startsWith('video/') ||
+    mimeType.startsWith('audio/') ||
+    mimeType.startsWith('text/') ||
+    mimeType === 'application/pdf'
+}
+
+function previewKind(mimeType) {
+  if (!mimeType) return 'none'
+  if (mimeType.startsWith('image/')) return 'image'
+  if (mimeType.startsWith('video/')) return 'video'
+  if (mimeType.startsWith('audio/')) return 'audio'
+  if (mimeType === 'application/pdf') return 'pdf'
+  if (mimeType.startsWith('text/')) return 'text'
+  return 'none'
+}
+
+async function openPreview(file) {
+  if (renamingItem.value) return
+  previewFile.value = file
+  previewUrl.value = null
+  previewText.value = null
+  if (!canPreview(file.mime_type)) return
+  previewLoading.value = true
+  try {
+    const blob = await orgStore.getFileBlob(orgID.value, file.id, file.mime_type)
+    if (previewKind(file.mime_type) === 'text') {
+      const slice = blob.size > TEXT_PREVIEW_LIMIT ? blob.slice(0, TEXT_PREVIEW_LIMIT) : blob
+      previewText.value = await slice.text()
+      if (blob.size > TEXT_PREVIEW_LIMIT) previewText.value += '\n\n[… truncated]'
+    } else {
+      previewUrl.value = URL.createObjectURL(blob)
+    }
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+    previewFile.value = null
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+function closePreview() {
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  previewFile.value = null
+  previewUrl.value = null
+  previewText.value = null
+  previewLoading.value = false
 }
 
 // ── Drag & drop upload ────────────────────────────────────────────────────────
@@ -2593,6 +2714,87 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 }
 .item-row[draggable="true"] { cursor: grab; }
 .item-row[draggable="true"]:active { cursor: grabbing; }
+.item-row.previewable { cursor: pointer; }
+
+.preview-overlay { align-items: center; justify-content: center; }
+.preview-modal {
+  background: var(--surface-color, #1e1e2e);
+  border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+  border-radius: 14px;
+  width: min(90vw, 900px);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+}
+.preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.08));
+  gap: 12px;
+  flex-shrink: 0;
+}
+.preview-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.preview-file-icon { flex-shrink: 0; opacity: 0.6; }
+.preview-filename {
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.preview-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.preview-body {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  background: var(--bg-color, #13131f);
+}
+.preview-loading { display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--secondary-text-color); }
+.preview-image { max-width: 100%; max-height: 70vh; object-fit: contain; display: block; }
+.preview-video { max-width: 100%; max-height: 70vh; display: block; }
+.preview-audio-wrap { display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 40px; }
+.preview-audio { width: 320px; max-width: 100%; }
+.preview-pdf { width: 100%; height: 70vh; border: none; display: block; }
+.preview-text {
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  max-height: 70vh;
+  overflow: auto;
+  padding: 20px;
+  margin: 0;
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-color);
+  background: var(--bg-color, #13131f);
+  align-self: stretch;
+}
+.preview-unsupported { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 48px; color: var(--secondary-text-color); }
+.preview-footer {
+  display: flex;
+  gap: 16px;
+  padding: 10px 18px;
+  border-top: 1px solid var(--border-color, rgba(255,255,255,0.08));
+  font-size: 0.78rem;
+  color: var(--secondary-text-color);
+  flex-shrink: 0;
+}
+.preview-meta { white-space: nowrap; }
 
 /* File system */
 .fs-toolbar {

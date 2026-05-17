@@ -469,6 +469,19 @@ export const useOrgStore = defineStore('organizations', () => {
     return data.encrypted_key
   }
 
+  async function getFileBlob(orgID, fileID, mimeType) {
+    const cachedFile = currentItems.value.files.find(f => f.id === fileID)
+    const encryptedFileKey = cachedFile?.encrypted_key || (await getFileKey(orgID, fileID))
+    const orgKey = await getOrgKey(orgID)
+    const response = await api.get(`/orgs/${orgID}/fs/file/${fileID}/download`, { responseType: 'blob' })
+    return decryptFileFromOrg(
+      response.data,
+      encryptedFileKey,
+      orgKey,
+      mimeType || cachedFile?.mime_type || 'application/octet-stream',
+    )
+  }
+
   // Low-level initiate/complete/abort kept for any direct caller
   async function initiateUpload(orgID, payload) {
     const { data } = await api.post(`/orgs/${orgID}/fs/multipart/initiate`, payload)
@@ -862,7 +875,7 @@ export const useOrgStore = defineStore('organizations', () => {
     fetchOrgs, fetchOrg, createOrg, updateOrg, deleteOrg, uploadOrgLogo, deleteOrgLogo,
     fetchMembers, updateMemberRole, removeMember, provisionMemberKey, provisionAllMissingKeys, setMemberKey,
     fetchInvitations, createInvitation, revokeInvitation, getInvitation, acceptInvitation,
-    fetchItems, createFolder, deleteFolder, deleteFile, downloadFile, getFileKey,
+    fetchItems, createFolder, deleteFolder, deleteFile, downloadFile, getFileKey, getFileBlob,
     renameOrgFile, renameOrgFolder,
     moveOrgFile, moveOrgFolder, getAllOrgFolders,
     uploadOrgFile, initiateUpload, completeUpload, abortUpload,
