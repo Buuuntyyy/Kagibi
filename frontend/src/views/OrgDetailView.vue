@@ -129,6 +129,37 @@
           </div>
         </div>
 
+        <!-- Sort / filter bar -->
+        <div class="sort-filter-bar" v-show="!searchQuery">
+          <div class="sort-group">
+            <button
+              v-for="field in ['name', 'size', 'date']"
+              :key="field"
+              class="sort-btn"
+              :class="{ active: sortBy === field }"
+              @click="toggleSort(field)"
+            >
+              {{ t(`orgs.sort${capitalize(field)}`) }}
+              <svg v-if="sortBy === field" viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
+                <path v-if="sortDir === 'asc'" d="M7 14l5-5 5 5z"/>
+                <path v-else d="M7 10l5 5 5-5z"/>
+              </svg>
+            </button>
+          </div>
+          <div class="sort-filter-divider"></div>
+          <div class="filter-group">
+            <button
+              v-for="type in ['all', 'images', 'documents', 'videos', 'audio', 'archives']"
+              :key="type"
+              class="filter-btn"
+              :class="{ active: filterType === type }"
+              @click="filterType = type"
+            >
+              {{ t(`orgs.filter${capitalize(type)}`) }}
+            </button>
+          </div>
+        </div>
+
         <!-- Member joined via link but admin hasn't provisioned their key yet -->
         <div v-if="!orgStore.currentOrg?.my_encrypted_org_key && !canManage" class="key-pending-banner">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
@@ -168,15 +199,15 @@
           <div class="spinner-sm-dark"></div>
         </div>
         <div v-else>
-          <div v-if="orgStore.currentItems.folders.length === 0 && orgStore.currentItems.files.length === 0" class="empty-folder">
+          <div v-if="sortedFolders.length === 0 && sortedFiles.length === 0" class="empty-folder">
             <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor" style="opacity:0.25"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>
-            <p>{{ t('orgs.emptyFolder') }}</p>
+            <p>{{ filterType !== 'all' ? t('orgs.filterNoResults') : t('orgs.emptyFolder') }}</p>
           </div>
 
           <div class="items-list">
             <!-- Folders -->
             <div
-              v-for="folder in orgStore.currentItems.folders"
+              v-for="folder in sortedFolders"
               :key="'f-' + folder.id"
               class="item-row folder-row"
               @click="renamingItem?.id !== folder.id && navigateToPath(folder.path)"
@@ -213,7 +244,7 @@
 
             <!-- Files -->
             <div
-              v-for="file in orgStore.currentItems.files"
+              v-for="file in sortedFiles"
               :key="'file-' + file.id"
               class="item-row"
             >
@@ -1558,6 +1589,66 @@ async function confirmMove() {
   }
 }
 
+// ── Sort & filter ─────────────────────────────────────────────────────────────
+
+const sortBy = ref('name')
+const sortDir = ref('asc')
+const filterType = ref('all')
+
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1) }
+
+function toggleSort(field) {
+  if (sortBy.value === field) {
+    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortBy.value = field
+    sortDir.value = 'asc'
+  }
+}
+
+function fileMatchesFilter(mimeType) {
+  if (filterType.value === 'all') return true
+  if (!mimeType) return false
+  switch (filterType.value) {
+    case 'images': return mimeType.startsWith('image/')
+    case 'videos': return mimeType.startsWith('video/')
+    case 'audio': return mimeType.startsWith('audio/')
+    case 'documents':
+      return mimeType === 'application/pdf' ||
+        mimeType.startsWith('text/') ||
+        mimeType.startsWith('application/msword') ||
+        mimeType.startsWith('application/vnd.openxmlformats-officedocument') ||
+        mimeType.startsWith('application/vnd.oasis.opendocument')
+    case 'archives':
+      return ['application/zip','application/x-tar','application/gzip',
+        'application/x-rar-compressed','application/x-7z-compressed',
+        'application/x-bzip2'].some(t => mimeType.startsWith(t))
+    default: return true
+  }
+}
+
+const sortedFolders = computed(() => {
+  const folders = [...(orgStore.currentItems.folders || [])]
+  return folders.sort((a, b) => {
+    const diff = sortBy.value === 'date'
+      ? new Date(a.created_at) - new Date(b.created_at)
+      : a.name.localeCompare(b.name)
+    return sortDir.value === 'asc' ? diff : -diff
+  })
+})
+
+const sortedFiles = computed(() => {
+  let files = [...(orgStore.currentItems.files || [])].filter(f => fileMatchesFilter(f.mime_type))
+  files.sort((a, b) => {
+    let diff
+    if (sortBy.value === 'size') diff = a.size - b.size
+    else if (sortBy.value === 'date') diff = new Date(a.created_at) - new Date(b.created_at)
+    else diff = a.name.localeCompare(b.name)
+    return sortDir.value === 'asc' ? diff : -diff
+  })
+  return files
+})
+
 // ── Members ───────────────────────────────────────────────────────────────────
 
 // ── Logo upload ───────────────────────────────────────────────────────────────
@@ -2350,6 +2441,38 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 .move-current-badge { font-size: 0.7rem; color: var(--secondary-text-color); white-space: nowrap; flex-shrink: 0; }
 .move-check { flex-shrink: 0; color: var(--primary-color); }
 .move-empty { text-align: center; padding: 16px; font-size: 0.85rem; color: var(--secondary-text-color); }
+
+.sort-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0 8px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.08));
+  margin-bottom: 4px;
+}
+.sort-group, .filter-group { display: flex; gap: 4px; align-items: center; }
+.sort-btn, .filter-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--secondary-text-color);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.sort-btn:hover, .filter-btn:hover { background: var(--hover-bg, rgba(255,255,255,0.06)); color: var(--text-color); }
+.sort-btn.active, .filter-btn.active {
+  background: var(--primary-color-light, rgba(99,102,241,0.15));
+  border-color: var(--primary-color, #6366f1);
+  color: var(--primary-color, #6366f1);
+}
+.sort-filter-divider { width: 1px; height: 18px; background: var(--border-color, rgba(255,255,255,0.08)); }
 
 .item-actions {
   display: flex;
