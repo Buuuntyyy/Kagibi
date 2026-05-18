@@ -445,6 +445,11 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	// Activity feed (all members)
 	orgsG.GET("/:orgID/activity", h.GetOrgActivity)
 
+	// Favorites / pinned items (per-member, all members)
+	orgsG.GET("/:orgID/favorites", h.ListFavorites)
+	orgsG.POST("/:orgID/favorites", h.AddFavorite)
+	orgsG.DELETE("/:orgID/favorites/:itemType/:itemID", h.RemoveFavorite)
+
 	// Client-side search index (encrypted names, client decrypts + filters)
 	orgsG.GET("/:orgID/fs/all-items", h.GetAllOrgItems)
 

@@ -201,6 +201,30 @@
           </template>
         </div>
 
+        <!-- Pinned / favorites quick-access strip -->
+        <div v-if="orgStore.favorites.length > 0 && !searchQuery" class="pinned-section">
+          <div class="pinned-label">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="flex-shrink:0"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            {{ t('orgs.pinned') }}
+          </div>
+          <div class="pinned-chips">
+            <button
+              v-for="fav in enrichedFavorites"
+              :key="fav.id"
+              class="pinned-chip"
+              @click="onFavClick(fav)"
+              :title="fav._path || fav.item_type"
+            >
+              <svg v-if="fav.item_type === 'folder'" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+              <svg v-else viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+              <span class="pinned-chip-name">{{ fav._name || `#${fav.item_id}` }}</span>
+              <span class="pinned-chip-remove" @click.stop="toggleFavorite({ id: fav.item_id, name: fav._name }, fav.item_type)" :title="t('orgs.unpinItem')">
+                <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              </span>
+            </button>
+          </div>
+        </div>
+
         <!-- Member joined via link but admin hasn't provisioned their key yet -->
         <div v-if="!orgStore.currentOrg?.my_encrypted_org_key && !canManage" class="key-pending-banner">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
@@ -334,6 +358,10 @@
                   <span v-if="zipDownloadStates[folder.id]" class="spinner-sm"></span>
                   <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                 </button>
+                <button class="btn-icon" :class="{ 'btn-icon-pinned': isFavorite(folder.id, 'folder') }" @click.stop="toggleFavorite(folder, 'folder')" :title="isFavorite(folder.id, 'folder') ? t('orgs.unpinItem') : t('orgs.pinItem')">
+                  <svg v-if="isFavorite(folder.id, 'folder')" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                  <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>
+                </button>
                 <button v-if="canWrite" class="btn-icon-danger" @click.stop="confirmDeleteFolder(folder)" :title="t('orgs.deleteFolder')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                 </button>
@@ -393,6 +421,10 @@
                 </button>
                 <button v-if="canWrite && renamingItem?.id !== file.id" class="btn-icon" @click.stop="startRename(file, 'file')" :title="t('orgs.renameFile')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                </button>
+                <button class="btn-icon" :class="{ 'btn-icon-pinned': isFavorite(file.id, 'file') }" @click.stop="toggleFavorite(file, 'file')" :title="isFavorite(file.id, 'file') ? t('orgs.unpinItem') : t('orgs.pinItem')">
+                  <svg v-if="isFavorite(file.id, 'file')" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                  <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>
                 </button>
                 <button v-if="canWrite" class="btn-icon-danger" @click.stop="confirmDeleteFile(file)" :title="t('orgs.deleteFile')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
@@ -1487,6 +1519,7 @@ onMounted(async () => {
     orgStore.fetchItems(orgID.value, '/'),
     orgStore.fetchMembers(orgID.value),
     orgStore.fetchOrgTags(orgID.value).catch(() => {}),
+    orgStore.fetchFavorites(orgID.value).catch(() => {}),
   ])
 
   settingsForm.value = {
@@ -1616,6 +1649,33 @@ function startActivityRefresh() {
 
 function stopActivityRefresh() {
   if (_activityRefreshTimer) { clearInterval(_activityRefreshTimer); _activityRefreshTimer = null }
+}
+
+// ── Favorites ────────────────────────────────────────────────────────────────
+
+const enrichedFavorites = computed(() => orgStore.favorites)
+
+function isFavorite(itemID, itemType) {
+  return orgStore.favorites.some(f => f.item_id === itemID && f.item_type === itemType)
+}
+
+async function toggleFavorite(item, type) {
+  const id = item.id
+  if (isFavorite(id, type)) {
+    await orgStore.removeFavorite(orgID.value, id, type)
+    showToast(t('orgs.itemUnpinned'))
+  } else {
+    await orgStore.addFavorite(orgID.value, id, type)
+    showToast(t('orgs.itemPinned'))
+  }
+}
+
+function onFavClick(fav) {
+  if (fav.item_type === 'folder') {
+    navigateToPath(fav._path || '/')
+  } else {
+    navigateToPath(fav._parent_path || '/')
+  }
 }
 
 // ── Search ────────────────────────────────────────────────────────────────────
@@ -4997,6 +5057,89 @@ const formatDate = (dateStr) => {
 .share-error-msg {
   color: var(--error-color);
   font-size: 0.87rem;
+}
+
+/* ── Pinned / favorites ─────────────────────────────────────────────────────── */
+
+.pinned-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 6px;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.pinned-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, #6b7280);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pinned-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pinned-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 6px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-secondary, #f9fafb);
+  font-size: 0.78rem;
+  cursor: pointer;
+  color: var(--text-primary, #111827);
+  transition: background 0.15s, border-color 0.15s;
+  max-width: 180px;
+}
+
+.pinned-chip:hover {
+  background: var(--bg-hover, #f3f4f6);
+  border-color: var(--accent-color, #6366f1);
+}
+
+.pinned-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+.pinned-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #6b7280);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+.pinned-chip-remove:hover {
+  background: var(--danger-light, #fee2e2);
+  color: var(--danger-color, #ef4444);
+}
+
+.btn-icon-pinned {
+  color: #f59e0b !important;
 }
 
 /* ── Activity feed ─────────────────────────────────────────────────────────── */

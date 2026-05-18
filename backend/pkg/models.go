@@ -338,6 +338,18 @@ type OrgTag struct {
 	CreatedAt     time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
+// OrgFavorite is a pinned file or folder for a specific org member.
+type OrgFavorite struct {
+	bun.BaseModel `bun:"table:org_favorites,alias:ofav"`
+
+	ID        int64     `bun:"id,pk,autoincrement" json:"id"`
+	OrgID     int64     `bun:"org_id,notnull" json:"org_id"`
+	UserID    string    `bun:"user_id,notnull" json:"user_id"`
+	ItemID    int64     `bun:"item_id,notnull" json:"item_id"`
+	ItemType  string    `bun:"item_type,notnull" json:"item_type"` // "file" | "folder"
+	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
 // OrgFolder is a directory inside an organization's shared storage.
 type OrgFolder struct {
 	bun.BaseModel `bun:"table:org_folders,alias:of"`

@@ -44,6 +44,9 @@ func Migrate(db *bun.DB) error {
 	if err := migrateOrgTags(ctx, db); err != nil {
 		return err
 	}
+	if err := migrateOrgFavorites(ctx, db); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -751,6 +754,25 @@ func migrateOrgTags(ctx context.Context, db *bun.DB) error {
 		`ALTER TABLE org_folders ADD COLUMN IF NOT EXISTS tag_ids BIGINT[] NOT NULL DEFAULT '{}'`); err != nil {
 		log.Printf("Warning: failed to add tag_ids to org_folders: %v", err)
 	}
+	return nil
+}
+
+func migrateOrgFavorites(ctx context.Context, db *bun.DB) error {
+	_, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS org_favorites (
+			id         BIGSERIAL PRIMARY KEY,
+			org_id     BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+			user_id    TEXT NOT NULL,
+			item_id    BIGINT NOT NULL,
+			item_type  VARCHAR(10) NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (org_id, user_id, item_id, item_type)
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create org_favorites: %w", err)
+	}
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_org_fav_user ON org_favorites (org_id, user_id)`)
 	return nil
 }
 

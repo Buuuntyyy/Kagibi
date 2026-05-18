@@ -42,6 +42,8 @@ export const useOrgStore = defineStore('organizations', () => {
   const orgTags = ref([])
   // Activity feed: OrgAuditLog[] with detail_plain (decrypted for file/folder actions)
   const orgActivity = ref([])
+  // Favorites: OrgFavorite[] enriched with _name and _path from cache
+  const favorites = ref([])
   const loading = ref(false)
   const error = ref(null)
 
@@ -786,6 +788,63 @@ export const useOrgStore = defineStore('organizations', () => {
     return entries
   }
 
+  async function fetchFavorites(orgID) {
+    // Warm search cache so we can resolve encrypted names
+    if (!searchCache.value || searchCache.value.orgID !== orgID) {
+      try {
+        const { data } = await api.get(`/orgs/${orgID}/fs/all-items`)
+        const items = data || []
+        try {
+          const orgKey = await getOrgKey(orgID)
+          for (const item of items) {
+            const plain = await decryptOrgName(item.name, orgKey)
+            item.decrypted_name = plain
+            if (item.type === 'folder') folderNameCache.value[item.name] = plain
+          }
+        } catch (_) {
+          for (const item of items) item.decrypted_name = item.name
+        }
+        searchCache.value = { orgID, items }
+      } catch (_) {}
+    }
+
+    const { data } = await api.get(`/orgs/${orgID}/favorites`)
+    const favs = data || []
+
+    if (searchCache.value?.orgID === orgID) {
+      for (const fav of favs) {
+        const found = searchCache.value.items.find(i => i.id === fav.item_id && i.type === fav.item_type)
+        if (found) {
+          fav._name = found.decrypted_name
+          fav._path = found.path
+          fav._parent_path = found.parent_path
+        }
+      }
+    }
+
+    favorites.value = favs
+    return favs
+  }
+
+  async function addFavorite(orgID, itemID, itemType) {
+    const { data } = await api.post(`/orgs/${orgID}/favorites`, { item_id: itemID, item_type: itemType })
+    if (data.id) {
+      if (searchCache.value?.orgID === orgID) {
+        const found = searchCache.value.items.find(i => i.id === itemID && i.type === itemType)
+        if (found) { data._name = found.decrypted_name; data._path = found.path; data._parent_path = found.parent_path }
+      }
+      if (!favorites.value.find(f => f.item_id === itemID && f.item_type === itemType)) {
+        favorites.value.push(data)
+      }
+    }
+    return data
+  }
+
+  async function removeFavorite(orgID, itemID, itemType) {
+    await api.delete(`/orgs/${orgID}/favorites/${itemType}/${itemID}`)
+    favorites.value = favorites.value.filter(f => !(f.item_id === itemID && f.item_type === itemType))
+  }
+
   // Internal: collect { zipPath: Uint8Array } entries from file items + folder subtrees.
   async function _collectZipEntries(orgID, fileItems, folderInfos, onProgress) {
     if (!searchCache.value || searchCache.value.orgID !== orgID) {
@@ -1043,6 +1102,7 @@ export const useOrgStore = defineStore('organizations', () => {
     searchCache.value = null
     folderNameCache.value = {}
     orgActivity.value = []
+    favorites.value = []
     loading.value = false
     error.value = null
     orgKeyCache.clear()
@@ -1058,6 +1118,7 @@ export const useOrgStore = defineStore('organizations', () => {
     moveOrgFile, moveOrgFolder, getAllOrgFolders,
     orgTags, fetchOrgTags, createOrgTag, updateOrgTag, deleteOrgTag, setFileTags, setFolderTags,
     orgActivity, fetchOrgActivity,
+    favorites, fetchFavorites, addFavorite, removeFavorite,
     downloadFolderAsZip, downloadSelectionAsZip,
     uploadOrgFile, initiateUpload, completeUpload, abortUpload,
     searchOrgItems,
