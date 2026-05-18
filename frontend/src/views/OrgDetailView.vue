@@ -249,9 +249,10 @@
           <div v-if="hasSelection && canWrite" class="bulk-bar">
             <span class="bulk-count">{{ t('orgs.bulkSelected', { count: selectedCount }) }}</span>
             <div class="bulk-actions">
-              <button class="btn-sm" @click="bulkDownload" :disabled="bulkLoading || selectedFileItems.length === 0" :title="t('orgs.bulkDownload')">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
-                {{ t('orgs.bulkDownload') }}
+              <button class="btn-sm" @click="bulkDownload" :disabled="bulkLoading || (selectedFileItems.length === 0 && selectedFolderItems.length === 0)" :title="selectedFolderItems.length > 0 ? t('orgs.downloadZip') : t('orgs.bulkDownload')">
+                <span v-if="bulkLoading" class="spinner-sm"></span>
+                <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                {{ selectedFolderItems.length > 0 ? t('orgs.downloadZip') : t('orgs.bulkDownload') }}
               </button>
               <button class="btn-sm" @click="openBulkMoveDialog" :disabled="bulkLoading">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-2 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg>
@@ -328,6 +329,10 @@
                 </button>
                 <button v-if="canWrite && renamingItem?.id !== folder.id" class="btn-icon" @click.stop="startRename(folder, 'folder')" :title="t('orgs.renameFolder')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                </button>
+                <button class="btn-icon" @click.stop="handleFolderZipDownload(folder)" :title="t('orgs.downloadZip')" :disabled="!!zipDownloadStates[folder.id]">
+                  <span v-if="zipDownloadStates[folder.id]" class="spinner-sm"></span>
+                  <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                 </button>
                 <button v-if="canWrite" class="btn-icon-danger" @click.stop="confirmDeleteFolder(folder)" :title="t('orgs.deleteFolder')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
@@ -2269,6 +2274,7 @@ async function onDropOnPath(e, path) {
 const selectedIDs = ref(new Set())
 const bulkLoading = ref(false)
 const bulkMoveMode = ref(false)
+const zipDownloadStates = ref({})
 
 function selKey(type, id) { return `${type}-${id}` }
 function isSelected(type, id) { return selectedIDs.value.has(selKey(type, id)) }
@@ -2353,8 +2359,37 @@ async function openBulkMoveDialog() {
 }
 
 async function bulkDownload() {
-  for (const file of selectedFileItems.value) {
-    await handleDownload(file)
+  if (selectedFolderItems.value.length > 0) {
+    bulkLoading.value = true
+    try {
+      const count = await orgStore.downloadSelectionAsZip(
+        orgID.value, selectedFileItems.value, selectedFolderItems.value
+      )
+      if (count === 0) showToast(t('orgs.zipEmpty'), 'info')
+      else showToast(t('orgs.zipFilesDownloaded', { n: count }))
+      clearSelection()
+    } catch (e) {
+      showToast(e.response?.data?.error || e.message, 'error')
+    } finally {
+      bulkLoading.value = false
+    }
+  } else {
+    for (const file of selectedFileItems.value) await handleDownload(file)
+  }
+}
+
+async function handleFolderZipDownload(folder) {
+  if (zipDownloadStates.value[folder.id]) return
+  zipDownloadStates.value[folder.id] = true
+  showToast(t('orgs.zipBuilding'), 'info')
+  try {
+    const count = await orgStore.downloadFolderAsZip(orgID.value, folder.path, folder.name)
+    if (count === 0) showToast(t('orgs.zipEmpty'), 'info')
+    else showToast(t('orgs.zipDownloaded', { name: folder.name }))
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  } finally {
+    delete zipDownloadStates.value[folder.id]
   }
 }
 
@@ -2787,7 +2822,6 @@ const formatDate = (dateStr) => {
   return new Date(dateStr).toLocaleDateString()
 }
 
-const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 </script>
 
 <style scoped>
