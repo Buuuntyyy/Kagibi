@@ -786,6 +786,96 @@ export const useOrgStore = defineStore('organizations', () => {
     return entries
   }
 
+  // Internal: collect { zipPath: Uint8Array } entries from file items + folder subtrees.
+  async function _collectZipEntries(orgID, fileItems, folderInfos, onProgress) {
+    if (!searchCache.value || searchCache.value.orgID !== orgID) {
+      const { data } = await api.get(`/orgs/${orgID}/fs/all-items`)
+      const items = data || []
+      try {
+        const orgKey = await getOrgKey(orgID)
+        for (const item of items) {
+          const plain = await decryptOrgName(item.name, orgKey)
+          item.decrypted_name = plain
+          if (item.type === 'folder') folderNameCache.value[item.name] = plain
+        }
+      } catch (_) {
+        for (const item of items) item.decrypted_name = item.name
+      }
+      searchCache.value = { orgID, items }
+    }
+
+    const seenIDs = new Set()
+    const zipList = []
+
+    for (const f of fileItems) {
+      if (seenIDs.has(f.id)) continue
+      seenIDs.add(f.id)
+      zipList.push({ id: f.id, mime_type: f.mime_type, zipPath: f.name })
+    }
+
+    for (const fi of folderInfos) {
+      const prefix = fi.path === '/' ? '/' : fi.path + '/'
+      const matched = (searchCache.value.items || []).filter(item => {
+        if (item.type !== 'file') return false
+        return fi.path === '/' ? true : (item.path === fi.path || item.path.startsWith(prefix))
+      })
+      for (const item of matched) {
+        if (seenIDs.has(item.id)) continue
+        seenIDs.add(item.id)
+        const relDir = item.path.slice(prefix.length)
+        const zipPath = relDir
+          ? `${fi.name}/${relDir}/${item.decrypted_name}`
+          : `${fi.name}/${item.decrypted_name}`
+        zipList.push({ id: item.id, mime_type: item.mime_type, zipPath })
+      }
+    }
+
+    if (zipList.length === 0) return {}
+
+    const allKeys = await fetchAllFileKeys(orgID)
+    const keyMap = {}
+    for (const k of allKeys) if (k.encrypted_key) keyMap[k.id] = k.encrypted_key
+
+    const orgKey = await getOrgKey(orgID)
+    const entries = {}
+
+    for (let i = 0; i < zipList.length; i++) {
+      const { id, mime_type, zipPath } = zipList[i]
+      const encKey = keyMap[id] || (await getFileKey(orgID, id))
+      const res = await api.get(`/orgs/${orgID}/fs/file/${id}/download`, { responseType: 'blob' })
+      const blob = await decryptFileFromOrg(res.data, encKey, orgKey, mime_type || 'application/octet-stream')
+      entries[zipPath] = new Uint8Array(await blob.arrayBuffer())
+      if (onProgress) onProgress(i + 1, zipList.length)
+    }
+
+    return entries
+  }
+
+  async function downloadFolderAsZip(orgID, folderPath, folderName, onProgress) {
+    const { zipSync } = await import('fflate')
+    const entries = await _collectZipEntries(orgID, [], [{ path: folderPath, name: folderName }], onProgress)
+    if (Object.keys(entries).length === 0) return 0
+    const zip = zipSync(entries)
+    const url = URL.createObjectURL(new Blob([zip], { type: 'application/zip' }))
+    const a = document.createElement('a')
+    a.href = url; a.download = `${folderName}.zip`; a.click()
+    URL.revokeObjectURL(url)
+    return Object.keys(entries).length
+  }
+
+  async function downloadSelectionAsZip(orgID, fileItems, folderItems, onProgress) {
+    const { zipSync } = await import('fflate')
+    const folderInfos = folderItems.map(f => ({ path: f.path, name: f.name }))
+    const entries = await _collectZipEntries(orgID, fileItems, folderInfos, onProgress)
+    if (Object.keys(entries).length === 0) return 0
+    const zip = zipSync(entries)
+    const url = URL.createObjectURL(new Blob([zip], { type: 'application/zip' }))
+    const a = document.createElement('a')
+    a.href = url; a.download = 'selection.zip'; a.click()
+    URL.revokeObjectURL(url)
+    return Object.keys(entries).length
+  }
+
   async function renameOrgFile(orgID, fileID, newPlainName) {
     const orgKey = await getOrgKey(orgID)
     const encryptedName = await encryptOrgName(newPlainName, orgKey)
@@ -968,6 +1058,7 @@ export const useOrgStore = defineStore('organizations', () => {
     moveOrgFile, moveOrgFolder, getAllOrgFolders,
     orgTags, fetchOrgTags, createOrgTag, updateOrgTag, deleteOrgTag, setFileTags, setFolderTags,
     orgActivity, fetchOrgActivity,
+    downloadFolderAsZip, downloadSelectionAsZip,
     uploadOrgFile, initiateUpload, completeUpload, abortUpload,
     searchOrgItems,
     fetchFolderAccess, fetchPermissions, setPermission, deletePermission,
