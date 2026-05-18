@@ -41,6 +41,9 @@ func Migrate(db *bun.DB) error {
 	if err := migrateOrganizationTables(ctx, db); err != nil {
 		return err
 	}
+	if err := migrateOrgTags(ctx, db); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -724,6 +727,33 @@ func migrateEmailRows(ctx context.Context, db *bun.DB, table string) {
 }
 
 // migrateP2PInviteEmails encrypts plaintext recipient_email in p2p_invites.
+func migrateOrgTags(ctx context.Context, db *bun.DB) error {
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS org_tags (
+			id             BIGSERIAL PRIMARY KEY,
+			org_id         BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+			encrypted_name TEXT NOT NULL,
+			color          VARCHAR(7) NOT NULL DEFAULT '#6366f1',
+			created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create org_tags table: %w", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`CREATE INDEX IF NOT EXISTS idx_org_tags_org_id ON org_tags (org_id)`); err != nil {
+		log.Printf("Warning: failed to create idx_org_tags_org_id: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE org_files ADD COLUMN IF NOT EXISTS tag_ids BIGINT[] NOT NULL DEFAULT '{}'`); err != nil {
+		log.Printf("Warning: failed to add tag_ids to org_files: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE org_folders ADD COLUMN IF NOT EXISTS tag_ids BIGINT[] NOT NULL DEFAULT '{}'`); err != nil {
+		log.Printf("Warning: failed to add tag_ids to org_folders: %v", err)
+	}
+	return nil
+}
+
 func migrateP2PInviteEmails(ctx context.Context, db *bun.DB) {
 	type row struct {
 		ID             int64  `bun:"id"`

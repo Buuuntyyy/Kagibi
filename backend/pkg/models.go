@@ -327,6 +327,17 @@ type OrgInvitation struct {
 	CreatedAt              time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
+// OrgTag is a colored label that can be applied to org files and folders.
+type OrgTag struct {
+	bun.BaseModel `bun:"table:org_tags,alias:ot"`
+
+	ID            int64     `bun:"id,pk,autoincrement" json:"id"`
+	OrgID         int64     `bun:"org_id,notnull" json:"org_id"`
+	EncryptedName string    `bun:"encrypted_name,notnull" json:"encrypted_name"`
+	Color         string    `bun:"color,notnull" json:"color"`
+	CreatedAt     time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
 // OrgFolder is a directory inside an organization's shared storage.
 type OrgFolder struct {
 	bun.BaseModel `bun:"table:org_folders,alias:of"`
@@ -338,6 +349,7 @@ type OrgFolder struct {
 	ParentPath   string     `bun:"parent_path,notnull,default:'/'" json:"parent_path"` // path.Dir(path)
 	CreatedBy    string     `bun:"created_by,notnull" json:"created_by"` // user_id
 	EncryptedKey string     `bun:"encrypted_key" json:"encrypted_key,omitempty"` // folder key encrypted with org_key
+	TagIDs       []int64    `bun:"tag_ids,array" json:"tag_ids"`
 	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt    time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 	DeletedAt    *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
@@ -356,6 +368,7 @@ type OrgFile struct {
 	MimeType     string     `bun:"mime_type,notnull,default:''" json:"mime_type"`
 	UploadedBy   string     `bun:"uploaded_by,notnull" json:"uploaded_by"` // user_id
 	EncryptedKey string     `bun:"encrypted_key" json:"encrypted_key,omitempty"`
+	TagIDs       []int64    `bun:"tag_ids,array" json:"tag_ids"`
 	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt    time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 	DeletedAt    *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`

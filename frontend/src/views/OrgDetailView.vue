@@ -136,16 +136,22 @@
               >{{ orgStore.folderNameCache[seg] || seg }}</button>
             </template>
           </div>
-          <div class="fs-actions" v-if="canWrite">
-            <button class="btn-sm" @click="showNewFolderModal = true">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
-              {{ t('orgs.newFolder') }}
+          <div class="fs-actions">
+            <button class="btn-sm btn-ghost-sm" @click="showTagManager = true">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
+              {{ t('orgs.manageTags') }}
             </button>
-            <label class="btn-sm btn-upload">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-              {{ t('orgs.uploadFile') }}
-              <input type="file" multiple style="display:none" @change="handleFileUpload" />
-            </label>
+            <template v-if="canWrite">
+              <button class="btn-sm" @click="showNewFolderModal = true">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+                {{ t('orgs.newFolder') }}
+              </button>
+              <label class="btn-sm btn-upload">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                {{ t('orgs.uploadFile') }}
+                <input type="file" multiple style="display:none" @change="handleFileUpload" />
+              </label>
+            </template>
           </div>
         </div>
 
@@ -178,6 +184,21 @@
               {{ t(`orgs.filter${capitalize(type)}`) }}
             </button>
           </div>
+          <template v-if="orgStore.orgTags.length > 0">
+            <div class="sort-filter-divider"></div>
+            <div class="tag-filter-group">
+              <button
+                v-for="tag in orgStore.orgTags"
+                :key="tag.id"
+                class="tag-filter-btn"
+                :class="{ active: filterTagID === tag.id }"
+                :style="{ '--tag-color': tag.color }"
+                @click="filterTagID = filterTagID === tag.id ? null : tag.id"
+              >
+                <span class="tag-dot"></span>{{ tag.name }}
+              </button>
+            </div>
+          </template>
         </div>
 
         <!-- Member joined via link but admin hasn't provisioned their key yet -->
@@ -284,8 +305,21 @@
                 @click.stop
               />
               <span v-else class="item-name">{{ folder.name }}</span>
+              <div v-if="renamingItem?.id !== folder.id && (folder.tag_ids || []).length > 0" class="item-tags">
+                <span
+                  v-for="tagID in (folder.tag_ids || []).slice(0, 3)"
+                  :key="tagID"
+                  class="item-tag-dot"
+                  :style="{ background: tagColor(tagID) }"
+                  :title="tagName(tagID)"
+                ></span>
+                <span v-if="(folder.tag_ids || []).length > 3" class="item-tag-more">+{{ (folder.tag_ids || []).length - 3 }}</span>
+              </div>
               <span v-if="renamingItem?.id !== folder.id" class="item-meta">{{ formatDate(folder.created_at) }}</span>
               <div class="item-actions">
+                <button class="btn-icon" @click.stop="openTagPopover($event, folder.id, 'folder')" :title="t('orgs.addTag')">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
+                </button>
                 <button v-if="canManage || isGroupAdmin" class="btn-icon" @click.stop="openAccessDialog(folder)" :title="t('orgs.manageAccess')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
                 </button>
@@ -328,8 +362,21 @@
                 @click.stop
               />
               <span v-else class="item-name">{{ file.name }}</span>
+              <div v-if="renamingItem?.id !== file.id && (file.tag_ids || []).length > 0" class="item-tags">
+                <span
+                  v-for="tagID in (file.tag_ids || []).slice(0, 3)"
+                  :key="tagID"
+                  class="item-tag-dot"
+                  :style="{ background: tagColor(tagID) }"
+                  :title="tagName(tagID)"
+                ></span>
+                <span v-if="(file.tag_ids || []).length > 3" class="item-tag-more">+{{ (file.tag_ids || []).length - 3 }}</span>
+              </div>
               <span v-if="renamingItem?.id !== file.id" class="item-meta">{{ formatSize(file.size) }} · {{ formatDate(file.created_at) }}</span>
               <div class="item-actions">
+                <button class="btn-icon" @click.stop="openTagPopover($event, file.id, 'file')" :title="t('orgs.addTag')">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
+                </button>
                 <button class="btn-icon" @click.stop="handleDownload(file)" :title="t('file.download')">
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                 </button>
@@ -710,6 +757,41 @@
           <button class="btn-danger" @click="handleLeaveOrg">{{ t('orgs.leaveOrg') }}</button>
         </div>
       </div>
+
+      <!-- TAB: ACTIVITY -->
+      <div v-if="activeTab === 'activity'" class="tab-content">
+        <div class="section-header">
+          <h3>{{ t('orgs.activity') }}</h3>
+          <button class="btn-sm" @click="loadActivity" :disabled="activityLoading">
+            <span v-if="activityLoading" class="spinner-sm"></span>
+            <span v-else>{{ t('orgs.refresh') }}</span>
+          </button>
+        </div>
+        <div v-if="activityLoading && orgStore.orgActivity.length === 0" class="loading-center" style="padding:40px 0">
+          <div class="spinner"></div>
+        </div>
+        <div v-else-if="orgStore.orgActivity.length === 0" class="empty-tab">
+          <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor" style="opacity:.3"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+          <p>{{ t('orgs.noActivity') }}</p>
+        </div>
+        <div v-else class="activity-feed">
+          <div v-for="group in activityByDay" :key="group.day" class="activity-day-group">
+            <div class="activity-day-label">{{ group.day }}</div>
+            <div class="activity-entry" v-for="entry in group.entries" :key="entry.id">
+              <div class="activity-icon">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                  <path :d="getActivityIcon(entry.action)" />
+                </svg>
+              </div>
+              <div class="activity-body">
+                <span class="activity-actor">{{ actorDisplayName(entry.actor_id) }}</span>
+                <span class="activity-desc">{{ activityDescription(entry) }}</span>
+              </div>
+              <span class="activity-time" :title="entry.created_at">{{ timeAgo(entry.created_at) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </template>
 
     <!-- ── Modals ─────────────────────────────────────────────────────────── -->
@@ -1023,6 +1105,87 @@
       </div>
     </Transition>
 
+    <!-- Tag popover -->
+    <div v-if="tagPopoverID !== null" class="tag-popover"
+      :style="tagPopoverStyle"
+      @click.stop
+    >
+      <div v-if="orgStore.orgTags.length === 0" class="tag-popover-empty">{{ t('orgs.noTagsYet') }}</div>
+      <label
+        v-for="tag in orgStore.orgTags"
+        :key="tag.id"
+        class="tag-popover-item"
+      >
+        <input type="checkbox"
+          :checked="tagPopoverCurrentIDs.includes(tag.id)"
+          @change="toggleTagOnItem(tag.id)"
+        />
+        <span class="tag-popover-dot" :style="{ background: tag.color }"></span>
+        <span class="tag-popover-name">{{ tag.name }}</span>
+      </label>
+      <div class="tag-popover-footer">
+        <button class="tag-popover-manage" @click="showTagManager = true; closeTagPopover()">{{ t('orgs.manageTags') }}</button>
+      </div>
+    </div>
+    <div v-if="tagPopoverID !== null" class="tag-popover-backdrop" @click="closeTagPopover"></div>
+
+    <!-- Tag manager modal -->
+    <Transition name="modal">
+      <div v-if="showTagManager" class="modal-overlay" @click.self="showTagManager = false">
+        <div class="modal modal-sm">
+          <div class="modal-header">
+            <h3>{{ t('orgs.manageTags') }}</h3>
+            <button class="btn-close" @click="showTagManager = false">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <!-- Existing tags -->
+            <div v-for="tag in orgStore.orgTags" :key="tag.id" class="tag-mgr-row">
+              <span class="tag-mgr-dot" :style="{ background: tag.color }"></span>
+              <span v-if="editingTagID !== tag.id" class="tag-mgr-name" @dblclick="startEditTag(tag)">{{ tag.name }}</span>
+              <input v-else class="tag-mgr-input" v-model="editTagName" @keydown.enter.prevent="saveEditTag(tag)" @keydown.escape.prevent="editingTagID = null" @blur="saveEditTag(tag)" autofocus />
+              <div class="tag-mgr-colors">
+                <button
+                  v-for="col in TAG_COLORS"
+                  :key="col"
+                  class="tag-color-swatch"
+                  :class="{ active: tag.color === col }"
+                  :style="{ background: col }"
+                  @click="recolorTag(tag, col)"
+                ></button>
+              </div>
+              <button v-if="canManage" class="btn-icon-danger" @click="confirmDeleteTag(tag)" :title="t('orgs.deleteTag')">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+              </button>
+            </div>
+            <!-- Create new tag -->
+            <div class="tag-mgr-create">
+              <div class="tag-mgr-colors">
+                <button
+                  v-for="col in TAG_COLORS"
+                  :key="col"
+                  class="tag-color-swatch"
+                  :class="{ active: newTagColor === col }"
+                  :style="{ background: col }"
+                  @click="newTagColor = col"
+                ></button>
+              </div>
+              <input
+                class="tag-mgr-input"
+                v-model="newTagName"
+                :placeholder="t('orgs.tagNamePlaceholder')"
+                @keydown.enter.prevent="createTag"
+              />
+              <button class="btn-sm" @click="createTag" :disabled="!newTagName.trim() || tagMgrLoading">
+                {{ t('orgs.createTag') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Move file/folder modal -->
     <Transition name="modal">
       <div v-if="showMoveModal" class="modal-overlay" @click.self="closeMoveDialog">
@@ -1165,6 +1328,7 @@ const tabs = computed(() => {
     { key: 'members', label: t('orgs.members'), icon: TabIcon(['M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z']), count: orgStore.members.length || null },
     { key: 'profile', label: t('orgs.myProfile'), icon: TabIcon(['M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z']) },
     { key: 'dashboard', label: t('orgs.dashboard'), icon: TabIcon(['M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z']) },
+    { key: 'activity', label: t('orgs.activity'), icon: TabIcon(['M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z']) },
   ]
   if (canManage.value || isGroupAdmin.value) {
     base.push(
@@ -1314,8 +1478,11 @@ const showOnboardingWizard = ref(false)
 onMounted(async () => {
   document.addEventListener('keydown', _onKeydown)
   await orgStore.fetchOrg(orgID.value)
-  await orgStore.fetchItems(orgID.value, '/')
-  await orgStore.fetchMembers(orgID.value)
+  await Promise.all([
+    orgStore.fetchItems(orgID.value, '/'),
+    orgStore.fetchMembers(orgID.value),
+    orgStore.fetchOrgTags(orgID.value).catch(() => {}),
+  ])
 
   settingsForm.value = {
     name: orgStore.currentOrg.name,
@@ -1356,6 +1523,7 @@ const _onKeydown = (e) => {
 onUnmounted(() => {
   if (_unsubOrgUpdate) _unsubOrgUpdate()
   document.removeEventListener('keydown', _onKeydown)
+  stopActivityRefresh()
 })
 
 const orgAdminTabs = new Set(['invitations', 'permissions', 'audit', 'settings'])
@@ -1374,6 +1542,75 @@ const switchTab = async (tab) => {
     auditHasMore.value = entries.length === 50
   }
   if (tab === 'dashboard') await loadDashboard()
+  if (tab === 'activity') { loadActivity(); startActivityRefresh() }
+  else stopActivityRefresh()
+}
+
+// ── Activity feed ─────────────────────────────────────────────────────────────
+
+const activityLoading = ref(false)
+let _activityRefreshTimer = null
+
+function timeAgo(dateStr) {
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000
+  if (diff < 60) return t('orgs.justNow')
+  if (diff < 3600) return t('orgs.minutesAgo', { n: Math.floor(diff / 60) })
+  if (diff < 86400) return t('orgs.hoursAgo', { n: Math.floor(diff / 3600) })
+  return t('orgs.daysAgo', { n: Math.floor(diff / 86400) })
+}
+
+function actorDisplayName(actorID) {
+  const m = orgStore.members.find(m => m.user_id === actorID)
+  return m?.name || actorID?.slice(0, 8) || '?'
+}
+
+function activityDescription(entry) {
+  const key = `orgs.act_${entry.action}`
+  const detail = entry.detail_plain || entry.detail || ''
+  return t(key, { detail })
+}
+
+function getActivityIcon(action) {
+  if (action === 'file_uploaded') return 'M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 8v2h14v-2H5z'
+  if (action === 'file_deleted' || action === 'folder_deleted') return 'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z'
+  if (action === 'file_downloaded') return 'M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 8v2h14v-2H5z'
+  if (action === 'file_renamed' || action === 'folder_renamed') return 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z'
+  if (action === 'file_moved' || action === 'folder_moved') return 'M20 6h-2.18c.07-.44.18-.88.18-1.3C18 2.55 16.15 1 14 1h-.37C12.14.41 10.73 0 9 0 5.13 0 2 3.13 2 7v3c0 1.7.55 3.26 1.47 4.53L1 17l1.41 1.41 2.08-2.08c.71.43 1.49.72 2.32.86L7 21h10l2-10h1c1.1 0 2-.9 2-2v-1c0-1.1-.9-2-2-2z'
+  if (action === 'file_shared_public') return 'M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z'
+  if (action === 'folder_created') return 'M10 4H4c-1.11 0-2 .89-2 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z'
+  if (action.startsWith('member_')) return 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z'
+  if (action.startsWith('invitation_')) return 'M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z'
+  if (action.startsWith('permission_')) return 'M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z'
+  if (action.startsWith('group_')) return 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z'
+  return 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z'
+}
+
+const activityByDay = computed(() => {
+  const days = []
+  let lastDay = null
+  for (const entry of orgStore.orgActivity) {
+    const day = entry.created_at ? entry.created_at.slice(0, 10) : '?'
+    if (day !== lastDay) { days.push({ day, entries: [] }); lastDay = day }
+    days[days.length - 1].entries.push(entry)
+  }
+  return days
+})
+
+async function loadActivity() {
+  activityLoading.value = true
+  try { await orgStore.fetchOrgActivity(orgID.value) } catch (_) {}
+  activityLoading.value = false
+}
+
+function startActivityRefresh() {
+  stopActivityRefresh()
+  _activityRefreshTimer = setInterval(() => {
+    if (activeTab.value === 'activity') loadActivity()
+  }, 30000)
+}
+
+function stopActivityRefresh() {
+  if (_activityRefreshTimer) { clearInterval(_activityRefreshTimer); _activityRefreshTimer = null }
 }
 
 // ── Search ────────────────────────────────────────────────────────────────────
@@ -1801,6 +2038,118 @@ function closePreview() {
   previewLoading.value = false
 }
 
+// ── Tags ──────────────────────────────────────────────────────────────────────
+
+const TAG_COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#6366f1','#a855f7','#ec4899']
+
+const filterTagID = ref(null)
+const showTagManager = ref(false)
+const newTagName = ref('')
+const newTagColor = ref('#6366f1')
+const tagMgrLoading = ref(false)
+const editingTagID = ref(null)
+const editTagName = ref('')
+
+// Tag popover state
+const tagPopoverID = ref(null)       // item id (file or folder)
+const tagPopoverType = ref(null)     // 'file' | 'folder'
+const tagPopoverStyle = ref({})
+const tagPopoverCurrentIDs = ref([]) // tag_ids currently on the item
+
+function tagColor(tagID) {
+  return orgStore.orgTags.find(t => t.id === tagID)?.color || '#888'
+}
+function tagName(tagID) {
+  return orgStore.orgTags.find(t => t.id === tagID)?.name || '?'
+}
+
+function openTagPopover(e, itemID, type) {
+  e.stopPropagation()
+  const btn = e.currentTarget
+  const rect = btn.getBoundingClientRect()
+  tagPopoverStyle.value = {
+    top: (rect.bottom + window.scrollY + 4) + 'px',
+    left: (rect.left + window.scrollX) + 'px',
+  }
+  tagPopoverID.value = itemID
+  tagPopoverType.value = type
+  const items = type === 'file' ? orgStore.currentItems.files : orgStore.currentItems.folders
+  const item = items.find(i => i.id === itemID)
+  tagPopoverCurrentIDs.value = [...(item?.tag_ids || [])]
+}
+
+function closeTagPopover() {
+  tagPopoverID.value = null
+  tagPopoverType.value = null
+  tagPopoverCurrentIDs.value = []
+}
+
+async function toggleTagOnItem(tagID) {
+  const ids = [...tagPopoverCurrentIDs.value]
+  const idx = ids.indexOf(tagID)
+  if (idx >= 0) ids.splice(idx, 1)
+  else ids.push(tagID)
+  tagPopoverCurrentIDs.value = ids
+  try {
+    if (tagPopoverType.value === 'file') await orgStore.setFileTags(orgID.value, tagPopoverID.value, ids)
+    else await orgStore.setFolderTags(orgID.value, tagPopoverID.value, ids)
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  }
+}
+
+async function createTag() {
+  const name = newTagName.value.trim()
+  if (!name) return
+  tagMgrLoading.value = true
+  try {
+    await orgStore.createOrgTag(orgID.value, name, newTagColor.value)
+    newTagName.value = ''
+    newTagColor.value = '#6366f1'
+    showToast(t('orgs.tagCreated'))
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  } finally {
+    tagMgrLoading.value = false
+  }
+}
+
+function startEditTag(tag) {
+  editingTagID.value = tag.id
+  editTagName.value = tag.name
+}
+
+async function saveEditTag(tag) {
+  const name = editTagName.value.trim()
+  editingTagID.value = null
+  if (!name || name === tag.name) return
+  try {
+    await orgStore.updateOrgTag(orgID.value, tag.id, name, null)
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  }
+}
+
+async function recolorTag(tag, color) {
+  if (tag.color === color) return
+  try {
+    await orgStore.updateOrgTag(orgID.value, tag.id, null, color)
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  }
+}
+
+async function confirmDeleteTag(tag) {
+  if (!confirm(t('orgs.deleteTagConfirm', { name: tag.name }))) return
+  try {
+    await orgStore.deleteOrgTag(orgID.value, tag.id)
+    if (filterTagID.value === tag.id) filterTagID.value = null
+    showToast(t('orgs.tagDeleted'))
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  }
+}
+
 // ── Drag & drop upload ────────────────────────────────────────────────────────
 
 const isDragOver = ref(false)
@@ -2048,7 +2397,9 @@ function fileMatchesFilter(mimeType) {
 }
 
 const sortedFolders = computed(() => {
-  const folders = [...(orgStore.currentItems.folders || [])]
+  let folders = [...(orgStore.currentItems.folders || [])]
+  if (filterTagID.value !== null)
+    folders = folders.filter(f => (f.tag_ids || []).includes(filterTagID.value))
   return folders.sort((a, b) => {
     const diff = sortBy.value === 'date'
       ? new Date(a.created_at) - new Date(b.created_at)
@@ -2059,6 +2410,8 @@ const sortedFolders = computed(() => {
 
 const sortedFiles = computed(() => {
   let files = [...(orgStore.currentItems.files || [])].filter(f => fileMatchesFilter(f.mime_type))
+  if (filterTagID.value !== null)
+    files = files.filter(f => (f.tag_ids || []).includes(filterTagID.value))
   files.sort((a, b) => {
     let diff
     if (sortBy.value === 'size') diff = a.size - b.size
@@ -3027,6 +3380,85 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 .item-row.selected .item-checkbox { opacity: 1; }
 
 .item-row.selected { background: var(--primary-color-light, rgba(99,102,241,0.08)); }
+
+.btn-ghost-sm {
+  background: none !important;
+  border-color: var(--border-color, rgba(255,255,255,0.1)) !important;
+  color: var(--secondary-text-color) !important;
+  font-size: 0.78rem !important;
+  padding: 3px 8px !important;
+}
+.btn-ghost-sm:hover { background: var(--hover-bg, rgba(255,255,255,0.06)) !important; color: var(--text-color) !important; }
+
+.tag-filter-group { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.tag-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  color: var(--secondary-text-color);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.tag-filter-btn:hover { background: var(--hover-bg, rgba(255,255,255,0.06)); color: var(--text-color); }
+.tag-filter-btn.active { border-color: var(--tag-color); background: color-mix(in srgb, var(--tag-color) 15%, transparent); color: var(--text-color); }
+.tag-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tag-color); flex-shrink: 0; }
+
+.item-tags { display: flex; align-items: center; gap: 3px; flex-shrink: 0; }
+.item-tag-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.item-tag-more { font-size: 0.7rem; color: var(--secondary-text-color); white-space: nowrap; }
+
+.tag-popover-backdrop { position: fixed; inset: 0; z-index: 199; }
+.tag-popover {
+  position: fixed;
+  z-index: 200;
+  background: var(--surface-color, #1e1e2e);
+  border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+  border-radius: 10px;
+  padding: 6px;
+  min-width: 180px;
+  max-width: 240px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.tag-popover-empty { font-size: 0.82rem; color: var(--secondary-text-color); padding: 6px 8px; }
+.tag-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.12s;
+}
+.tag-popover-item:hover { background: var(--hover-bg, rgba(255,255,255,0.06)); }
+.tag-popover-item input[type="checkbox"] { accent-color: var(--primary-color, #6366f1); }
+.tag-popover-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.tag-popover-name { flex: 1; }
+.tag-popover-footer { border-top: 1px solid var(--border-color, rgba(255,255,255,0.08)); margin-top: 4px; padding-top: 4px; }
+.tag-popover-manage { background: none; border: none; cursor: pointer; font-size: 0.78rem; color: var(--secondary-text-color); padding: 4px 8px; width: 100%; text-align: left; border-radius: 4px; }
+.tag-popover-manage:hover { background: var(--hover-bg); color: var(--text-color); }
+
+.tag-mgr-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+}
+.tag-mgr-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.tag-mgr-name { flex: 1; font-size: 0.88rem; cursor: pointer; }
+.tag-mgr-name:hover { text-decoration: underline; }
+.tag-mgr-input { flex: 1; background: var(--input-bg, rgba(255,255,255,0.06)); border: 1px solid var(--border-color); border-radius: 5px; padding: 3px 8px; font-size: 0.85rem; color: var(--text-color); }
+.tag-mgr-colors { display: flex; gap: 4px; flex-shrink: 0; }
+.tag-color-swatch { width: 14px; height: 14px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; transition: border-color 0.12s; }
+.tag-color-swatch.active, .tag-color-swatch:hover { border-color: var(--text-color, #fff); }
+.tag-mgr-create { display: flex; align-items: center; gap: 8px; padding-top: 10px; flex-wrap: wrap; }
 
 .sort-filter-bar {
   display: flex;
@@ -4531,5 +4963,86 @@ const capitalize = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : ''
 .share-error-msg {
   color: var(--error-color);
   font-size: 0.87rem;
+}
+
+/* ── Activity feed ─────────────────────────────────────────────────────────── */
+
+.activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 680px;
+}
+
+.activity-day-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.activity-day-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--subtle-text-color, #8a8a8a);
+  padding: 0 0 6px 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 4px;
+}
+
+.activity-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  transition: background 0.12s;
+}
+
+.activity-entry:hover {
+  background: var(--hover-background-color);
+}
+
+.activity-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-color);
+}
+
+.activity-body {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: baseline;
+}
+
+.activity-actor {
+  font-weight: 600;
+  color: var(--main-text-color);
+  flex-shrink: 0;
+}
+
+.activity-desc {
+  color: var(--secondary-text-color, #666);
+  word-break: break-word;
+}
+
+.activity-time {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: var(--subtle-text-color, #8a8a8a);
+  white-space: nowrap;
 }
 </style>

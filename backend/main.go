@@ -434,6 +434,17 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	// Dashboard stats
 	orgsG.GET("/:orgID/stats", h.GetOrgStats)
 
+	// Tags
+	orgsG.GET("/:orgID/tags", h.ListOrgTags)
+	orgsG.POST("/:orgID/tags", h.CreateOrgTag)
+	orgsG.PATCH("/:orgID/tags/:tagID", h.UpdateOrgTag)
+	orgsG.DELETE("/:orgID/tags/:tagID", h.DeleteOrgTag)
+	orgsG.PUT("/:orgID/fs/file/:fileID/tags", h.SetFileTags)
+	orgsG.PUT("/:orgID/fs/folder/:folderID/tags", h.SetFolderTags)
+
+	// Activity feed (all members)
+	orgsG.GET("/:orgID/activity", h.GetOrgActivity)
+
 	// Client-side search index (encrypted names, client decrypts + filters)
 	orgsG.GET("/:orgID/fs/all-items", h.GetAllOrgItems)
 
