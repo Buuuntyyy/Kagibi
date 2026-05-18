@@ -44,6 +44,8 @@ export const useOrgStore = defineStore('organizations', () => {
   const orgActivity = ref([])
   // Favorites: OrgFavorite[] enriched with _name and _path from cache
   const favorites = ref([])
+  // Trash: TrashItem[] with _name decrypted
+  const trash = ref([])
   const loading = ref(false)
   const error = ref(null)
 
@@ -845,6 +847,35 @@ export const useOrgStore = defineStore('organizations', () => {
     favorites.value = favorites.value.filter(f => !(f.item_id === itemID && f.item_type === itemType))
   }
 
+  async function fetchTrash(orgID) {
+    const { data } = await api.get(`/orgs/${orgID}/trash`)
+    const items = data || []
+    try {
+      const orgKey = await getOrgKey(orgID)
+      for (const item of items) item._name = await decryptOrgName(item.name, orgKey)
+    } catch (_) {
+      for (const item of items) item._name = item.name
+    }
+    trash.value = items
+    return items
+  }
+
+  async function restoreTrashItem(orgID, itemType, itemID) {
+    await api.post(`/orgs/${orgID}/trash/${itemType}/${itemID}/restore`)
+    trash.value = trash.value.filter(i => !(i.id === itemID && i.item_type === itemType))
+    searchCache.value = null
+  }
+
+  async function permanentDeleteTrashItem(orgID, itemType, itemID) {
+    await api.delete(`/orgs/${orgID}/trash/${itemType}/${itemID}`)
+    trash.value = trash.value.filter(i => !(i.id === itemID && i.item_type === itemType))
+  }
+
+  async function emptyTrash(orgID) {
+    await api.delete(`/orgs/${orgID}/trash`)
+    trash.value = []
+  }
+
   // Internal: collect { zipPath: Uint8Array } entries from file items + folder subtrees.
   async function _collectZipEntries(orgID, fileItems, folderInfos, onProgress) {
     if (!searchCache.value || searchCache.value.orgID !== orgID) {
@@ -1103,6 +1134,7 @@ export const useOrgStore = defineStore('organizations', () => {
     folderNameCache.value = {}
     orgActivity.value = []
     favorites.value = []
+    trash.value = []
     loading.value = false
     error.value = null
     orgKeyCache.clear()
@@ -1119,6 +1151,7 @@ export const useOrgStore = defineStore('organizations', () => {
     orgTags, fetchOrgTags, createOrgTag, updateOrgTag, deleteOrgTag, setFileTags, setFolderTags,
     orgActivity, fetchOrgActivity,
     favorites, fetchFavorites, addFavorite, removeFavorite,
+    trash, fetchTrash, restoreTrashItem, permanentDeleteTrashItem, emptyTrash,
     downloadFolderAsZip, downloadSelectionAsZip,
     uploadOrgFile, initiateUpload, completeUpload, abortUpload,
     searchOrgItems,

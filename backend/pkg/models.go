@@ -365,6 +365,8 @@ type OrgFolder struct {
 	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt    time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 	DeletedAt    *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
+	DeletedBy    string     `bun:"deleted_by,notnull,default:''" json:"deleted_by,omitempty"`
+	DeleteRoot   bool       `bun:"delete_root,notnull,default:false" json:"-"`
 }
 
 // OrgFile is a file inside an organization's shared storage.
@@ -384,6 +386,8 @@ type OrgFile struct {
 	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt    time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 	DeletedAt    *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
+	DeletedBy    string     `bun:"deleted_by,notnull,default:''" json:"deleted_by,omitempty"`
+	DeleteRoot   bool       `bun:"delete_root,notnull,default:false" json:"-"`
 }
 
 // OrgFolderPermission stores per-user access overrides for a folder path within an org.

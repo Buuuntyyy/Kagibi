@@ -450,6 +450,12 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	orgsG.POST("/:orgID/favorites", h.AddFavorite)
 	orgsG.DELETE("/:orgID/favorites/:itemType/:itemID", h.RemoveFavorite)
 
+	// Trash (all members can list/restore; admin/owner can permanent-delete / empty)
+	orgsG.GET("/:orgID/trash", h.ListTrash)
+	orgsG.POST("/:orgID/trash/:itemType/:itemID/restore", h.RestoreItem)
+	orgsG.DELETE("/:orgID/trash/:itemType/:itemID", h.PermanentDeleteItem)
+	orgsG.DELETE("/:orgID/trash", h.EmptyTrash)
+
 	// Client-side search index (encrypted names, client decrypts + filters)
 	orgsG.GET("/:orgID/fs/all-items", h.GetAllOrgItems)
 
