@@ -38,6 +38,10 @@ export const useOrgStore = defineStore('organizations', () => {
   const folderNameCache = ref({})
   // Search index cache: { orgID, items: OrgItemResult[] with decrypted_name populated }
   const searchCache = ref(null)
+  // Org tags: { id, encrypted_name, color, name (decrypted) }[]
+  const orgTags = ref([])
+  // Activity feed: OrgAuditLog[] with detail_plain (decrypted for file/folder actions)
+  const orgActivity = ref([])
   const loading = ref(false)
   const error = ref(null)
 
@@ -699,6 +703,89 @@ export const useOrgStore = defineStore('organizations', () => {
       .map(item => ({ id: item.id, name: item.decrypted_name, path: item.path, parent_path: item.parent_path }))
   }
 
+  async function fetchOrgTags(orgID) {
+    const { data } = await api.get(`/orgs/${orgID}/tags`)
+    const tags = data || []
+    try {
+      const orgKey = await getOrgKey(orgID)
+      for (const tag of tags) tag.name = await decryptOrgName(tag.encrypted_name, orgKey)
+    } catch (_) {
+      for (const tag of tags) tag.name = tag.encrypted_name
+    }
+    orgTags.value = tags
+    return tags
+  }
+
+  async function createOrgTag(orgID, plainName, color) {
+    const orgKey = await getOrgKey(orgID)
+    const encryptedName = await encryptOrgName(plainName, orgKey)
+    const { data } = await api.post(`/orgs/${orgID}/tags`, { encrypted_name: encryptedName, color })
+    const tag = { ...data, name: plainName }
+    orgTags.value = [...orgTags.value, tag]
+    return tag
+  }
+
+  async function updateOrgTag(orgID, tagID, plainName, color) {
+    const orgKey = await getOrgKey(orgID)
+    const body = {}
+    if (plainName) body.encrypted_name = await encryptOrgName(plainName, orgKey)
+    if (color) body.color = color
+    const { data } = await api.patch(`/orgs/${orgID}/tags/${tagID}`, body)
+    orgTags.value = orgTags.value.map(t =>
+      t.id === tagID ? { ...data, name: plainName || t.name } : t
+    )
+    return data
+  }
+
+  async function deleteOrgTag(orgID, tagID) {
+    await api.delete(`/orgs/${orgID}/tags/${tagID}`)
+    orgTags.value = orgTags.value.filter(t => t.id !== tagID)
+    currentItems.value.files = currentItems.value.files.map(f => ({
+      ...f, tag_ids: (f.tag_ids || []).filter(id => id !== tagID),
+    }))
+    currentItems.value.folders = currentItems.value.folders.map(f => ({
+      ...f, tag_ids: (f.tag_ids || []).filter(id => id !== tagID),
+    }))
+  }
+
+  async function setFileTags(orgID, fileID, tagIDs) {
+    await api.put(`/orgs/${orgID}/fs/file/${fileID}/tags`, { tag_ids: tagIDs })
+    const file = currentItems.value.files.find(f => f.id === fileID)
+    if (file) file.tag_ids = tagIDs
+  }
+
+  async function setFolderTags(orgID, folderID, tagIDs) {
+    await api.put(`/orgs/${orgID}/fs/folder/${folderID}/tags`, { tag_ids: tagIDs })
+    const folder = currentItems.value.folders.find(f => f.id === folderID)
+    if (folder) folder.tag_ids = tagIDs
+  }
+
+  const FILE_FOLDER_AUDIT_ACTIONS = new Set([
+    'file_uploaded', 'file_deleted', 'file_downloaded', 'file_renamed',
+    'file_moved', 'file_shared_public',
+    'folder_created', 'folder_deleted', 'folder_renamed', 'folder_moved',
+  ])
+
+  async function fetchOrgActivity(orgID) {
+    const { data } = await api.get(`/orgs/${orgID}/activity`)
+    const entries = data || []
+    try {
+      const orgKey = await getOrgKey(orgID)
+      for (const entry of entries) {
+        if (FILE_FOLDER_AUDIT_ACTIONS.has(entry.action) && entry.detail) {
+          try { entry.detail_plain = await decryptOrgName(entry.detail, orgKey) }
+          catch (_) { entry.detail_plain = entry.detail }
+        } else {
+          entry.detail_plain = entry.detail
+        }
+      }
+    } catch (_) {
+      for (const entry of entries) entry.detail_plain = entry.detail
+    }
+    orgActivity.value = entries
+    return entries
+  }
+
   async function renameOrgFile(orgID, fileID, newPlainName) {
     const orgKey = await getOrgKey(orgID)
     const encryptedName = await encryptOrgName(newPlainName, orgKey)
@@ -865,6 +952,7 @@ export const useOrgStore = defineStore('organizations', () => {
     orgStats.value = null
     searchCache.value = null
     folderNameCache.value = {}
+    orgActivity.value = []
     loading.value = false
     error.value = null
     orgKeyCache.clear()
@@ -878,6 +966,8 @@ export const useOrgStore = defineStore('organizations', () => {
     fetchItems, createFolder, deleteFolder, deleteFile, downloadFile, getFileKey, getFileBlob,
     renameOrgFile, renameOrgFolder,
     moveOrgFile, moveOrgFolder, getAllOrgFolders,
+    orgTags, fetchOrgTags, createOrgTag, updateOrgTag, deleteOrgTag, setFileTags, setFolderTags,
+    orgActivity, fetchOrgActivity,
     uploadOrgFile, initiateUpload, completeUpload, abortUpload,
     searchOrgItems,
     fetchFolderAccess, fetchPermissions, setPermission, deletePermission,
