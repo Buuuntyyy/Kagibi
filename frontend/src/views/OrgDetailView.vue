@@ -829,6 +829,49 @@
           </div>
         </div>
       </div>
+
+      <!-- TAB: TRASH -->
+      <div v-if="activeTab === 'trash'" class="tab-content">
+        <div class="section-header">
+          <h3>{{ t('orgs.trash') }}</h3>
+          <div class="section-header-actions">
+            <button class="btn-sm" @click="loadTrash" :disabled="trashLoading">
+              <span v-if="trashLoading" class="spinner-sm"></span>
+              <span v-else>{{ t('orgs.refresh') }}</span>
+            </button>
+            <button v-if="canManage && orgStore.trash.length > 0" class="btn-sm btn-danger-sm" @click="handleEmptyTrash">
+              {{ t('orgs.emptyTrash') }}
+            </button>
+          </div>
+        </div>
+        <div v-if="trashLoading && orgStore.trash.length === 0" class="loading-center" style="padding:40px 0">
+          <div class="spinner"></div>
+        </div>
+        <div v-else-if="orgStore.trash.length === 0" class="empty-tab">
+          <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor" style="opacity:.3"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          <p>{{ t('orgs.trashEmpty') }}</p>
+        </div>
+        <div v-else class="trash-list">
+          <div v-for="item in orgStore.trash" :key="item.item_type + item.id" class="trash-row">
+            <div class="trash-row-icon">
+              <svg v-if="item.item_type === 'folder'" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M10 4H4c-1.11 0-2 .89-2 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2h-8l-2-2z"/></svg>
+              <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+            </div>
+            <div class="trash-row-info">
+              <span class="trash-row-name">{{ item.name }}</span>
+              <span class="trash-row-path">{{ item.path }}</span>
+            </div>
+            <div class="trash-row-meta">
+              <span class="trash-row-date" :title="item.deleted_at">{{ t('orgs.deletedOn', { date: formatTrashDate(item.deleted_at) }) }}</span>
+              <span v-if="item.deleted_by" class="trash-row-by">{{ t('orgs.deletedBy', { user: trashActorName(item.deleted_by) }) }}</span>
+            </div>
+            <div class="trash-row-actions">
+              <button class="btn-sm" @click="handleRestore(item)" :title="t('orgs.restore')">{{ t('orgs.restore') }}</button>
+              <button v-if="isAdminOrOwner" class="btn-sm btn-danger-sm" @click="handlePermanentDelete(item)" :title="t('orgs.permanentDelete')">{{ t('orgs.permanentDelete') }}</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </template>
 
     <!-- ── Modals ─────────────────────────────────────────────────────────── -->
@@ -1366,6 +1409,7 @@ const tabs = computed(() => {
     { key: 'profile', label: t('orgs.myProfile'), icon: TabIcon(['M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z']) },
     { key: 'dashboard', label: t('orgs.dashboard'), icon: TabIcon(['M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z']) },
     { key: 'activity', label: t('orgs.activity'), icon: TabIcon(['M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z']) },
+    { key: 'trash', label: t('orgs.trash'), icon: TabIcon(['M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z']), count: orgStore.trash.length || null },
   ]
   if (canManage.value || isGroupAdmin.value) {
     base.push(
@@ -1582,6 +1626,7 @@ const switchTab = async (tab) => {
   if (tab === 'dashboard') await loadDashboard()
   if (tab === 'activity') { loadActivity(); startActivityRefresh() }
   else stopActivityRefresh()
+  if (tab === 'trash') loadTrash()
 }
 
 // ── Activity feed ─────────────────────────────────────────────────────────────
@@ -1676,6 +1721,50 @@ function onFavClick(fav) {
   } else {
     navigateToPath(fav._parent_path || '/')
   }
+}
+
+// ── Trash ────────────────────────────────────────────────────────────────────
+
+const trashLoading = ref(false)
+
+async function loadTrash() {
+  trashLoading.value = true
+  try { await orgStore.fetchTrash(orgID.value) } catch (_) {}
+  trashLoading.value = false
+}
+
+function formatTrashDate(dateStr) {
+  if (!dateStr) return '?'
+  const d = new Date(dateStr)
+  return d.toLocaleDateString()
+}
+
+function trashActorName(actorID) {
+  const m = orgStore.members.find(m => m.user_id === actorID)
+  return m?.name || actorID?.slice(0, 8) || actorID
+}
+
+async function handleRestore(item) {
+  try {
+    await orgStore.restoreTrashItem(orgID.value, item.item_type, item.id)
+    showToast(t('orgs.itemRestored'))
+  } catch (_) {}
+}
+
+async function handlePermanentDelete(item) {
+  if (!confirm(t('orgs.confirmPermanentDelete', { name: item.name }))) return
+  try {
+    await orgStore.permanentDeleteTrashItem(orgID.value, item.item_type, item.id)
+    showToast(t('orgs.permanentDeleted'))
+  } catch (_) {}
+}
+
+async function handleEmptyTrash() {
+  if (!confirm(t('orgs.confirmEmptyTrash'))) return
+  try {
+    await orgStore.emptyTrash(orgID.value)
+    showToast(t('orgs.trashEmptied'))
+  } catch (_) {}
 }
 
 // ── Search ────────────────────────────────────────────────────────────────────
@@ -5221,5 +5310,103 @@ const formatDate = (dateStr) => {
   font-size: 0.75rem;
   color: var(--subtle-text-color, #8a8a8a);
   white-space: nowrap;
+}
+
+/* ── Trash ─────────────────────────────────────────────────────────────────── */
+
+.trash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trash-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  transition: background 0.12s;
+}
+
+.trash-row:hover {
+  background: var(--hover-background-color);
+}
+
+.trash-row-icon {
+  flex-shrink: 0;
+  color: var(--subtle-text-color, #8a8a8a);
+  display: flex;
+  align-items: center;
+}
+
+.trash-row-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.trash-row-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--main-text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trash-row-path {
+  font-size: 0.75rem;
+  color: var(--subtle-text-color, #8a8a8a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trash-row-meta {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  min-width: 110px;
+}
+
+.trash-row-date {
+  font-size: 0.75rem;
+  color: var(--subtle-text-color, #8a8a8a);
+  white-space: nowrap;
+}
+
+.trash-row-by {
+  font-size: 0.72rem;
+  color: var(--subtle-text-color, #8a8a8a);
+  white-space: nowrap;
+}
+
+.trash-row-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+}
+
+.btn-danger-sm {
+  background: transparent;
+  border: 1px solid var(--danger-color, #ef4444);
+  color: var(--danger-color, #ef4444);
+  font-size: 0.78rem;
+  padding: 3px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.btn-danger-sm:hover {
+  background: var(--danger-color, #ef4444);
+  color: #fff;
 }
 </style>

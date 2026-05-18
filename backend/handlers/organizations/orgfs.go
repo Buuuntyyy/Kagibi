@@ -9,6 +9,7 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"time"
 
 	"kagibi/backend/pkg"
 
@@ -157,20 +158,29 @@ func (h *OrgHandler) DeleteOrgFolder(c *gin.Context) {
 		return
 	}
 
-	// Compute total size of files that will be deleted for quota adjustment
+	// Compute total size of non-deleted files under this path for quota adjustment
 	var totalSize struct{ Sum int64 }
 	_ = h.DB.NewSelect().
 		TableExpr("org_files").
 		ColumnExpr("COALESCE(SUM(size), 0) AS sum").
-		Where("org_id = ? AND (folder_path = ? OR folder_path LIKE ?)", orgID, folder.Path, folder.Path+"/%").
+		Where("org_id = ? AND (folder_path = ? OR folder_path LIKE ?) AND deleted_at IS NULL", orgID, folder.Path, folder.Path+"/%").
 		Scan(ctx, &totalSize)
 
-	// Soft-delete sub-folders and files under this path
-	_, _ = h.DB.NewDelete().Model((*pkg.OrgFolder)(nil)).
-		Where("org_id = ? AND (path = ? OR path LIKE ?)", orgID, folder.Path, folder.Path+"/%").
+	now := time.Now().UTC()
+	// Soft-delete the target folder itself (delete_root = true)
+	_, _ = h.DB.NewUpdate().Model((*pkg.OrgFolder)(nil)).
+		Set("deleted_at = ?, deleted_by = ?, delete_root = TRUE", now, userID).
+		Where("id = ?", folderID).
 		Exec(ctx)
-	_, _ = h.DB.NewDelete().Model((*pkg.OrgFile)(nil)).
-		Where("org_id = ? AND (folder_path = ? OR folder_path LIKE ?)", orgID, folder.Path, folder.Path+"/%").
+	// Soft-delete nested sub-folders (cascaded, delete_root = false)
+	_, _ = h.DB.NewUpdate().Model((*pkg.OrgFolder)(nil)).
+		Set("deleted_at = ?, deleted_by = ?, delete_root = FALSE", now, userID).
+		Where("org_id = ? AND path LIKE ? AND deleted_at IS NULL", orgID, folder.Path+"/%").
+		Exec(ctx)
+	// Soft-delete nested files (cascaded, delete_root = false)
+	_, _ = h.DB.NewUpdate().Model((*pkg.OrgFile)(nil)).
+		Set("deleted_at = ?, deleted_by = ?, delete_root = FALSE", now, userID).
+		Where("org_id = ? AND (folder_path = ? OR folder_path LIKE ?) AND deleted_at IS NULL", orgID, folder.Path, folder.Path+"/%").
 		Exec(ctx)
 
 	if totalSize.Sum > 0 {
@@ -180,5 +190,6 @@ func (h *OrgHandler) DeleteOrgFolder(c *gin.Context) {
 			Exec(ctx)
 	}
 
+	h.logAudit(ctx, orgID, userID, "folder_deleted", strconv.FormatInt(folderID, 10), "folder", folder.Name)
 	c.JSON(http.StatusOK, gin.H{"message": "folder deleted", "freed_bytes": totalSize.Sum})
 }

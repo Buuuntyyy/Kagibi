@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"time"
 
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/s3storage"
@@ -146,7 +147,11 @@ func (h *OrgHandler) DeleteOrgFile(c *gin.Context) {
 		return
 	}
 
-	if _, err := h.DB.NewDelete().Model(&file).WherePK().Exec(ctx); err != nil {
+	now := time.Now().UTC()
+	if _, err := h.DB.NewUpdate().Model((*pkg.OrgFile)(nil)).
+		Set("deleted_at = ?, deleted_by = ?, delete_root = TRUE", now, userID).
+		Where("id = ?", fileID).
+		Exec(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete file"})
 		return
 	}

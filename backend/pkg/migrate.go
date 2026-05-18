@@ -47,6 +47,9 @@ func Migrate(db *bun.DB) error {
 	if err := migrateOrgFavorites(ctx, db); err != nil {
 		return err
 	}
+	if err := migrateOrgTrashColumns(ctx, db); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -773,6 +776,22 @@ func migrateOrgFavorites(ctx context.Context, db *bun.DB) error {
 		return fmt.Errorf("failed to create org_favorites: %w", err)
 	}
 	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_org_fav_user ON org_favorites (org_id, user_id)`)
+	return nil
+}
+
+func migrateOrgTrashColumns(ctx context.Context, db *bun.DB) error {
+	for _, stmt := range []string{
+		`ALTER TABLE org_files   ADD COLUMN IF NOT EXISTS deleted_by  TEXT    NOT NULL DEFAULT ''`,
+		`ALTER TABLE org_files   ADD COLUMN IF NOT EXISTS delete_root BOOLEAN NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE org_folders ADD COLUMN IF NOT EXISTS deleted_by  TEXT    NOT NULL DEFAULT ''`,
+		`ALTER TABLE org_folders ADD COLUMN IF NOT EXISTS delete_root BOOLEAN NOT NULL DEFAULT FALSE`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateOrgTrashColumns: %v", err)
+		}
+	}
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_org_files_trash   ON org_files   (org_id, deleted_at) WHERE deleted_at IS NOT NULL AND delete_root = TRUE`)
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_org_folders_trash ON org_folders (org_id, deleted_at) WHERE deleted_at IS NOT NULL AND delete_root = TRUE`)
 	return nil
 }
 
