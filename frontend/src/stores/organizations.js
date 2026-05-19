@@ -46,6 +46,8 @@ export const useOrgStore = defineStore('organizations', () => {
   const favorites = ref([])
   // Trash: TrashItem[] with _name decrypted
   const trash = ref([])
+  // Org shares: OrgShareItem[] with _file_name decrypted
+  const orgShares = ref([])
   const loading = ref(false)
   const error = ref(null)
 
@@ -876,6 +878,24 @@ export const useOrgStore = defineStore('organizations', () => {
     trash.value = []
   }
 
+  async function fetchOrgShares(orgID) {
+    const { data } = await api.get(`/orgs/${orgID}/shares`)
+    const items = data || []
+    try {
+      const orgKey = await getOrgKey(orgID)
+      for (const item of items) item._file_name = await decryptOrgName(item.file_name, orgKey)
+    } catch (_) {
+      for (const item of items) item._file_name = item.file_name
+    }
+    orgShares.value = items
+    return items
+  }
+
+  async function revokeOrgShare(orgID, shareID) {
+    await api.delete(`/orgs/${orgID}/shares/${shareID}`)
+    orgShares.value = orgShares.value.filter(s => s.id !== shareID)
+  }
+
   // Internal: collect { zipPath: Uint8Array } entries from file items + folder subtrees.
   async function _collectZipEntries(orgID, fileItems, folderInfos, onProgress) {
     if (!searchCache.value || searchCache.value.orgID !== orgID) {
@@ -1135,6 +1155,7 @@ export const useOrgStore = defineStore('organizations', () => {
     orgActivity.value = []
     favorites.value = []
     trash.value = []
+    orgShares.value = []
     loading.value = false
     error.value = null
     orgKeyCache.clear()
@@ -1152,6 +1173,7 @@ export const useOrgStore = defineStore('organizations', () => {
     orgActivity, fetchOrgActivity,
     favorites, fetchFavorites, addFavorite, removeFavorite,
     trash, fetchTrash, restoreTrashItem, permanentDeleteTrashItem, emptyTrash,
+    orgShares, fetchOrgShares, revokeOrgShare,
     downloadFolderAsZip, downloadSelectionAsZip,
     uploadOrgFile, initiateUpload, completeUpload, abortUpload,
     searchOrgItems,

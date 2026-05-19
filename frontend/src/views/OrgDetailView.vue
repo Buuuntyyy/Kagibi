@@ -872,6 +872,55 @@
           </div>
         </div>
       </div>
+
+      <!-- TAB: SHARES -->
+      <div v-if="activeTab === 'shares'" class="tab-content">
+        <div class="section-header">
+          <h3>{{ t('orgs.shares') }}</h3>
+          <button class="btn-sm" @click="loadShares" :disabled="sharesLoading">
+            <span v-if="sharesLoading" class="spinner-sm"></span>
+            <span v-else>{{ t('orgs.refresh') }}</span>
+          </button>
+        </div>
+        <p class="shares-scope-hint" v-if="!canManage">{{ t('orgs.sharesMyOwn') }}</p>
+        <div v-if="sharesLoading && orgStore.orgShares.length === 0" class="loading-center" style="padding:40px 0">
+          <div class="spinner"></div>
+        </div>
+        <div v-else-if="orgStore.orgShares.length === 0" class="empty-tab">
+          <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor" style="opacity:.3"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+          <p>{{ t('orgs.noShares') }}</p>
+        </div>
+        <div v-else class="shares-list">
+          <div v-for="share in orgStore.orgShares" :key="share.id" class="share-row">
+            <div class="share-row-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+            </div>
+            <div class="share-row-info">
+              <span class="share-row-name">{{ share._file_name || share.file_name }}</span>
+              <span class="share-row-path">{{ share.file_path }}</span>
+            </div>
+            <div class="share-row-meta">
+              <span class="share-row-creator">{{ t('orgs.sharedBy', { user: shareActorName(share.owner_id) }) }}</span>
+              <span class="share-row-date">{{ t('orgs.sharedOn', { date: formatTrashDate(share.created_at) }) }}</span>
+              <span v-if="share.expires_at" class="share-row-expiry" :class="{ 'share-expired': isExpired(share.expires_at) }">
+                {{ isExpired(share.expires_at) ? t('orgs.shareExpired') : t('orgs.shareExpires', { date: formatTrashDate(share.expires_at) }) }}
+              </span>
+            </div>
+            <div class="share-row-stats">
+              <span class="share-views">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                {{ share.views }}
+              </span>
+              <span v-if="share.single_use" class="share-single-use">{{ t('orgs.shareSingleUse') }}</span>
+            </div>
+            <div class="share-row-actions">
+              <button class="btn-sm btn-danger-sm" @click="handleRevokeShare(share)" :title="t('orgs.revokeShare')">
+                {{ t('orgs.revokeShare') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </template>
 
     <!-- ── Modals ─────────────────────────────────────────────────────────── -->
@@ -1410,6 +1459,7 @@ const tabs = computed(() => {
     { key: 'dashboard', label: t('orgs.dashboard'), icon: TabIcon(['M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z']) },
     { key: 'activity', label: t('orgs.activity'), icon: TabIcon(['M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z']) },
     { key: 'trash', label: t('orgs.trash'), icon: TabIcon(['M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z']), count: orgStore.trash.length || null },
+    { key: 'shares', label: t('orgs.shares'), icon: TabIcon(['M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z']), count: orgStore.orgShares.length || null },
   ]
   if (canManage.value || isGroupAdmin.value) {
     base.push(
@@ -1627,6 +1677,7 @@ const switchTab = async (tab) => {
   if (tab === 'activity') { loadActivity(); startActivityRefresh() }
   else stopActivityRefresh()
   if (tab === 'trash') loadTrash()
+  if (tab === 'shares') loadShares()
 }
 
 // ── Activity feed ─────────────────────────────────────────────────────────────
@@ -1764,6 +1815,34 @@ async function handleEmptyTrash() {
   try {
     await orgStore.emptyTrash(orgID.value)
     showToast(t('orgs.trashEmptied'))
+  } catch (_) {}
+}
+
+// ── Shares ───────────────────────────────────────────────────────────────────
+
+const sharesLoading = ref(false)
+
+async function loadShares() {
+  sharesLoading.value = true
+  try { await orgStore.fetchOrgShares(orgID.value) } catch (_) {}
+  sharesLoading.value = false
+}
+
+function shareActorName(actorID) {
+  const m = orgStore.members.find(m => m.user_id === actorID)
+  return m?.name || actorID?.slice(0, 8) || actorID
+}
+
+function isExpired(dateStr) {
+  if (!dateStr) return false
+  return new Date(dateStr) < new Date()
+}
+
+async function handleRevokeShare(share) {
+  if (!confirm(t('orgs.confirmRevokeShare', { name: share._file_name || share.file_name }))) return
+  try {
+    await orgStore.revokeOrgShare(orgID.value, share.id)
+    showToast(t('orgs.shareRevoked'))
   } catch (_) {}
 }
 
@@ -5408,5 +5487,120 @@ const formatDate = (dateStr) => {
 .btn-danger-sm:hover {
   background: var(--danger-color, #ef4444);
   color: #fff;
+}
+
+/* ── Shares ─────────────────────────────────────────────────────────────────── */
+
+.shares-scope-hint {
+  font-size: 0.8rem;
+  color: var(--subtle-text-color, #8a8a8a);
+  margin: 0 0 12px 0;
+}
+
+.shares-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.share-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  transition: background 0.12s;
+}
+
+.share-row:hover {
+  background: var(--hover-background-color);
+}
+
+.share-row-icon {
+  flex-shrink: 0;
+  color: var(--subtle-text-color, #8a8a8a);
+  display: flex;
+  align-items: center;
+}
+
+.share-row-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.share-row-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--main-text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share-row-path {
+  font-size: 0.75rem;
+  color: var(--subtle-text-color, #8a8a8a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share-row-meta {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  min-width: 130px;
+}
+
+.share-row-creator,
+.share-row-date {
+  font-size: 0.75rem;
+  color: var(--subtle-text-color, #8a8a8a);
+  white-space: nowrap;
+}
+
+.share-row-expiry {
+  font-size: 0.72rem;
+  color: var(--subtle-text-color, #8a8a8a);
+  white-space: nowrap;
+}
+
+.share-expired {
+  color: var(--danger-color, #ef4444);
+}
+
+.share-row-stats {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.share-views {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.78rem;
+  color: var(--subtle-text-color, #8a8a8a);
+}
+
+.share-single-use {
+  font-size: 0.7rem;
+  background: var(--primary-color-10, rgba(99,102,241,.12));
+  color: var(--primary-color, #6366f1);
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.share-row-actions {
+  flex-shrink: 0;
 }
 </style>

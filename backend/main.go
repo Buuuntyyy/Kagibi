@@ -456,6 +456,10 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	orgsG.DELETE("/:orgID/trash/:itemType/:itemID", h.PermanentDeleteItem)
 	orgsG.DELETE("/:orgID/trash", h.EmptyTrash)
 
+	// Org share links management
+	orgsG.GET("/:orgID/shares", h.ListOrgShares)
+	orgsG.DELETE("/:orgID/shares/:shareID", h.RevokeOrgShare)
+
 	// Client-side search index (encrypted names, client decrypts + filters)
 	orgsG.GET("/:orgID/fs/all-items", h.GetAllOrgItems)
 
