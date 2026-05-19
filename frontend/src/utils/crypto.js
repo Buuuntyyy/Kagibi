@@ -256,7 +256,11 @@ export async function decryptChunkedFileWorker(encryptedBlob, key, mimeType) {
         chunkIndex ++;
     }
 
-    return new Blob(decryptedParts, { type: mimeType || 'application/octet-stream' });
+    const blob = new Blob(decryptedParts, { type: mimeType || 'application/octet-stream' });
+    // Release all decrypted ArrayBuffers immediately; Blob keeps its own internal copy.
+    for (let i = 0; i < decryptedParts.length; i++) decryptedParts[i] = null
+    decryptedParts.length = 0
+    return blob;
 }
 
 

@@ -11,11 +11,17 @@ import {
   decryptOrgKey,
   wrapFileKey,
   unwrapFileKey,
-  encryptFileForOrg,
   decryptFileFromOrg,
   encryptOrgName,
   decryptOrgName,
+  CHUNK_SIZE,
 } from '../utils/orgCrypto.js'
+import {
+  encryptChunkWorker,
+  generateBaseNonce,
+  NONCE_LENGTH,
+  TAG_LENGTH_BYTES,
+} from '../utils/crypto.js'
 
 // CryptoKey objects must NOT enter Vue's reactive system (Proxy breaks them).
 // This module-level Map is the canonical cache for decrypted org keys.
@@ -370,38 +376,45 @@ export const useOrgStore = defineStore('organizations', () => {
   async function uploadOrgFile(orgID, file, folderPath, onProgress) {
     const orgKey = await getOrgKey(orgID)
 
-    // Encrypt the file name before sending to the server.
     let encryptedFileName = file.name
     try {
       encryptedFileName = await encryptOrgName(file.name, orgKey)
     } catch (_) { /* fall back to plaintext */ }
 
-    // Encrypt all chunks (0–50% progress)
-    const { encryptedChunks, encryptedFileKey, totalEncryptedSize } =
-      await encryptFileForOrg(file, orgKey, onProgress)
+    // Generate a per-file key and wrap it with the org key.
+    const fileKey = await generateOrgKey()
+    const encryptedFileKey = await wrapFileKey(fileKey, orgKey)
+    const baseNonce = generateBaseNonce()
 
-    // Initiate multipart upload
+    // Compute total encrypted size deterministically before touching S3.
+    const numChunks = file.size === 0 ? 1 : Math.ceil(file.size / CHUNK_SIZE)
+    const totalEncryptedSize = file.size + numChunks * (NONCE_LENGTH + TAG_LENGTH_BYTES)
+
     const { data: initData } = await api.post(`/orgs/${orgID}/fs/multipart/initiate`, {
       file_name: encryptedFileName,
       file_path: folderPath,
       content_type: 'application/octet-stream',
       total_size: totalEncryptedSize,
-      total_parts: encryptedChunks.length,
+      total_parts: numChunks,
       encrypted_key: encryptedFileKey,
     })
 
-    // PUT encrypted chunks to S3 presigned URLs (50–100% progress)
+    // Encrypt one chunk → upload → move on.  Peak memory ≈ 1 chunk (≈ 10 MB).
     const parts = []
+    let offset = 0
     for (let i = 0; i < initData.presigned_urls.length; i++) {
       const { part_number, url } = initData.presigned_urls[i]
-      const chunk = encryptedChunks[i]
-      const res = await fetch(url, { method: 'PUT', body: chunk })
+      // arrayBuffer() is transferred to the worker (detached in main thread → no copy).
+      const chunkBuf = await file.slice(offset, offset + CHUNK_SIZE).arrayBuffer()
+      const encryptedChunk = await encryptChunkWorker(chunkBuf, fileKey, i, baseNonce)
+      offset += CHUNK_SIZE
+      const res = await fetch(url, { method: 'PUT', body: encryptedChunk })
+      // encryptedChunk goes out of scope here; eligible for GC immediately.
       const etag = res.headers.get('ETag') || ''
       parts.push({ part_number, etag })
-      if (onProgress) onProgress(50 + Math.round(((i + 1) / initData.presigned_urls.length) * 50))
+      if (onProgress) onProgress(Math.round(((i + 1) / numChunks) * 100))
     }
 
-    // Complete multipart upload
     const { data: result } = await api.post(`/orgs/${orgID}/fs/multipart/complete`, {
       upload_id: initData.upload_id,
       key: initData.key,
@@ -414,7 +427,6 @@ export const useOrgStore = defineStore('organizations', () => {
     })
 
     if (result.file) {
-      // Server echoes back the encrypted name; replace with plaintext for display.
       result.file.name = file.name
       currentItems.value.files = [...(currentItems.value.files || []), result.file]
       if (currentOrg.value) {
