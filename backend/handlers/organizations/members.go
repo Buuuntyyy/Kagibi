@@ -23,6 +23,7 @@ type MemberResponse struct {
 	PublicKey       string    `json:"public_key,omitempty"`
 	Role            string    `json:"role"`
 	EncryptedOrgKey string    `json:"encrypted_org_key,omitempty"`
+	QuotaBytes      int64     `json:"quota_bytes"`
 	JoinedAt        time.Time `json:"joined_at"`
 }
 
@@ -79,13 +80,14 @@ func (h *OrgHandler) ListMembers(c *gin.Context) {
 	for i, m := range members {
 		u := userByID[m.UserID]
 		res := MemberResponse{
-			ID:        m.ID,
-			UserID:    m.UserID,
-			Name:      u.Name,
-			Email:     u.Email,
-			AvatarURL: u.AvatarURL,
-			Role:      m.Role,
-			JoinedAt:  m.JoinedAt,
+			ID:         m.ID,
+			UserID:     m.UserID,
+			Name:       u.Name,
+			Email:      u.Email,
+			AvatarURL:  u.AvatarURL,
+			Role:       m.Role,
+			QuotaBytes: m.QuotaBytes,
+			JoinedAt:   m.JoinedAt,
 		}
 		// Key material and raw public keys are only exposed to admins/owners.
 		// Regular members and viewers have no legitimate use for this data.
@@ -112,7 +114,8 @@ func (h *OrgHandler) UpdateMemberRole(c *gin.Context) {
 	}
 
 	var req struct {
-		Role string `json:"role" binding:"required"`
+		Role       string `json:"role" binding:"required"`
+		QuotaBytes *int64 `json:"quota_bytes"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -157,13 +160,18 @@ func (h *OrgHandler) UpdateMemberRole(c *gin.Context) {
 
 	previousRole := target.Role
 	target.Role = req.Role
-	if _, err := h.DB.NewUpdate().Model(&target).WherePK().Column("role").Exec(ctx); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update role"})
+	columns := []string{"role"}
+	if req.QuotaBytes != nil {
+		target.QuotaBytes = *req.QuotaBytes
+		columns = append(columns, "quota_bytes")
+	}
+	if _, err := h.DB.NewUpdate().Model(&target).WherePK().Column(columns...).Exec(ctx); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update member"})
 		return
 	}
 	h.logAudit(ctx, orgID, callerID, "role_changed", target.UserID, "user",
 		previousRole+" → "+req.Role)
-	c.JSON(http.StatusOK, gin.H{"id": target.ID, "role": target.Role})
+	c.JSON(http.StatusOK, gin.H{"id": target.ID, "role": target.Role, "quota_bytes": target.QuotaBytes})
 }
 
 func (h *OrgHandler) RemoveMember(c *gin.Context) {

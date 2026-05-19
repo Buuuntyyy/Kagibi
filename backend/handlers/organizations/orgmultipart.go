@@ -96,7 +96,7 @@ func (h *OrgHandler) InitiateOrgMultipart(c *gin.Context) {
 		return
 	}
 
-	// Quota check
+	// Org-level quota check
 	var org pkg.Organization
 	if err := h.DB.NewSelect().Model(&org).Where("id = ?", orgID).Scan(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch organization"})
@@ -106,6 +106,23 @@ func (h *OrgHandler) InitiateOrgMultipart(c *gin.Context) {
 	if org.StorageUsedBytes+req.TotalSize > quotaBytes {
 		c.JSON(http.StatusForbidden, gin.H{"error": "organization storage quota exceeded"})
 		return
+	}
+
+	// Per-member quota check (quota_bytes=0 means unlimited)
+	var member pkg.OrgMember
+	if err := h.DB.NewSelect().Model(&member).
+		Where("org_id = ? AND user_id = ?", orgID, userID).
+		Scan(ctx); err == nil && member.QuotaBytes > 0 {
+		var memberUsed int64
+		_ = h.DB.NewSelect().
+			TableExpr("org_files").
+			ColumnExpr("COALESCE(SUM(size), 0)").
+			Where("org_id = ? AND uploaded_by = ? AND deleted_at IS NULL", orgID, userID).
+			Scan(ctx, &memberUsed)
+		if memberUsed+req.TotalSize > member.QuotaBytes {
+			c.JSON(http.StatusForbidden, gin.H{"error": "member storage quota exceeded"})
+			return
+		}
 	}
 
 	fullPath := normPath(path.Join(folderPath, req.FileName))

@@ -7,12 +7,14 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"net/http"
 	"os"
 	"path"
 	"strings"
 
 	"kagibi/backend/pkg"
 
+	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/uptrace/bun"
 )
@@ -305,6 +307,38 @@ func (h *OrgHandler) logAudit(ctx context.Context, orgID int64, actorID, action,
 
 func canManage(role string) bool { return role == "owner" || role == "admin" }
 func isOwner(role string) bool   { return role == "owner" }
+
+// checkMFAEnforcement returns true if the caller may proceed.
+// If the org has require_mfa=true and the caller has not enrolled MFA,
+// it writes a 403 response and returns false.
+func (h *OrgHandler) checkMFAEnforcement(c *gin.Context, orgID int64, userID string) bool {
+	ctx := c.Request.Context()
+
+	var org pkg.Organization
+	if err := h.DB.NewSelect().Model(&org).Column("require_mfa").Where("id = ?", orgID).Scan(ctx); err != nil {
+		return true // don't block on lookup failure
+	}
+	if !org.RequireMFA {
+		return true
+	}
+
+	var settings struct {
+		MFAEnabled bool `bun:"mfa_enabled"`
+	}
+	err := h.DB.NewSelect().
+		TableExpr("user_security_settings").
+		ColumnExpr("mfa_enabled").
+		Where("user_id = ?", userID).
+		Scan(ctx, &settings)
+	if err != nil || !settings.MFAEnabled {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":   "mfa_required",
+			"message": "This organization requires two-factor authentication. Please enable MFA in your account settings.",
+		})
+		return false
+	}
+	return true
+}
 
 // hasOrgAccess reports whether userID may use the Organizations feature.
 // Self-hosted instances (BILLING_ENABLED=false) grant access to everyone.

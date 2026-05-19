@@ -50,6 +50,9 @@ func Migrate(db *bun.DB) error {
 	if err := migrateOrgTrashColumns(ctx, db); err != nil {
 		return err
 	}
+	if err := migrateNewFeatureColumns(ctx, db); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -792,6 +795,22 @@ func migrateOrgTrashColumns(ctx context.Context, db *bun.DB) error {
 	}
 	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_org_files_trash   ON org_files   (org_id, deleted_at) WHERE deleted_at IS NOT NULL AND delete_root = TRUE`)
 	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_org_folders_trash ON org_folders (org_id, deleted_at) WHERE deleted_at IS NOT NULL AND delete_root = TRUE`)
+	return nil
+}
+
+// migrateNewFeatureColumns adds columns introduced by the low-effort feature batch:
+// download counter on share links, MFA enforcement flag on organizations,
+// and per-member storage quota on org_members.
+func migrateNewFeatureColumns(ctx context.Context, db *bun.DB) error {
+	for _, stmt := range []string{
+		`ALTER TABLE "share_links"    ADD COLUMN IF NOT EXISTS "download_count" BIGINT NOT NULL DEFAULT 0`,
+		`ALTER TABLE "organizations"  ADD COLUMN IF NOT EXISTS "require_mfa"    BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE "org_members"    ADD COLUMN IF NOT EXISTS "quota_bytes"    BIGINT NOT NULL DEFAULT 0`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateNewFeatureColumns: %v", err)
+		}
+	}
 	return nil
 }
 

@@ -36,6 +36,7 @@ func (h *OrgHandler) UpdateOrg(c *gin.Context) {
 		Name           *string `json:"name"`
 		Description    *string `json:"description"`
 		StorageQuotaMB *int64  `json:"storage_quota_mb"` // owner only
+		RequireMFA     *bool   `json:"require_mfa"`      // admin/owner
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -57,10 +58,13 @@ func (h *OrgHandler) UpdateOrg(c *gin.Context) {
 	if req.StorageQuotaMB != nil && isOwner(role) {
 		org.StorageQuotaMB = *req.StorageQuotaMB
 	}
+	if req.RequireMFA != nil {
+		org.RequireMFA = *req.RequireMFA
+	}
 	org.UpdatedAt = time.Now()
 
 	if _, err := h.DB.NewUpdate().Model(&org).WherePK().
-		Column("name", "description", "storage_quota_mb", "updated_at").
+		Column("name", "description", "storage_quota_mb", "require_mfa", "updated_at").
 		Exec(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update organization"})
 		return

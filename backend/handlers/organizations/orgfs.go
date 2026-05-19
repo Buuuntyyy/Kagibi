@@ -27,6 +27,10 @@ func (h *OrgHandler) ListOrgItems(c *gin.Context) {
 		return
 	}
 
+	if !h.checkMFAEnforcement(c, orgID, userID) {
+		return
+	}
+
 	rawPath := c.Param("path")
 	if rawPath == "" {
 		rawPath = "/"

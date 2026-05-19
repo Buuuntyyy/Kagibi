@@ -208,6 +208,12 @@ func DownloadSharedFileHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	monitoring.FileDownloadsTotal.Inc()
+	go func() {
+		_, _ = db.NewUpdate().Model((*pkg.ShareLink)(nil)).
+			Set("download_count = download_count + 1").
+			Where("id = ?", shareLink.ID).
+			Exec(context.Background())
+	}()
 
 	if err := streamFileFromS3(c, shareLink.OwnerID, file); err != nil {
 		log.Printf("Error streaming file: %v", err)

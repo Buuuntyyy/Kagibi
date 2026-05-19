@@ -160,6 +160,18 @@
         @cancel="handleInputCancel"
       />
     </div>
+
+    <!-- Upload conflict dialog -->
+    <div v-if="uploadStore.conflictState" class="modal-overlay" @click.self="uploadStore.resolveConflict('cancel')">
+      <div class="modal-box">
+        <h3>{{ t('orgs.uploadConflictTitle') }}</h3>
+        <p>{{ t('orgs.uploadConflictMsg', { name: uploadStore.conflictState.fileName }) }}</p>
+        <div class="modal-actions">
+          <button class="btn-primary" @click="uploadStore.resolveConflict('keepBoth')">{{ t('orgs.uploadConflictKeepBoth') }}</button>
+          <button class="btn-secondary" @click="uploadStore.resolveConflict('cancel')">{{ t('orgs.uploadConflictCancel') }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -997,4 +1009,18 @@ const storageLimitGB = computed(() => {
     display: none;
   }
 }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.modal-box {
+  background: var(--surface-primary); border-radius: 12px; padding: 24px 28px;
+  max-width: 400px; width: 90%; display: flex; flex-direction: column; gap: 16px;
+}
+.modal-box h3 { margin: 0; font-size: 16px; color: var(--text-primary); }
+.modal-box p  { margin: 0; font-size: 14px; color: var(--text-secondary); }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.btn-primary  { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; background: var(--primary-color); color: #fff; font-size: 14px; }
+.btn-secondary{ padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer; background: transparent; color: var(--text-primary); font-size: 14px; }
 </style>

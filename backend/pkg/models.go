@@ -189,7 +189,8 @@ type ShareLink struct {
 	PasswordHash string     `bun:"password_hash"`         // Optionnel : mot de passe
 	ExpiresAt    *time.Time `bun:"expires_at"`            // Optionnel : expiration
 	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
-	Views        int64      `bun:"views,default:0"`
+	Views         int64      `bun:"views,default:0"`
+	DownloadCount int64      `bun:"download_count,default:0" json:"download_count"`
 	SingleUse    bool       `bun:"single_use,default:false"`   // Link is invalidated after first download
 	UsedAt       *time.Time `bun:"used_at"`                    // Set when a single-use link is consumed
 	PermDownload bool       `bun:"perm_download,default:true"` // Can download files
@@ -291,6 +292,7 @@ type Organization struct {
 	LogoPath         string     `bun:"logo_path,notnull,default:''" json:"logo_path,omitempty"`
 	StorageQuotaMB   int64      `bun:"storage_quota_mb,notnull,default:10240" json:"storage_quota_mb"` // 10 GB default
 	StorageUsedBytes int64      `bun:"storage_used_bytes,notnull,default:0" json:"storage_used_bytes"`
+	RequireMFA       bool       `bun:"require_mfa,default:false" json:"require_mfa"`
 	CreatedAt        time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt        time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 	DeletedAt        *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
@@ -305,6 +307,7 @@ type OrgMember struct {
 	UserID          string    `bun:"user_id,notnull" json:"user_id"`
 	Role            string    `bun:"role,notnull,default:'member'" json:"role"` // owner | admin | member | viewer
 	EncryptedOrgKey string    `bun:"encrypted_org_key" json:"encrypted_org_key,omitempty"` // org key encrypted with this member's RSA public key
+	QuotaBytes      int64     `bun:"quota_bytes,default:0" json:"quota_bytes"` // 0 = use org-level default
 	JoinedAt        time.Time `bun:"joined_at,nullzero,notnull,default:current_timestamp" json:"joined_at"`
 }
 
