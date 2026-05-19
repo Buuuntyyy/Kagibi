@@ -62,8 +62,16 @@
         </button>
       </div>
 
+      <!-- MFA required gate -->
+      <div v-if="orgMFARequired" class="mfa-required-overlay">
+        <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+        <h3>{{ t('orgs.mfaRequired') }}</h3>
+        <p>{{ t('orgs.mfaRequiredHint') }}</p>
+        <router-link to="/account" class="btn-primary">{{ t('nav.account') }}</router-link>
+      </div>
+
       <!-- TAB: FILES -->
-      <div v-if="activeTab === 'files'" class="tab-content"
+      <div v-else-if="activeTab === 'files'" class="tab-content"
         :class="{ 'drop-zone-active': isDragOver }"
         @dragenter.prevent="onDragEnterZone"
         @dragleave="onDragLeaveZone"
@@ -534,6 +542,17 @@
                 <option value="viewer">{{ t('orgs.viewer') }}</option>
               </select>
               <span v-else class="role-badge" :class="m.role">{{ t(`orgs.${m.role}`) }}</span>
+              <span v-if="m.quota_bytes > 0" class="quota-badge" :title="t('orgs.memberQuotaLabel')">
+                {{ formatBytes(m.quota_bytes) }}
+              </span>
+              <button
+                v-if="canManage && m.role !== 'owner' && m.user_id !== myUserID"
+                class="btn-sm"
+                @click="openQuotaDialog(m)"
+                :title="t('orgs.memberQuotaLabel')"
+              >
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.6-.22l-2.39.96a7.2 7.2 0 0 0-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54a7.37 7.37 0 0 0-1.62.94l-2.39-.96a.48.48 0 0 0-.6.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 0 0-.12.61l1.92 3.32c.12.22.37.29.6.22l2.39-.96c.5.36 1.04.67 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54a7.37 7.37 0 0 0 1.62-.94l2.39.96c.23.09.48 0 .6-.22l1.92-3.32a.47.47 0 0 0-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+              </button>
               <button
                 v-if="(canManage && m.role !== 'owner' && m.user_id !== myUserID) || m.user_id === myUserID"
                 class="btn-icon-danger"
@@ -622,6 +641,10 @@
           <div style="display:flex;gap:8px;align-items:center">
             <span class="audit-retention-note">{{ t('orgs.auditRetentionNote') }}</span>
             <button class="btn-sm" @click="refreshAudit">{{ t('orgs.refresh') }}</button>
+            <button v-if="canManage" class="btn-sm" @click="handleExportAudit" :title="t('orgs.exportAuditLogHint')">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-14 9v2h14v-2H5z"/></svg>
+              {{ t('orgs.exportAuditLog') }}
+            </button>
             <button v-if="canManage" class="btn-sm btn-clean" @click="openCleanModal">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
               {{ t('orgs.cleanAudit') }}
@@ -761,6 +784,13 @@
           <div class="form-group" v-if="isOwner">
             <label>{{ t('orgs.storageQuotaMB') }}</label>
             <input v-model.number="settingsForm.storageQuotaMB" class="input-field" type="number" min="100" />
+          </div>
+          <div class="form-group">
+            <label class="toggle-label">
+              <input type="checkbox" v-model="settingsForm.requireMFA" class="toggle-checkbox" />
+              <span>{{ t('orgs.requireMFA') }}</span>
+            </label>
+            <p class="hint-sm">{{ t('orgs.requireMFAHint') }}</p>
           </div>
           <p v-if="settingsError" class="form-error">{{ settingsError }}</p>
           <button class="btn-primary" @click="handleSaveSettings" :disabled="savingSettings">
@@ -910,6 +940,10 @@
               <span class="share-views">
                 <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
                 {{ share.views }}
+              </span>
+              <span class="share-downloads" :title="t('orgs.shareDownloadCount', share.download_count ?? 0)">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-14 9v2h14v-2H5z"/></svg>
+                {{ share.download_count ?? 0 }}
               </span>
               <span v-if="share.single_use" class="share-single-use">{{ t('orgs.shareSingleUse') }}</span>
             </div>
@@ -1067,8 +1101,59 @@
       </div>
     </Transition>
 
+    <!-- Member quota dialog -->
+    <Transition name="modal">
+      <div v-if="quotaDialogMember" class="modal-overlay" @click.self="quotaDialogMember = null">
+        <div class="modal" style="max-width:380px">
+          <div class="modal-header">
+            <h3>{{ t('orgs.memberQuotaLabel') }}</h3>
+            <button class="btn-close" @click="quotaDialogMember = null">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p style="margin:0 0 12px;font-size:14px;color:var(--text-secondary)">
+              {{ quotaDialogMember.name || quotaDialogMember.email }}
+            </p>
+            <input
+              v-model.number="quotaDialogBytes"
+              type="number"
+              min="0"
+              step="1073741824"
+              class="input-field"
+              :placeholder="t('orgs.memberQuotaLabel')"
+            />
+            <p class="hint-sm" style="margin-top:6px">0 = {{ t('orgs.memberQuotaLabel').split(',')[1] || 'unlimited' }}</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-secondary" @click="quotaDialogMember = null">{{ t('common.cancel') }}</button>
+            <button class="btn-primary" @click="handleSaveQuota" :disabled="savingQuota">
+              <span v-if="savingQuota" class="spinner-sm"></span>
+              {{ t('common.save') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Clean audit modal -->
     <Transition name="modal">
+      <!-- Upload conflict dialog (org files) -->
+      <div v-if="orgStore.orgConflictState" class="modal-overlay" @click.self="orgStore.resolveOrgConflict('cancel')">
+        <div class="modal" style="max-width:420px">
+          <div class="modal-header">
+            <h3>{{ t('orgs.uploadConflictTitle') }}</h3>
+          </div>
+          <div class="modal-body">
+            <p style="font-size:14px;color:var(--text-secondary);margin:0 0 8px">{{ t('orgs.uploadConflictMsg', { name: orgStore.orgConflictState.fileName }) }}</p>
+          </div>
+          <div class="modal-footer" style="display:flex;gap:10px;justify-content:flex-end;padding:16px 20px">
+            <button class="btn-secondary" @click="orgStore.resolveOrgConflict('cancel')">{{ t('orgs.uploadConflictCancel') }}</button>
+            <button class="btn-primary" @click="orgStore.resolveOrgConflict('keepBoth')">{{ t('orgs.uploadConflictKeepBoth') }}</button>
+          </div>
+        </div>
+      </div>
+
       <div v-if="showCleanModal" class="modal-overlay" @click.self="showCleanModal = false">
         <div class="modal modal-clean">
           <div class="modal-header">
@@ -1503,6 +1588,9 @@ const isOwner = computed(() => orgStore.currentOrg?.my_role === 'owner')
 const canManage = computed(() => ['owner', 'admin'].includes(orgStore.currentOrg?.my_role))
 const canWrite = computed(() => ['owner', 'admin', 'member'].includes(orgStore.currentOrg?.my_role))
 const isGroupAdmin = computed(() => orgStore.currentOrg?.is_group_admin === true)
+const orgMFARequired = computed(() =>
+  orgStore.currentOrg?.require_mfa === true && !authStore.user?.mfa_enabled
+)
 
 const storagePercent = computed(() => {
   const org = orgStore.currentOrg
@@ -1638,6 +1726,7 @@ onMounted(async () => {
     name: orgStore.currentOrg.name,
     description: orgStore.currentOrg.description,
     storageQuotaMB: orgStore.currentOrg.storage_quota_mb,
+    requireMFA: orgStore.currentOrg.require_mfa ?? false,
   }
 
   const pendingOrgId = localStorage.getItem('kagibi_org_onboarding')
@@ -2827,6 +2916,35 @@ const handleRoleChange = async (member, role) => {
   }
 }
 
+const quotaDialogMember = ref(null)
+const quotaDialogBytes = ref(0)
+const savingQuota = ref(false)
+
+const openQuotaDialog = (member) => {
+  quotaDialogMember.value = member
+  quotaDialogBytes.value = member.quota_bytes ?? 0
+}
+
+const handleSaveQuota = async () => {
+  if (!quotaDialogMember.value) return
+  savingQuota.value = true
+  try {
+    await orgStore.setMemberQuota(orgID.value, quotaDialogMember.value.id, quotaDialogBytes.value)
+    showToast(t('orgs.memberQuotaSaved'))
+    quotaDialogMember.value = null
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  } finally {
+    savingQuota.value = false
+  }
+}
+
+const formatBytes = (bytes) => {
+  if (!bytes || bytes === 0) return '∞'
+  const gb = bytes / (1024 ** 3)
+  return gb >= 1 ? `${gb.toFixed(1)} GB` : `${(bytes / (1024 ** 2)).toFixed(0)} MB`
+}
+
 const handleRemoveMember = async (member) => {
   if (!confirm(t('orgs.confirmRemoveMember'))) return
   try {
@@ -2932,7 +3050,7 @@ const handleDeletePerm = async (perm) => {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
-const settingsForm = ref({ name: '', description: '', storageQuotaMB: 10240 })
+const settingsForm = ref({ name: '', description: '', storageQuotaMB: 10240, requireMFA: false })
 const savingSettings = ref(false)
 const settingsError = ref('')
 
@@ -2940,7 +3058,11 @@ const handleSaveSettings = async () => {
   savingSettings.value = true
   settingsError.value = ''
   try {
-    const payload = { name: settingsForm.value.name, description: settingsForm.value.description }
+    const payload = {
+      name: settingsForm.value.name,
+      description: settingsForm.value.description,
+      require_mfa: settingsForm.value.requireMFA,
+    }
     if (isOwner.value) payload.storage_quota_mb = settingsForm.value.storageQuotaMB
     await orgStore.updateOrg(orgID.value, payload)
     showToast(t('common.success'))
@@ -2991,6 +3113,14 @@ const handleDeleteOrg = async () => {
 }
 
 // ── Audit log actions ─────────────────────────────────────────────────────────
+
+const handleExportAudit = async () => {
+  try {
+    await orgStore.exportAuditLog(orgID.value)
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  }
+}
 
 const refreshAudit = async () => {
   auditPage.value = 1
@@ -4153,6 +4283,42 @@ const formatDate = (dateStr) => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.toggle-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
+.toggle-checkbox { width: 16px; height: 16px; cursor: pointer; }
+
+/* MFA required overlay */
+.mfa-required-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 60px 24px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.mfa-required-overlay h3 { margin: 0; font-size: 18px; color: var(--text-primary); }
+.mfa-required-overlay p  { margin: 0; font-size: 14px; max-width: 400px; }
+
+/* Quota badge on member row */
+.quota-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  color: var(--primary-color);
+  white-space: nowrap;
+}
+
+/* Download count on share row */
+.share-downloads {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .settings-section h3 {

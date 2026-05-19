@@ -46,7 +46,10 @@ export const useUploadStore = defineStore('uploads', {
       active: false,
       total: 0,
       done: 0
-    }
+    },
+
+    /** Upload conflict dialog state: null when idle */
+    conflictState: null
   }),
 
   getters: {
@@ -306,6 +309,23 @@ export const useUploadStore = defineStore('uploads', {
       this.folderCreation.active = false
     },
     
+    /**
+     * Show conflict dialog and wait for user resolution.
+     * Returns a Promise that resolves to 'keepBoth' | 'cancel'.
+     */
+    showConflict(uploadId, fileName) {
+      return new Promise(resolve => {
+        this.conflictState = { uploadId, fileName, resolve }
+      })
+    },
+
+    resolveConflict(choice) {
+      if (this.conflictState?.resolve) {
+        this.conflictState.resolve(choice)
+        this.conflictState = null
+      }
+    },
+
     /**
      * Get next pending upload (for queue processor)
      */

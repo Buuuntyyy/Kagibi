@@ -4,6 +4,7 @@
 package organizations
 
 import (
+	"encoding/csv"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -166,6 +167,57 @@ func (h *OrgHandler) DeleteAuditLog(c *gin.Context) {
 	h.logAudit(ctx, orgID, callerID, "audit_cleared", "", "org",
 		fmt.Sprintf("%d entries removed (%s)", n, req.Mode))
 	c.JSON(http.StatusOK, gin.H{"deleted": n})
+}
+
+// ExportAuditLog streams the full audit log (last 1 year) as a CSV attachment.
+// Restricted to admins and owners.
+func (h *OrgHandler) ExportAuditLog(c *gin.Context) {
+	callerID := c.GetString("user_id")
+	orgID, err := strconv.ParseInt(c.Param("orgID"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization id"})
+		return
+	}
+	ctx := c.Request.Context()
+
+	callerRole, err := h.memberRole(ctx, orgID, callerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check membership"})
+		return
+	}
+	if !canManage(callerRole) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
+		return
+	}
+
+	var entries []pkg.OrgAuditLog
+	if err := h.DB.NewSelect().Model(&entries).
+		Where("org_id = ? AND created_at >= NOW() - INTERVAL '1 year'", orgID).
+		OrderExpr("created_at DESC").
+		Scan(ctx); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch audit log"})
+		return
+	}
+
+	filename := fmt.Sprintf("audit-org%d.csv", orgID)
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	c.Status(http.StatusOK)
+
+	w := csv.NewWriter(c.Writer)
+	_ = w.Write([]string{"id", "actor_id", "action", "target_id", "target_type", "detail", "created_at"})
+	for _, e := range entries {
+		_ = w.Write([]string{
+			strconv.FormatInt(e.ID, 10),
+			e.ActorID,
+			e.Action,
+			e.TargetID,
+			e.TargetType,
+			e.Detail,
+			e.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+		})
+	}
+	w.Flush()
 }
 
 // GetOrgAllFileKeys returns all {id, encrypted_key} pairs for non-deleted files in the org.

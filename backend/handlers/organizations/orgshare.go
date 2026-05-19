@@ -230,6 +230,13 @@ func DownloadOrgShare(c *gin.Context, db *bun.DB) {
 			Exec(context.Background())
 	}
 
+	go func() {
+		_, _ = db.NewUpdate().Model((*pkg.ShareLink)(nil)).
+			Set("download_count = download_count + 1").
+			Where("id = ?", share.ID).
+			Exec(context.Background())
+	}()
+
 	if _, err := io.Copy(c.Writer, output.Body); err != nil {
 		log.Printf("DownloadOrgShare stream error token=%s: %v", token, err)
 	}

@@ -863,7 +863,23 @@
       "skip": "Passer cette étape",
       "finish": "Terminer",
       "startUsing": "Commencer à utiliser Kagibi"
-    }
+    },
+    "exportAuditLog": "Exporter CSV",
+    "exportAuditLogHint": "Télécharger le journal d'audit complet (12 derniers mois) au format CSV",
+    "requireMFA": "Exiger le MFA pour tous les membres",
+    "requireMFAHint": "Les membres sans authentification à deux facteurs ne pourront pas accéder aux fichiers de l'organisation.",
+    "requireMFASaved": "Exigence MFA mise à jour",
+    "mfaRequired": "Authentification à deux facteurs requise",
+    "mfaRequiredHint": "Cette organisation exige le MFA. Veuillez l'activer dans vos paramètres de compte avant d'accéder à l'espace de travail.",
+    "memberQuotaLabel": "Quota de stockage (octets, 0 = illimité)",
+    "memberQuotaSaved": "Quota mis à jour",
+    "memberQuotaBytes": "{n} Go",
+    "shareDownloadCount": "{count} téléchargement | {count} téléchargements",
+    "shareNoDownloads": "Aucun téléchargement",
+    "uploadConflictTitle": "Fichier déjà existant",
+    "uploadConflictMsg": "\"{name}\" existe déjà dans ce dossier.",
+    "uploadConflictKeepBoth": "Garder les deux",
+    "uploadConflictCancel": "Annuler"
   },
   "join": {
     "loading": "Vérification de l'invitation...",

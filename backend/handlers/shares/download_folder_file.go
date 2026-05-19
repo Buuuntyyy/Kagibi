@@ -4,6 +4,7 @@
 package shares
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"kagibi/backend/pkg"
@@ -140,6 +141,12 @@ func DownloadFileFromSharedFolderHandler(c *gin.Context, db *bun.DB) {
 	defer output.Body.Close()
 
 	monitoring.FileDownloadsTotal.Inc()
+	go func() {
+		_, _ = db.NewUpdate().Model((*pkg.ShareLink)(nil)).
+			Set("download_count = download_count + 1").
+			Where("id = ?", shareLink.ID).
+			Exec(context.Background())
+	}()
 
 	// Headers
 	c.Header("Content-Description", "File Transfer")

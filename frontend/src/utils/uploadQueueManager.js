@@ -212,11 +212,36 @@ class UploadQueueManager {
     const uploadStore = useUploadStore()
     const fileStore = useFileStore()
     const authStore = useAuthStore()
-    const { id, file, targetPath } = uploadItem
+    const { id, targetPath } = uploadItem
+    let { file } = uploadItem
 
     try {
       if (!authStore.isAuthenticated || !authStore.masterKey) throw new Error('Not authenticated')
       uploadStore.updateUpload(id, { startTime: Date.now() })
+
+      // Conflict check: does a file with this name exist in the target folder?
+      const conflict = (fileStore.files || []).some(f => {
+        const filePath = targetPath === '/' ? `/${file.name}` : `${targetPath}/${file.name}`
+        return f.Path === filePath
+      })
+      if (conflict) {
+        const choice = await uploadStore.showConflict(id, file.name)
+        if (choice === 'cancel') {
+          uploadStore.setStatus(id, UploadStatus.CANCELLED)
+          return
+        }
+        // keepBoth: find a free name like "file (1).txt"
+        let base = file.name, ext = ''
+        const dot = file.name.lastIndexOf('.')
+        if (dot > 0) { base = file.name.slice(0, dot); ext = file.name.slice(dot) }
+        let n = 1
+        while ((fileStore.files || []).some(f => {
+          const p = targetPath === '/' ? `/${base} (${n})${ext}` : `${targetPath}/${base} (${n})${ext}`
+          return f.Path === p
+        })) n++
+        file = new File([file], `${base} (${n})${ext}`, { type: file.type })
+        uploadStore.updateUpload(id, { fileName: file.name, file })
+      }
 
       const previewID = await this.uploadPreview(file, targetPath, authStore.masterKey)
 

@@ -56,6 +56,8 @@ export const useOrgStore = defineStore('organizations', () => {
   const orgShares = ref([])
   const loading = ref(false)
   const error = ref(null)
+  // Upload conflict dialog: null when idle, { fileName, resolve } when pending
+  const orgConflictState = ref(null)
 
   // ── Org key management ────────────────────────────────────────────────────
 
@@ -196,6 +198,13 @@ export const useOrgStore = defineStore('organizations', () => {
     await api.patch(`/orgs/${orgID}/members/${memberID}`, { role })
     const m = members.value.find(m => m.id === memberID)
     if (m) m.role = role
+  }
+
+  async function setMemberQuota(orgID, memberID, quotaBytes) {
+    const m = members.value.find(m => m.id === memberID)
+    const role = m?.role ?? 'member'
+    const { data } = await api.patch(`/orgs/${orgID}/members/${memberID}`, { role, quota_bytes: quotaBytes })
+    if (m) m.quota_bytes = data.quota_bytes ?? quotaBytes
   }
 
   // memberID is the OrgMember row ID (member.id), not the user UUID
@@ -373,7 +382,34 @@ export const useOrgStore = defineStore('organizations', () => {
    * @param {string} folderPath
    * @param {(progress: number) => void} [onProgress]  0–100
    */
+  function showOrgConflict(fileName) {
+    return new Promise(resolve => {
+      orgConflictState.value = { fileName, resolve }
+    })
+  }
+
+  function resolveOrgConflict(choice) {
+    if (orgConflictState.value?.resolve) {
+      orgConflictState.value.resolve(choice)
+      orgConflictState.value = null
+    }
+  }
+
   async function uploadOrgFile(orgID, file, folderPath, onProgress) {
+    // Conflict check: is there a file with the same name in this folder?
+    const conflict = (currentItems.value.files || []).some(f => f.name === file.name)
+    if (conflict) {
+      const choice = await showOrgConflict(file.name)
+      if (choice === 'cancel') return null
+      // keepBoth: find a free name
+      let base = file.name, ext = ''
+      const dot = file.name.lastIndexOf('.')
+      if (dot > 0) { base = file.name.slice(0, dot); ext = file.name.slice(dot) }
+      let n = 1
+      while ((currentItems.value.files || []).some(f => f.name === `${base} (${n})${ext}`)) n++
+      file = new File([file], `${base} (${n})${ext}`, { type: file.type })
+    }
+
     const orgKey = await getOrgKey(orgID)
 
     let encryptedFileName = file.name
@@ -680,6 +716,19 @@ export const useOrgStore = defineStore('organizations', () => {
   async function deleteAuditLog(orgID, payload) {
     const { data } = await api.delete(`/orgs/${orgID}/audit`, { data: payload })
     return data
+  }
+
+  async function exportAuditLog(orgID) {
+    const response = await api.get(`/orgs/${orgID}/audit/export`, { responseType: 'blob' })
+    const url = URL.createObjectURL(response.data)
+    const a = document.createElement('a')
+    a.href = url
+    const today = new Date().toISOString().slice(0, 10)
+    a.download = `audit-org${orgID}-${today}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   async function moveOrgFile(orgID, fileID, newFolderPath) {
@@ -1178,7 +1227,7 @@ export const useOrgStore = defineStore('organizations', () => {
   return {
     orgs, currentOrg, members, invitations, currentItems, permissions, groups, myGroups, auditLog, auditSummary, orgStats, folderNameCache, loading, error,
     fetchOrgs, fetchOrg, createOrg, updateOrg, deleteOrg, uploadOrgLogo, deleteOrgLogo,
-    fetchMembers, updateMemberRole, removeMember, provisionMemberKey, provisionAllMissingKeys, setMemberKey,
+    fetchMembers, updateMemberRole, setMemberQuota, removeMember, provisionMemberKey, provisionAllMissingKeys, setMemberKey,
     fetchInvitations, createInvitation, revokeInvitation, getInvitation, acceptInvitation,
     fetchItems, createFolder, deleteFolder, deleteFile, downloadFile, getFileKey, getFileBlob,
     renameOrgFile, renameOrgFolder,
@@ -1195,8 +1244,9 @@ export const useOrgStore = defineStore('organizations', () => {
     fetchGroups, fetchMyGroups, createGroup, updateGroup, deleteGroup,
     addGroupMember, removeGroupMember, updateGroupMemberRole, fetchGroupMembers,
     setGroupPermission, deleteGroupPermission, fetchGroupPermissions,
-    fetchAuditLog, fetchAuditSummary, deleteAuditLog, fetchAllFileKeys, rotateOrgKey, initializeOrgKey,
+    fetchAuditLog, fetchAuditSummary, deleteAuditLog, exportAuditLog, fetchAllFileKeys, rotateOrgKey, initializeOrgKey,
     fetchOrgStats, createOrgFileShare,
+    orgConflictState, resolveOrgConflict,
     $reset,
   }
 })
