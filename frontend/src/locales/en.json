@@ -832,6 +832,12 @@
     "shareGenerating": "Generating encrypted share link…",
     "shareHint": "Copy this link and share it. The decryption key is in the # fragment and is never sent to the server.",
     "shareKeyWarning": "⚠ Anyone with this link can download and decrypt this file. The key is stored in your browser history — use private browsing for sensitive documents.",
+    "createShareLink": "Generate link",
+    "shareExpiry": "Expiry (optional)",
+    "sharePasswordLabel": "Password (optional)",
+    "sharePasswordPlaceholder": "Leave empty for no password",
+    "shareSingleUseLabel": "Single use",
+    "shareSingleUseHint": "The link will be invalidated after the first download.",
     "copyLink": "Copy link",
     "close": "Close",
     "wizard": {

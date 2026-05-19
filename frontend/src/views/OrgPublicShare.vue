@@ -47,6 +47,35 @@
         <p>Le lien est incomplet — la clé de déchiffrement doit être présente dans le fragment # de l'URL.</p>
       </div>
 
+      <div v-else-if="passwordRequired" class="share-card glass-panel password-card">
+        <div class="file-preview-section">
+          <div class="file-icon-wrapper">
+            <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="var(--primary-color)" stroke-width="1.5">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <h2 class="file-name">Partage protégé</h2>
+          <p class="share-meta">Un mot de passe est requis pour accéder à ce partage.</p>
+        </div>
+        <form @submit.prevent="submitPassword" class="password-form">
+          <input
+            type="password"
+            v-model="enteredPassword"
+            placeholder="Mot de passe"
+            class="password-input"
+            :class="{ 'input-error': passwordError }"
+            autofocus
+            autocomplete="current-password"
+          />
+          <p v-if="passwordError" class="password-error-msg">Mot de passe incorrect.</p>
+          <button type="submit" class="btn-primary-lg" :disabled="passwordLoading">
+            <span v-if="passwordLoading">Vérification...</span>
+            <span v-else>Déverrouiller</span>
+          </button>
+        </form>
+      </div>
+
       <div v-else-if="shareInfo" class="share-card glass-panel">
         <div class="file-preview-section">
           <div class="file-icon-wrapper">
@@ -120,9 +149,22 @@ const downloading = ref(false)
 const downloadProgress = ref(0)
 const downloadError = ref('')
 
+// Password gate state
+const passwordRequired = ref(false)
+const enteredPassword = ref('')
+const passwordError = ref(false)
+const passwordLoading = ref(false)
+let confirmedPassword = ''
+
 // The share key lives in the URL fragment (never sent to the server).
 let shareKeyB64 = ''
 let shareKeyCrypto = null
+
+async function fetchShareInfo(password = '') {
+  const headers = password ? { 'X-Share-Password': password } : {}
+  const { data } = await api.get(`/public/org-share/${token}`, { headers })
+  return data
+}
 
 onMounted(async () => {
   shareKeyB64 = window.location.hash.slice(1)
@@ -133,7 +175,6 @@ onMounted(async () => {
   }
 
   try {
-    // Import the share key (AES-256-GCM) from the base64url fragment
     const raw = Uint8Array.from(atob(shareKeyB64.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0))
     shareKeyCrypto = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, true, ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey'])
   } catch {
@@ -143,14 +184,39 @@ onMounted(async () => {
   }
 
   try {
-    const { data } = await api.get(`/public/org-share/${token}`)
+    const data = await fetchShareInfo()
     shareInfo.value = data
   } catch (e) {
-    error.value = e.response?.data?.error || e.message
+    if (e.response?.status === 401 && e.response?.data?.error === 'password_required') {
+      passwordRequired.value = true
+    } else {
+      error.value = e.response?.data?.error || e.message
+    }
   } finally {
     loading.value = false
   }
 })
+
+const submitPassword = async () => {
+  if (!enteredPassword.value) return
+  passwordLoading.value = true
+  passwordError.value = false
+  try {
+    const data = await fetchShareInfo(enteredPassword.value)
+    confirmedPassword = enteredPassword.value
+    shareInfo.value = data
+    passwordRequired.value = false
+  } catch (e) {
+    if (e.response?.status === 401) {
+      passwordError.value = true
+    } else {
+      error.value = e.response?.data?.error || e.message
+      passwordRequired.value = false
+    }
+  } finally {
+    passwordLoading.value = false
+  }
+}
 
 const downloadFile = async () => {
   if (!shareKeyCrypto || !shareInfo.value) return
@@ -159,9 +225,11 @@ const downloadFile = async () => {
   downloadProgress.value = 0
 
   try {
+    const headers = confirmedPassword ? { 'X-Share-Password': confirmedPassword } : {}
     // Download the encrypted blob
     const response = await api.get(`/public/org-share/${token}/download`, {
       responseType: 'blob',
+      headers,
       onDownloadProgress: (ev) => {
         if (ev.total) downloadProgress.value = Math.round((ev.loaded / ev.total) * 50)
       },
@@ -188,7 +256,7 @@ const downloadFile = async () => {
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
-    setTimeout(() => URL.revokeObjectURL(url), 10000)
+    setTimeout(() => URL.revokeObjectURL(url), 500)
   } catch (e) {
     downloadError.value = e.message || 'Erreur lors du téléchargement ou du déchiffrement.'
   } finally {
@@ -402,4 +470,36 @@ function formatDate(d) {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.password-card {
+  text-align: center;
+}
+
+.password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.password-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-color);
+  color: var(--main-text-color);
+  font-size: 1rem;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.password-input:focus { outline: none; border-color: var(--primary-color); }
+.password-input.input-error { border-color: var(--error-color); }
+
+.password-error-msg {
+  color: var(--error-color);
+  font-size: 0.85rem;
+  margin: -4px 0 0;
+}
 </style>

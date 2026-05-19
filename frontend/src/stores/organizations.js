@@ -1038,10 +1038,12 @@ export const useOrgStore = defineStore('organizations', () => {
    *
    * Returns { token, link } from the server.
    */
-  async function createOrgFileShare(orgID, fileID, { encryptedKey, expiresAt }) {
+  async function createOrgFileShare(orgID, fileID, { encryptedKey, expiresAt, password, singleUse }) {
     const { data } = await api.post(`/orgs/${orgID}/fs/file/${fileID}/share`, {
       encrypted_key: encryptedKey,
       expires_at: expiresAt ?? null,
+      password: password || '',
+      single_use: !!singleUse,
     })
     return data
   }

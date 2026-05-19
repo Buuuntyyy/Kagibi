@@ -832,6 +832,12 @@
     "shareGenerating": "Génération du lien de partage chiffré…",
     "shareHint": "Copiez ce lien et partagez-le. La clé de déchiffrement est dans le fragment # et n'est jamais envoyée au serveur.",
     "shareKeyWarning": "⚠ Toute personne disposant de ce lien peut télécharger et déchiffrer ce fichier. La clé est stockée dans l'historique du navigateur — utilisez la navigation privée pour les documents sensibles.",
+    "createShareLink": "Générer le lien",
+    "shareExpiry": "Expiration (optionnel)",
+    "sharePasswordLabel": "Mot de passe (optionnel)",
+    "sharePasswordPlaceholder": "Laisser vide pour aucun mot de passe",
+    "shareSingleUseLabel": "Usage unique",
+    "shareSingleUseHint": "Le lien sera invalidé après le premier téléchargement.",
     "copyLink": "Copier le lien",
     "close": "Fermer",
     "wizard": {

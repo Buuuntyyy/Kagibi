@@ -23,11 +23,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type createOrgShareRequest struct {
 	EncryptedKey string     `json:"encrypted_key"`
 	ExpiresAt    *time.Time `json:"expires_at"`
+	Password     string     `json:"password"`
+	SingleUse    bool       `json:"single_use"`
 }
 
 // CreateOrgFileShare creates a public share link for an org file.
@@ -93,8 +96,18 @@ func (h *OrgHandler) CreateOrgFileShare(c *gin.Context) {
 		Token:        token,
 		EncryptedKey: req.EncryptedKey,
 		ExpiresAt:    req.ExpiresAt,
+		SingleUse:    req.SingleUse,
 		PermDownload: true,
 		OrgID:        &orgID,
+	}
+
+	if req.Password != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
+			return
+		}
+		share.PasswordHash = string(hash)
 	}
 
 	if _, err := h.DB.NewInsert().Model(share).Exec(ctx); err != nil {
@@ -122,6 +135,15 @@ func GetOrgShare(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	if !checkOrgSharePassword(c, share) {
+		return
+	}
+
+	if share.SingleUse && share.UsedAt != nil {
+		c.JSON(http.StatusGone, gin.H{"error": "Link already used"})
+		return
+	}
+
 	var file pkg.OrgFile
 	if err := db.NewSelect().Model(&file).
 		Where("id = ? AND org_id = ?", share.ResourceID, *share.OrgID).
@@ -143,6 +165,8 @@ func GetOrgShare(c *gin.Context, db *bun.DB) {
 		"mime_type":     file.MimeType,
 		"encrypted_key": share.EncryptedKey,
 		"expires_at":    share.ExpiresAt,
+		"has_password":  share.PasswordHash != "",
+		"single_use":    share.SingleUse,
 	})
 }
 
@@ -154,6 +178,15 @@ func DownloadOrgShare(c *gin.Context, db *bun.DB) {
 	share, err := fetchValidOrgShare(c.Request.Context(), db, token)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !checkOrgSharePassword(c, share) {
+		return
+	}
+
+	if share.SingleUse && share.UsedAt != nil {
+		c.JSON(http.StatusGone, gin.H{"error": "Link already used"})
 		return
 	}
 
@@ -189,12 +222,34 @@ func DownloadOrgShare(c *gin.Context, db *bun.DB) {
 	c.Header("Content-Length", strconv.FormatInt(file.Size, 10))
 	c.Header("Content-Disposition", cd)
 
+	if share.SingleUse {
+		now := time.Now()
+		_, _ = db.NewUpdate().Model((*pkg.ShareLink)(nil)).
+			Set("used_at = ?", now).
+			Where("id = ?", share.ID).
+			Exec(context.Background())
+	}
+
 	if _, err := io.Copy(c.Writer, output.Body); err != nil {
 		log.Printf("DownloadOrgShare stream error token=%s: %v", token, err)
 	}
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+// checkOrgSharePassword validates the X-Share-Password header against the stored bcrypt hash.
+// Returns true if no password is set or the header matches.
+func checkOrgSharePassword(c *gin.Context, share *pkg.ShareLink) bool {
+	if share.PasswordHash == "" {
+		return true
+	}
+	password := c.GetHeader("X-Share-Password")
+	if password == "" || bcrypt.CompareHashAndPassword([]byte(share.PasswordHash), []byte(password)) != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "password_required"})
+		return false
+	}
+	return true
+}
 
 func generateOrgShareToken() (string, error) {
 	b := make([]byte, 32)

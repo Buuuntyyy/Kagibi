@@ -1395,10 +1395,28 @@
               </div>
               <p class="share-warning">{{ t('orgs.shareKeyWarning') }}</p>
             </div>
-            <div v-else-if="shareError" class="share-error-msg">{{ shareError }}</div>
+            <div v-else class="share-form">
+              <div class="share-form-field">
+                <label>{{ t('orgs.shareExpiry') }}</label>
+                <input type="datetime-local" v-model="shareExpiresAt" class="share-form-input" />
+              </div>
+              <div class="share-form-field">
+                <label>{{ t('orgs.sharePasswordLabel') }}</label>
+                <input type="password" v-model="sharePassword" class="share-form-input" :placeholder="t('orgs.sharePasswordPlaceholder')" autocomplete="new-password" />
+              </div>
+              <label class="share-single-use-label">
+                <input type="checkbox" v-model="shareSingleUse" />
+                <span>{{ t('orgs.shareSingleUseLabel') }}</span>
+              </label>
+              <p class="share-single-use-hint">{{ t('orgs.shareSingleUseHint') }}</p>
+              <p v-if="shareError" class="share-error-msg">{{ shareError }}</p>
+            </div>
           </div>
           <div class="modal-footer">
             <button class="btn-secondary" @click="closeShareModal">{{ t('orgs.close') }}</button>
+            <button v-if="!shareLink" class="btn-primary" @click="createOrgShare" :disabled="shareLoading">
+              {{ t('orgs.createShareLink') }}
+            </button>
           </div>
         </div>
       </div>
@@ -2007,43 +2025,63 @@ const shareLoading = ref(false)
 const shareLink = ref('')
 const shareError = ref('')
 const shareCopied = ref(false)
+const shareSelectedFile = ref(null)
+// Share creation form fields
+const shareExpiresAt = ref('')
+const sharePassword = ref('')
+const shareSingleUse = ref(false)
 
-const openShareModal = async (file) => {
+const openShareModal = (file) => {
+  shareSelectedFile.value = file
   showShareModal.value = true
-  shareLoading.value = true
   shareLink.value = ''
   shareError.value = ''
   shareCopied.value = false
+  shareExpiresAt.value = ''
+  sharePassword.value = ''
+  shareSingleUse.value = false
+}
+
+const createOrgShare = async () => {
+  const file = shareSelectedFile.value
+  if (!file) return
+  shareLoading.value = true
+  shareError.value = ''
   try {
-    // 1. Fetch the file's wrapped key from the server
     const { data: keyData } = await api.get(`/orgs/${orgID.value}/fs/file/${file.id}/key`)
     const encryptedFileKey = keyData.encrypted_key
 
-    // 2. Decrypt the org key with the user's RSA private key
     if (!authStore.privateKey) throw new Error('Clé privée introuvable. Reconnectez-vous.')
     const orgKey = await decryptOrgKey(
       orgStore.currentOrg?.my_encrypted_org_key,
       authStore.privateKey,
     )
 
-    // 3. Unwrap the file key with the org key
     const fileKey = await unwrapFileKey(encryptedFileKey, orgKey)
-
-    // 4. Generate a fresh share key (AES-256-GCM) and re-wrap the file key
     const shareKey = await generateOrgKey()
     const encryptedKeyForShare = await wrapFileKey(fileKey, shareKey)
 
-    // 5. Export share key to base64url (goes in the URL fragment)
     const shareKeyRaw = await crypto.subtle.exportKey('raw', shareKey)
     const shareKeyB64 = btoa(String.fromCharCode(...new Uint8Array(shareKeyRaw)))
       .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 
-    // 6. Store the share on the server
+    let expiresAt = null
+    if (shareExpiresAt.value) {
+      const d = new Date(shareExpiresAt.value)
+      if (d <= new Date()) throw new Error("La date d'expiration doit être dans le futur.")
+      expiresAt = d.toISOString()
+    }
+
     const result = await orgStore.createOrgFileShare(orgID.value, file.id, {
       encryptedKey: encryptedKeyForShare,
+      expiresAt,
+      password: sharePassword.value,
+      singleUse: shareSingleUse.value,
     })
 
     shareLink.value = `${window.location.origin}/s/org/${result.token}#${shareKeyB64}`
+    // Refresh shares list silently
+    orgStore.fetchOrgShares(orgID.value).catch(() => {})
   } catch (e) {
     shareError.value = e.response?.data?.error || e.message
   } finally {
@@ -2056,6 +2094,7 @@ const closeShareModal = () => {
   shareLink.value = ''
   shareError.value = ''
   shareCopied.value = false
+  shareSelectedFile.value = null
 }
 
 const copyShareLink = async () => {
@@ -5225,6 +5264,57 @@ const formatDate = (dateStr) => {
 .share-error-msg {
   color: var(--error-color);
   font-size: 0.87rem;
+}
+
+.share-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.share-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.share-form-field label {
+  font-size: 0.85rem;
+  color: var(--secondary-text-color);
+  font-weight: 500;
+}
+
+.share-form-input {
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--input-background, var(--card-color));
+  color: var(--main-text-color);
+  font-size: 0.9rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.share-single-use-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--main-text-color);
+  font-weight: 500;
+}
+
+.share-single-use-label input[type="checkbox"] {
+  accent-color: var(--primary-color);
+  width: 15px;
+  height: 15px;
+}
+
+.share-single-use-hint {
+  font-size: 0.78rem;
+  color: var(--secondary-text-color);
+  margin: -4px 0 0 23px;
 }
 
 /* ── Pinned / favorites ─────────────────────────────────────────────────────── */
