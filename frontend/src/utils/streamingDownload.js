@@ -171,7 +171,7 @@ class StreamSaver {
       document.body.removeChild(a)
       
       // Delay revoke to ensure download starts
-      setTimeout(() => URL.revokeObjectURL(url), 10000)
+      setTimeout(() => URL.revokeObjectURL(url), 500)
     }
   }
 

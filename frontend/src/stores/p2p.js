@@ -956,15 +956,17 @@ export const useP2PStore = defineStore('p2p', {
         // Since we trust we received everything (or mostly), let's just use the array.
         
         const blob = new Blob(this.activeTransfer.buffer, { type: this.activeTransfer.fileType });
+        // Release the receive buffer immediately; the Blob holds its own copy.
+        this.activeTransfer.buffer = null
         const url = URL.createObjectURL(blob);
 
         const a = document.createElement('a');
         a.href = url;
         a.download = this.activeTransfer.fileName;
         a.click();
-        
+
         window.URL.revokeObjectURL(url);
-        
+
         this.activeTransfer.status = 'Complete';
 
         // Close PeerConnection after successful reception; keep activeTransfer alive
