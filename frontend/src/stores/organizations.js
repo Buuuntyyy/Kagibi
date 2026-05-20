@@ -59,6 +59,25 @@ export const useOrgStore = defineStore('organizations', () => {
   // Upload conflict dialog: null when idle, { fileName, resolve } when pending
   const orgConflictState = ref(null)
 
+  // ── Pinned orgs (localStorage-backed) ────────────────────────────────────
+  const PINNED_KEY = 'kagibi_pinned_orgs'
+  const _loadPinned = () => {
+    try { return new Set(JSON.parse(localStorage.getItem(PINNED_KEY) || '[]')) }
+    catch { return new Set() }
+  }
+  const pinnedOrgIDs = ref(_loadPinned())
+
+  function togglePin(orgID) {
+    const s = new Set(pinnedOrgIDs.value)
+    if (s.has(orgID)) s.delete(orgID); else s.add(orgID)
+    pinnedOrgIDs.value = s
+    localStorage.setItem(PINNED_KEY, JSON.stringify([...s]))
+  }
+
+  function isPinned(orgID) {
+    return pinnedOrgIDs.value.has(orgID)
+  }
+
   // ── Org key management ────────────────────────────────────────────────────
 
   /**
@@ -1292,6 +1311,7 @@ export const useOrgStore = defineStore('organizations', () => {
     fetchAuditLog, fetchAuditSummary, deleteAuditLog, exportAuditLog, fetchAllFileKeys, rotateOrgKey, initializeOrgKey,
     fetchOrgStats, createOrgFileShare,
     orgConflictState, resolveOrgConflict,
+    pinnedOrgIDs, togglePin, isPinned,
     $reset,
   }
 })
