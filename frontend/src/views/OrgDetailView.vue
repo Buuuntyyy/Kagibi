@@ -71,7 +71,7 @@
           <button
             class="tab-btn tab-dropdown-trigger"
             :class="{ active: group.items.some(i => i.key === activeTab) }"
-            @click.stop="openDropdown = openDropdown === group.key ? null : group.key"
+            @click.stop="toggleDropdown(group.key, $event)"
           >
             <component :is="group.icon" class="tab-icon" />
             {{ group.label }}
@@ -79,7 +79,9 @@
           </button>
 
           <Transition name="tab-dropdown">
-            <div v-if="openDropdown === group.key" class="tab-dropdown-menu" @click.stop>
+            <div v-if="openDropdown === group.key" class="tab-dropdown-menu"
+              :style="{ top: dropdownPos.top + 'px', left: dropdownPos.left + 'px' }"
+              @click.stop>
               <button
                 v-for="item in group.items"
                 :key="item.key"
@@ -110,6 +112,7 @@
         @dragleave="onDragLeaveZone"
         @dragover.prevent="onDragOverZone"
         @drop.prevent="onDropFiles"
+        @click.self="clearAll()"
       >
         <div v-if="isDragOver && canWrite" class="drop-overlay">
           <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
@@ -332,9 +335,9 @@
             </div>
           </div>
 
-          <div class="items-list">
+          <div class="items-list" @click.self="clearAll()">
             <!-- Select-all row -->
-            <div v-if="sortedFolders.length + sortedFiles.length > 0" class="select-all-row">
+            <div v-if="sortedFolders.length + sortedFiles.length > 0" class="select-all-row" @click.stop>
               <label class="checkbox-wrap" @click.stop>
                 <input type="checkbox" :checked="allVisibleSelected" @change="toggleSelectAll" class="item-checkbox" />
               </label>
@@ -353,8 +356,8 @@
               @dragover="onFolderDragOver($event, folder)"
               @dragleave="onFolderDragLeave(folder)"
               @drop="onDropOnFolder($event, folder)"
-              @click="renamingItem?.id !== folder.id && selectFolderRow(folder.id)"
-              @dblclick="renamingItem?.id !== folder.id && navigateToPath(folder.path)"
+              @click.stop="renamingItem?.id !== folder.id && selectFolderRow(folder.id)"
+              @dblclick.stop="renamingItem?.id !== folder.id && navigateToPath(folder.path)"
             >
               <label class="checkbox-wrap" @click.stop>
                 <input type="checkbox" :checked="isSelected('folder', folder.id)" @change="e => toggleSelect(e, 'folder', folder.id)" class="item-checkbox" />
@@ -419,7 +422,7 @@
               :draggable="canWrite"
               @dragstart="onItemDragStart($event, file, 'file')"
               @dragend="onItemDragEnd"
-              @click="openPreview(file)"
+              @click.stop="openPreview(file)"
             >
               <label class="checkbox-wrap" @click.stop>
                 <input type="checkbox" :checked="isSelected('file', file.id)" @change="e => toggleSelect(e, 'file', file.id)" class="item-checkbox" />
@@ -693,7 +696,7 @@
             <div v-for="entry in orgStore.auditLog" :key="entry.id" class="audit-row">
               <div class="audit-action">
                 <span class="audit-badge" :class="entry.action">{{ t(`orgs.audit_${entry.action}`, entry.action) }}</span>
-                <span v-if="entry.detail" class="audit-detail">{{ entry.detail }}</span>
+                <span v-if="entry.detail" class="audit-detail">{{ entry.detail_plain || entry.detail }}</span>
               </div>
               <div class="audit-meta">
                 <span class="audit-actor" :title="entry.actor_id">{{ entry.actor_id.slice(0, 8) }}</span>
@@ -790,7 +793,7 @@
               <div v-for="entry in orgStore.auditLog.slice(0, 8)" :key="entry.id" class="audit-row">
                 <div class="audit-action">
                   <span class="audit-badge" :class="entry.action">{{ t(`orgs.audit_${entry.action}`, entry.action) }}</span>
-                  <span v-if="entry.detail" class="audit-detail">{{ entry.detail }}</span>
+                  <span v-if="entry.detail" class="audit-detail">{{ entry.detail_plain || entry.detail }}</span>
                 </div>
                 <div class="audit-meta">
                   <span class="audit-actor" :title="entry.actor_id">{{ entry.actor_id.slice(0, 8) }}</span>
@@ -922,8 +925,8 @@
               <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
             </div>
             <div class="trash-row-info">
-              <span class="trash-row-name">{{ item.name }}</span>
-              <span class="trash-row-path">{{ item.path }}</span>
+              <span class="trash-row-name">{{ item._name || item.name }}</span>
+              <span class="trash-row-path">{{ item._path || item.path }}</span>
             </div>
             <div class="trash-row-meta">
               <span class="trash-row-date" :title="item.deleted_at">{{ t('orgs.deletedOn', { date: formatTrashDate(item.deleted_at) }) }}</span>
@@ -1567,6 +1570,7 @@ const uiStore = useUIStore()
 
 const activeTab = ref('files')
 const openDropdown = ref(null)
+const dropdownPos = ref({ top: 0, left: 0 })
 const currentPath = ref('/')
 const toast = ref(null)
 
@@ -1768,6 +1772,13 @@ const showOnboardingWizard = ref(false)
 
 const _closeDropdown = () => { openDropdown.value = null }
 
+function toggleDropdown(key, event) {
+  if (openDropdown.value === key) { openDropdown.value = null; return }
+  const rect = event.currentTarget.getBoundingClientRect()
+  dropdownPos.value = { top: rect.bottom + 4, left: rect.left }
+  openDropdown.value = key
+}
+
 onMounted(async () => {
   document.addEventListener('keydown', _onKeydown)
   document.addEventListener('click', _closeDropdown)
@@ -1968,7 +1979,7 @@ async function handleRestore(item) {
 }
 
 async function handlePermanentDelete(item) {
-  const confirmed = await uiStore.showConfirm({ title: 'Supprimer définitivement', message: t('orgs.confirmPermanentDelete', { name: item.name }), confirmLabel: 'Supprimer' })
+  const confirmed = await uiStore.showConfirm({ title: 'Supprimer définitivement', message: t('orgs.confirmPermanentDelete', { name: item._name || item.name }), confirmLabel: 'Supprimer' })
   if (!confirmed) return
   try {
     await orgStore.permanentDeleteTrashItem(orgID.value, item.item_type, item.id)
@@ -2739,6 +2750,7 @@ function toggleSelectAll() {
 }
 
 function clearSelection() { selectedIDs.value = new Set() }
+function clearAll() { selectedIDs.value = new Set(); activeFolderID.value = null }
 
 const selectedFileItems = computed(() =>
   sortedFiles.value.filter(f => isSelected('file', f.id))
@@ -3556,9 +3568,7 @@ const formatDate = (dateStr) => {
 .tab-chevron.open { transform: rotate(180deg); opacity: 1; }
 
 .tab-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
+  position: fixed;
   min-width: 200px;
   background: var(--card-color, #1e1e1e);
   border: 1px solid var(--border-color, #2a2a2a);
@@ -3902,15 +3912,22 @@ const formatDate = (dateStr) => {
 .move-empty { text-align: center; padding: 16px; font-size: 0.85rem; color: var(--secondary-text-color); }
 
 .bulk-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 400;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 8px 12px;
-  background: var(--primary-color-light, rgba(99,102,241,0.12));
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--card-color, #1e1e1e);
   border: 1px solid var(--primary-color, #6366f1);
-  border-radius: 8px;
-  margin-bottom: 8px;
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.35), 0 0 0 1px rgba(99,102,241,0.15);
+  width: max-content;
+  max-width: min(700px, calc(100vw - 48px));
 }
 .bulk-count { font-size: 0.85rem; font-weight: 600; color: var(--primary-color, #6366f1); white-space: nowrap; }
 .bulk-actions { display: flex; gap: 6px; flex-wrap: wrap; }
