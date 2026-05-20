@@ -2,134 +2,247 @@
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 
 <template>
-  <div class="orgs-container">
-    <div class="header">
-      <h2>{{ t('orgs.title') }}</h2>
-      <button v-if="isPremium && orgStore.orgs.length > 0" class="btn-primary" @click="showCreateModal = true">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+  <div class="orgs-page">
+
+    <!-- ── Page header ─────────────────────────────────────────────────── -->
+    <div class="page-header">
+      <div class="page-header-text">
+        <h1>{{ t('orgs.title') }}</h1>
+        <p class="page-subtitle">{{ t('orgs.pageSubtitle') }}</p>
+      </div>
+      <button
+        v-if="isPremium && orgStore.orgs.length > 0"
+        class="btn-create"
+        @click="showCreateModal = true"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
         {{ t('orgs.createOrg') }}
       </button>
     </div>
 
-    <!-- Billing status loading (and initial fetch) -->
-    <div v-if="!billingReady" class="loading-state">
+    <!-- ── Billing loading ─────────────────────────────────────────────── -->
+    <div v-if="!billingReady" class="center-state">
       <div class="spinner"></div>
-      <span>{{ t('common.loading') }}</span>
     </div>
 
-    <!-- Paywall — cloud + free plan -->
+    <!-- ── Paywall ─────────────────────────────────────────────────────── -->
     <div v-else-if="!isPremium" class="paywall-wrapper">
       <div class="paywall-card">
+        <div class="paywall-glow"></div>
         <div class="paywall-icon-wrap">
-          <svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>
+          <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>
         </div>
-
-        <div class="paywall-badge">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+        <span class="paywall-badge">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
           {{ t('orgs.premiumBadge') }}
-        </div>
-
-        <h3 class="paywall-title">{{ t('orgs.premiumTitle') }}</h3>
+        </span>
+        <h2 class="paywall-title">{{ t('orgs.premiumTitle') }}</h2>
         <p class="paywall-desc">{{ t('orgs.premiumDesc') }}</p>
-
         <ul class="paywall-features">
           <li v-for="n in 5" :key="n">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
             {{ t(`orgs.premiumFeature${n}`) }}
           </li>
         </ul>
-
         <button class="btn-upgrade" @click="router.push('/dashboard/account')">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm.99-5C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>
           {{ t('orgs.upgradeCta') }}
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         </button>
-
         <p class="paywall-note">{{ t('orgs.upgradeNote') }}</p>
       </div>
     </div>
 
-    <!-- Premium users -->
+    <!-- ── Premium content ────────────────────────────────────────────── -->
     <template v-else>
-      <div v-if="orgStore.loading" class="loading-state">
+      <div v-if="orgStore.loading" class="center-state">
         <div class="spinner"></div>
-        <span>{{ t('common.loading') }}</span>
       </div>
 
-      <div v-else-if="orgStore.error" class="error-state">
-        <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor" class="error-icon"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+      <div v-else-if="orgStore.error" class="center-state error">
+        <svg viewBox="0 0 24 24" width="36" height="36" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
         <p>{{ orgStore.error }}</p>
       </div>
 
+      <!-- Empty state -->
       <div v-else-if="orgStore.orgs.length === 0" class="empty-state">
-        <div class="empty-icon">
-          <svg viewBox="0 0 24 24" width="64" height="64" fill="currentColor"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>
+        <div class="empty-visual">
+          <div class="empty-circle c1"></div>
+          <div class="empty-circle c2"></div>
+          <div class="empty-circle c3"></div>
+          <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor" class="empty-icon"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>
         </div>
         <h3>{{ t('orgs.noOrgs') }}</h3>
         <p>{{ t('orgs.noOrgsDesc') }}</p>
-        <button class="btn-primary" @click="showCreateModal = true">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+        <button class="btn-create" @click="showCreateModal = true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
           {{ t('orgs.createOrg') }}
         </button>
       </div>
 
-      <div v-else class="orgs-grid">
-        <div
+      <!-- Grid + pinned strip -->
+      <div v-else>
+      <!-- Pinned strip -->
+      <div v-if="pinnedOrgs.length > 0" class="pinned-strip">
+        <p class="pinned-strip-label">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M17 4v7l2 3v2h-6v5l-1 1-1-1v-5H5v-2l2-3V4c0-.55.45-1 1-1h8c.55 0 1 .45 1 1z"/></svg>
+          {{ t('orgs.pinned') }}
+        </p>
+        <div class="pinned-list">
+          <button
+            v-for="org in pinnedOrgs"
+            :key="'pin-' + org.id"
+            class="pinned-chip"
+            @click="router.push(`/dashboard/organizations/${org.id}`)"
+          >
+            <span class="pinned-chip-dot" :style="{ background: orgAccent(org) }"></span>
+            <span>{{ org.name }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Orgs grid -->
+      <div class="orgs-grid">
+        <article
           v-for="org in orgStore.orgs"
           :key="org.id"
           class="org-card"
           @click="router.push(`/dashboard/organizations/${org.id}`)"
+          tabindex="0"
+          @keydown.enter="router.push(`/dashboard/organizations/${org.id}`)"
         >
-          <div class="org-card-header">
-            <div class="org-avatar">{{ org.name.charAt(0).toUpperCase() }}</div>
-            <div class="org-info">
-              <h3 class="org-name">{{ org.name }}</h3>
-              <p class="org-desc">{{ org.description || '—' }}</p>
+          <!-- Colored top accent band -->
+          <div class="card-accent" :style="{ background: orgAccent(org) }"></div>
+
+          <div class="card-body">
+            <!-- Avatar + name row -->
+            <div class="card-identity">
+              <div class="org-avatar" :style="{ background: orgAccent(org) }">
+                <img
+                  v-if="org.logo_url"
+                  :src="org.logo_url"
+                  :alt="org.name"
+                  class="org-avatar-img"
+                  @error="e => e.target.style.display = 'none'"
+                />
+                <span v-else>{{ org.name.charAt(0).toUpperCase() }}</span>
+              </div>
+              <div class="org-meta">
+                <h3 class="org-name">{{ org.name }}</h3>
+                <p class="org-desc">{{ org.description || t('orgs.noDescription') }}</p>
+              </div>
+              <span class="role-badge" :class="org.my_role">
+                {{ t(`orgs.${org.my_role}`) }}
+              </span>
             </div>
-            <div class="role-badge" :class="org.my_role">{{ t(`orgs.${org.my_role}`) }}</div>
+
+            <!-- Stats row -->
+            <div class="card-stats">
+              <div class="stat-item" v-if="org.member_count">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+                <span>{{ org.member_count }} {{ t('orgs.members') }}</span>
+              </div>
+              <div class="stat-item">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/></svg>
+                <span>{{ formatSize(org.storage_used_bytes) }}</span>
+              </div>
+            </div>
+
+            <!-- Storage progress -->
+            <div class="storage-section">
+              <div class="storage-labels">
+                <span>{{ t('orgs.storageUsed') }}</span>
+                <span :class="storagePercent(org) > 90 ? 'text-danger' : storagePercent(org) > 70 ? 'text-warn' : ''">
+                  {{ storagePercent(org).toFixed(0) }}%
+                </span>
+              </div>
+              <div class="storage-track">
+                <div
+                  class="storage-fill"
+                  :style="{ width: storagePercent(org) + '%', background: storageColor(org) }"
+                ></div>
+              </div>
+              <div class="storage-quota">{{ formatSize(org.storage_quota_mb * 1024 * 1024) }} {{ t('orgs.total') }}</div>
+            </div>
           </div>
 
-          <div class="org-storage">
-            <div class="storage-row">
-              <span class="storage-label">{{ t('orgs.storageUsed') }}</span>
-              <span class="storage-value">{{ formatSize(org.storage_used_bytes) }} / {{ formatSize(org.storage_quota_mb * 1024 * 1024) }}</span>
-            </div>
-            <div class="storage-bar">
-              <div class="storage-fill" :style="{ width: storagePercent(org) + '%', background: storageColor(org) }"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </template>
+          <!-- Pin button -->
+          <button
+            class="btn-pin"
+            :class="{ pinned: orgStore.isPinned(org.id) }"
+            :title="orgStore.isPinned(org.id) ? t('orgs.unpin') : t('orgs.pin')"
+            @click.stop="orgStore.togglePin(org.id)"
+          >
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+              <path d="M17 4v7l2 3v2h-6v5l-1 1-1-1v-5H5v-2l2-3V4c0-.55.45-1 1-1h8c.55 0 1 .45 1 1z"/>
+            </svg>
+          </button>
 
-    <!-- Create org modal -->
+          <!-- Hover arrow -->
+          <div class="card-arrow">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+          </div>
+        </article>
+      </div><!-- orgs-grid -->
+      </div><!-- grid+pinned wrapper -->
+
+    </template><!-- end v-else premium content -->
+
+    <!-- ── Create org modal ───────────────────────────────────────────── -->
     <Transition name="modal">
       <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
         <div class="modal">
           <div class="modal-header">
-            <h3>{{ t('orgs.createOrg') }}</h3>
+            <div class="modal-header-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/></svg>
+            </div>
+            <div>
+              <h3>{{ t('orgs.createOrg') }}</h3>
+              <p class="modal-subtitle">{{ t('orgs.createOrgSubtitle') }}</p>
+            </div>
             <button class="btn-close" @click="showCreateModal = false">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
             </button>
           </div>
+
           <div class="modal-body">
             <div class="form-group">
-              <label>{{ t('orgs.orgName') }} *</label>
-              <input v-model="form.name" type="text" :placeholder="t('orgs.orgName')" class="input-field" />
+              <label>{{ t('orgs.orgName') }} <span class="required">*</span></label>
+              <input
+                v-model="form.name"
+                type="text"
+                :placeholder="t('orgs.orgNamePlaceholder')"
+                class="input-field"
+                autofocus
+              />
             </div>
             <div class="form-group">
               <label>{{ t('orgs.orgDesc') }}</label>
-              <input v-model="form.description" type="text" :placeholder="t('orgs.orgDesc')" class="input-field" />
+              <input
+                v-model="form.description"
+                type="text"
+                :placeholder="t('orgs.orgDescPlaceholder')"
+                class="input-field"
+              />
             </div>
             <div class="form-group">
               <label>{{ t('orgs.storageQuotaMB') }}</label>
-              <input v-model.number="form.storageQuotaMB" type="number" min="100" class="input-field" />
+              <div class="quota-input-wrap">
+                <input v-model.number="form.storageQuotaMB" type="number" min="100" class="input-field" />
+                <span class="quota-unit">MB</span>
+              </div>
+              <p class="field-hint">{{ formatSize(form.storageQuotaMB * 1024 * 1024) }}</p>
             </div>
-            <p v-if="createError" class="form-error">{{ createError }}</p>
+            <p v-if="createError" class="form-error">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+              {{ createError }}
+            </p>
           </div>
+
           <div class="modal-footer">
             <button class="btn-secondary" @click="showCreateModal = false">{{ t('orgs.cancel') }}</button>
-            <button class="btn-primary" @click="handleCreate" :disabled="creating || !form.name">
+            <button class="btn-create" @click="handleCreate" :disabled="creating || !form.name">
               <span v-if="creating" class="spinner-sm"></span>
+              <svg v-else viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
               {{ creating ? t('common.loading') : t('orgs.create') }}
             </button>
           </div>
@@ -147,13 +260,13 @@ import { useOrgStore } from '../stores/organizations'
 import { useAuthStore } from '../stores/auth'
 import { useBillingStore } from '../stores/billing'
 
+
 const { t } = useI18n()
 const router = useRouter()
 const orgStore = useOrgStore()
 const authStore = useAuthStore()
 const billingStore = useBillingStore()
 
-// Access gate: self-hosted always allowed; cloud requires paid plan.
 const isPremium = computed(() =>
   billingStore.isSelfHosted || (authStore.user?.plan ?? 'free') !== 'free'
 )
@@ -163,11 +276,7 @@ const showCreateModal = ref(false)
 const creating = ref(false)
 const createError = ref('')
 
-const form = ref({
-  name: '',
-  description: '',
-  storageQuotaMB: 10240,
-})
+const form = ref({ name: '', description: '', storageQuotaMB: 10240 })
 
 onMounted(async () => {
   await billingStore.fetchBillingStatus()
@@ -211,165 +320,528 @@ const storageColor = (org) => {
   if (pct > 70) return '#f59e0b'
   return 'var(--primary-color)'
 }
+
+const ACCENT_PALETTE = [
+  'linear-gradient(135deg, #6366f1, #8b5cf6)',
+  'linear-gradient(135deg, #0ea5e9, #6366f1)',
+  'linear-gradient(135deg, #10b981, #0ea5e9)',
+  'linear-gradient(135deg, #f59e0b, #ef4444)',
+  'linear-gradient(135deg, #ec4899, #8b5cf6)',
+  'linear-gradient(135deg, #14b8a6, #10b981)',
+  'linear-gradient(135deg, #f97316, #f59e0b)',
+]
+const orgAccent = (org) => ACCENT_PALETTE[org.id % ACCENT_PALETTE.length]
+
+const pinnedOrgs = computed(() =>
+  orgStore.orgs.filter(o => orgStore.isPinned(o.id))
+)
 </script>
 
 <style scoped>
-.orgs-container {
-  padding: 24px;
-  max-width: 1200px;
+/* ── Layout ──────────────────────────────────────────────────────────── */
+.orgs-page {
+  padding: 32px 32px 48px;
+  max-width: 1280px;
   margin: 0 auto;
-  height: 100%;
-  overflow-y: auto;
+  min-height: 100%;
   box-sizing: border-box;
 }
 
-.header {
+/* ── Page header ─────────────────────────────────────────────────────── */
+.page-header {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 32px;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.header h2 {
-  font-size: 1.5rem;
+.page-header-text h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--main-text-color);
+  margin: 0 0 4px;
+  letter-spacing: -0.02em;
+}
+
+.page-subtitle {
+  font-size: 0.9rem;
+  color: var(--secondary-text-color);
+  margin: 0;
+}
+
+/* ── Create button ───────────────────────────────────────────────────── */
+.btn-create {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+.btn-create:hover { filter: brightness(1.1); }
+.btn-create:active { transform: scale(0.97); }
+.btn-create:disabled { opacity: 0.55; cursor: not-allowed; filter: none; transform: none; }
+
+/* ── Center states ───────────────────────────────────────────────────── */
+.center-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 80px 0;
+  color: var(--secondary-text-color);
+  font-size: 0.9rem;
+}
+.center-state.error { color: #ef4444; }
+
+.spinner {
+  width: 30px; height: 30px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.spinner-sm {
+  display: inline-block;
+  width: 13px; height: 13px;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Empty state ─────────────────────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 80px 0;
+  text-align: center;
+}
+
+.empty-visual {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.empty-circle {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.12;
+}
+.empty-circle.c1 { width: 96px; height: 96px; background: var(--primary-color); }
+.empty-circle.c2 { width: 68px; height: 68px; background: var(--primary-color); opacity: 0.18; }
+.empty-circle.c3 { width: 44px; height: 44px; background: var(--primary-color); opacity: 0.25; }
+
+.empty-icon { color: var(--primary-color); position: relative; z-index: 1; }
+
+.empty-state h3 {
+  font-size: 1.2rem;
   font-weight: 700;
   color: var(--main-text-color);
   margin: 0;
 }
+.empty-state p {
+  font-size: 0.875rem;
+  color: var(--secondary-text-color);
+  margin: 0;
+  max-width: 340px;
+  line-height: 1.6;
+}
 
-.btn-primary {
+/* ── Orgs grid ───────────────────────────────────────────────────────── */
+.orgs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+/* ── Org card ────────────────────────────────────────────────────────── */
+.org-card {
+  position: relative;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+  outline: none;
+}
+
+.org-card:hover,
+.org-card:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.2);
+  border-color: color-mix(in srgb, var(--primary-color) 40%, var(--border-color));
+}
+
+.card-accent {
+  height: 4px;
+  width: 100%;
+}
+
+.card-body {
+  padding: 18px 20px 16px;
+}
+
+/* ── Identity ──────────────────────────────────────────────────────── */
+.card-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.org-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 1.25rem;
+  font-weight: 800;
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 18px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s, transform 0.1s;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  letter-spacing: -0.02em;
 }
 
-.btn-primary:hover { opacity: 0.9; }
-.btn-primary:active { transform: scale(0.98); }
-.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+.org-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
-.btn-secondary {
-  background: var(--card-color);
+.org-meta { flex: 1; min-width: 0; }
+
+.org-name {
+  font-size: 0.975rem;
+  font-weight: 700;
   color: var(--main-text-color);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 10px 18px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s;
+  margin: 0 0 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.btn-secondary:hover { background: var(--hover-background-color); }
+.org-desc {
+  font-size: 0.775rem;
+  color: var(--secondary-text-color);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-style: italic;
+}
 
-/* ── Paywall ── */
+/* ── Role badge ────────────────────────────────────────────────────── */
+.role-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.role-badge.owner  { background: rgba(245,158,11,0.14); color: #f59e0b; }
+.role-badge.admin  { background: rgba(99,102,241,0.14);  color: #818cf8; }
+.role-badge.member { background: rgba(34,197,94,0.14);   color: #4ade80; }
+.role-badge.viewer { background: rgba(107,114,128,0.12); color: #9ca3af; }
+
+/* ── Stats row ─────────────────────────────────────────────────────── */
+.card-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.775rem;
+  color: var(--secondary-text-color);
+}
+
+/* ── Storage ───────────────────────────────────────────────────────── */
+.storage-section { }
+
+.storage-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--secondary-text-color);
+  margin-bottom: 5px;
+}
+
+.text-danger { color: #ef4444 !important; font-weight: 600; }
+.text-warn   { color: #f59e0b !important; font-weight: 600; }
+
+.storage-track {
+  height: 4px;
+  background: var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.storage-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.storage-quota {
+  font-size: 0.72rem;
+  color: var(--secondary-text-color);
+  opacity: 0.7;
+}
+
+/* ── Pin button ────────────────────────────────────────────────────── */
+.btn-pin {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--secondary-text-color);
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.15s, transform 0.15s, color 0.15s, background 0.15s;
+  z-index: 2;
+}
+
+.org-card:hover .btn-pin,
+.org-card:focus-visible .btn-pin,
+.btn-pin.pinned {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.btn-pin.pinned {
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-color));
+  border-color: color-mix(in srgb, var(--primary-color) 30%, var(--border-color));
+}
+
+.btn-pin:hover {
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, var(--card-color));
+}
+
+/* ── Pinned strip ──────────────────────────────────────────────────── */
+.pinned-strip {
+  margin-bottom: 24px;
+}
+
+.pinned-strip-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--secondary-text-color);
+  margin: 0 0 10px;
+}
+
+.pinned-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pinned-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 6px 14px 6px 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--main-text-color);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.pinned-chip:hover {
+  background: var(--hover-background-color);
+  border-color: color-mix(in srgb, var(--primary-color) 35%, var(--border-color));
+  transform: translateY(-1px);
+}
+
+.pinned-chip-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* ── Card arrow ────────────────────────────────────────────────────── */
+.card-arrow {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  color: var(--secondary-text-color);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 0.18s, transform 0.18s;
+}
+
+.org-card:hover .card-arrow,
+.org-card:focus-visible .card-arrow {
+  opacity: 0.6;
+  transform: translateX(0);
+}
+
+/* ── Paywall ─────────────────────────────────────────────────────────── */
 .paywall-wrapper {
   display: flex;
   justify-content: center;
-  padding: 40px 0;
+  padding: 40px 16px;
 }
 
 .paywall-card {
+  position: relative;
   background: var(--card-color);
   border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 40px 48px;
-  max-width: 520px;
+  border-radius: 20px;
+  padding: 44px 48px;
+  max-width: 500px;
   width: 100%;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
+  overflow: hidden;
+}
+
+.paywall-glow {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 280px;
+  height: 180px;
+  background: radial-gradient(ellipse, color-mix(in srgb, var(--primary-color) 20%, transparent), transparent 70%);
+  pointer-events: none;
 }
 
 .paywall-icon-wrap {
-  width: 80px;
-  height: 80px;
-  border-radius: 20px;
-  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  width: 68px;
+  height: 68px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--primary-color) 13%, transparent);
   color: var(--primary-color);
   display: flex;
   align-items: center;
   justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--primary-color) 25%, transparent);
+  position: relative;
+  z-index: 1;
 }
 
 .paywall-badge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 13%, transparent);
   color: var(--primary-color);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
   padding: 4px 12px;
   border-radius: 20px;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .paywall-title {
-  font-size: 1.35rem;
-  font-weight: 700;
+  font-size: 1.4rem;
+  font-weight: 800;
   color: var(--main-text-color);
   margin: 0;
+  letter-spacing: -0.02em;
 }
 
 .paywall-desc {
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   color: var(--secondary-text-color);
   margin: 0;
-  line-height: 1.6;
+  line-height: 1.65;
+  max-width: 360px;
 }
 
 .paywall-features {
   list-style: none;
   padding: 0;
-  margin: 4px 0;
+  margin: 0;
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 9px;
   text-align: left;
+  background: var(--background-color);
+  border-radius: 12px;
+  padding: 16px 18px;
 }
 
 .paywall-features li {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   color: var(--main-text-color);
 }
-
-.paywall-features li svg {
-  color: var(--primary-color);
-  flex-shrink: 0;
-}
+.paywall-features li svg { color: var(--primary-color); flex-shrink: 0; }
 
 .btn-upgrade {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
   background: var(--primary-color);
-  color: white;
+  color: #fff;
   border: none;
-  border-radius: 8px;
-  padding: 12px 28px;
-  font-size: 0.95rem;
+  border-radius: 10px;
+  padding: 13px 32px;
+  font-size: 0.925rem;
   font-weight: 700;
   cursor: pointer;
-  margin-top: 4px;
-  transition: opacity 0.2s, transform 0.1s;
+  transition: filter 0.15s, transform 0.1s;
+  width: 100%;
+  justify-content: center;
 }
-
-.btn-upgrade:hover { opacity: 0.9; }
+.btn-upgrade:hover { filter: brightness(1.1); }
 .btn-upgrade:active { transform: scale(0.98); }
 
 .paywall-note {
@@ -379,163 +851,12 @@ const storageColor = (org) => {
   line-height: 1.5;
 }
 
-/* ── Empty state ── */
-.loading-state, .error-state, .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 60px 24px;
-  text-align: center;
-  color: var(--secondary-text-color);
-}
-
-.empty-icon {
-  color: var(--border-color);
-  opacity: 0.6;
-}
-
-.empty-state h3 {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: var(--main-text-color);
-  margin: 0;
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 0.9rem;
-}
-
-
-.error-icon { color: #ef4444; }
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid var(--border-color);
-  border-top-color: var(--primary-color);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-.spinner-sm {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255,255,255,0.4);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ── Org grid ── */
-.orgs-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
-
-.org-card {
-  background: var(--card-color);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 20px;
-  cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s;
-}
-
-.org-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-}
-
-.org-card-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.org-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: var(--primary-color);
-  color: white;
-  font-size: 1.3rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.org-info { flex: 1; min-width: 0; }
-
-.org-name {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--main-text-color);
-  margin: 0 0 4px 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.org-desc {
-  font-size: 0.8rem;
-  color: var(--secondary-text-color);
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.role-badge {
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 20px;
-  flex-shrink: 0;
-}
-
-.role-badge.owner { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-.role-badge.admin { background: rgba(99, 102, 241, 0.15); color: #6366f1; }
-.role-badge.member { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
-.role-badge.viewer { background: rgba(107, 114, 128, 0.12); color: #6b7280; }
-
-.org-storage { margin-top: 4px; }
-
-.storage-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.78rem;
-  color: var(--secondary-text-color);
-  margin-bottom: 6px;
-}
-
-.storage-bar {
-  height: 5px;
-  background: var(--border-color);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.storage-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-
-/* ── Modal ── */
+/* ── Modal ───────────────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(3px);
   z-index: 2000;
   display: flex;
   align-items: center;
@@ -545,8 +866,9 @@ const storageColor = (org) => {
 
 .modal {
   background: var(--card-color);
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.3);
   width: 100%;
   max-width: 480px;
   overflow: hidden;
@@ -554,20 +876,38 @@ const storageColor = (org) => {
 
 .modal-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px 16px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 22px 24px 18px;
   border-bottom: 1px solid var(--border-color);
 }
 
+.modal-header-icon {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary-color) 13%, transparent);
+  color: var(--primary-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .modal-header h3 {
-  margin: 0;
-  font-size: 1.1rem;
+  margin: 0 0 2px;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--main-text-color);
 }
 
+.modal-subtitle {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--secondary-text-color);
+}
+
 .btn-close {
+  margin-left: auto;
   background: none;
   border: none;
   cursor: pointer;
@@ -576,17 +916,17 @@ const storageColor = (org) => {
   border-radius: 6px;
   display: flex;
   align-items: center;
-  transition: background 0.15s;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
 }
-
-.btn-close:hover { background: var(--hover-background-color); }
+.btn-close:hover { background: var(--hover-background-color); color: var(--main-text-color); }
 
 .modal-body { padding: 20px 24px; }
 
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
   padding: 16px 24px 20px;
   border-top: 1px solid var(--border-color);
 }
@@ -597,46 +937,89 @@ const storageColor = (org) => {
   gap: 6px;
   margin-bottom: 16px;
 }
+.form-group:last-of-type { margin-bottom: 0; }
 
 .form-group label {
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: 0.82rem;
+  font-weight: 600;
   color: var(--secondary-text-color);
 }
+
+.required { color: var(--primary-color); }
 
 .input-field {
   background: var(--background-color);
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 10px 12px;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   color: var(--main-text-color);
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
   width: 100%;
   box-sizing: border-box;
 }
-
 .input-field:focus {
   outline: none;
   border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 15%, transparent);
+}
+
+.quota-input-wrap { position: relative; }
+.quota-input-wrap .input-field { padding-right: 44px; }
+.quota-unit {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8rem;
+  color: var(--secondary-text-color);
+  pointer-events: none;
+}
+
+.field-hint {
+  font-size: 0.75rem;
+  color: var(--secondary-text-color);
+  margin: 2px 0 0;
 }
 
 .form-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   color: #ef4444;
   font-size: 0.82rem;
-  margin: 0;
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  background: rgba(239,68,68,0.08);
+  border-radius: 6px;
+  border: 1px solid rgba(239,68,68,0.2);
 }
 
+.btn-secondary {
+  background: transparent;
+  color: var(--main-text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-secondary:hover { background: var(--hover-background-color); }
+
+/* ── Modal animation ─────────────────────────────────────────────────── */
 .modal-enter-active, .modal-leave-active { transition: opacity 0.2s; }
 .modal-enter-active .modal, .modal-leave-active .modal { transition: transform 0.2s; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
-.modal-enter-from .modal { transform: scale(0.95) translateY(8px); }
-.modal-leave-to .modal { transform: scale(0.95) translateY(8px); }
+.modal-enter-from .modal, .modal-leave-to .modal { transform: scale(0.96) translateY(10px); }
 
+/* ── Responsive ──────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .orgs-container { padding: 16px; }
-  .orgs-grid { grid-template-columns: 1fr; }
-  .header { flex-wrap: wrap; gap: 12px; }
-  .paywall-card { padding: 28px 20px; }
+  .orgs-page { padding: 20px 16px 40px; }
+  .page-header-text h1 { font-size: 1.4rem; }
+  .orgs-grid { grid-template-columns: 1fr; gap: 14px; }
+  .paywall-card { padding: 32px 20px; }
+  .modal-header { flex-wrap: wrap; }
 }
 </style>

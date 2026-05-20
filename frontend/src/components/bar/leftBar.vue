@@ -74,6 +74,21 @@
         <span>{{ t('orgs.title') }}</span>
       </div>
 
+      <!-- Pinned orgs shortcuts -->
+      <template v-if="pinnedOrgs.length > 0">
+        <div
+          v-for="org in pinnedOrgs"
+          :key="'pinned-' + org.id"
+          class="menu-item pinned-org-item"
+          :class="{ active: route.path.startsWith('/dashboard/organizations/' + org.id) }"
+          :title="org.name"
+          @click="navigateTo('/dashboard/organizations/' + org.id)"
+        >
+          <span class="pinned-org-dot" :style="{ background: orgAccent(org) }"></span>
+          <span class="pinned-org-name">{{ org.name }}</span>
+        </div>
+      </template>
+
       <!-- Friends Accordion -->
       <div class="friends-accordion" :class="{ open: friendsOpen }">
         <div class="menu-item" @click="toggleFriendsAccordion">
@@ -186,6 +201,7 @@ import { useBillingStore } from '../../stores/billing'
 import { uploadQueueManager } from '../../utils/uploadQueueManager'
 import { useUploadStore } from '../../stores/uploads'
 import { useUIStore } from '../../stores/ui'
+import { useOrgStore } from '../../stores/organizations'
 import InputDialog from '../InputDialog.vue'
 import FriendsSidebar from '../FriendsSidebar.vue'
 
@@ -201,8 +217,24 @@ const friendStore = useFriendStore()
 const uploadStore = useUploadStore()
 const billingStore = useBillingStore()
 const uiStore = useUIStore()
+const orgStore = useOrgStore()
 const router = useRouter()
 const route = useRoute()
+
+const ACCENT_PALETTE = [
+  'linear-gradient(135deg, #6366f1, #8b5cf6)',
+  'linear-gradient(135deg, #0ea5e9, #6366f1)',
+  'linear-gradient(135deg, #10b981, #0ea5e9)',
+  'linear-gradient(135deg, #f59e0b, #ef4444)',
+  'linear-gradient(135deg, #ec4899, #8b5cf6)',
+  'linear-gradient(135deg, #14b8a6, #10b981)',
+  'linear-gradient(135deg, #f97316, #f59e0b)',
+]
+const orgAccent = (org) => ACCENT_PALETTE[org.id % ACCENT_PALETTE.length]
+
+const pinnedOrgs = computed(() =>
+  orgStore.orgs.filter(o => orgStore.isPinned(o.id))
+)
 
 const showNewMenu = ref(false)
 const friendsOpen = ref(true) // Default open or closed
@@ -660,6 +692,34 @@ const storageLimitGB = computed(() => {
   overflow: hidden;
 }
 
+/* ── Pinned org shortcuts ─────────────────────────────────────────────── */
+.pinned-org-item {
+  padding-left: 28px;
+}
+
+.pinned-org-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  margin-right: 10px;
+}
+
+.pinned-org-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.left-bar.collapsed .pinned-org-item {
+  padding: 0;
+  justify-content: center;
+}
+.left-bar.collapsed .pinned-org-name { display: none; }
+.left-bar.collapsed .pinned-org-dot { margin: 0; width: 12px; height: 12px; border-radius: 4px; }
+
 .friends-accordion {
   display: flex;
   flex-direction: column;
@@ -1005,6 +1065,13 @@ const storageLimitGB = computed(() => {
   .left-bar .storage-section {
     padding: 6px;
   }
+
+  .left-bar .pinned-org-item {
+    padding: 0;
+    justify-content: center;
+  }
+  .left-bar .pinned-org-name { display: none; }
+  .left-bar .pinned-org-dot { margin: 0; width: 12px; height: 12px; border-radius: 4px; }
 
   /* Hide the manual toggle — sidebar is auto-collapsed by breakpoint */
   .collapse-toggle {
