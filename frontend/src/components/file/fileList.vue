@@ -1306,6 +1306,10 @@ const getDeleteWarningMessage = (items) => {
 
 const deleteSelectedItems = () => {
   if (selectedItems.value.length === 0) return;
+  // Snapshot now: the container's @click="deselectAll" fires after this handler
+  // (click bubbling), so selectedItems.value would be empty by the time the
+  // async onConfirm callback runs if we read the ref lazily.
+  const itemsToDelete = [...selectedItems.value]
 
   if (fileStore.viewMode === 'shared') {
     if (!fileStore.sharedPermissions.delete) {
@@ -1315,10 +1319,10 @@ const deleteSelectedItems = () => {
     uiStore.requestDeleteConfirmation({
       title: "Supprimer les éléments",
       message: '',
-      itemName: selectedItems.value.length === 1 ? selectedItems.value[0].Name : null,
-      itemsCount: selectedItems.value.length,
+      itemName: itemsToDelete.length === 1 ? itemsToDelete[0].Name : null,
+      itemsCount: itemsToDelete.length,
       onConfirm: async () => {
-        for (const item of selectedItems.value) {
+        for (const item of itemsToDelete) {
           await fileStore.deleteFromShare(item.ID, item.type);
         }
         selectedItems.value = [];
@@ -1327,32 +1331,30 @@ const deleteSelectedItems = () => {
     return;
   }
 
-  const warningMessage = getDeleteWarningMessage(selectedItems.value)
+  const warningMessage = getDeleteWarningMessage(itemsToDelete)
 
   uiStore.requestDeleteConfirmation({
     title: "Supprimer les éléments",
     message: warningMessage,
-    itemName: selectedItems.value.length === 1 ? selectedItems.value[0].Name : null,
-    itemsCount: selectedItems.value.length,
+    itemName: itemsToDelete.length === 1 ? itemsToDelete[0].Name : null,
+    itemsCount: itemsToDelete.length,
     onConfirm: async () => {
-      const fileIDs = selectedItems.value.filter(i => i.type === 'file').map(i => i.ID);
-      const folderIDs = selectedItems.value.filter(i => i.type === 'folder').map(i => i.ID);
+      const fileIDs = itemsToDelete.filter(i => i.type === 'file').map(i => i.ID);
+      const folderIDs = itemsToDelete.filter(i => i.type === 'folder').map(i => i.ID);
 
       if (fileIDs.length > 0) {
           await fileStore.deleteFiles(fileIDs);
       }
 
-      // Delete folders one by one for now as bulk delete folders is not implemented
       for (const folderID of folderIDs) {
           await api.delete(`/files/folder/${folderID}`);
       }
 
-      // Refresh list if we deleted folders manually (deleteFiles already refreshes)
       if (folderIDs.length > 0 && fileIDs.length === 0) {
           fileStore.fetchItems(fileStore.currentPath);
       }
 
-      selectedItems.value = [] // Clear selection after deletion
+      selectedItems.value = []
     }
   });
 };
