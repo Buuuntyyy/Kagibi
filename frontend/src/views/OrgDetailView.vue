@@ -49,17 +49,50 @@
     <template v-else-if="orgStore.currentOrg">
       <!-- Tabs -->
       <div class="tabs-bar">
+        <!-- Primary flat tabs -->
         <button
-          v-for="tab in tabs"
+          v-for="tab in primaryTabs"
           :key="tab.key"
           class="tab-btn"
           :class="{ active: activeTab === tab.key }"
-          @click="switchTab(tab.key)"
+          @click="switchTab(tab.key); openDropdown = null"
         >
           <component :is="tab.icon" class="tab-icon" />
           {{ tab.label }}
           <span v-if="tab.count" class="tab-count">{{ tab.count }}</span>
         </button>
+
+        <!-- Dropdown groups -->
+        <div
+          v-for="group in tabMenuGroups"
+          :key="group.key"
+          class="tab-dropdown"
+        >
+          <button
+            class="tab-btn tab-dropdown-trigger"
+            :class="{ active: group.items.some(i => i.key === activeTab) }"
+            @click.stop="openDropdown = openDropdown === group.key ? null : group.key"
+          >
+            <component :is="group.icon" class="tab-icon" />
+            {{ group.label }}
+            <svg class="tab-chevron" :class="{ open: openDropdown === group.key }" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+          </button>
+
+          <Transition name="tab-dropdown">
+            <div v-if="openDropdown === group.key" class="tab-dropdown-menu" @click.stop>
+              <button
+                v-for="item in group.items"
+                :key="item.key"
+                class="tab-dropdown-item"
+                :class="{ active: activeTab === item.key }"
+                @click="switchTab(item.key); openDropdown = null"
+              >
+                <component :is="item.icon" class="tab-icon" />
+                {{ item.label }}
+              </button>
+            </div>
+          </Transition>
+        </div>
       </div>
 
       <!-- MFA required gate -->
@@ -1533,6 +1566,7 @@ const realtimeStore = useRealtimeStore()
 const uiStore = useUIStore()
 
 const activeTab = ref('files')
+const openDropdown = ref(null)
 const currentPath = ref('/')
 const toast = ref(null)
 
@@ -1557,30 +1591,47 @@ const calMonth = ref(new Date().getMonth())
 
 const TabIcon = (paths) => ({ render: () => h('svg', { viewBox: '0 0 24 24', width: 18, height: 18, fill: 'currentColor' }, paths.map(d => h('path', { d }))) })
 
-const tabs = computed(() => {
-  const base = [
-    { key: 'files', label: t('orgs.files'), icon: TabIcon(['M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z']) },
-    { key: 'members', label: t('orgs.members'), icon: TabIcon(['M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z']), count: orgStore.members.length || null },
-    { key: 'profile', label: t('orgs.myProfile'), icon: TabIcon(['M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z']) },
-    { key: 'dashboard', label: t('orgs.dashboard'), icon: TabIcon(['M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z']) },
-    { key: 'activity', label: t('orgs.activity'), icon: TabIcon(['M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z']) },
-    { key: 'trash', label: t('orgs.trash'), icon: TabIcon(['M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z']), count: orgStore.trash.length || null },
-    { key: 'shares', label: t('orgs.shares'), icon: TabIcon(['M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z']), count: orgStore.orgShares.length || null },
+const primaryTabs = computed(() => [
+  { key: 'files',   label: t('orgs.files'),    icon: TabIcon(['M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z']) },
+  { key: 'members', label: t('orgs.members'),  icon: TabIcon(['M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z']), count: orgStore.members.length || null },
+  { key: 'shares',  label: t('orgs.shares'),   icon: TabIcon(['M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z']), count: orgStore.orgShares.length || null },
+  { key: 'trash',   label: t('orgs.trash'),    icon: TabIcon(['M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z']), count: orgStore.trash.length || null },
+])
+
+const tabMenuGroups = computed(() => {
+  const groups = [
+    {
+      key: 'overview',
+      label: t('orgs.overview') || 'Vue d\'ensemble',
+      icon: TabIcon(['M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z']),
+      items: [
+        { key: 'profile',   label: t('orgs.myProfile'), icon: TabIcon(['M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z']) },
+        { key: 'dashboard', label: t('orgs.dashboard'), icon: TabIcon(['M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z']) },
+        { key: 'activity',  label: t('orgs.activity'),  icon: TabIcon(['M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z']) },
+      ],
+    },
   ]
+
   if (canManage.value || isGroupAdmin.value) {
-    base.push(
-      { key: 'groups', label: t('orgs.groups'), icon: TabIcon(['M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z', 'M23 14h-2v-2h-2v2h-2v2h2v2h2v-2h2z']) },
-    )
+    const adminItems = []
+    if (canManage.value || isGroupAdmin.value) {
+      adminItems.push({ key: 'groups', label: t('orgs.groups'), icon: TabIcon(['M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z', 'M23 14h-2v-2h-2v2h-2v2h2v2h2v-2h2z']) })
+    }
+    if (canManage.value) {
+      adminItems.push({ key: 'invitations', label: t('orgs.invitations'), icon: TabIcon(['M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z']) })
+      adminItems.push({ key: 'permissions', label: t('orgs.permissions'), icon: TabIcon(['M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z']) })
+      adminItems.push({ key: 'audit',       label: t('orgs.auditLog'),    icon: TabIcon(['M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z']) })
+      adminItems.push({ key: 'settings',    label: t('orgs.settings'),    icon: TabIcon(['M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z']) })
+    }
+    groups.push({
+      key: 'admin',
+      label: t('orgs.administration') || 'Administration',
+      icon: TabIcon(['M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z']),
+      items: adminItems,
+    })
   }
-  if (canManage.value) {
-    base.push(
-      { key: 'invitations', label: t('orgs.invitations'), icon: TabIcon(['M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z']) },
-      { key: 'permissions', label: t('orgs.permissions'), icon: TabIcon(['M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z']) },
-      { key: 'audit', label: t('orgs.auditLog'), icon: TabIcon(['M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z']) },
-      { key: 'settings', label: t('orgs.settings'), icon: TabIcon(['M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z']) },
-    )
-  }
-  return base
+
+  return groups
 })
 
 // ── Computed ──────────────────────────────────────────────────────────────────
@@ -1715,8 +1766,11 @@ let _unsubOrgUpdate = null
 
 const showOnboardingWizard = ref(false)
 
+const _closeDropdown = () => { openDropdown.value = null }
+
 onMounted(async () => {
   document.addEventListener('keydown', _onKeydown)
+  document.addEventListener('click', _closeDropdown)
   await orgStore.fetchOrg(orgID.value)
   await Promise.all([
     orgStore.fetchItems(orgID.value, '/'),
@@ -1765,6 +1819,7 @@ const _onKeydown = (e) => {
 onUnmounted(() => {
   if (_unsubOrgUpdate) _unsubOrgUpdate()
   document.removeEventListener('keydown', _onKeydown)
+  document.removeEventListener('click', _closeDropdown)
   stopActivityRefresh()
 })
 
@@ -3427,11 +3482,12 @@ const formatDate = (dateStr) => {
 /* ── Tabs ───────────────────────────────────────────────────────────────── */
 .tabs-bar {
   display: flex;
+  align-items: stretch;
   gap: 0;
   border-bottom: 1px solid var(--border-color);
   padding: 0 24px;
-  overflow-x: auto;
   flex-shrink: 0;
+  overflow-x: auto;
   scrollbar-width: none;
 }
 .tabs-bar::-webkit-scrollbar { display: none; }
@@ -3479,6 +3535,73 @@ const formatDate = (dateStr) => {
 .tab-btn.active .tab-count {
   background: color-mix(in srgb, var(--primary-color) 15%, transparent);
   color: var(--primary-color);
+}
+
+/* ── Tab dropdowns ──────────────────────────────────────────────────────── */
+.tab-dropdown {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.tab-dropdown-trigger {
+  padding-right: 10px;
+}
+
+.tab-chevron {
+  flex-shrink: 0;
+  transition: transform 0.2s;
+  opacity: 0.6;
+}
+.tab-chevron.open { transform: rotate(180deg); opacity: 1; }
+
+.tab-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  background: var(--card-color, #1e1e1e);
+  border: 1px solid var(--border-color, #2a2a2a);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  z-index: 1000;
+  overflow: hidden;
+  padding: 4px;
+}
+
+.tab-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--secondary-text-color, #aaa);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.tab-dropdown-item:hover {
+  background: var(--hover-background-color, rgba(255,255,255,0.05));
+  color: var(--main-text-color, #fff);
+}
+.tab-dropdown-item.active {
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  font-weight: 600;
+}
+
+.tab-dropdown-enter-active, .tab-dropdown-leave-active {
+  transition: opacity 0.15s, transform 0.15s;
+}
+.tab-dropdown-enter-from, .tab-dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 
 /* Tab content */

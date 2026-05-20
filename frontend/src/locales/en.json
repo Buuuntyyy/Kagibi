@@ -525,6 +525,8 @@
     "files": "Files",
     "permissions": "Permissions",
     "settings": "Settings",
+    "overview": "Overview",
+    "administration": "Administration",
     "owner": "Owner",
     "admin": "Admin",
     "member": "Member",
