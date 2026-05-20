@@ -700,6 +700,19 @@ export const useOrgStore = defineStore('organizations', () => {
   async function fetchAuditLog(orgID, page = 1) {
     const { data } = await api.get(`/orgs/${orgID}/audit`, { params: { page } })
     const entries = data || []
+    try {
+      const orgKey = await getOrgKey(orgID)
+      for (const entry of entries) {
+        if (FILE_FOLDER_AUDIT_ACTIONS.has(entry.action) && entry.detail) {
+          try { entry.detail_plain = await decryptOrgName(entry.detail, orgKey) }
+          catch (_) { entry.detail_plain = entry.detail }
+        } else {
+          entry.detail_plain = entry.detail
+        }
+      }
+    } catch (_) {
+      for (const entry of entries) entry.detail_plain = entry.detail
+    }
     if (page === 1) {
       auditLog.value = entries
     } else {
@@ -915,9 +928,20 @@ export const useOrgStore = defineStore('organizations', () => {
     const items = data || []
     try {
       const orgKey = await getOrgKey(orgID)
-      for (const item of items) item._name = await decryptOrgName(item.name, orgKey)
+      for (const item of items) {
+        item._name = await decryptOrgName(item.name, orgKey)
+        if (item.path) {
+          const segs = item.path.split('/')
+          const plain = await Promise.all(
+            segs.map(s => s ? decryptOrgName(s, orgKey).catch(() => s) : Promise.resolve(s))
+          )
+          item._path = plain.join('/')
+        } else {
+          item._path = item.path
+        }
+      }
     } catch (_) {
-      for (const item of items) item._name = item.name
+      for (const item of items) { item._name = item.name; item._path = item.path }
     }
     trash.value = items
     return items
