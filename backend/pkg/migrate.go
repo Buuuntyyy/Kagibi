@@ -53,6 +53,7 @@ func Migrate(db *bun.DB) error {
 	if err := migrateNewFeatureColumns(ctx, db); err != nil {
 		return err
 	}
+	migrateEnsurePartialOrgIndexes(ctx, db)
 
 	return nil
 }
@@ -812,6 +813,35 @@ func migrateNewFeatureColumns(ctx context.Context, db *bun.DB) error {
 		}
 	}
 	return nil
+}
+
+// migrateEnsurePartialOrgIndexes drops and recreates the org folder/file unique
+// path indexes as PARTIAL indexes (WHERE deleted_at IS NULL). If a previous run
+// created them as full unique indexes the IF NOT EXISTS guard would have left them
+// non-partial, causing every insert after a soft-delete to fail with a false 409.
+func migrateEnsurePartialOrgIndexes(ctx context.Context, db *bun.DB) {
+	for _, pair := range [][2]string{
+		{"uq_org_folders_org_path", "CREATE UNIQUE INDEX uq_org_folders_org_path ON org_folders (org_id, path) WHERE deleted_at IS NULL"},
+		{"uq_org_files_org_path", "CREATE UNIQUE INDEX uq_org_files_org_path ON org_files (org_id, path) WHERE deleted_at IS NULL"},
+	} {
+		name, stmt := pair[0], pair[1]
+		// Check if the index is already a partial index; if so, skip.
+		var isPartial bool
+		_ = db.QueryRowContext(ctx,
+			`SELECT indpred IS NOT NULL FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = $1`, name,
+		).Scan(&isPartial)
+		if isPartial {
+			continue
+		}
+		// Drop (possibly non-partial) and recreate as partial.
+		if _, err := db.ExecContext(ctx, `DROP INDEX IF EXISTS `+name); err != nil {
+			log.Printf("Warning: migrateEnsurePartialOrgIndexes drop %s: %v", name, err)
+			continue
+		}
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateEnsurePartialOrgIndexes create %s: %v", name, err)
+		}
+	}
 }
 
 func migrateP2PInviteEmails(ctx context.Context, db *bun.DB) {
