@@ -697,6 +697,27 @@ export const useOrgStore = defineStore('organizations', () => {
 
   // ── Audit log ─────────────────────────────────────────────────────────────
 
+  // Scans a free-text detail string for encrypted path segments (/base64url)
+  // and replaces each with its decrypted name. Used for permission/group actions
+  // where the detail is a sentence containing embedded encrypted paths.
+  async function decryptPathSegmentsInText(text, orgKey) {
+    if (!text) return text
+    const regex = /\/([A-Za-z0-9_\-]{20,})/g
+    const segments = new Map()
+    let match
+    while ((match = regex.exec(text)) !== null) {
+      const seg = match[1]
+      if (!segments.has(seg)) {
+        try { segments.set(seg, await decryptOrgName(seg, orgKey)) }
+        catch (_) { segments.set(seg, seg) }
+      }
+    }
+    if (segments.size === 0) return text
+    let result = text
+    for (const [enc, plain] of segments) result = result.replaceAll(`/${enc}`, `/${plain}`)
+    return result
+  }
+
   async function fetchAuditLog(orgID, page = 1) {
     const { data } = await api.get(`/orgs/${orgID}/audit`, { params: { page } })
     const entries = data || []
@@ -705,9 +726,9 @@ export const useOrgStore = defineStore('organizations', () => {
       for (const entry of entries) {
         if (FILE_FOLDER_AUDIT_ACTIONS.has(entry.action) && entry.detail) {
           try { entry.detail_plain = await decryptOrgName(entry.detail, orgKey) }
-          catch (_) { entry.detail_plain = entry.detail }
+          catch (_) { entry.detail_plain = await decryptPathSegmentsInText(entry.detail, orgKey) }
         } else {
-          entry.detail_plain = entry.detail
+          entry.detail_plain = await decryptPathSegmentsInText(entry.detail, orgKey)
         }
       }
     } catch (_) {
@@ -854,9 +875,9 @@ export const useOrgStore = defineStore('organizations', () => {
       for (const entry of entries) {
         if (FILE_FOLDER_AUDIT_ACTIONS.has(entry.action) && entry.detail) {
           try { entry.detail_plain = await decryptOrgName(entry.detail, orgKey) }
-          catch (_) { entry.detail_plain = entry.detail }
+          catch (_) { entry.detail_plain = await decryptPathSegmentsInText(entry.detail, orgKey) }
         } else {
-          entry.detail_plain = entry.detail
+          entry.detail_plain = await decryptPathSegmentsInText(entry.detail, orgKey)
         }
       }
     } catch (_) {

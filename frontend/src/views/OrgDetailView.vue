@@ -356,7 +356,7 @@
               @dragover="onFolderDragOver($event, folder)"
               @dragleave="onFolderDragLeave(folder)"
               @drop="onDropOnFolder($event, folder)"
-              @click.stop="renamingItem?.id !== folder.id && selectFolderRow(folder.id)"
+              @click.stop="renamingItem?.id !== folder.id && handleRowClick($event, 'folder', folder.id)"
               @dblclick.stop="renamingItem?.id !== folder.id && navigateToPath(folder.path)"
             >
               <label class="checkbox-wrap" @click.stop>
@@ -422,7 +422,8 @@
               :draggable="canWrite"
               @dragstart="onItemDragStart($event, file, 'file')"
               @dragend="onItemDragEnd"
-              @click.stop="openPreview(file)"
+              @click.stop="handleRowClick($event, 'file', file.id)"
+              @dblclick.stop="openPreview(file)"
             >
               <label class="checkbox-wrap" @click.stop>
                 <input type="checkbox" :checked="isSelected('file', file.id)" @change="e => toggleSelect(e, 'file', file.id)" class="item-checkbox" />
@@ -2704,6 +2705,7 @@ async function onDropOnPath(e, path) {
 
 const selectedIDs = ref(new Set())
 const activeFolderID = ref(null)
+const lastClickedKey = ref(null)
 const bulkLoading = ref(false)
 const bulkMoveMode = ref(false)
 const zipDownloadStates = ref({})
@@ -2718,17 +2720,40 @@ function toggleSelect(e, type, id) {
   if (s.has(key)) s.delete(key)
   else s.add(key)
   selectedIDs.value = s
+  lastClickedKey.value = key
 }
 
-function selectFolderRow(id) {
-  activeFolderID.value = id
-  const key = selKey('folder', id)
-  if (!selectedIDs.value.has(key)) {
+function handleRowClick(event, type, id) {
+  const key = selKey(type, id)
+  if (event.shiftKey && lastClickedKey.value) {
+    const allKeys = [
+      ...sortedFolders.value.map(f => selKey('folder', f.id)),
+      ...sortedFiles.value.map(f => selKey('file', f.id)),
+    ]
+    const cur = allKeys.indexOf(key)
+    const last = allKeys.indexOf(lastClickedKey.value)
+    if (cur !== -1 && last !== -1) {
+      const start = Math.min(cur, last)
+      const end = Math.max(cur, last)
+      const s = new Set(selectedIDs.value)
+      for (let i = start; i <= end; i++) s.add(allKeys[i])
+      selectedIDs.value = s
+    }
+    activeFolderID.value = null
+  } else if (event.ctrlKey || event.metaKey) {
     const s = new Set(selectedIDs.value)
-    s.add(key)
+    if (s.has(key)) s.delete(key)
+    else s.add(key)
     selectedIDs.value = s
+    lastClickedKey.value = key
+    activeFolderID.value = null
+  } else {
+    selectedIDs.value = new Set([key])
+    lastClickedKey.value = key
+    activeFolderID.value = type === 'folder' ? id : null
   }
 }
+
 
 const hasSelection = computed(() => selectedIDs.value.size > 0)
 const selectedCount = computed(() => selectedIDs.value.size)
@@ -2750,7 +2775,7 @@ function toggleSelectAll() {
 }
 
 function clearSelection() { selectedIDs.value = new Set() }
-function clearAll() { selectedIDs.value = new Set(); activeFolderID.value = null }
+function clearAll() { selectedIDs.value = new Set(); activeFolderID.value = null; lastClickedKey.value = null }
 
 const selectedFileItems = computed(() =>
   sortedFiles.value.filter(f => isSelected('file', f.id))
