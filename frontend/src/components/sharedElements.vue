@@ -109,11 +109,13 @@ import FileTable from './file/FileTable.vue';
 import SharedWithMe from './sharedWithMe.vue';
 import ManageShareDialog from './ManageShareDialog.vue';
 import { useFileStore } from '../stores/files';
+import { useUIStore } from '../stores/ui';
 
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const fileStore = useFileStore();
+const uiStore = useUIStore();
 const shares = ref([]);
 const loading = ref(true);
 const error = ref(null);
@@ -188,7 +190,7 @@ const fetchShares = async () => {
 };
 
 const deleteShare = async (id, item) => {
-  if (!confirm("Voulez-vous vraiment supprimer ce partage ?")) return;
+  if (!await uiStore.showConfirm({ title: 'Supprimer le partage', message: 'Voulez-vous vraiment supprimer ce partage ?', confirmLabel: 'Supprimer' })) return
 
   try {
     if (item._hasPublicLink) {
@@ -204,7 +206,7 @@ const deleteShare = async (id, item) => {
     );
   } catch (err) {
     console.error("Error deleting share:", err);
-    alert("Erreur lors de la suppression du partage.");
+    uiStore.showError("Erreur lors de la suppression du partage.");
   }
 };
 
@@ -212,7 +214,7 @@ const copyLink = (link) => {
   const fullLink = `${window.location.origin}${link}`;
   navigator.clipboard.writeText(fullLink).then(() => {
       // Could use a toast notification here
-      alert("Lien copié dans le presse-papier !");
+      uiStore.showToast("Lien copié dans le presse-papier !", 'success');
   }).catch(err => {
       console.error('Failed to copy: ', err);
   });

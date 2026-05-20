@@ -534,7 +534,7 @@ const createShare = async () => {
         if (expiresAt.value) {
             const selectedDate = new Date(expiresAt.value);
             if (selectedDate <= new Date()) {
-                alert("La date d'expiration doit être dans le futur.");
+                uiStore.showWarning("La date d'expiration doit être dans le futur.");
                 loading.value = false;
                 return;
             }
@@ -552,7 +552,7 @@ const createShare = async () => {
         
     } catch (error) {
         console.error("Create share error:", error);
-        alert("Erreur lors de la création du partage.");
+        uiStore.showError("Erreur lors de la création du partage.");
     } finally {
         loading.value = false;
     }
@@ -574,7 +574,7 @@ const deleteShare = async () => {
   const idToDelete = localShareId.value || props.item.share_id || props.item.ShareID;
   
   if (!idToDelete) {
-      alert("Impossible de supprimer le partage (ID manquant). Veuillez rafraîchir la page.");
+      uiStore.showError("Impossible de supprimer le partage (ID manquant). Veuillez rafraîchir la page.");
       return;
   }
   
@@ -590,7 +590,7 @@ const deleteShare = async () => {
             emit('share-deleted');
         } catch (error) {
             console.error('Erreur lors de la suppression du partage:', error);
-            alert('Impossible de supprimer le partage.');
+            uiStore.showError('Impossible de supprimer le partage.');
         } finally {
             loading.value = false;
         }
@@ -727,7 +727,7 @@ const shareWithFriend = async (friend) => {
                 if (e.response && e.response.status === 404) {
                      delete directShareStatus.value[friend.id];
                 } else {
-                     alert("Erreur lors de la suppression du partage.");
+                     uiStore.showError("Erreur lors de la suppression du partage.");
                 }
              } finally {
                 sharing.value[friend.id] = false;
@@ -799,7 +799,7 @@ const shareWithFriend = async (friend) => {
 
     } catch (e) {
         console.error("Partage échoué:", e);
-        alert("Erreur: " + e.message);
+        uiStore.showError("Erreur: " + e.message);
     } finally {
         sharing.value[friend.id] = false;
     }

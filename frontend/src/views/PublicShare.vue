@@ -124,11 +124,13 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
 import { usePublicFileStore } from '../stores/publicFileStore'
+import { useUIStore } from '../stores/ui'
 import { deriveKeyFromToken, unwrapMasterKey, decryptChunkedFileWorker } from '../utils/crypto'
 
 const route = useRoute()
 const router = useRouter()
 const publicFileStore = usePublicFileStore()
+const uiStore = useUIStore()
 
 const shareInfo = ref(null)
 const loading = ref(true)
@@ -211,11 +213,11 @@ const downloadFile = async () => {
           fileKey = await unwrapMasterKey(shareInfo.value.encrypted_key, shareKey);
         } catch(e) {
             console.error("Decryption error:", e);
-            alert("Impossible de déchiffrer la clé du fichier.");
+            uiStore.showError("Impossible de déchiffrer la clé du fichier.");
             return;
         }
     } else {
-        alert("Ce fichier ne peut pas être déchiffré (clé manquante).");
+        uiStore.showError("Ce fichier ne peut pas être déchiffré (clé manquante).");
         return;
     }
 
@@ -234,7 +236,7 @@ const downloadFile = async () => {
 
   } catch (err) {
     console.error("Download failed", err)
-    alert("Erreur lors du téléchargement")
+    uiStore.showError("Erreur lors du téléchargement")
   }
 }
 </script>

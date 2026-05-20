@@ -303,9 +303,10 @@ export const useP2PStore = defineStore('p2p', {
     // preGeneratedKey: optional CryptoKey already created (invite flow).
     async startTransfer(friend, file, preGeneratedKey = null) {
          await sodium.ready;
+         const uiStore = useUIStore();
 
          if (!friend.public_key) {
-             alert("L'ami n'a pas de clé publique (Il doit se reconnecter une fois pour la publier).");
+             uiStore.showError("L'ami n'a pas de clé publique (Il doit se reconnecter une fois pour la publier).");
              return;
          }
 
@@ -402,13 +403,14 @@ export const useP2PStore = defineStore('p2p', {
     async acceptTransfer() {
         if (!this.incomingOffer) return;
         const offerData = this.incomingOffer;
-        // Don't nullify yet, keep ref for transferId check if needed? 
+        // Don't nullify yet, keep ref for transferId check if needed?
         // Actually we copy it to activeTransfer.
-        this.incomingOffer = null; 
+        this.incomingOffer = null;
 
         await sodium.ready;
         const authStore = useAuthStore();
-        
+        const uiStore = useUIStore();
+
         // --- GUARD: Check Keys ---
         if (!authStore.privateKey) {
             console.warn("Private key missing in store. Attempting re-restoration...");
@@ -418,7 +420,7 @@ export const useP2PStore = defineStore('p2p', {
             // Double check
             if (!authStore.privateKey) {
                 console.error("Critical: User has no decrypted private RSA key. Cannot accept transfer.");
-                alert("Erreur de sécurité : Votre clé de chiffrement n'est pas disponible. Essayez de recharger la page ou de vous reconnecter.");
+                uiStore.showError("Erreur de sécurité : Votre clé de chiffrement n'est pas disponible. Essayez de recharger la page ou de vous reconnecter.");
                 return;
             }
         }
@@ -430,7 +432,7 @@ export const useP2PStore = defineStore('p2p', {
             fileKey = await window.crypto.subtle.importKey("raw", rawKey, "AES-GCM", true, ["decrypt"]);
         } catch(e) {
             console.error("Decryption failed", e);
-            alert("Erreur de déchiffrement de la clé");
+            uiStore.showError("Erreur de déchiffrement de la clé");
             return;
         }
 

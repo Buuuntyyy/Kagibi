@@ -1066,9 +1066,9 @@ const handleContextAction = (action) => {
       if (item.type === 'file' && item.share_token) {
         const shareUrl = `${window.location.origin}/s/${item.share_token}`;
         navigator.clipboard.writeText(shareUrl).then(() => {
-          alert('Lien de partage copié dans le presse-papiers !');
+          uiStore.showToast('Lien de partage copié dans le presse-papiers !', 'success');
         }).catch(err => {
-          alert('Impossible de copier le lien.');
+          uiStore.showError('Impossible de copier le lien.');
           console.error('Could not copy text: ', err);
         });
       }
@@ -1372,7 +1372,7 @@ const renameSelectedItem = async () => {
       }
       selectedItems.value = [];
     } catch (error) {
-      alert("Erreur lors du renommage : " + (error.response?.data?.error || error.message));
+      uiStore.showError("Erreur lors du renommage : " + (error.response?.data?.error || error.message));
     }
   }
 }
@@ -1384,7 +1384,7 @@ const removeTag = async (item, type, tagToRemove) => {
     await fileStore.updateTags(item.ID, type, newTags);
   } catch (error) {
     console.error(error);
-    alert("Erreur lors de la suppression du tag.");
+    uiStore.showError("Erreur lors de la suppression du tag.");
   }
 }
 
@@ -1401,7 +1401,7 @@ const updateTags = async () => {
       await fileStore.updateTags(item.ID, item.type, newTags);
       selectedItems.value = []; // Clear selection
     } catch (error) {
-      alert("Erreur lors de la mise à jour des tags : " + (error.response?.data?.error || error.message));
+      uiStore.showError("Erreur lors de la mise à jour des tags : " + (error.response?.data?.error || error.message));
     }
   }
 }

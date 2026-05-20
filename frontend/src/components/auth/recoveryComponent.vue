@@ -52,9 +52,11 @@
 <script setup>
 import { ref } from 'vue'
 import { useAuthStore } from '../../stores/auth'
+import { useUIStore } from '../../stores/ui'
 
 const emit = defineEmits(['cancel', 'success'])
 const authStore = useAuthStore()
+const uiStore = useUIStore()
 
 const email = ref('')
 const recoveryCode = ref('')
@@ -73,7 +75,7 @@ const handleRecovery = async () => {
   loading.value = true
   try {
     await authStore.recoverAccount(email.value, recoveryCode.value.trim(), newPassword.value)
-    alert("Compte récupéré avec succès ! Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.")
+    uiStore.showToast("Compte récupéré avec succès ! Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.", 'success')
     emit('success')
   } catch (err) {
     console.error(err)

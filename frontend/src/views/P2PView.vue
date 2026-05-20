@@ -200,6 +200,7 @@ import { useI18n } from 'vue-i18n'
 import { useFriendStore } from '../stores/friends'
 import { useAuthStore } from '../stores/auth'
 import { useP2PStore } from '../stores/p2p'
+import { useUIStore } from '../stores/ui'
 import { authClient } from '../auth-client'
 import { API_BASE_URL } from '../api'
 import LeftBar from '../components/bar/leftBar.vue'
@@ -211,6 +212,7 @@ const route = useRoute()
 const friendStore = useFriendStore()
 const authStore = useAuthStore()
 const p2pStore = useP2PStore()
+const uiStore = useUIStore()
 
 const selectedFriend = ref(null)
 const selectedFile = ref(null)
@@ -353,7 +355,7 @@ const startTransfer = async () => {
         await p2pStore.startTransfer(selectedFriend.value, selectedFile.value)
     } catch (e) {
         console.error("Transfer failed", e)
-        alert("Erreur: " + e.message)
+        uiStore.showError("Erreur: " + e.message)
     }
 }
 </script>
