@@ -364,7 +364,7 @@ type OrgFolder struct {
 	ParentPath   string     `bun:"parent_path,notnull,default:'/'" json:"parent_path"` // path.Dir(path)
 	CreatedBy    string     `bun:"created_by,notnull" json:"created_by"` // user_id
 	EncryptedKey string     `bun:"encrypted_key" json:"encrypted_key,omitempty"` // folder key encrypted with org_key
-	TagIDs       []int64    `bun:"tag_ids,array" json:"tag_ids"`
+	TagIDs       []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
 	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt    time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 	DeletedAt    *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
@@ -385,7 +385,7 @@ type OrgFile struct {
 	MimeType     string     `bun:"mime_type,notnull,default:''" json:"mime_type"`
 	UploadedBy   string     `bun:"uploaded_by,notnull" json:"uploaded_by"` // user_id
 	EncryptedKey string     `bun:"encrypted_key" json:"encrypted_key,omitempty"`
-	TagIDs       []int64    `bun:"tag_ids,array" json:"tag_ids"`
+	TagIDs       []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
 	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt    time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 	DeletedAt    *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`

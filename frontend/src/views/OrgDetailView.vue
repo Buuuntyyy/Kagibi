@@ -313,14 +313,15 @@
               v-for="folder in sortedFolders"
               :key="'f-' + folder.id"
               class="item-row folder-row"
-              :class="{ selected: isSelected('folder', folder.id), 'drag-over': dragOverFolderID === folder.id }"
+              :class="{ selected: isSelected('folder', folder.id), 'drag-over': dragOverFolderID === folder.id, 'folder-active': activeFolderID === folder.id }"
               :draggable="canWrite"
               @dragstart="onItemDragStart($event, folder, 'folder')"
               @dragend="onItemDragEnd"
               @dragover="onFolderDragOver($event, folder)"
               @dragleave="onFolderDragLeave(folder)"
               @drop="onDropOnFolder($event, folder)"
-              @click="renamingItem?.id !== folder.id && navigateToPath(folder.path)"
+              @click="renamingItem?.id !== folder.id && selectFolderRow(folder.id)"
+              @dblclick="renamingItem?.id !== folder.id && navigateToPath(folder.path)"
             >
               <label class="checkbox-wrap" @click.stop>
                 <input type="checkbox" :checked="isSelected('folder', folder.id)" @change="e => toggleSelect(e, 'folder', folder.id)" class="item-checkbox" />
@@ -975,7 +976,7 @@
           </div>
           <div class="modal-footer">
             <button class="btn-secondary" @click="showNewFolderModal = false">{{ t('orgs.cancel') }}</button>
-            <button class="btn-primary" @click="handleCreateFolder" :disabled="!newFolderName">{{ t('orgs.create') }}</button>
+            <button class="btn-primary" @click="handleCreateFolder" :disabled="!newFolderName || folderCreating">{{ t('orgs.create') }}</button>
           </div>
         </div>
       </div>
@@ -2012,6 +2013,7 @@ const highlightMatch = (text, query) => {
 const navigateToPath = async (path) => {
   const prevPath = currentPath.value
   currentPath.value = path || '/'
+  activeFolderID.value = null
   clearSelection()
   try {
     await orgStore.fetchItems(orgID.value, currentPath.value)
@@ -2037,10 +2039,12 @@ const buildPath = (idx) => {
 const showNewFolderModal = ref(false)
 const newFolderName = ref('')
 const folderError = ref('')
+const folderCreating = ref(false)
 
 const handleCreateFolder = async () => {
-  if (!newFolderName.value) return
+  if (!newFolderName.value || folderCreating.value) return
   folderError.value = ''
+  folderCreating.value = true
   try {
     await orgStore.createFolder(orgID.value, newFolderName.value, currentPath.value)
     showNewFolderModal.value = false
@@ -2048,6 +2052,8 @@ const handleCreateFolder = async () => {
     showToast(t('orgs.folderCreated'))
   } catch (e) {
     folderError.value = e.response?.data?.error || e.message
+  } finally {
+    folderCreating.value = false
   }
 }
 
@@ -2628,6 +2634,7 @@ async function onDropOnPath(e, path) {
 // ── Bulk selection ────────────────────────────────────────────────────────────
 
 const selectedIDs = ref(new Set())
+const activeFolderID = ref(null)
 const bulkLoading = ref(false)
 const bulkMoveMode = ref(false)
 const zipDownloadStates = ref({})
@@ -2642,6 +2649,16 @@ function toggleSelect(e, type, id) {
   if (s.has(key)) s.delete(key)
   else s.add(key)
   selectedIDs.value = s
+}
+
+function selectFolderRow(id) {
+  activeFolderID.value = id
+  const key = selKey('folder', id)
+  if (!selectedIDs.value.has(key)) {
+    const s = new Set(selectedIDs.value)
+    s.add(key)
+    selectedIDs.value = s
+  }
 }
 
 const hasSelection = computed(() => selectedIDs.value.size > 0)
@@ -3811,6 +3828,7 @@ const formatDate = (dateStr) => {
 .item-row.selected .item-checkbox { opacity: 1; }
 
 .item-row.selected { background: var(--primary-color-light, rgba(99,102,241,0.08)); }
+.item-row.folder-active { background: var(--primary-color-light, rgba(99,102,241,0.13)); outline: 1px solid var(--primary-color, #6366f1); outline-offset: -1px; }
 
 .btn-ghost-sm {
   background: none !important;

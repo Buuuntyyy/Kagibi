@@ -5,6 +5,7 @@ package organizations
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"path"
 	"regexp"
@@ -110,6 +111,16 @@ func (h *OrgHandler) CreateOrgFolder(c *gin.Context) {
 		return
 	}
 
+	// Explicit existence check so the error is never ambiguous.
+	var existing pkg.OrgFolder
+	err = h.DB.NewSelect().Model(&existing).
+		Where("org_id = ? AND path = ?", orgID, folderPath).
+		Limit(1).Scan(ctx)
+	if err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "folder already exists at this path"})
+		return
+	}
+
 	folder := &pkg.OrgFolder{
 		OrgID:        orgID,
 		Name:         req.Name,
@@ -117,9 +128,11 @@ func (h *OrgHandler) CreateOrgFolder(c *gin.Context) {
 		ParentPath:   parentPath,
 		CreatedBy:    userID,
 		EncryptedKey: req.EncryptedKey,
+		TagIDs:       []int64{},
 	}
 	if _, err := h.DB.NewInsert().Model(folder).Exec(ctx); err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "folder already exists at this path"})
+		log.Printf("[CreateOrgFolder] insert error orgID=%d path=%q: %v", orgID, folderPath, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create folder"})
 		return
 	}
 	c.JSON(http.StatusCreated, folder)

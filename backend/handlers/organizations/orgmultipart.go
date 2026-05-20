@@ -239,6 +239,7 @@ func (h *OrgHandler) CompleteOrgMultipart(c *gin.Context) {
 		MimeType:     contentType,
 		UploadedBy:   userID,
 		EncryptedKey: req.EncryptedKey,
+		TagIDs:       []int64{},
 	}
 	if _, err := h.DB.NewInsert().Model(file).
 		On("CONFLICT (org_id, path) WHERE deleted_at IS NULL DO UPDATE").
