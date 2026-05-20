@@ -256,8 +256,10 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { usePublicFileStore } from '../stores/publicFileStore';
+import { useUIStore } from '../stores/ui';
 
 const store = usePublicFileStore();
+const uiStore = useUIStore();
 const fileInputRef = ref(null);
 
 const triggerFileInput = () => {
@@ -432,7 +434,7 @@ const downloadSelected = () => {
 
 const deleteSelected = async () => {
   const names = deletableSelected.value.map(s => s.name).join(', ');
-  if (!confirm(`Supprimer ${deletableSelected.value.length} élément(s) :\n${names}\n\nCette action est irréversible.`)) return;
+  if (!await uiStore.showConfirm({ title: 'Supprimer les éléments', message: `Supprimer ${deletableSelected.value.length} élément(s) : ${names}. Cette action est irréversible.`, confirmLabel: 'Supprimer' })) return;
   for (const s of [...deletableSelected.value]) {
     try {
       if (s.type === 'file') {
@@ -508,7 +510,7 @@ const downloadFolderZip = (folder) => {
 };
 
 const deleteFile = async (file) => {
-  if (!confirm(`Supprimer "${file.Name}" ? Cette action est irréversible.`)) return;
+  if (!await uiStore.showConfirm({ title: 'Supprimer le fichier', message: `Supprimer "${file.Name}" ? Cette action est irréversible.`, confirmLabel: 'Supprimer' })) return;
   try {
     await store.deleteFile(file.ID);
   } catch {
@@ -517,7 +519,7 @@ const deleteFile = async (file) => {
 };
 
 const deleteFolderAction = async (folder) => {
-  if (!confirm(`Supprimer le dossier "${folder.Name}" et tout son contenu ? Cette action est irréversible.`)) return;
+  if (!await uiStore.showConfirm({ title: 'Supprimer le dossier', message: `Supprimer le dossier "${folder.Name}" et tout son contenu ? Cette action est irréversible.`, confirmLabel: 'Supprimer' })) return;
   try {
     await store.deleteFolder(folder.ID);
     selectedItems.value = selectedItems.value.filter(s => !(s.type === 'folder' && s.id === folder.ID));

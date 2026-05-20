@@ -156,9 +156,11 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useUploadStore, UploadStatus } from '../../stores/uploads'
+import { useUIStore } from '../../stores/ui'
 import uploadQueueManager from '../../utils/uploadQueueManager'
 
 const uploadStore = useUploadStore()
+const uiStore = useUIStore()
 const isCollapsed = ref(false)
 
 // Computed
@@ -211,9 +213,8 @@ function closeManager() {
 }
 
 async function cancelAll() {
-  if (confirm('Annuler tous les uploads en cours ?')) {
-    await uploadStore.cancelAll()
-  }
+  if (!await uiStore.showConfirm({ title: 'Annuler les uploads', message: 'Annuler tous les uploads en cours ?', confirmLabel: 'Annuler tout', confirmClass: 'danger' })) return
+  await uploadStore.cancelAll()
 }
 
 async function cancelUpload(id) {

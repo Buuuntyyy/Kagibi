@@ -11,6 +11,8 @@
       <P2PTransferDialog v-if="!isLandingPage" />
       <WarnDialog v-if="!isLandingPage" />
       <DeleteConfirmDialog v-if="!isLandingPage" />
+      <ConfirmDialog v-if="!isLandingPage" />
+      <GlobalToast />
       <UploadManager v-if="!isLandingPage" />
       <DownloadManager v-if="!isLandingPage" />
     </template>
@@ -29,6 +31,8 @@ import WarnDialog from './components/WarnDialog.vue'
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
 import UploadManager from './components/upload/UploadManager.vue'
 import DownloadManager from './components/download/DownloadManager.vue'
+import ConfirmDialog from './components/ConfirmDialog.vue'
+import GlobalToast from './components/GlobalToast.vue'
 import { useThemeStore } from './stores/theme'
 import { useAuthStore } from './stores/auth'
 import { useBillingStore } from './stores/billing'

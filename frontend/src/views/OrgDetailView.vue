@@ -1517,6 +1517,7 @@ import { useI18n } from 'vue-i18n'
 import { useOrgStore } from '../stores/organizations'
 import { useAuthStore } from '../stores/auth'
 import { useRealtimeStore } from '../stores/realtime'
+import { useUIStore } from '../stores/ui'
 import OrgGroupsPanel from '../components/organizations/OrgGroupsPanel.vue'
 import OrgFolderAccessDialog from '../components/organizations/OrgFolderAccessDialog.vue'
 import OrgOnboardingWizard from '../components/organizations/OrgOnboardingWizard.vue'
@@ -1529,6 +1530,7 @@ const router = useRouter()
 const orgStore = useOrgStore()
 const authStore = useAuthStore()
 const realtimeStore = useRealtimeStore()
+const uiStore = useUIStore()
 
 const activeTab = ref('files')
 const currentPath = ref('/')
@@ -1911,7 +1913,8 @@ async function handleRestore(item) {
 }
 
 async function handlePermanentDelete(item) {
-  if (!confirm(t('orgs.confirmPermanentDelete', { name: item.name }))) return
+  const confirmed = await uiStore.showConfirm({ title: 'Supprimer définitivement', message: t('orgs.confirmPermanentDelete', { name: item.name }), confirmLabel: 'Supprimer' })
+  if (!confirmed) return
   try {
     await orgStore.permanentDeleteTrashItem(orgID.value, item.item_type, item.id)
     showToast(t('orgs.permanentDeleted'))
@@ -1919,7 +1922,7 @@ async function handlePermanentDelete(item) {
 }
 
 async function handleEmptyTrash() {
-  if (!confirm(t('orgs.confirmEmptyTrash'))) return
+  if (!await uiStore.showConfirm({ title: 'Vider la corbeille', message: t('orgs.confirmEmptyTrash'), confirmLabel: 'Vider' })) return
   try {
     await orgStore.emptyTrash(orgID.value)
     showToast(t('orgs.trashEmptied'))
@@ -1947,7 +1950,7 @@ function isExpired(dateStr) {
 }
 
 async function handleRevokeShare(share) {
-  if (!confirm(t('orgs.confirmRevokeShare', { name: share._file_name || share.file_name }))) return
+  if (!await uiStore.showConfirm({ title: 'Révoquer le partage', message: t('orgs.confirmRevokeShare', { name: share._file_name || share.file_name }), confirmLabel: 'Révoquer' })) return
   try {
     await orgStore.revokeOrgShare(orgID.value, share.id)
     showToast(t('orgs.shareRevoked'))
@@ -2084,7 +2087,7 @@ const uploadFile = async (file) => {
 
 // Delete file
 const confirmDeleteFile = async (file) => {
-  if (!confirm(t('orgs.confirmDeleteFile', { name: file.name }))) return
+  if (!await uiStore.showConfirm({ title: 'Supprimer le fichier', message: t('orgs.confirmDeleteFile', { name: file.name }), confirmLabel: 'Supprimer' })) return
   try {
     await orgStore.deleteFile(orgID.value, file.id)
     showToast(t('orgs.fileDeleted'))
@@ -2095,7 +2098,7 @@ const confirmDeleteFile = async (file) => {
 
 // Delete folder
 const confirmDeleteFolder = async (folder) => {
-  if (!confirm(t('orgs.confirmDeleteFolder', { name: folder.name }))) return
+  if (!await uiStore.showConfirm({ title: 'Supprimer le dossier', message: t('orgs.confirmDeleteFolder', { name: folder.name }), confirmLabel: 'Supprimer' })) return
   try {
     await orgStore.deleteFolder(orgID.value, folder.id)
     showToast(t('orgs.folderDeleted'))
@@ -2507,7 +2510,7 @@ async function recolorTag(tag, color) {
 }
 
 async function confirmDeleteTag(tag) {
-  if (!confirm(t('orgs.deleteTagConfirm', { name: tag.name }))) return
+  if (!await uiStore.showConfirm({ title: 'Supprimer le tag', message: t('orgs.deleteTagConfirm', { name: tag.name }), confirmLabel: 'Supprimer' })) return
   try {
     await orgStore.deleteOrgTag(orgID.value, tag.id)
     if (filterTagID.value === tag.id) filterTagID.value = null
@@ -2690,7 +2693,7 @@ const selectedFolderItems = computed(() =>
 )
 
 async function bulkDelete() {
-  if (!confirm(t('orgs.bulkDeleteConfirm', { count: selectedCount.value }))) return
+  if (!await uiStore.showConfirm({ title: 'Suppression groupée', message: t('orgs.bulkDeleteConfirm', { count: selectedCount.value }), confirmLabel: 'Supprimer' })) return
   bulkLoading.value = true
   let failed = 0
   for (const folder of selectedFolderItems.value) {
@@ -2853,7 +2856,7 @@ const handleLogoChange = async (event) => {
 }
 
 const handleRemoveLogo = async () => {
-  if (!confirm(t('orgs.removeLogoConfirm'))) return
+  if (!await uiStore.showConfirm({ title: 'Supprimer le logo', message: t('orgs.removeLogoConfirm'), confirmLabel: 'Supprimer' })) return
   try {
     await orgStore.deleteOrgLogo(orgID.value)
     showToast(t('orgs.logoRemoved'))
@@ -2963,7 +2966,7 @@ const formatBytes = (bytes) => {
 }
 
 const handleRemoveMember = async (member) => {
-  if (!confirm(t('orgs.confirmRemoveMember'))) return
+  if (!await uiStore.showConfirm({ title: 'Retirer le membre', message: t('orgs.confirmRemoveMember'), confirmLabel: 'Retirer' })) return
   try {
     await orgStore.removeMember(orgID.value, member.id)
     showToast(t('orgs.memberRemoved'))
@@ -3091,7 +3094,7 @@ const handleSaveSettings = async () => {
 }
 
 const handleLeaveOrg = async () => {
-  if (!confirm(t('orgs.leaveOrgConfirm', { name: orgStore.currentOrg.name }))) return
+  if (!await uiStore.showConfirm({ title: 'Quitter l\'organisation', message: t('orgs.leaveOrgConfirm', { name: orgStore.currentOrg.name }), confirmLabel: 'Quitter', confirmClass: 'danger' })) return
   const myMember = orgStore.members.find(m => m.user_id === myUserID.value)
   if (!myMember) return
   try {
@@ -3106,7 +3109,7 @@ const handleLeaveOrg = async () => {
 const rotatingKey = ref(false)
 
 const handleRotateKey = async () => {
-  if (!confirm(t('orgs.rotateKeyConfirm'))) return
+  if (!await uiStore.showConfirm({ title: 'Rotation des clés', message: t('orgs.rotateKeyConfirm'), confirmLabel: 'Confirmer', confirmClass: 'danger' })) return
   rotatingKey.value = true
   try {
     await orgStore.rotateOrgKey(orgID.value)
@@ -3119,7 +3122,7 @@ const handleRotateKey = async () => {
 }
 
 const handleDeleteOrg = async () => {
-  if (!confirm(t('orgs.deleteOrgConfirm', { name: orgStore.currentOrg.name }))) return
+  if (!await uiStore.showConfirm({ title: 'Supprimer l\'organisation', message: t('orgs.deleteOrgConfirm', { name: orgStore.currentOrg.name }), confirmLabel: 'Supprimer' })) return
   try {
     await orgStore.deleteOrg(orgID.value)
     showToast(t('orgs.orgDeleted'))

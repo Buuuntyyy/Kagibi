@@ -246,6 +246,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useOrgStore } from '../../stores/organizations'
+import { useUIStore } from '../../stores/ui'
 
 const props = defineProps({
   orgID: { type: Number, required: true },
@@ -253,6 +254,7 @@ const props = defineProps({
 
 const { t } = useI18n()
 const orgStore = useOrgStore()
+const uiStore = useUIStore()
 
 const loading = ref(false)
 const selectedGroup = ref(null)
@@ -434,7 +436,7 @@ function capitalize(s) {
 }
 
 async function confirmDelete(group) {
-  if (!confirm(`${t('orgs.confirmDeleteGroup')} "${group.name}" ?`)) return
+  if (!await uiStore.showConfirm({ title: t('orgs.confirmDeleteGroup') || 'Supprimer le groupe', message: `${t('orgs.confirmDeleteGroup')} "${group.name}" ?`, confirmLabel: 'Supprimer' })) return
   if (selectedGroup.value?.id === group.id) selectedGroup.value = null
   await orgStore.deleteGroup(props.orgID, group.id)
 }

@@ -11,8 +11,10 @@
 <script setup>
 import { ref } from 'vue'
 import { useFilesStore } from '@/stores/files'
+import { useUIStore } from '../../stores/ui'
 
 const filesStore = useFilesStore()
+const uiStore = useUIStore()
 const file = ref(null)
 const error = ref('')
 
@@ -24,7 +26,7 @@ const uploadFile = async () => {
   try {
     error.value = ''
     await filesStore.uploadFile(file.value)
-    alert('Fichier uploadé avec succès !')
+    uiStore.showToast('Fichier uploadé avec succès !', 'success')
   } catch (err) {
     error.value = 'Échec de l\'upload : ' + err.message
   }

@@ -152,12 +152,14 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useFriendStore } from '../stores/friends'
 import { useAuthStore } from '../stores/auth'
+import { useUIStore } from '../stores/ui'
 
 const { t } = useI18n()
 const router = useRouter()
 
 const friendStore = useFriendStore()
 const authStore = useAuthStore()
+const uiStore = useUIStore()
 
 const activeTab = ref('list')
 const friendCodeInput = ref('')
@@ -216,10 +218,9 @@ const submitAddFriend = async () => {
   }
 }
 
-const confirmRemove = (friend) => {
-  if (confirm(`Êtes-vous sûr de vouloir supprimer ${friend.name} de vos amis ?`)) {
-    friendStore.removeFriend(friend.id)
-  }
+const confirmRemove = async (friend) => {
+  if (!await uiStore.showConfirm({ title: 'Supprimer l\'ami', message: `Êtes-vous sûr de vouloir supprimer ${friend.name} de vos amis ?`, confirmLabel: 'Supprimer' })) return
+  friendStore.removeFriend(friend.id)
 }
 
 const sendToP2P = (friend) => {

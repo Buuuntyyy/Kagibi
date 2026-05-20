@@ -185,6 +185,7 @@ import { useFriendStore } from '../../stores/friends'
 import { useBillingStore } from '../../stores/billing'
 import { uploadQueueManager } from '../../utils/uploadQueueManager'
 import { useUploadStore } from '../../stores/uploads'
+import { useUIStore } from '../../stores/ui'
 import InputDialog from '../InputDialog.vue'
 import FriendsSidebar from '../FriendsSidebar.vue'
 
@@ -199,6 +200,7 @@ const fileStore = useFileStore()
 const friendStore = useFriendStore()
 const uploadStore = useUploadStore()
 const billingStore = useBillingStore()
+const uiStore = useUIStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -378,7 +380,7 @@ const handleFolderUpload = async (event) => {
 
   if (invalidNames.length > 0) {
     const lines = invalidNames.map(e => `${e.relPath} → caractère(s) interdit(s) : ${e.bad}`)
-    alert('Noms de dossiers invalides :\n\n' + lines.join('\n') + '\n\nCaractères autorisés : lettres, chiffres, espaces, - . _')
+    uiStore.showError('Noms de dossiers invalides :\n' + lines.join('\n') + '\n\nCaractères autorisés : lettres, chiffres, espaces, - . _')
     return
   }
 
@@ -386,7 +388,7 @@ const handleFolderUpload = async (event) => {
   const rootName = files[0].webkitRelativePath.split('/')[0]
   const hasConflict = fileStore.folders.some(f => f.Name === rootName)
   if (hasConflict) {
-    alert(t('file.folderConflictTitle') + '\n\n' + t('file.folderConflictMsg', { name: rootName }) + '\n' + t('file.folderConflictHint'))
+    uiStore.showWarning(t('file.folderConflictMsg', { name: rootName }))
     return
   }
 
@@ -396,7 +398,7 @@ const handleFolderUpload = async (event) => {
   const storageUsed = authStore.user?.storage_used ?? authStore.user?.plan_storage_used ?? 0
   const available = storageLimit - storageUsed
   if (storageLimit > 0 && totalSize > available) {
-    alert(`Espace insuffisant\n\nTaille du dossier : ${formatSize(totalSize)}\nEspace disponible : ${formatSize(Math.max(0, available))}\n\nLibérez de l'espace ou passez à un abonnement supérieur.`)
+    uiStore.showError(`Taille du dossier : ${formatSize(totalSize)}\nEspace disponible : ${formatSize(Math.max(0, available))}`, 'Espace insuffisant')
     return
   }
 
@@ -432,7 +434,7 @@ const handleFolderUpload = async (event) => {
   } catch (error) {
     uploadStore.endFolderCreation()
     console.error('Folder upload failed:', error)
-    alert('Erreur lors de l\'upload du dossier : ' + (error.response?.data?.error || error.message))
+    uiStore.showError('Erreur lors de l\'upload du dossier : ' + (error.response?.data?.error || error.message))
   }
 }
 
