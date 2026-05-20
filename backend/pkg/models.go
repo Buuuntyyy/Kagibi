@@ -370,6 +370,7 @@ type OrgFolder struct {
 	DeletedAt    *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
 	DeletedBy    string     `bun:"deleted_by,notnull,default:''" json:"deleted_by,omitempty"`
 	DeleteRoot   bool       `bun:"delete_root,notnull,default:false" json:"-"`
+	TotalSize    int64      `bun:"-" json:"total_size,omitempty"` // computed on list, not stored
 }
 
 // OrgFile is a file inside an organization's shared storage.

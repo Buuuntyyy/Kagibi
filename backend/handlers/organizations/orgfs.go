@@ -67,6 +67,39 @@ func (h *OrgHandler) ListOrgItems(c *gin.Context) {
 		return
 	}
 
+	// Compute recursive folder sizes: one query fetches all file sizes under the
+	// current path, then we sum per-folder in Go using path-prefix matching.
+	if len(folders) > 0 {
+		type pathSize struct {
+			FolderPath string `bun:"folder_path"`
+			Total      int64  `bun:"total"`
+		}
+		var sizes []pathSize
+		if err := h.DB.NewSelect().
+			TableExpr("org_files").
+			ColumnExpr("folder_path, SUM(size) AS total").
+			Where("org_id = ? AND folder_path LIKE ?", orgID, folderPath+"%").
+			GroupExpr("folder_path").
+			Scan(ctx, &sizes); err == nil {
+			// Build a map of folder_path → direct-file total
+			sizeMap := make(map[string]int64, len(sizes))
+			for _, ps := range sizes {
+				sizeMap[ps.FolderPath] = ps.Total
+			}
+			// Assign recursive totals to each sub-folder
+			for i := range folders {
+				prefix := folders[i].Path
+				var total int64
+				for p, s := range sizeMap {
+					if len(p) >= len(prefix) && p[:len(prefix)] == prefix {
+						total += s
+					}
+				}
+				folders[i].TotalSize = total
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"folders":      folders,
 		"files":        files,
