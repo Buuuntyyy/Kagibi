@@ -440,7 +440,7 @@ export const useP2PStore = defineStore('p2p', {
         const rtcConfig = await fetchICEConfig();
         const pc = new RTCPeerConnection(rtcConfig);
         const realtimeStore = useRealtimeStore();
-        const uiStore = useUIStore();
+        
 
         // We don't necessarily need to send transferId back for candidates, but good practice.
         // Or we assume candidates from receiver belong to the same session implicitly.
