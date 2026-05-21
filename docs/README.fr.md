@@ -85,6 +85,137 @@ Envoi direct d'un fichier d'un appareil à un autre, chiffré de bout en bout, s
 
 ---
 
+## Organisations
+
+Les organisations sont des espaces collaboratifs chiffrés de bout en bout. Tous les fichiers, noms de dossiers et métadonnées stockés dans une organisation sont chiffrés avec une clé partagée que seuls les membres détiennent — le serveur n'a aucun accès au contenu.
+
+### Rôles et accès
+
+Chaque membre d'une organisation possède l'un des quatre rôles suivants :
+
+| Rôle | Droits |
+|------|--------|
+| Propriétaire (owner) | Contrôle total : gestion des membres, rôles, quota, suppression de l'org |
+| Admin | Gestion des membres, provisionnement, audit, invitations |
+| Membre (member) | Lecture et écriture des fichiers selon les permissions de dossier |
+| Lecteur (viewer) | Accès en lecture seule aux dossiers autorisés |
+
+### Chiffrement de bout en bout
+
+Chaque organisation utilise une **OrgKey** dédiée (AES-256). Cette clé est générée une fois par le propriétaire, puis re-chiffrée individuellement pour chaque membre avec sa clé publique RSA-4096 avant d'être stockée côté serveur. Concrètement :
+
+- Le serveur ne détient jamais l'OrgKey en clair.
+- L'ajout d'un nouveau membre nécessite qu'un admin **provisionne** sa clé : l'admin déchiffre l'OrgKey localement, puis la re-chiffre avec la clé publique du nouveau membre.
+- Les membres ayant rejoint via un lien d'invitation ne peuvent pas déchiffrer le contenu de l'organisation tant qu'un admin n'a pas provisionné leur clé.
+
+```
+MasterKey du propriétaire
+       │
+       ▼
+  OrgKey (AES-256)
+       │
+  ┌────┴─────────────┐
+  │                  │
+  RSA-OAEP(membre1)  RSA-OAEP(membre2) ...
+  stocké côté serveur par membre
+```
+
+### Groupes
+
+Au sein d'une organisation, les **groupes** permettent de regrouper des membres pour leur assigner des permissions de façon collective :
+
+- Créer, renommer et supprimer des groupes.
+- Ajouter ou retirer des membres d'un groupe.
+- Les membres d'un groupe héritent d'un rôle au sein du groupe : **admin** ou **membre**.
+- Les permissions de dossier peuvent être assignées à un groupe entier en une seule opération.
+
+### Assistant d'initialisation (Onboarding Wizard)
+
+Quand un utilisateur crée sa première organisation, un assistant pas-à-pas le guide :
+
+1. Nommage de l'organisation et saisie d'une description.
+2. Explication du modèle de chiffrement et du flux de provisionnement de clés.
+3. Création du premier lien d'invitation pour les membres de l'équipe.
+
+### Gestion des fichiers dans les organisations
+
+Le navigateur de fichiers d'une organisation propose une interface complète pour le travail collaboratif :
+
+- **Tri** — par nom, taille ou date (ascendant / descendant).
+- **Filtrage** — par catégorie de type (images, documents, vidéos, audio, archives) ou par tag d'organisation.
+- **Navigation par fil d'Ariane** — chemin cliquable avec support du glisser-déposer pour déplacer des éléments entre dossiers.
+- **Taille des dossiers** — la taille totale récursive est calculée et affichée pour chaque dossier.
+- **Glisser-déposer** — faites glisser des fichiers ou dossiers vers un autre dossier ou segment du fil d'Ariane pour les déplacer ; faites glisser depuis l'OS pour uploader.
+- **Sélection multiple** — sélectionnez plusieurs éléments via des cases à cocher ou shift-clic, puis téléchargez, déplacez ou supprimez en masse.
+- **Renommage inline** — renommage directement dans la liste, avec gestion au clavier (Entrée / Échap) et perte de focus.
+- **Prévisualisation** — aperçu dans le navigateur des images, PDF, fichiers audio et vidéo, sans téléchargement.
+- **Téléchargement ZIP** — téléchargez un dossier entier ou une sélection de fichiers/dossiers sous forme d'archive ZIP.
+- **Tags** — des tags à l'échelle de l'organisation (avec couleur) peuvent être appliqués à tout fichier ou dossier ; filtrage par tag dans le navigateur de fichiers.
+- **Favoris (épingles)** — étoilez les fichiers et dossiers fréquemment consultés ; ils apparaissent dans une bande d'accès rapide en haut du navigateur.
+- **Corbeille** — les éléments supprimés sont déplacés dans la corbeille, où ils peuvent être restaurés individuellement ou supprimés définitivement ; les admins peuvent vider toute la corbeille.
+- **Recherche** — recherche plein texte sur les noms de fichiers et dossiers de l'organisation, avec déchiffrement des noms chiffrés avant la correspondance.
+- **Progression d'upload** — barres de progression par fichier visibles pendant le chiffrement et l'envoi.
+
+### Contrôle d'accès par dossier
+
+Les admins et les admins de groupe peuvent définir des permissions par dossier pour des utilisateurs individuels ou des groupes :
+
+| Niveau | Description |
+|--------|-------------|
+| manage | Peut lire, écrire et modifier les permissions du dossier |
+| write | Peut uploader, renommer, déplacer et supprimer dans le dossier |
+| read | Peut naviguer et télécharger depuis le dossier |
+| none | Aucun accès ; le dossier est invisible |
+
+Les permissions s'accumulent : le niveau d'accès effectif d'un utilisateur à un dossier est le niveau le plus élevé accordé directement ou via l'un des groupes auxquels il appartient.
+
+### Liens de partage d'organisation
+
+Les fichiers d'une organisation peuvent être partagés via des liens publics, indépendamment du système de partage personnel :
+
+- **Générer un lien de partage** pour tout fichier ou dossier au sein de l'organisation.
+- **Protection par mot de passe** — protection optionnelle par mot de passe pour accéder au lien.
+- **Option à usage unique** — le lien est automatiquement révoqué après son premier accès réussi.
+- **Gestion des partages** — liste de tous les liens de partage actifs de l'org et révocation à la demande.
+- **Page d'accès public** — les destinataires accèdent au contenu via une URL dédiée ; le déchiffrement s'effectue côté client dans leur navigateur.
+
+### Journal d'audit
+
+Chaque action effectuée au sein d'une organisation est enregistrée dans un journal d'audit immuable :
+
+- Les événements incluent : upload, téléchargement, suppression, renommage, déplacement de fichier, adhésion/départ de membre, changement de rôle, changement de permission, création/révocation de partage, provisionnement de clé.
+- Les **champs chiffrés** (noms de fichiers, chemins) sont déchiffrés côté client avant affichage.
+- **Export** — les admins peuvent exporter le journal d'audit complet sous forme de fichier.
+- **Gestion de la rétention** — les admins peuvent supprimer les entrées d'audit antérieures à une date choisie.
+- **Pagination** — bouton "charger plus" pour les historiques volumineux.
+
+### Obligation MFA
+
+Les propriétaires et admins d'une organisation peuvent exiger que tous les membres aient activé le MFA avant d'accéder à l'organisation. Les membres sans MFA actif voient un écran de blocage et sont redirigés vers leurs paramètres de compte.
+
+### Tableau de bord et statistiques
+
+Le tableau de bord de l'organisation offre une vue d'ensemble aux admins :
+
+- Nombre total de membres, fichiers, dossiers.
+- Activité sur les 7 derniers jours.
+- Nombre de liens de partage actifs.
+- Alerte quand des membres n'ont pas encore de clé d'organisation provisionnée.
+- Accès direct au flux de provisionnement.
+
+### CLI d'administration
+
+Un outil en ligne de commande (`admin`) est disponible pour la gestion des organisations côté serveur :
+
+```bash
+./admin org create --name "Acme" --owner <user-id> --quota 10240
+./admin org list
+./admin org quota --id <org-id> --quota 20480
+./admin org delete --id <org-id>
+```
+
+---
+
 ## Comment fonctionne le chiffrement
 
 ### Dérivation des clés
@@ -153,6 +284,7 @@ URL présignée S3 (TTL 5 min)
 | Lire le nom d'un fichier | Non si l'option est activée — voir ci-dessous |
 | Déchiffrer les données d'un partage | Non — clés chiffrées avec RSA-OAEP |
 | Accéder à votre clé maître | Non — jamais transmise au backend |
+| Lire le contenu d'une organisation | Non — l'OrgKey n'est jamais stockée en clair |
 
 ### Chiffrement des noms de fichiers (opt-in)
 
@@ -337,6 +469,7 @@ Les réseaux modernes rendent parfois les connexions directes impossibles (NAT, 
 - **Temps restant estimé** (ex. `~1m 30s`).
 - **Type de connexion** : direct (LAN), via STUN (traversée NAT) ou via relais TURN.
 - **Re-notification** : l'expéditeur peut relancer une alerte sonore au destinataire (jusqu'à 3 fois, cooldown 30 s).
+- **Quitter manuellement** — l'expéditeur ou le destinataire peut fermer la connexion à tout moment.
 
 ---
 
@@ -364,7 +497,19 @@ Les réseaux modernes rendent parfois les connexions directes impossibles (NAT, 
 | Taille (octets) | Clair |
 | Type MIME | Clair |
 | Dates de création/modification | Clair |
-| Clé de fichier (`EncryptedKey`) | Chiffré (MasterKey) |
+| Clé de fichier (`EncryptedKey`) | Chiffré (MasterKey ou OrgKey) |
+
+### Données d'organisation
+
+| Donnée | Format |
+|--------|--------|
+| Nom de l'organisation | Clair |
+| Liste des membres et rôles | Clair |
+| OrgKey par membre | Chiffré (clé publique RSA du membre) |
+| Noms de fichiers et dossiers de l'org | Chiffré (OrgKey, AES-256-GCM) |
+| Contenu des fichiers de l'org | Chiffré (clé dérivée de l'OrgKey, AES-256-GCM) |
+| Entrées du journal d'audit | Actions en clair ; chemins/noms chiffrés déchiffrés côté client |
+| Permissions de dossier | Clair (IDs utilisateur/groupe + niveau d'accès) |
 
 ### Données sociales et de partage
 
@@ -372,6 +517,7 @@ Les réseaux modernes rendent parfois les connexions directes impossibles (NAT, 
 - Partages actifs : identifiant de ressource + clé chiffrée + permissions
 - Liens publics : token + clé chiffrée + expiration + hash de mot de passe optionnel
 - Invitations P2P : token + nom du fichier + taille + date d'expiration (contenu non stocké)
+- Liens de partage d'organisation : token + clé chiffrée + hash de mot de passe optionnel + indicateur à usage unique
 
 ### Ce qui n'est pas collecté
 
