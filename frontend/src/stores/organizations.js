@@ -599,10 +599,22 @@ export const useOrgStore = defineStore('organizations', () => {
           const plain = await decryptOrgName(item.name, orgKey)
           item.decrypted_name = plain
           if (item.type === 'folder') folderNameCache.value[item.name] = plain
+
+          // Decrypt path segments for display in search results
+          const decryptSegs = async (p) => {
+            if (!p || p === '/') return p
+            const segs = p.split('/')
+            const dec = await Promise.all(segs.map(s => s ? decryptOrgName(s, orgKey).catch(() => s) : Promise.resolve(s)))
+            return dec.join('/')
+          }
+          item.decrypted_path = await decryptSegs(item.path)
+          item.decrypted_parent_path = await decryptSegs(item.parent_path)
         }
       } catch (_) {
         for (const item of items) {
           item.decrypted_name = item.name
+          item.decrypted_path = item.path
+          item.decrypted_parent_path = item.parent_path
         }
       }
       searchCache.value = { orgID, items }
