@@ -1291,7 +1291,7 @@
       v-model="showAccessDialog"
       :orgID="orgID"
       :folder="accessDialogFolder"
-      :canManage="canManage"
+      :canManage="canManage || isGroupAdmin"
     />
 
     <!-- Onboarding wizard (first org creation only) -->
