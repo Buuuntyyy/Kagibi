@@ -153,7 +153,7 @@
               <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="currentColor" class="search-result-icon file"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
               <div class="search-result-body">
                 <span class="search-result-name" v-html="highlightMatch(item.decrypted_name, searchQuery)"></span>
-                <span class="search-result-path">{{ item.parent_path === '/' ? '/' : item.parent_path }}</span>
+                <span class="search-result-path">{{ (item.decrypted_parent_path ?? item.parent_path) === '/' ? '/' : (item.decrypted_parent_path ?? item.parent_path) }}</span>
               </div>
               <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" class="search-result-arrow"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
             </div>
