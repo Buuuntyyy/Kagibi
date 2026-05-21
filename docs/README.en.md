@@ -85,6 +85,137 @@ Send a file directly from one device to another, end-to-end encrypted, without i
 
 ---
 
+## Organizations
+
+Organizations are end-to-end encrypted collaborative spaces. All files, folder names, and metadata stored within an organization are encrypted with a shared key that only members hold — the server has zero access to the content.
+
+### Roles and Access
+
+Each organization member has one of four roles:
+
+| Role | Rights |
+|------|--------|
+| Owner | Full control: manage members, roles, quota, delete org |
+| Admin | Manage members, provisioning, audit, invites |
+| Member | Read and write files according to folder permissions |
+| Viewer | Read-only access to permitted folders |
+
+### End-to-End Encryption
+
+Each organization uses a dedicated **OrgKey** (AES-256). This key is generated once by the owner, then individually re-encrypted for each member using their RSA-4096 public key before being stored server-side. This means:
+
+- The server never holds the OrgKey in plaintext.
+- Adding a new member requires an admin to **provision** their key: the admin decrypts the OrgKey locally and re-encrypts it with the new member's public key.
+- Members who joined via invitation link cannot decrypt organization content until an admin provisions their key.
+
+```
+Owner's MasterKey
+       │
+       ▼
+  OrgKey (AES-256)
+       │
+  ┌────┴─────────────┐
+  │                  │
+  RSA-OAEP(member1)  RSA-OAEP(member2) ...
+  stored server-side per member
+```
+
+### Groups
+
+Within an organization, **groups** allow clustering members to assign permissions collectively:
+
+- Create, rename, and delete groups.
+- Add or remove members from a group.
+- Group members inherit a role within the group: **admin** or **member**.
+- Folder-level permissions can be assigned to an entire group at once.
+
+### Onboarding Wizard
+
+When a user creates their first organization, a step-by-step wizard guides them through:
+
+1. Naming the organization and setting a description.
+2. Understanding the encryption model and key provisioning workflow.
+3. Creating the first invitation link for team members.
+
+### File Management in Organizations
+
+The organization file browser provides a full-featured interface for collaborative work:
+
+- **Sorting** — by name, size, or date (ascending / descending).
+- **Filtering** — by file type category (images, documents, videos, audio, archives) or by org tag.
+- **Breadcrumb navigation** — clickable path with drag-and-drop support for moving items between folders.
+- **Folder sizes** — total recursive size is computed and displayed for each folder.
+- **Drag-and-drop** — drag files or folders onto another folder or breadcrumb segment to move them; drag from the OS to upload.
+- **Bulk selection** — select multiple items via checkboxes or shift-click, then bulk download, move, or delete.
+- **Rename** — inline rename with keyboard (Enter / Escape) and blur support.
+- **File preview** — in-browser preview for images, PDFs, audio, and video files, without downloading.
+- **ZIP download** — download an entire folder or a selection of files/folders as a ZIP archive (decrypted server-side before zipping, then streamed to the client).
+- **Tags** — organization-wide tags (with colour) can be applied to any file or folder; filter by tag in the file browser.
+- **Pinned items (Favorites)** — star frequently-accessed files and folders; they appear in a quick-access strip at the top of the browser.
+- **Trash** — deleted items are moved to the trash, where they can be restored individually or permanently deleted; admins can empty the entire trash.
+- **Search** — full-text search across organization file and folder names, with encrypted-name decryption before matching.
+- **Upload progress** — per-file progress bars visible while files are being encrypted and uploaded.
+
+### Folder-Level Access Control
+
+Admins and group admins can define per-folder permissions for individual users or groups:
+
+| Level | Description |
+|-------|-------------|
+| manage | Can read, write, and change permissions on the folder |
+| write | Can upload, rename, move, and delete within the folder |
+| read | Can browse and download from the folder |
+| none | No access; folder is invisible |
+
+Permissions cascade: a user's effective access to a folder is the highest level granted either directly or via any group they belong to.
+
+### Organization Share Links
+
+Organization files can be shared via public links, independently of the personal sharing system:
+
+- **Generate a share link** for any file or folder within the organization.
+- **Password protection** — optionally require a password to access the link.
+- **Single-use option** — the link is automatically revoked after its first successful access.
+- **Share management** — list all active org share links and revoke any of them.
+- **Public access page** — recipients access the content at a dedicated URL; decryption happens client-side in their browser.
+
+### Audit Log
+
+Every action performed within an organization is recorded in an immutable audit log:
+
+- Events include: file upload, download, deletion, rename, move, member join/leave, role change, permission change, share creation/revocation, key provisioning.
+- **Encrypted fields** (file names, paths) are decrypted on the client before display.
+- **Export** — admins can export the full audit log as a file.
+- **Retention management** — admins can delete audit entries older than a chosen date.
+- **Pagination** — load-more button for large audit histories.
+
+### MFA Enforcement
+
+Organization owners and admins can require all members to have MFA enabled before accessing the organization. Members without an active MFA setup see an access gate and are directed to their account settings.
+
+### Dashboard and Statistics
+
+The organization dashboard provides an overview for admins:
+
+- Total member count, file count, folder count.
+- Activity over the past 7 days.
+- Number of active share links.
+- Alert when members are missing an org key (not yet provisioned).
+- Quick navigation to the provisioning workflow.
+
+### Admin CLI
+
+A command-line tool (`admin`) is available for server-side organization management:
+
+```bash
+./admin org create --name "Acme" --owner <user-id> --quota 10240
+./admin org list
+./admin org quota --id <org-id> --quota 20480
+./admin org delete --id <org-id>
+```
+
+---
+
 ## How Encryption Works
 
 ### Key Derivation
@@ -153,6 +284,7 @@ Pre-signed S3 URL (TTL 5 min)
 | Read a file name | No if the option is enabled — see below |
 | Decrypt share data | No — keys encrypted with RSA-OAEP |
 | Access your master key | No — never transmitted to the backend |
+| Read organization content | No — OrgKey never stored in plaintext |
 
 ### Filename Encryption (opt-in)
 
@@ -337,6 +469,7 @@ Modern networks sometimes make direct connections impossible (NAT, firewalls). I
 - **Estimated time remaining** (e.g. `~1m 30s`).
 - **Connection type**: direct (LAN), via STUN (NAT traversal), or via TURN relay.
 - **Re-notify**: the sender can send another sound alert to the recipient (up to 3 times, 30 s cooldown).
+- **Manual leave** — the sender or recipient can manually close the connection at any point.
 
 ---
 
@@ -364,7 +497,19 @@ Modern networks sometimes make direct connections impossible (NAT, firewalls). I
 | Size (bytes) | Plaintext |
 | MIME type | Plaintext |
 | Creation/modification dates | Plaintext |
-| File key (`EncryptedKey`) | Encrypted (MasterKey) |
+| File key (`EncryptedKey`) | Encrypted (MasterKey or OrgKey) |
+
+### Organization Data
+
+| Data | Format |
+|------|--------|
+| Organization name | Plaintext |
+| Member list and roles | Plaintext |
+| OrgKey per member | Encrypted (member's RSA public key) |
+| File and folder names within org | Encrypted (OrgKey, AES-256-GCM) |
+| File content within org | Encrypted (OrgKey-derived key, AES-256-GCM) |
+| Audit log entries | Plaintext actions; encrypted paths/names decrypted client-side |
+| Folder permissions | Plaintext (user/group IDs + access level) |
 
 ### Social and Sharing Data
 
@@ -372,6 +517,7 @@ Modern networks sometimes make direct connections impossible (NAT, firewalls). I
 - Active shares: resource identifier + encrypted key + permissions
 - Public links: token + encrypted key + expiration + optional password hash
 - P2P invitations: token + file name + size + expiration date (content never stored)
+- Organization share links: token + encrypted key + optional password hash + single-use flag
 
 ### What Is Not Collected
 
