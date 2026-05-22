@@ -16,16 +16,18 @@
       <p class="subtitle">{{ t('account.subtitle') }}</p>
     </div>
 
-    <!-- Plan Banner -->
-    <div class="plan-banner" v-if="!loading && authStore.user && billingStore.showSubscriptionUI">
+    <!-- Coming-soon subscription banner -->
+    <div class="plan-banner coming-soon" v-if="!loading && authStore.user">
       <div class="plan-content">
-        <span class="plan-icon">🌟</span>
+        <span class="plan-icon">🚀</span>
         <div class="plan-details">
-          <span class="plan-title">{{ t('account.currentPlan') }}</span>
-          <span class="plan-value">{{ formatPlanName(authStore.user?.plan) }}</span>
+          <span class="plan-title">{{ t('account.subscriptionsComingSoonLabel') }}</span>
+          <span class="plan-value">{{ t('account.subscriptionsComingSoonTitle') }}</span>
         </div>
       </div>
-      <button class="btn-upgrade" @click="openUpgradeInfoPopup">{{ t('account.upgrade') }}</button>
+      <a v-if="buyMeACoffeeUrl" :href="buyMeACoffeeUrl" target="_blank" rel="noopener noreferrer" class="btn-upgrade">
+        ☕ Buy me a coffee
+      </a>
     </div>
 
     <div v-if="loading" class="loading-state">
@@ -953,6 +955,10 @@ const executeDeleteAccount = async () => {
   justify-content: space-between;
   align-items: center;
   box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.plan-banner.coming-soon {
+  background: linear-gradient(135deg, #6b7280, #9ca3af);
 }
 
 .plan-content {
