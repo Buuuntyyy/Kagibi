@@ -296,11 +296,11 @@ func (h *OrgHandler) GetMyPermission(c *gin.Context) {
 	role, _ := h.memberRole(ctx, orgID, userID)
 
 	c.JSON(http.StatusOK, gin.H{
-		"level":        levelToString(perm),
-		"role":         role,
-		"folder_path":  folderPath,
-		"can_read":     perm >= PermRead,
-		"can_write":    perm >= PermWrite,
-		"can_manage":   perm >= PermManage,
+		"level":       levelToString(perm),
+		"role":        role,
+		"folder_path": folderPath,
+		"can_read":    perm >= PermRead,
+		"can_write":   perm >= PermWrite,
+		"can_manage":  perm >= PermManage,
 	})
 }

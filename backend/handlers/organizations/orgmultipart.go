@@ -27,7 +27,7 @@ const orgPresignTTL = 180 * time.Second
 
 type OrgInitiateRequest struct {
 	FileName     string `json:"file_name" binding:"required"`
-	FilePath     string `json:"file_path"`   // destination folder path within org (e.g. "/documents")
+	FilePath     string `json:"file_path"` // destination folder path within org (e.g. "/documents")
 	ContentType  string `json:"content_type"`
 	TotalSize    int64  `json:"total_size" binding:"required,min=1"`
 	TotalParts   int    `json:"total_parts" binding:"required,min=1"`
@@ -35,8 +35,8 @@ type OrgInitiateRequest struct {
 }
 
 type OrgInitiateResponse struct {
-	UploadID      string            `json:"upload_id"`
-	Key           string            `json:"key"`
+	UploadID      string             `json:"upload_id"`
+	Key           string             `json:"key"`
 	PresignedURLs []orgPresignedPart `json:"presigned_urls"`
 }
 
@@ -46,14 +46,14 @@ type orgPresignedPart struct {
 }
 
 type OrgCompleteRequest struct {
-	UploadID     string         `json:"upload_id" binding:"required"`
-	Key          string         `json:"key" binding:"required"`
-	Parts        []orgPart      `json:"parts" binding:"required,min=1"`
-	FileName     string         `json:"file_name" binding:"required"`
-	FilePath     string         `json:"file_path"`
-	TotalSize    int64          `json:"total_size" binding:"required"`
-	ContentType  string         `json:"content_type"`
-	EncryptedKey string         `json:"encrypted_key" binding:"required"`
+	UploadID     string    `json:"upload_id" binding:"required"`
+	Key          string    `json:"key" binding:"required"`
+	Parts        []orgPart `json:"parts" binding:"required,min=1"`
+	FileName     string    `json:"file_name" binding:"required"`
+	FilePath     string    `json:"file_path"`
+	TotalSize    int64     `json:"total_size" binding:"required"`
+	ContentType  string    `json:"content_type"`
+	EncryptedKey string    `json:"encrypted_key" binding:"required"`
 }
 
 type orgPart struct {
