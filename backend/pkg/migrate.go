@@ -38,6 +38,22 @@ func Migrate(db *bun.DB) error {
 	if err := migrateEmailEncryption(ctx, db); err != nil {
 		return err
 	}
+	if err := migrateOrganizationTables(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateOrgTags(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateOrgFavorites(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateOrgTrashColumns(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateNewFeatureColumns(ctx, db); err != nil {
+		return err
+	}
+	migrateEnsurePartialOrgIndexes(ctx, db)
 
 	return nil
 }
@@ -96,6 +112,16 @@ func migrateCoreModels(ctx context.Context, db *bun.DB) error {
 		(*P2PSignal)(nil),
 		(*P2PInvite)(nil),
 		(*RealtimeEvent)(nil),
+		(*Organization)(nil),
+		(*OrgMember)(nil),
+		(*OrgInvitation)(nil),
+		(*OrgFolder)(nil),
+		(*OrgFile)(nil),
+		(*OrgFolderPermission)(nil),
+		(*OrgAuditLog)(nil),
+		(*OrgGroup)(nil),
+		(*OrgGroupMember)(nil),
+		(*OrgGroupPermission)(nil),
 	}
 
 	for _, model := range models {
@@ -173,6 +199,13 @@ func migrateSchemaAlterations(ctx context.Context, db *bun.DB) error {
 		}
 	}
 
+	// Org file public share: link a share_link back to its source org
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "org_id" BIGINT`,
+	); err != nil {
+		log.Printf("Warning: failed to add org_id column to share_links: %v", err)
+	}
+
 	// Single-use link columns
 	for _, col := range []string{
 		`ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "single_use" BOOLEAN NOT NULL DEFAULT false`,
@@ -181,6 +214,20 @@ func migrateSchemaAlterations(ctx context.Context, db *bun.DB) error {
 		if _, err := db.ExecContext(ctx, col); err != nil {
 			log.Printf("Warning: failed to add single_use/used_at column to share_links: %v", err)
 		}
+	}
+
+	// restrict_to_groups column added after initial table creation
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "org_group_permissions" ADD COLUMN IF NOT EXISTS "restrict_to_groups" BOOLEAN NOT NULL DEFAULT false`,
+	); err != nil {
+		log.Printf("Warning: failed to add restrict_to_groups column: %v", err)
+	}
+
+	// role column for group members (admin | member)
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "org_group_members" ADD COLUMN IF NOT EXISTS "role" VARCHAR NOT NULL DEFAULT 'member'`,
+	); err != nil {
+		log.Printf("Warning: failed to add role column to org_group_members: %v", err)
 	}
 
 	// Share permissions columns
@@ -218,6 +265,18 @@ func migrateSchemaAlterations(ctx context.Context, db *bun.DB) error {
 	// can_download added to share_item_overrides after initial table creation
 	if _, err := db.ExecContext(ctx, `ALTER TABLE "share_item_overrides" ADD COLUMN IF NOT EXISTS "can_download" BOOLEAN NOT NULL DEFAULT true`); err != nil {
 		log.Printf("Warning: failed to add can_download column to share_item_overrides: %v", err)
+	}
+
+	// Org E2E encryption columns — added when the organisation crypto layer was introduced.
+	// Tables created before this migration will be missing these columns.
+	for _, col := range []string{
+		`ALTER TABLE "org_members"     ADD COLUMN IF NOT EXISTS "encrypted_org_key"        TEXT`,
+		`ALTER TABLE "org_invitations" ADD COLUMN IF NOT EXISTS "encrypted_org_key"        TEXT`,
+		`ALTER TABLE "org_invitations" ADD COLUMN IF NOT EXISTS "notified_email_encrypted" TEXT`,
+	} {
+		if _, err := db.ExecContext(ctx, col); err != nil {
+			log.Printf("Warning: failed to add encrypted_org_key column: %v", err)
+		}
 	}
 
 	// The original p2p_signals_signal_type_check constraint omitted 'reject' and 'p2p_ping'.
@@ -492,6 +551,95 @@ func migrateUserSettings(ctx context.Context, db *bun.DB) error {
 	return nil
 }
 
+func migrateOrganizationTables(ctx context.Context, db *bun.DB) error {
+	// storage_used_bytes added after initial org table creation (Phase 2)
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "storage_used_bytes" BIGINT NOT NULL DEFAULT 0`,
+	); err != nil {
+		log.Printf("Warning: failed to add storage_used_bytes to organizations: %v", err)
+	}
+
+	// logo_path stores the S3 object key for the org's custom logo (empty = no logo)
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "organizations" ADD COLUMN IF NOT EXISTS "logo_path" TEXT NOT NULL DEFAULT ''`,
+	); err != nil {
+		log.Printf("Warning: failed to add logo_path to organizations: %v", err)
+	}
+
+	// Unique membership: one row per (org, user) pair
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_members_org_user ON org_members (org_id, user_id)`,
+	); err != nil {
+		log.Printf("Warning: failed to create org_members unique index: %v", err)
+	}
+
+	// Unique file path per org (prevents duplicate paths in same org)
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_files_org_path ON org_files (org_id, path) WHERE deleted_at IS NULL`,
+	); err != nil {
+		log.Printf("Warning: failed to create org_files unique path index: %v", err)
+	}
+
+	// Unique folder path per org
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_folders_org_path ON org_folders (org_id, path) WHERE deleted_at IS NULL`,
+	); err != nil {
+		log.Printf("Warning: failed to create org_folders unique path index: %v", err)
+	}
+
+	// Unique permission override per (org, user, folder_path)
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_permissions ON org_folder_permissions (org_id, user_id, folder_path)`,
+	); err != nil {
+		log.Printf("Warning: failed to create org_folder_permissions unique index: %v", err)
+	}
+
+	// Groups: unique name per org, unique LDAP GUID per org
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_groups_name ON org_groups (org_id, name)`,
+	); err != nil {
+		log.Printf("Warning: failed to create uq_org_groups_name: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_groups_ldap_guid ON org_groups (org_id, ldap_guid) WHERE ldap_guid IS NOT NULL AND ldap_guid != ''`,
+	); err != nil {
+		log.Printf("Warning: failed to create uq_org_groups_ldap_guid: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_group_members ON org_group_members (group_id, user_id)`,
+	); err != nil {
+		log.Printf("Warning: failed to create uq_org_group_members: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_org_group_permissions ON org_group_permissions (org_id, group_id, folder_path)`,
+	); err != nil {
+		log.Printf("Warning: failed to create uq_org_group_permissions: %v", err)
+	}
+
+	for _, idx := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_organizations_owner_id       ON organizations (owner_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_members_org_id           ON org_members (org_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_members_user_id          ON org_members (user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_invitations_org_id       ON org_invitations (org_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_invitations_token        ON org_invitations (token)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_invitations_target       ON org_invitations (target_user_id) WHERE target_user_id IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_org_files_org_folder         ON org_files (org_id, folder_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_files_uploaded_by        ON org_files (uploaded_by)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_folders_org_parent       ON org_folders (org_id, parent_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_folder_perms_org_user    ON org_folder_permissions (org_id, user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_audit_logs_org_created    ON org_audit_logs (org_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_groups_org_id            ON org_groups (org_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_group_members_group_id   ON org_group_members (group_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_group_members_user_id    ON org_group_members (user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_group_perms_org_group    ON org_group_permissions (org_id, group_id)`,
+	} {
+		if _, err := db.ExecContext(ctx, idx); err != nil {
+			log.Printf("Warning: failed to create org index: %v", err)
+		}
+	}
+	return nil
+}
+
 // migrateEmailEncryption adds email_hash / email_encrypted columns, migrates existing
 // plaintext emails from auth_users and profiles, adds UNIQUE indexes on the hash
 // columns, then nullifies the legacy plaintext email columns.
@@ -589,6 +737,113 @@ func migrateEmailRows(ctx context.Context, db *bun.DB, table string) {
 }
 
 // migrateP2PInviteEmails encrypts plaintext recipient_email in p2p_invites.
+func migrateOrgTags(ctx context.Context, db *bun.DB) error {
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS org_tags (
+			id             BIGSERIAL PRIMARY KEY,
+			org_id         BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+			encrypted_name TEXT NOT NULL,
+			color          VARCHAR(7) NOT NULL DEFAULT '#6366f1',
+			created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create org_tags table: %w", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`CREATE INDEX IF NOT EXISTS idx_org_tags_org_id ON org_tags (org_id)`); err != nil {
+		log.Printf("Warning: failed to create idx_org_tags_org_id: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE org_files ADD COLUMN IF NOT EXISTS tag_ids BIGINT[] NOT NULL DEFAULT '{}'`); err != nil {
+		log.Printf("Warning: failed to add tag_ids to org_files: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE org_folders ADD COLUMN IF NOT EXISTS tag_ids BIGINT[] NOT NULL DEFAULT '{}'`); err != nil {
+		log.Printf("Warning: failed to add tag_ids to org_folders: %v", err)
+	}
+	return nil
+}
+
+func migrateOrgFavorites(ctx context.Context, db *bun.DB) error {
+	_, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS org_favorites (
+			id         BIGSERIAL PRIMARY KEY,
+			org_id     BIGINT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+			user_id    TEXT NOT NULL,
+			item_id    BIGINT NOT NULL,
+			item_type  VARCHAR(10) NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (org_id, user_id, item_id, item_type)
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create org_favorites: %w", err)
+	}
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_org_fav_user ON org_favorites (org_id, user_id)`)
+	return nil
+}
+
+func migrateOrgTrashColumns(ctx context.Context, db *bun.DB) error {
+	for _, stmt := range []string{
+		`ALTER TABLE org_files   ADD COLUMN IF NOT EXISTS deleted_by  TEXT    NOT NULL DEFAULT ''`,
+		`ALTER TABLE org_files   ADD COLUMN IF NOT EXISTS delete_root BOOLEAN NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE org_folders ADD COLUMN IF NOT EXISTS deleted_by  TEXT    NOT NULL DEFAULT ''`,
+		`ALTER TABLE org_folders ADD COLUMN IF NOT EXISTS delete_root BOOLEAN NOT NULL DEFAULT FALSE`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateOrgTrashColumns: %v", err)
+		}
+	}
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_org_files_trash   ON org_files   (org_id, deleted_at) WHERE deleted_at IS NOT NULL AND delete_root = TRUE`)
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_org_folders_trash ON org_folders (org_id, deleted_at) WHERE deleted_at IS NOT NULL AND delete_root = TRUE`)
+	return nil
+}
+
+// migrateNewFeatureColumns adds columns introduced by the low-effort feature batch:
+// download counter on share links, MFA enforcement flag on organizations,
+// and per-member storage quota on org_members.
+func migrateNewFeatureColumns(ctx context.Context, db *bun.DB) error {
+	for _, stmt := range []string{
+		`ALTER TABLE "share_links"    ADD COLUMN IF NOT EXISTS "download_count" BIGINT NOT NULL DEFAULT 0`,
+		`ALTER TABLE "organizations"  ADD COLUMN IF NOT EXISTS "require_mfa"    BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE "org_members"    ADD COLUMN IF NOT EXISTS "quota_bytes"    BIGINT NOT NULL DEFAULT 0`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateNewFeatureColumns: %v", err)
+		}
+	}
+	return nil
+}
+
+// migrateEnsurePartialOrgIndexes drops and recreates the org folder/file unique
+// path indexes as PARTIAL indexes (WHERE deleted_at IS NULL). If a previous run
+// created them as full unique indexes the IF NOT EXISTS guard would have left them
+// non-partial, causing every insert after a soft-delete to fail with a false 409.
+func migrateEnsurePartialOrgIndexes(ctx context.Context, db *bun.DB) {
+	for _, pair := range [][2]string{
+		{"uq_org_folders_org_path", "CREATE UNIQUE INDEX uq_org_folders_org_path ON org_folders (org_id, path) WHERE deleted_at IS NULL"},
+		{"uq_org_files_org_path", "CREATE UNIQUE INDEX uq_org_files_org_path ON org_files (org_id, path) WHERE deleted_at IS NULL"},
+	} {
+		name, stmt := pair[0], pair[1]
+		// Check if the index is already a partial index; if so, skip.
+		var isPartial bool
+		_ = db.QueryRowContext(ctx,
+			`SELECT indpred IS NOT NULL FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = $1`, name,
+		).Scan(&isPartial)
+		if isPartial {
+			continue
+		}
+		// Drop (possibly non-partial) and recreate as partial.
+		if _, err := db.ExecContext(ctx, `DROP INDEX IF EXISTS `+name); err != nil {
+			log.Printf("Warning: migrateEnsurePartialOrgIndexes drop %s: %v", name, err)
+			continue
+		}
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateEnsurePartialOrgIndexes create %s: %v", name, err)
+		}
+	}
+}
+
 func migrateP2PInviteEmails(ctx context.Context, db *bun.DB) {
 	type row struct {
 		ID             int64  `bun:"id"`

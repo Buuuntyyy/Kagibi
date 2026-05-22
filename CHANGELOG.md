@@ -1,5 +1,101 @@
 # Changelog
 
+## v2.18.0 — 2026-05-21
+
+### Nouvelles fonctionnalités
+
+- **Contrôle d'accès par dossier** : les admins d'organisation (et les admins de groupe) peuvent définir des permissions par dossier pour des utilisateurs individuels ou des groupes entiers. Niveaux disponibles : `manage`, `write`, `read`, `none`. Les permissions s'accumulent : le niveau effectif est le plus élevé accordé directement ou via un groupe.
+- **Onglets Vue d'ensemble et Administration** : la vue de détail d'une organisation dispose maintenant d'onglets dédiés offrant une synthèse rapide et un accès centralisé aux actions d'administration.
+- **Taille totale des dossiers** : la taille récursive de chaque dossier est calculée et affichée dans le navigateur de fichiers.
+
+### Améliorations
+
+- **Journal d'audit** : les champs chiffrés (noms de fichiers, chemins) sont désormais déchiffrés côté client avant affichage. Export du journal complet en un clic.
+- **Obligation MFA par organisation** : les propriétaires et admins peuvent exiger que tous les membres aient le MFA activé ; les membres non conformes voient un écran de blocage.
+- **Suppression améliorée** : la suppression multiple fonctionne désormais correctement avec la sélection multiple dans le navigateur de fichiers et les vues d'organisation.
+- **Recherche dans les organisations** : les noms et chemins chiffrés sont déchiffrés avant la mise en correspondance, rendant la recherche fonctionnelle même avec le chiffrement des noms activé.
+- Refactorisation : unification des notifications UI via le store dédié, nettoyage de la structure du code.
+
+---
+
+## v2.17.0 — 2026-05-19
+
+### Nouvelles fonctionnalités
+
+- **Partage public d'organisation** : génération de liens publics pour tout fichier ou dossier d'une organisation, avec déchiffrement côté client pour les destinataires. Options : protection par mot de passe, usage unique (lien révoqué après le premier accès). Liste et révocation des partages actifs.
+- **Tri et filtrage** : le navigateur de fichiers de l'organisation permet de trier par nom, taille ou date (ascendant/descendant) et de filtrer par catégorie de type (images, documents, vidéos, audio, archives) ou par tag.
+- **Sélection multiple** : cases à cocher et shift-clic pour sélectionner plusieurs éléments, avec actions groupées : téléchargement, déplacement, suppression.
+- **Glisser-déposer** : déplacer des fichiers ou dossiers vers un autre dossier ou segment du fil d'Ariane ; faire glisser depuis l'OS pour uploader directement.
+- **Prévisualisation de fichiers** : aperçu dans le navigateur des images, PDF, fichiers audio et vidéo, sans téléchargement.
+- **Gestion des tags** : tags à l'échelle de l'organisation (avec couleur) applicables à tout fichier ou dossier ; filtrage par tag dans le navigateur.
+- **Téléchargement ZIP** : téléchargement d'un dossier entier ou d'une sélection sous forme d'archive ZIP.
+- **Favoris (épingles)** : épingler des fichiers et dossiers fréquemment consultés ; ils apparaissent dans une bande d'accès rapide en haut du navigateur.
+- **Corbeille** : suppression douce avec restauration individuelle, suppression définitive, et vidage complet de la corbeille par les admins.
+
+### Améliorations
+
+- Optimisation du pipeline d'upload et de déchiffrement (performances et gestion mémoire).
+
+---
+
+## v2.16.0 — 2026-05-15
+
+### Nouvelles fonctionnalités
+
+- **Module Organisations** : espaces collaboratifs chiffrés de bout en bout. Création, liste et gestion des organisations depuis un nouveau tableau de bord dédié.
+- **Chiffrement E2E des organisations** : chaque organisation possède une OrgKey (AES-256) générée par le propriétaire et re-chiffrée individuellement pour chaque membre via RSA-OAEP 4096. Le serveur ne détient jamais la clé en clair.
+- **Provisionnement de clés** : les admins peuvent provisionner la clé d'organisation pour les membres qui ont rejoint via lien d'invitation, individuellement ou en masse (provision-all).
+- **Groupes** : création et gestion de sous-groupes au sein d'une organisation, avec rôles (admin de groupe / membre de groupe) et assignation de permissions par groupe.
+- **Assistant d'initialisation** : wizard pas-à-pas guidant le propriétaire lors de la création de sa première organisation (nommage, modèle de chiffrement, premier lien d'invitation).
+- **Tableau de bord** : KPIs (membres, fichiers, dossiers, activité 7 jours, liens actifs), alerte sur les membres sans clé provisionnée.
+- **Journal d'audit** : enregistrement de toutes les actions de l'organisation avec résumé et suppression des entrées anciennes.
+- **Fonctionnalités premium** : invites de mise à niveau intégrées pour les limites de quota et les fonctionnalités avancées.
+- **CLI d'administration** : outil en ligne de commande pour créer, lister, modifier le quota et supprimer des organisations côté serveur.
+
+---
+
+## v2.15.0 — 2026-05-10
+
+### Nouvelles fonctionnalités
+
+- **Intégration @unhead/vue** : gestion du `<head>` HTML via `@unhead/vue` pour un meilleur contrôle des métadonnées de page.
+- **Transfert P2P — quitter manuellement** : l'expéditeur ou le destinataire peut désormais fermer la connexion à tout moment via un bouton dédié, sans attendre la fin ou l'échec du transfert.
+- **Gestion du buffer P2P améliorée** : optimisation du débit et de la stabilité lors des transferts WebRTC à haut débit.
+
+### Corrections
+
+- Réinitialisation complète de l'état de `P2PInviteDialog` à la fermeture (évite les états résiduels entre deux sessions).
+- Réinitialisation de l'assistant de transfert (wizard) à la fin d'un transfert.
+- Corrections UI/UX mobile : navigation inférieure, mise en page et interactions tactiles.
+
+---
+
+## v2.14.0 — 2026-05-04
+
+### Nouvelles fonctionnalités
+
+- **Transfert P2P — indicateurs d'état** : affichage en temps réel de l'état de la connexion WebRTC (connexion, transfert, erreur, reconnexion) avec messages explicites pour chaque phase.
+- **Gestion des erreurs et reconnexion P2P** : détection et signalement des erreurs réseau, avec tentatives de reconnexion automatiques et possibilité de relancer le transfert manuellement en cas d'échec.
+
+---
+
+## v2.13.0 — 2026-05-04
+
+### Nouvelles fonctionnalités
+
+- **Protection par mot de passe des liens publics** : les liens de partage peuvent désormais être protégés par un mot de passe (haché en bcrypt côté serveur). Le visiteur doit saisir le mot de passe avant d'accéder au contenu.
+- **Liens à usage unique** : option pour qu'un lien de partage public soit automatiquement révoqué après son premier accès réussi.
+- **Restrictions par élément dans les partages de dossier** : panneau latéral dans la boîte de dialogue de gestion permettant de configurer les droits par sous-élément (dossier : accès complet / lecture seule / masqué ; fichier : téléchargement et suppression individuellement réglables). Navigation dans l'arborescence via fil d'Ariane cliquable, contrôles en masse par niveau.
+- **Téléchargement ZIP de dossiers partagés** : récupération récursive des fichiers d'un dossier partagé avec génération d'une archive ZIP.
+- **Vue d'ensemble des partages améliorée** : déduplication des partages, copie du lien en un clic, navigation directe vers le dossier partagé dans l'arborescence, meilleure expérience de navigation publique.
+
+### Améliorations
+
+- Ajout de l'URL d'avatar dans les réponses d'amis (affichage des avatars dans la liste d'amis).
+- Mise à jour de la récupération des limites de stockage dans le tableau de bord d'utilisation.
+
+---
+
 ## v2.12.0 — 2026-04-27
 
 ### Corrections

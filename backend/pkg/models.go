@@ -179,23 +179,25 @@ type Tag struct {
 type ShareLink struct {
 	bun.BaseModel `bun:"table:share_links,alias:sl"`
 
-	ID           int64      `bun:"id,pk,autoincrement"`
-	ResourceID   int64      `bun:"resource_id,notnull"`   // ID du fichier ou dossier
-	ResourceType string     `bun:"resource_type,notnull"` // "file" ou "folder"
-	Path         string     `bun:"path"`                  // Base path of the shared resource
-	OwnerID      string     `bun:"owner_id,notnull"`      // Créateur du lien
-	Token        string     `bun:"token,unique,notnull"`  // Le code dans l'URL (ex: "xYz123")
-	EncryptedKey string     `bun:"encrypted_key"`         // Clé du fichier chiffrée avec la ShareKey (pour les partages de fichiers)
-	PasswordHash string     `bun:"password_hash"`         // Optionnel : mot de passe
-	ExpiresAt    *time.Time `bun:"expires_at"`            // Optionnel : expiration
-	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
-	Views        int64      `bun:"views,default:0"`
-	SingleUse    bool       `bun:"single_use,default:false"`   // Link is invalidated after first download
-	UsedAt       *time.Time `bun:"used_at"`                    // Set when a single-use link is consumed
-	PermDownload bool       `bun:"perm_download,default:true"` // Can download files
-	PermCreate   bool       `bun:"perm_create,default:false"`  // Folder: can create files/dirs
-	PermDelete   bool       `bun:"perm_delete,default:false"`  // Folder: can delete files/dirs
-	PermMove     bool       `bun:"perm_move,default:false"`    // Folder: can move files/dirs
+	ID            int64      `bun:"id,pk,autoincrement"`
+	ResourceID    int64      `bun:"resource_id,notnull"`   // ID du fichier ou dossier
+	ResourceType  string     `bun:"resource_type,notnull"` // "file" | "folder" | "org_file"
+	Path          string     `bun:"path"`                  // Base path of the shared resource
+	OwnerID       string     `bun:"owner_id,notnull"`      // Créateur du lien
+	Token         string     `bun:"token,unique,notnull"`  // Le code dans l'URL (ex: "xYz123")
+	EncryptedKey  string     `bun:"encrypted_key"`         // Clé du fichier chiffrée avec la ShareKey (pour les partages de fichiers)
+	PasswordHash  string     `bun:"password_hash"`         // Optionnel : mot de passe
+	ExpiresAt     *time.Time `bun:"expires_at"`            // Optionnel : expiration
+	CreatedAt     time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	Views         int64      `bun:"views,default:0"`
+	DownloadCount int64      `bun:"download_count,default:0" json:"download_count"`
+	SingleUse     bool       `bun:"single_use,default:false"`       // Link is invalidated after first download
+	UsedAt        *time.Time `bun:"used_at"`                        // Set when a single-use link is consumed
+	PermDownload  bool       `bun:"perm_download,default:true"`     // Can download files
+	PermCreate    bool       `bun:"perm_create,default:false"`      // Folder: can create files/dirs
+	PermDelete    bool       `bun:"perm_delete,default:false"`      // Folder: can delete files/dirs
+	PermMove      bool       `bun:"perm_move,default:false"`        // Folder: can move files/dirs
+	OrgID         *int64     `bun:"org_id" json:"org_id,omitempty"` // set for org_file shares
 }
 
 // ShareItemOverride stores per-item access restrictions within a shared folder.
@@ -277,6 +279,208 @@ type P2PSignal struct {
 	Payload    map[string]any `bun:"payload,type:jsonb" json:"payload"`
 	CreatedAt  time.Time      `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	Consumed   bool           `bun:"consumed,notnull,default:false" json:"consumed"`
+}
+
+// Organization represents a group or professional entity with shared storage and members.
+type Organization struct {
+	bun.BaseModel `bun:"table:organizations,alias:org"`
+
+	ID               int64      `bun:"id,pk,autoincrement" json:"id"`
+	Name             string     `bun:"name,notnull" json:"name"`
+	Description      string     `bun:"description" json:"description"`
+	OwnerID          string     `bun:"owner_id,notnull" json:"owner_id"`
+	LogoPath         string     `bun:"logo_path,notnull,default:''" json:"logo_path,omitempty"`
+	StorageQuotaMB   int64      `bun:"storage_quota_mb,notnull,default:10240" json:"storage_quota_mb"` // 10 GB default
+	StorageUsedBytes int64      `bun:"storage_used_bytes,notnull,default:0" json:"storage_used_bytes"`
+	RequireMFA       bool       `bun:"require_mfa,default:false" json:"require_mfa"`
+	CreatedAt        time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt        time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	DeletedAt        *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
+}
+
+// OrgMember represents a user's membership in an organization.
+type OrgMember struct {
+	bun.BaseModel `bun:"table:org_members,alias:om"`
+
+	ID              int64     `bun:"id,pk,autoincrement" json:"id"`
+	OrgID           int64     `bun:"org_id,notnull" json:"org_id"`
+	UserID          string    `bun:"user_id,notnull" json:"user_id"`
+	Role            string    `bun:"role,notnull,default:'member'" json:"role"`            // owner | admin | member | viewer
+	EncryptedOrgKey string    `bun:"encrypted_org_key" json:"encrypted_org_key,omitempty"` // org key encrypted with this member's RSA public key
+	QuotaBytes      int64     `bun:"quota_bytes,default:0" json:"quota_bytes"`             // 0 = use org-level default
+	JoinedAt        time.Time `bun:"joined_at,nullzero,notnull,default:current_timestamp" json:"joined_at"`
+}
+
+// OrgInvitation is a token-based or direct invite to join an organization.
+type OrgInvitation struct {
+	bun.BaseModel `bun:"table:org_invitations,alias:oi"`
+
+	ID                     int64      `bun:"id,pk,autoincrement" json:"id"`
+	OrgID                  int64      `bun:"org_id,notnull" json:"org_id"`
+	InvitedBy              string     `bun:"invited_by,notnull" json:"invited_by"`
+	Token                  string     `bun:"token,unique,notnull" json:"token"`
+	TargetUserID           *string    `bun:"target_user_id" json:"target_user_id,omitempty"`       // set for direct invites
+	EncryptedOrgKey        string     `bun:"encrypted_org_key" json:"encrypted_org_key,omitempty"` // pre-encrypted for direct invites
+	NotifiedEmailEncrypted string     `bun:"notified_email_encrypted" json:"-"`                    // AES-256-GCM encrypted recipient email
+	Role                   string     `bun:"role,notnull,default:'member'" json:"role"`
+	MaxUses                int        `bun:"max_uses,notnull,default:0" json:"max_uses"` // 0 = unlimited
+	Uses                   int        `bun:"uses,notnull,default:0" json:"uses"`
+	ExpiresAt              *time.Time `bun:"expires_at" json:"expires_at,omitempty"`
+	Status                 string     `bun:"status,notnull,default:'active'" json:"status"` // active | revoked
+	CreatedAt              time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// OrgTag is a colored label that can be applied to org files and folders.
+type OrgTag struct {
+	bun.BaseModel `bun:"table:org_tags,alias:ot"`
+
+	ID            int64     `bun:"id,pk,autoincrement" json:"id"`
+	OrgID         int64     `bun:"org_id,notnull" json:"org_id"`
+	EncryptedName string    `bun:"encrypted_name,notnull" json:"encrypted_name"`
+	Color         string    `bun:"color,notnull" json:"color"`
+	CreatedAt     time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// OrgFavorite is a pinned file or folder for a specific org member.
+type OrgFavorite struct {
+	bun.BaseModel `bun:"table:org_favorites,alias:ofav"`
+
+	ID        int64     `bun:"id,pk,autoincrement" json:"id"`
+	OrgID     int64     `bun:"org_id,notnull" json:"org_id"`
+	UserID    string    `bun:"user_id,notnull" json:"user_id"`
+	ItemID    int64     `bun:"item_id,notnull" json:"item_id"`
+	ItemType  string    `bun:"item_type,notnull" json:"item_type"` // "file" | "folder"
+	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// OrgFolder is a directory inside an organization's shared storage.
+type OrgFolder struct {
+	bun.BaseModel `bun:"table:org_folders,alias:of"`
+
+	ID           int64      `bun:"id,pk,autoincrement" json:"id"`
+	OrgID        int64      `bun:"org_id,notnull" json:"org_id"`
+	Name         string     `bun:"name,notnull" json:"name"`
+	Path         string     `bun:"path,notnull" json:"path"`                           // full virtual path, e.g. "/documents/contracts"
+	ParentPath   string     `bun:"parent_path,notnull,default:'/'" json:"parent_path"` // path.Dir(path)
+	CreatedBy    string     `bun:"created_by,notnull" json:"created_by"`               // user_id
+	EncryptedKey string     `bun:"encrypted_key" json:"encrypted_key,omitempty"`       // folder key encrypted with org_key
+	TagIDs       []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
+	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt    time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	DeletedAt    *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
+	DeletedBy    string     `bun:"deleted_by,notnull,default:''" json:"deleted_by,omitempty"`
+	DeleteRoot   bool       `bun:"delete_root,notnull,default:false" json:"-"`
+	TotalSize    int64      `bun:"-" json:"total_size,omitempty"` // computed on list, not stored
+}
+
+// OrgFile is a file inside an organization's shared storage.
+type OrgFile struct {
+	bun.BaseModel `bun:"table:org_files,alias:ofile"`
+
+	ID           int64      `bun:"id,pk,autoincrement" json:"id"`
+	OrgID        int64      `bun:"org_id,notnull" json:"org_id"`
+	Name         string     `bun:"name,notnull" json:"name"`
+	Path         string     `bun:"path,notnull" json:"path"`                           // full path including name, e.g. "/documents/report.pdf"
+	FolderPath   string     `bun:"folder_path,notnull,default:'/'" json:"folder_path"` // path.Dir(path)
+	Size         int64      `bun:"size,notnull,default:0" json:"size"`
+	MimeType     string     `bun:"mime_type,notnull,default:''" json:"mime_type"`
+	UploadedBy   string     `bun:"uploaded_by,notnull" json:"uploaded_by"` // user_id
+	EncryptedKey string     `bun:"encrypted_key" json:"encrypted_key,omitempty"`
+	TagIDs       []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
+	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt    time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	DeletedAt    *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
+	DeletedBy    string     `bun:"deleted_by,notnull,default:''" json:"deleted_by,omitempty"`
+	DeleteRoot   bool       `bun:"delete_root,notnull,default:false" json:"-"`
+}
+
+// OrgFolderPermission stores per-user access overrides for a folder path within an org.
+// Permissions are inherited: the most specific (deepest) path wins.
+// A "none" level blocks access regardless of the member's role.
+type OrgFolderPermission struct {
+	bun.BaseModel `bun:"table:org_folder_permissions,alias:ofp"`
+
+	ID           int64     `bun:"id,pk,autoincrement" json:"id"`
+	OrgID        int64     `bun:"org_id,notnull" json:"org_id"`
+	UserID       string    `bun:"user_id,notnull" json:"user_id"`
+	FolderPath   string    `bun:"folder_path,notnull,default:'/'" json:"folder_path"` // "/" = org root
+	Level        string    `bun:"level,notnull" json:"level"`                         // read | write | manage | none
+	PermCreate   bool      `bun:"perm_create,notnull,default:false" json:"perm_create"`
+	PermDelete   bool      `bun:"perm_delete,notnull,default:false" json:"perm_delete"`
+	PermDownload bool      `bun:"perm_download,notnull,default:true" json:"perm_download"`
+	PermMove     bool      `bun:"perm_move,notnull,default:false" json:"perm_move"`
+	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// OrgGroup is a named collection of org members used for bulk permission assignment.
+// source = "internal" for manually managed groups; "ldap" for directory-synced groups.
+type OrgGroup struct {
+	bun.BaseModel `bun:"table:org_groups,alias:og"`
+
+	ID          int64  `bun:"id,pk,autoincrement" json:"id"`
+	OrgID       int64  `bun:"org_id,notnull" json:"org_id"`
+	Name        string `bun:"name,notnull" json:"name"`
+	Description string `bun:"description" json:"description"`
+	CreatedBy   string `bun:"created_by,notnull" json:"created_by"`
+
+	// LDAP fields — populated only when source = "ldap"
+	Source       string     `bun:"source,notnull,default:'internal'" json:"source"` // "internal" | "ldap"
+	LdapDN       string     `bun:"ldap_dn" json:"ldap_dn,omitempty"`
+	LdapGUID     string     `bun:"ldap_guid" json:"ldap_guid,omitempty"`
+	LastSyncedAt *time.Time `bun:"last_synced_at" json:"last_synced_at,omitempty"`
+
+	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
+// OrgGroupMember records a user's membership in an org group.
+// AddedBy is empty when the membership originates from an LDAP sync.
+type OrgGroupMember struct {
+	bun.BaseModel `bun:"table:org_group_members,alias:ogm"`
+
+	ID       int64     `bun:"id,pk,autoincrement" json:"id"`
+	GroupID  int64     `bun:"group_id,notnull" json:"group_id"`
+	UserID   string    `bun:"user_id,notnull" json:"user_id"`
+	Role     string    `bun:"role,notnull,default:'member'" json:"role"` // admin | member
+	AddedBy  string    `bun:"added_by" json:"added_by,omitempty"`
+	JoinedAt time.Time `bun:"joined_at,nullzero,notnull,default:current_timestamp" json:"joined_at"`
+}
+
+// OrgGroupPermission stores folder-level access overrides for a group.
+// Resolution rule: direct user overrides beat group overrides; among multiple
+// group overrides the most permissive wins ("none" at group level never blocks).
+type OrgGroupPermission struct {
+	bun.BaseModel `bun:"table:org_group_permissions,alias:ogp"`
+
+	ID           int64  `bun:"id,pk,autoincrement" json:"id"`
+	OrgID        int64  `bun:"org_id,notnull" json:"org_id"`
+	GroupID      int64  `bun:"group_id,notnull" json:"group_id"`
+	FolderPath   string `bun:"folder_path,notnull,default:'/'" json:"folder_path"`
+	Level        string `bun:"level,notnull" json:"level"` // read | write | manage | none
+	PermCreate   bool   `bun:"perm_create,notnull,default:false" json:"perm_create"`
+	PermDelete   bool   `bun:"perm_delete,notnull,default:false" json:"perm_delete"`
+	PermDownload bool   `bun:"perm_download,notnull,default:true" json:"perm_download"`
+	PermMove     bool   `bun:"perm_move,notnull,default:false" json:"perm_move"`
+	// RestrictToGroups, when true, makes this path inaccessible to org members
+	// who are not in any group with an explicit permission on this path.
+	// Owners and admins are never affected.
+	RestrictToGroups bool      `bun:"restrict_to_groups,notnull,default:false" json:"restrict_to_groups"`
+	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// OrgAuditLog records security-relevant events within an organization.
+// The log is append-only — records are never updated or deleted.
+type OrgAuditLog struct {
+	bun.BaseModel `bun:"table:org_audit_logs,alias:oal"`
+
+	ID         int64     `bun:"id,pk,autoincrement" json:"id"`
+	OrgID      int64     `bun:"org_id,notnull" json:"org_id"`
+	ActorID    string    `bun:"actor_id,notnull" json:"actor_id"`
+	Action     string    `bun:"action,notnull" json:"action"` // member_joined | member_removed | role_changed | file_uploaded | file_downloaded | file_deleted | permission_set | permission_removed | invitation_created | invitation_revoked | key_rotated | key_provisioned
+	TargetID   string    `bun:"target_id,notnull,default:''" json:"target_id,omitempty"`
+	TargetType string    `bun:"target_type,notnull,default:''" json:"target_type,omitempty"`
+	Detail     string    `bun:"detail,notnull,default:''" json:"detail,omitempty"`
+	CreatedAt  time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 // EmitRealtimeEvent inserts an event into the realtime_events table and

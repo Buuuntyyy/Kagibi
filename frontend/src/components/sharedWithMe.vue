@@ -87,12 +87,14 @@ import api from '../api';
 import ContextMenu from './file/ContextMenu.vue';
 import { useFileStore } from '../stores/files';
 import { useAuthStore } from '../stores/auth';
+import { useUIStore } from '../stores/ui';
 import { decryptChunkedFileWorker } from '../utils/crypto';
 import { zipSync } from 'fflate';
 import sodium from 'libsodium-wrappers-sumo';
 
 const fileStore = useFileStore();
 const authStore = useAuthStore();
+const uiStore = useUIStore();
 const { t } = useI18n();
 
 const isZipping = ref(false);
@@ -281,7 +283,7 @@ const handleContextAction = async (action) => {
         }
     }
         else if (action === 'delete') {
-          if (confirm(t('shared.removeShareConfirm'))) {
+          if (await uiStore.showConfirm({ title: t('shared.removeShare') || 'Supprimer', message: t('shared.removeShareConfirm'), confirmLabel: 'Supprimer' })) {
              try {
                 let url = `/shares/with-me/${item.id}`;
                 // Determine type query param
@@ -297,7 +299,7 @@ const handleContextAction = async (action) => {
                 await fetchSharedWithMe();
              } catch (e) {
                  console.error(e);
-               alert(t('shared.deleteError'));
+               uiStore.showError(t('shared.deleteError'));
              }
          }
     }
@@ -408,7 +410,7 @@ const downloadSharedFile = async (item) => {
 
     } catch (e) {
         console.error("Download error:", e);
-    alert(`${t('shared.downloadDecryptError')}: ${e.message}`);
+    uiStore.showError(`${t('shared.downloadDecryptError')}: ${e.message}`);
     }
 }
 
@@ -420,7 +422,7 @@ const downloadFolderAsZip = async (folder) => {
         await authStore.ensureRSAKeys(authStore.masterKey);
     }
     if (!authStore.privateKey) {
-        alert(t('shared.privateKeyUnavailable'));
+        uiStore.showError(t('shared.privateKeyUnavailable'));
         return;
     }
 
@@ -436,7 +438,7 @@ const downloadFolderAsZip = async (folder) => {
         const rootEncryptedKey = res.data.root_encrypted_key;
 
         if (files.length === 0) {
-            alert(t('shared.emptyFolder'));
+            uiStore.showWarning(t('shared.emptyFolder'));
             return;
         }
 
@@ -485,7 +487,7 @@ const downloadFolderAsZip = async (folder) => {
         }
 
         if (Object.keys(zipData).length === 0) {
-            alert(t('shared.zipNoFiles'));
+            uiStore.showWarning(t('shared.zipNoFiles'));
             return;
         }
 
@@ -501,7 +503,7 @@ const downloadFolderAsZip = async (folder) => {
         setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch (e) {
         console.error('ZIP download error:', e);
-        alert(`${t('shared.downloadDecryptError')}: ${e.message}`);
+        uiStore.showError(`${t('shared.downloadDecryptError')}: ${e.message}`);
     } finally {
         isZipping.value = false;
         zipProgress.value = 0;

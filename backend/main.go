@@ -12,6 +12,7 @@ import (
 	"kagibi/backend/handlers/folders"
 	"kagibi/backend/handlers/friends"
 	"kagibi/backend/handlers/keys"
+	orghandlers "kagibi/backend/handlers/organizations"
 	p2phandlers "kagibi/backend/handlers/p2p"
 	"kagibi/backend/handlers/security"
 	"kagibi/backend/handlers/shares"
@@ -67,6 +68,7 @@ func main() {
 	workers.StartAccountCleanupWorker(db) // RGPD Article 17
 
 	friendHandler := friends.NewFriendHandler(db, wshandler.GlobalHub.IsConnected)
+	orgHandler := orghandlers.NewOrgHandler(db, redisClient)
 	setupPresenceHooks(db)
 
 	metricsServer := monitoring.NewServer(9090)
@@ -77,7 +79,7 @@ func main() {
 	}
 
 	router := setupRouter(redisClient)
-	registerRoutes(router, db, redisClient, provider, friendHandler)
+	registerRoutes(router, db, redisClient, provider, friendHandler, orgHandler)
 	startServerWithGracefulShutdown(router, metricsServer, redisClient)
 }
 
@@ -168,7 +170,7 @@ func setupRouter(redisClient *redis.Client) *gin.Engine {
 	return router
 }
 
-func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, provider authprovider.AuthProvider, friendHandler *friends.FriendHandler) {
+func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, provider authprovider.AuthProvider, friendHandler *friends.FriendHandler, orgHandler *orghandlers.OrgHandler) {
 	api := router.Group("/api/v1")
 
 	// Public auth routes (no JWT required)
@@ -178,6 +180,11 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	authGroup.POST("/refresh", auth.LocalRefreshHandler(provider, redisClient))
 	authGroup.POST("/recovery/init", func(c *gin.Context) { auth.RecoveryInitHandler(c, db) })
 	authGroup.POST("/recovery/finish", func(c *gin.Context) { auth.RecoveryFinishHandler(c, db, provider, redisClient) })
+
+	// Public org-file share routes (no auth required)
+	publicOrgShareRoutes := api.Group("/public/org-share")
+	publicOrgShareRoutes.GET("/:token", func(c *gin.Context) { orghandlers.GetOrgShare(c, db) })
+	publicOrgShareRoutes.GET("/:token/download", func(c *gin.Context) { orghandlers.DownloadOrgShare(c, db) })
 
 	// Public share routes
 	publicShareRoutes := api.Group("/public/share")
@@ -216,6 +223,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	registerFriendRoutes(protected, friendHandler)
 	registerShareRoutes(protected, db)
 	registerSecurityRoutes(protected)
+	registerOrganizationRoutes(api, protected, orgHandler)
 	registerBillingRoutes(api, protected, authMW, db)
 	registerP2PRoutes(protected, db)
 	registerP2PGuestRoutes(api, db, authMW)
@@ -345,6 +353,120 @@ func registerSecurityRoutes(g *gin.RouterGroup) {
 	securityG := g.Group("/security")
 	securityG.POST("/report", func(c *gin.Context) { security.ReportSecurityEvent(c) })
 	securityG.GET("/events", func(c *gin.Context) { security.GetSecurityEvents(c) })
+}
+
+func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHandler) {
+	orgsG := g.Group("/orgs")
+
+	// Organization CRUD
+	orgsG.POST("", h.CreateOrg)
+	orgsG.GET("", h.ListOrgs)
+	orgsG.GET("/:orgID", h.GetOrg)
+	orgsG.PATCH("/:orgID", h.UpdateOrg)
+	orgsG.DELETE("/:orgID", h.DeleteOrg)
+
+	// Member management
+	orgsG.GET("/:orgID/members", h.ListMembers)
+	orgsG.PATCH("/:orgID/members/:memberID", h.UpdateMemberRole)
+	orgsG.DELETE("/:orgID/members/:memberID", h.RemoveMember)
+	orgsG.PATCH("/:orgID/members/:memberID/key", h.SetMemberKey)
+
+	// Invitations
+	orgsG.POST("/:orgID/invitations", h.CreateInvitation)
+	orgsG.GET("/:orgID/invitations", h.ListInvitations)
+	orgsG.DELETE("/:orgID/invitations/:invID", h.RevokeInvitation)
+
+	// Shared file system — listing and folders
+	orgsG.GET("/:orgID/fs/list/*path", h.ListOrgItems)
+	orgsG.POST("/:orgID/fs/folder", h.CreateOrgFolder)
+	orgsG.DELETE("/:orgID/fs/folder/:folderID", h.DeleteOrgFolder)
+
+	// Shared file system — files
+	orgsG.GET("/:orgID/fs/file/:fileID/download", h.DownloadOrgFile)
+	orgsG.GET("/:orgID/fs/file/:fileID/key", h.GetOrgFileKey)
+	orgsG.DELETE("/:orgID/fs/file/:fileID", h.DeleteOrgFile)
+	orgsG.POST("/:orgID/fs/file/:fileID/share", h.CreateOrgFileShare)
+	orgsG.PATCH("/:orgID/fs/file/:fileID/rename", h.RenameOrgFile)
+	orgsG.PATCH("/:orgID/fs/folder/:folderID/rename", h.RenameOrgFolder)
+	orgsG.PATCH("/:orgID/fs/file/:fileID/move", h.MoveOrgFile)
+	orgsG.PATCH("/:orgID/fs/folder/:folderID/move", h.MoveOrgFolder)
+
+	// Shared file system — multipart upload
+	orgsG.POST("/:orgID/fs/multipart/initiate", h.InitiateOrgMultipart)
+	orgsG.POST("/:orgID/fs/multipart/complete", h.CompleteOrgMultipart)
+	orgsG.POST("/:orgID/fs/multipart/abort", h.AbortOrgMultipart)
+
+	// Folder permission overrides
+	orgsG.GET("/:orgID/permissions", h.ListPermissions)
+	orgsG.PUT("/:orgID/permissions", h.SetPermission)
+	orgsG.DELETE("/:orgID/permissions", h.DeletePermission)
+	orgsG.GET("/:orgID/permissions/me", h.GetMyPermission)
+	orgsG.GET("/:orgID/permissions/folder", h.GetFolderAccess)
+
+	// Groups (list/read: all members; create/update/delete: admin+owner)
+	orgsG.GET("/:orgID/groups", h.ListGroups)
+	orgsG.POST("/:orgID/groups", h.CreateGroup)
+	orgsG.GET("/:orgID/groups/me", h.ListMyGroups)
+	orgsG.GET("/:orgID/groups/:groupID", h.GetGroup)
+	orgsG.PATCH("/:orgID/groups/:groupID", h.UpdateGroup)
+	orgsG.DELETE("/:orgID/groups/:groupID", h.DeleteGroup)
+	orgsG.GET("/:orgID/groups/:groupID/members", h.ListGroupMembers)
+	orgsG.POST("/:orgID/groups/:groupID/members", h.AddGroupMember)
+	orgsG.DELETE("/:orgID/groups/:groupID/members/:memberID", h.RemoveGroupMember)
+	orgsG.PATCH("/:orgID/groups/:groupID/members/:memberID", h.SetGroupMemberRole)
+	orgsG.GET("/:orgID/groups/:groupID/permissions", h.ListGroupPermissions)
+	orgsG.PUT("/:orgID/groups/:groupID/permissions", h.SetGroupPermission)
+	orgsG.DELETE("/:orgID/groups/:groupID/permissions", h.DeleteGroupPermission)
+
+	// Audit log (admin/owner only)
+	orgsG.GET("/:orgID/audit", h.ListAuditLog)
+	orgsG.GET("/:orgID/audit/summary", h.AuditSummary)
+	orgsG.GET("/:orgID/audit/export", h.ExportAuditLog)
+	orgsG.DELETE("/:orgID/audit", h.DeleteAuditLog)
+
+	// Custom logo
+	orgsG.PUT("/:orgID/logo", h.UploadOrgLogo)
+	orgsG.DELETE("/:orgID/logo", h.DeleteOrgLogo)
+
+	// Key management
+	orgsG.GET("/:orgID/fs/all-keys", h.GetOrgAllFileKeys)
+	orgsG.POST("/:orgID/rotate-key", h.RotateOrgKey)
+
+	// Dashboard stats
+	orgsG.GET("/:orgID/stats", h.GetOrgStats)
+
+	// Tags
+	orgsG.GET("/:orgID/tags", h.ListOrgTags)
+	orgsG.POST("/:orgID/tags", h.CreateOrgTag)
+	orgsG.PATCH("/:orgID/tags/:tagID", h.UpdateOrgTag)
+	orgsG.DELETE("/:orgID/tags/:tagID", h.DeleteOrgTag)
+	orgsG.PUT("/:orgID/fs/file/:fileID/tags", h.SetFileTags)
+	orgsG.PUT("/:orgID/fs/folder/:folderID/tags", h.SetFolderTags)
+
+	// Activity feed (all members)
+	orgsG.GET("/:orgID/activity", h.GetOrgActivity)
+
+	// Favorites / pinned items (per-member, all members)
+	orgsG.GET("/:orgID/favorites", h.ListFavorites)
+	orgsG.POST("/:orgID/favorites", h.AddFavorite)
+	orgsG.DELETE("/:orgID/favorites/:itemType/:itemID", h.RemoveFavorite)
+
+	// Trash (all members can list/restore; admin/owner can permanent-delete / empty)
+	orgsG.GET("/:orgID/trash", h.ListTrash)
+	orgsG.POST("/:orgID/trash/:itemType/:itemID/restore", h.RestoreItem)
+	orgsG.DELETE("/:orgID/trash/:itemType/:itemID", h.PermanentDeleteItem)
+	orgsG.DELETE("/:orgID/trash", h.EmptyTrash)
+
+	// Org share links management
+	orgsG.GET("/:orgID/shares", h.ListOrgShares)
+	orgsG.DELETE("/:orgID/shares/:shareID", h.RevokeOrgShare)
+
+	// Client-side search index (encrypted names, client decrypts + filters)
+	orgsG.GET("/:orgID/fs/all-items", h.GetAllOrgItems)
+
+	// Token-based join routes — GET is public (unauthenticated preview), POST requires auth
+	public.GET("/org-invitations/:token", h.GetInvitation)
+	g.POST("/org-invitations/:token/accept", h.AcceptInvitation)
 }
 
 func p2pSignalHandler(db *bun.DB) gin.HandlerFunc {

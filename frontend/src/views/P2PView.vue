@@ -55,6 +55,7 @@
                             <div class="friends-grid">
                                 <div v-if="onlineFriends.length === 0" class="no-friends">
                                     {{ t('p2p.noOnlineFriends') }}
+                                    <router-link to="/dashboard/friends" class="friends-page-link">{{ t('friends.myFriends') }} →</router-link>
                                 </div>
                                 <template v-else>
                                     <div
@@ -199,6 +200,7 @@ import { useI18n } from 'vue-i18n'
 import { useFriendStore } from '../stores/friends'
 import { useAuthStore } from '../stores/auth'
 import { useP2PStore } from '../stores/p2p'
+import { useUIStore } from '../stores/ui'
 import { authClient } from '../auth-client'
 import { API_BASE_URL } from '../api'
 import LeftBar from '../components/bar/leftBar.vue'
@@ -210,6 +212,7 @@ const route = useRoute()
 const friendStore = useFriendStore()
 const authStore = useAuthStore()
 const p2pStore = useP2PStore()
+const uiStore = useUIStore()
 
 const selectedFriend = ref(null)
 const selectedFile = ref(null)
@@ -234,8 +237,30 @@ watch(() => p2pStore.inviteReady, (ready) => {
   if (ready && showInviteDialog.value) showInviteDialog.value = false
 })
 
+function resetWizard() {
+  selectedFriend.value    = null
+  selectedFile.value      = null
+  inviteMode.value        = false
+  showInviteDialog.value  = false
+  inviteTransferId.value  = ''
+  directLegalConsent.value = false
+}
+
+watch(() => p2pStore.activeTransfer, (current, previous) => {
+  if (!current && previous?.type === 'send' && previous?.status === 'Done') {
+    resetWizard()
+  }
+})
+
 onMounted(async () => {
-    friendStore.fetchFriends()
+    await friendStore.fetchFriends()
+
+    const friendId = route.query.friendId
+    if (friendId) {
+      const friend = friendStore.acceptedFriends.find(f => String(f.id) === String(friendId))
+      if (friend) selectedFriend.value = friend
+    }
+
     const token = route.query.invite
     if (token) {
       await loadInvite(token)
@@ -328,11 +353,9 @@ const startTransfer = async () => {
     if (!canSend.value) return
     try {
         await p2pStore.startTransfer(selectedFriend.value, selectedFile.value)
-        // Reset after send? Or keep?
-        // Let's keep for now so user sees feedback or can send again
     } catch (e) {
         console.error("Transfer failed", e)
-        alert("Erreur: " + e.message)
+        uiStore.showError("Erreur: " + e.message)
     }
 }
 </script>
@@ -619,6 +642,20 @@ const startTransfer = async () => {
 @media (max-width: 768px) {
   .dashboard-container {
     padding-bottom: 64px; /* space for bottom nav */
+    flex-direction: column;
+  }
+
+  .main-content {
+    overflow-y: auto;
+    border-radius: 0;
+  }
+
+  .p2p-page {
+    min-height: unset;
+  }
+
+  .p2p-container {
+    overflow-y: unset;
   }
 }
 
@@ -643,6 +680,18 @@ const startTransfer = async () => {
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.5rem;
+}
+
+.friends-page-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+.friends-page-link:hover {
+  text-decoration: underline;
 }
 
 .invite-option-chip {

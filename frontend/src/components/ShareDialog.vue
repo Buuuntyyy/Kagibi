@@ -45,6 +45,7 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFileStore } from '../stores/files'
+import { useUIStore } from '../stores/ui'
 
 const { t } = useI18n()
 
@@ -56,6 +57,7 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const fileStore = useFileStore()
+const uiStore = useUIStore()
 const expiresAt = ref('')
 const generatedLink = ref('')
 const loading = ref(false)
@@ -95,7 +97,7 @@ const generateLink = async () => {
     
   } catch (error) {
     console.error("Failed to generate link", error)
-    alert("Erreur lors de la génération du lien")
+    uiStore.showError("Erreur lors de la génération du lien")
   } finally {
     loading.value = false
   }

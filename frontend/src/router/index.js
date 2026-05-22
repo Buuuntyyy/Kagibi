@@ -6,10 +6,14 @@ import SharedElements from '../components/sharedElements.vue'
 import FileBrowser from '../components/FileBrowser.vue'
 import PublicShare from '../views/PublicShare.vue'
 import PublicBrowse from '../views/PublicBrowse.vue'
+import OrgPublicShare from '../views/OrgPublicShare.vue'
 import TermsOfService from '../views/TermsOfService.vue'
 import PrivacyPolicy from '../views/PrivacyPolicy.vue'
 import Credits from '../views/Credits.vue'
 import FriendsView from '../views/FriendsView.vue'
+import OrganizationsView from '../views/OrganizationsView.vue'
+import OrgDetailView from '../views/OrgDetailView.vue'
+import JoinView from '../views/JoinView.vue'
 import P2PView from '../views/P2PView.vue'
 import HomeView from '../views/HomeView.vue'
 import UsageDashboard from '../components/usage/UsageDashboard.vue'
@@ -100,6 +104,16 @@ const routes = [
         path: 'friends',
         name: 'Friends',
         component: FriendsView
+      },
+      {
+        path: 'organizations',
+        name: 'Organizations',
+        component: OrganizationsView
+      },
+      {
+        path: 'organizations/:orgID',
+        name: 'OrgDetail',
+        component: OrgDetailView
       }
     ]
   },
@@ -120,6 +134,16 @@ const routes = [
     name: 'Account',
     component: Account,
     meta: { requiresAuth: true },
+  },
+  {
+    path: '/join/:token',
+    name: 'JoinOrg',
+    component: JoinView,
+  },
+  {
+    path: '/s/org/:token',
+    name: 'OrgPublicShare',
+    component: OrgPublicShare,
   },
   {
     path: '/s/:token',
@@ -152,7 +176,7 @@ router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
 
   // Skip auth check for public routes to avoid 401 errors for non-authenticated users
-  if (to.name === 'PublicShare' || to.name === 'PublicBrowse') {
+  if (to.name === 'PublicShare' || to.name === 'PublicBrowse' || to.name === 'OrgPublicShare') {
     next()
     return
   }

@@ -208,6 +208,12 @@ func DownloadSharedFileHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	monitoring.FileDownloadsTotal.Inc()
+	go func() {
+		_, _ = db.NewUpdate().Model((*pkg.ShareLink)(nil)).
+			Set("download_count = download_count + 1").
+			Where("id = ?", shareLink.ID).
+			Exec(context.Background())
+	}()
 
 	if err := streamFileFromS3(c, shareLink.OwnerID, file); err != nil {
 		log.Printf("Error streaming file: %v", err)
@@ -390,7 +396,9 @@ func saveShareFileKeys(ctx context.Context, db *bun.DB, shareID int64, keys map[
 
 func getValidShareLink(ctx context.Context, db *bun.DB, token string) (*pkg.ShareLink, error) {
 	var shareLink pkg.ShareLink
-	err := db.NewSelect().Model(&shareLink).Where("token = ?", token).Scan(ctx)
+	err := db.NewSelect().Model(&shareLink).
+		Where("token = ? AND resource_type IN ('file', 'folder')", token).
+		Scan(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("Link not found")
 	}

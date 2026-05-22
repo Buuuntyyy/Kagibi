@@ -56,6 +56,7 @@ import { useI18n } from 'vue-i18n'
 import api from '../../api'
 import { useAuthStore } from '../../stores/auth'
 import { useFileStore } from '../../stores/files'
+import { useUIStore } from '../../stores/ui'
 import sodium from 'libsodium-wrappers-sumo'
 import { decryptChunkedFileWorker } from '../../utils/crypto'
 
@@ -63,6 +64,7 @@ const router = useRouter()
 const { t } = useI18n()
 const authStore = useAuthStore()
 const fileStore = useFileStore()
+const uiStore = useUIStore()
 const isOpen = ref(true)
 const loading = ref(true)
 const sharedItems = ref([])
@@ -128,13 +130,13 @@ const downloadSharedFile = async (item) => {
         // Root Share (Direct)
         if (!item.encrypted_key) {
              console.error("Clé de chiffrement manquante.");
-             alert(t('shared.openFileMissingKey'));
+             uiStore.showError(t('shared.openFileMissingKey'));
              return;
         }
         
         if (!authStore.privateKey) {
              console.error("Clé privée non disponible.");
-             alert(t('shared.privateKeyUnavailable'));
+             uiStore.showError(t('shared.privateKeyUnavailable'));
              return;
         }
 
@@ -174,7 +176,7 @@ const downloadSharedFile = async (item) => {
 
     } catch (e) {
         console.error("Download error:", e);
-      alert(`${t('shared.downloadDecryptError')}: ${e.message}`);
+      uiStore.showError(`${t('shared.downloadDecryptError')}: ${e.message}`);
     }
 }
 
