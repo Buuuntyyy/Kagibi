@@ -16,16 +16,16 @@ import (
 
 // OrgShareItem is the DTO returned by ListOrgShares.
 type OrgShareItem struct {
-	ID         int64      `json:"id"`
-	FileID     int64      `json:"file_id"`
-	FileName   string     `json:"file_name"`
-	FilePath   string     `json:"file_path"`
-	OwnerID    string     `json:"owner_id"`
-	CreatedAt  time.Time  `json:"created_at"`
-	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
-	Views      int64      `json:"views"`
-	SingleUse  bool       `json:"single_use"`
-	Token      string     `json:"token"`
+	ID        int64      `json:"id"`
+	FileID    int64      `json:"file_id"`
+	FileName  string     `json:"file_name"`
+	FilePath  string     `json:"file_path"`
+	OwnerID   string     `json:"owner_id"`
+	CreatedAt time.Time  `json:"created_at"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Views     int64      `json:"views"`
+	SingleUse bool       `json:"single_use"`
+	Token     string     `json:"token"`
 }
 
 // ListOrgShares returns all active share links for this org's files.

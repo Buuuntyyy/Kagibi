@@ -44,7 +44,7 @@ type CallerCaps struct {
 	AdminGroupIDs map[int64]bool
 }
 
-func (c CallerCaps) IsOrgAdmin() bool  { return canManage(c.OrgRole) }
+func (c CallerCaps) IsOrgAdmin() bool   { return canManage(c.OrgRole) }
 func (c CallerCaps) IsGroupAdmin() bool { return len(c.AdminGroupIDs) > 0 }
 
 // resolveCallerCaps fetches the caller's org role and the set of group IDs where they hold

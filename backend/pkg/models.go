@@ -179,25 +179,25 @@ type Tag struct {
 type ShareLink struct {
 	bun.BaseModel `bun:"table:share_links,alias:sl"`
 
-	ID           int64      `bun:"id,pk,autoincrement"`
-	ResourceID   int64      `bun:"resource_id,notnull"`   // ID du fichier ou dossier
-	ResourceType string     `bun:"resource_type,notnull"` // "file" | "folder" | "org_file"
-	Path         string     `bun:"path"`                  // Base path of the shared resource
-	OwnerID      string     `bun:"owner_id,notnull"`      // Créateur du lien
-	Token        string     `bun:"token,unique,notnull"`  // Le code dans l'URL (ex: "xYz123")
-	EncryptedKey string     `bun:"encrypted_key"`         // Clé du fichier chiffrée avec la ShareKey (pour les partages de fichiers)
-	PasswordHash string     `bun:"password_hash"`         // Optionnel : mot de passe
-	ExpiresAt    *time.Time `bun:"expires_at"`            // Optionnel : expiration
-	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	ID            int64      `bun:"id,pk,autoincrement"`
+	ResourceID    int64      `bun:"resource_id,notnull"`   // ID du fichier ou dossier
+	ResourceType  string     `bun:"resource_type,notnull"` // "file" | "folder" | "org_file"
+	Path          string     `bun:"path"`                  // Base path of the shared resource
+	OwnerID       string     `bun:"owner_id,notnull"`      // Créateur du lien
+	Token         string     `bun:"token,unique,notnull"`  // Le code dans l'URL (ex: "xYz123")
+	EncryptedKey  string     `bun:"encrypted_key"`         // Clé du fichier chiffrée avec la ShareKey (pour les partages de fichiers)
+	PasswordHash  string     `bun:"password_hash"`         // Optionnel : mot de passe
+	ExpiresAt     *time.Time `bun:"expires_at"`            // Optionnel : expiration
+	CreatedAt     time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	Views         int64      `bun:"views,default:0"`
 	DownloadCount int64      `bun:"download_count,default:0" json:"download_count"`
-	SingleUse    bool       `bun:"single_use,default:false"`   // Link is invalidated after first download
-	UsedAt       *time.Time `bun:"used_at"`                    // Set when a single-use link is consumed
-	PermDownload bool       `bun:"perm_download,default:true"` // Can download files
-	PermCreate   bool       `bun:"perm_create,default:false"`  // Folder: can create files/dirs
-	PermDelete   bool       `bun:"perm_delete,default:false"`  // Folder: can delete files/dirs
-	PermMove     bool       `bun:"perm_move,default:false"`    // Folder: can move files/dirs
-	OrgID        *int64     `bun:"org_id" json:"org_id,omitempty"` // set for org_file shares
+	SingleUse     bool       `bun:"single_use,default:false"`       // Link is invalidated after first download
+	UsedAt        *time.Time `bun:"used_at"`                        // Set when a single-use link is consumed
+	PermDownload  bool       `bun:"perm_download,default:true"`     // Can download files
+	PermCreate    bool       `bun:"perm_create,default:false"`      // Folder: can create files/dirs
+	PermDelete    bool       `bun:"perm_delete,default:false"`      // Folder: can delete files/dirs
+	PermMove      bool       `bun:"perm_move,default:false"`        // Folder: can move files/dirs
+	OrgID         *int64     `bun:"org_id" json:"org_id,omitempty"` // set for org_file shares
 }
 
 // ShareItemOverride stores per-item access restrictions within a shared folder.
@@ -305,9 +305,9 @@ type OrgMember struct {
 	ID              int64     `bun:"id,pk,autoincrement" json:"id"`
 	OrgID           int64     `bun:"org_id,notnull" json:"org_id"`
 	UserID          string    `bun:"user_id,notnull" json:"user_id"`
-	Role            string    `bun:"role,notnull,default:'member'" json:"role"` // owner | admin | member | viewer
+	Role            string    `bun:"role,notnull,default:'member'" json:"role"`            // owner | admin | member | viewer
 	EncryptedOrgKey string    `bun:"encrypted_org_key" json:"encrypted_org_key,omitempty"` // org key encrypted with this member's RSA public key
-	QuotaBytes      int64     `bun:"quota_bytes,default:0" json:"quota_bytes"` // 0 = use org-level default
+	QuotaBytes      int64     `bun:"quota_bytes,default:0" json:"quota_bytes"`             // 0 = use org-level default
 	JoinedAt        time.Time `bun:"joined_at,nullzero,notnull,default:current_timestamp" json:"joined_at"`
 }
 
@@ -360,10 +360,10 @@ type OrgFolder struct {
 	ID           int64      `bun:"id,pk,autoincrement" json:"id"`
 	OrgID        int64      `bun:"org_id,notnull" json:"org_id"`
 	Name         string     `bun:"name,notnull" json:"name"`
-	Path         string     `bun:"path,notnull" json:"path"`             // full virtual path, e.g. "/documents/contracts"
+	Path         string     `bun:"path,notnull" json:"path"`                           // full virtual path, e.g. "/documents/contracts"
 	ParentPath   string     `bun:"parent_path,notnull,default:'/'" json:"parent_path"` // path.Dir(path)
-	CreatedBy    string     `bun:"created_by,notnull" json:"created_by"` // user_id
-	EncryptedKey string     `bun:"encrypted_key" json:"encrypted_key,omitempty"` // folder key encrypted with org_key
+	CreatedBy    string     `bun:"created_by,notnull" json:"created_by"`               // user_id
+	EncryptedKey string     `bun:"encrypted_key" json:"encrypted_key,omitempty"`       // folder key encrypted with org_key
 	TagIDs       []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
 	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt    time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
@@ -380,7 +380,7 @@ type OrgFile struct {
 	ID           int64      `bun:"id,pk,autoincrement" json:"id"`
 	OrgID        int64      `bun:"org_id,notnull" json:"org_id"`
 	Name         string     `bun:"name,notnull" json:"name"`
-	Path         string     `bun:"path,notnull" json:"path"`                 // full path including name, e.g. "/documents/report.pdf"
+	Path         string     `bun:"path,notnull" json:"path"`                           // full path including name, e.g. "/documents/report.pdf"
 	FolderPath   string     `bun:"folder_path,notnull,default:'/'" json:"folder_path"` // path.Dir(path)
 	Size         int64      `bun:"size,notnull,default:0" json:"size"`
 	MimeType     string     `bun:"mime_type,notnull,default:''" json:"mime_type"`
@@ -417,11 +417,11 @@ type OrgFolderPermission struct {
 type OrgGroup struct {
 	bun.BaseModel `bun:"table:org_groups,alias:og"`
 
-	ID          int64      `bun:"id,pk,autoincrement" json:"id"`
-	OrgID       int64      `bun:"org_id,notnull" json:"org_id"`
-	Name        string     `bun:"name,notnull" json:"name"`
-	Description string     `bun:"description" json:"description"`
-	CreatedBy   string     `bun:"created_by,notnull" json:"created_by"`
+	ID          int64  `bun:"id,pk,autoincrement" json:"id"`
+	OrgID       int64  `bun:"org_id,notnull" json:"org_id"`
+	Name        string `bun:"name,notnull" json:"name"`
+	Description string `bun:"description" json:"description"`
+	CreatedBy   string `bun:"created_by,notnull" json:"created_by"`
 
 	// LDAP fields — populated only when source = "ldap"
 	Source       string     `bun:"source,notnull,default:'internal'" json:"source"` // "internal" | "ldap"
@@ -452,15 +452,15 @@ type OrgGroupMember struct {
 type OrgGroupPermission struct {
 	bun.BaseModel `bun:"table:org_group_permissions,alias:ogp"`
 
-	ID           int64     `bun:"id,pk,autoincrement" json:"id"`
-	OrgID        int64     `bun:"org_id,notnull" json:"org_id"`
-	GroupID      int64     `bun:"group_id,notnull" json:"group_id"`
-	FolderPath       string    `bun:"folder_path,notnull,default:'/'" json:"folder_path"`
-	Level            string    `bun:"level,notnull" json:"level"` // read | write | manage | none
-	PermCreate       bool      `bun:"perm_create,notnull,default:false" json:"perm_create"`
-	PermDelete       bool      `bun:"perm_delete,notnull,default:false" json:"perm_delete"`
-	PermDownload     bool      `bun:"perm_download,notnull,default:true" json:"perm_download"`
-	PermMove         bool      `bun:"perm_move,notnull,default:false" json:"perm_move"`
+	ID           int64  `bun:"id,pk,autoincrement" json:"id"`
+	OrgID        int64  `bun:"org_id,notnull" json:"org_id"`
+	GroupID      int64  `bun:"group_id,notnull" json:"group_id"`
+	FolderPath   string `bun:"folder_path,notnull,default:'/'" json:"folder_path"`
+	Level        string `bun:"level,notnull" json:"level"` // read | write | manage | none
+	PermCreate   bool   `bun:"perm_create,notnull,default:false" json:"perm_create"`
+	PermDelete   bool   `bun:"perm_delete,notnull,default:false" json:"perm_delete"`
+	PermDownload bool   `bun:"perm_download,notnull,default:true" json:"perm_download"`
+	PermMove     bool   `bun:"perm_move,notnull,default:false" json:"perm_move"`
 	// RestrictToGroups, when true, makes this path inaccessible to org members
 	// who are not in any group with an explicit permission on this path.
 	// Owners and admins are never affected.

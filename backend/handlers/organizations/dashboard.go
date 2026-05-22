@@ -21,11 +21,11 @@ type MemberStorageStat struct {
 
 // OrgStats is the payload returned by GET /orgs/:orgID/stats.
 type OrgStats struct {
-	FileCount        int64               `json:"file_count"`
-	FolderCount      int64               `json:"folder_count"`
-	Activity7d       int64               `json:"activity_7d"`
-	MembersNoKey     int64               `json:"members_no_key"`
-	StorageByMember  []MemberStorageStat `json:"storage_by_member"`
+	FileCount       int64               `json:"file_count"`
+	FolderCount     int64               `json:"folder_count"`
+	Activity7d      int64               `json:"activity_7d"`
+	MembersNoKey    int64               `json:"members_no_key"`
+	StorageByMember []MemberStorageStat `json:"storage_by_member"`
 }
 
 // GetOrgStats returns aggregate statistics for an organisation dashboard.
