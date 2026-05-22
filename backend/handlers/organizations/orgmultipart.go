@@ -81,6 +81,10 @@ func (h *OrgHandler) InitiateOrgMultipart(c *gin.Context) {
 		return
 	}
 
+	if !h.checkMFAEnforcement(c, orgID, userID) {
+		return
+	}
+
 	folderPath := normPath(req.FilePath)
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
 	defer cancel()
@@ -172,6 +176,10 @@ func (h *OrgHandler) CompleteOrgMultipart(c *gin.Context) {
 	var req OrgCompleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !h.checkMFAEnforcement(c, orgID, userID) {
 		return
 	}
 

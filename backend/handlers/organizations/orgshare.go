@@ -58,6 +58,10 @@ func (h *OrgHandler) CreateOrgFileShare(c *gin.Context) {
 		return
 	}
 
+	if !h.checkMFAEnforcement(c, orgID, userID) {
+		return
+	}
+
 	ctx := c.Request.Context()
 
 	var file pkg.OrgFile

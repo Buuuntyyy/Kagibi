@@ -45,6 +45,10 @@ func (h *OrgHandler) RenameOrgFile(c *gin.Context) {
 		return
 	}
 
+	if !h.checkMFAEnforcement(c, orgID, userID) {
+		return
+	}
+
 	ctx := c.Request.Context()
 
 	var file pkg.OrgFile
@@ -119,6 +123,10 @@ func (h *OrgHandler) RenameOrgFolder(c *gin.Context) {
 	var req orgRenameRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if !h.checkMFAEnforcement(c, orgID, userID) {
 		return
 	}
 

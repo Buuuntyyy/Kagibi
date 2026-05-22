@@ -100,6 +100,13 @@ func (h *OrgHandler) CreateInvitation(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "user is already a member"})
 			return
 		}
+		pendingCount, _ := h.DB.NewSelect().Model((*pkg.OrgInvitation)(nil)).
+			Where("org_id = ? AND target_user_id = ? AND status = 'active'", orgID, *req.TargetUserID).
+			Count(ctx)
+		if pendingCount > 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "an active invitation already exists for this user"})
+			return
+		}
 	}
 
 	token, err := generateInviteToken()

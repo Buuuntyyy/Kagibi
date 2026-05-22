@@ -431,6 +431,7 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	// Key management
 	orgsG.GET("/:orgID/fs/all-keys", h.GetOrgAllFileKeys)
 	orgsG.POST("/:orgID/rotate-key", h.RotateOrgKey)
+	orgsG.POST("/:orgID/transfer-ownership", h.TransferOwnership)
 
 	// Dashboard stats
 	orgsG.GET("/:orgID/stats", h.GetOrgStats)
