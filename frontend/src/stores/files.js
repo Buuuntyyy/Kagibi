@@ -206,7 +206,7 @@ async function prepareFolderShareKeys(folder, masterKey, token) {
     }
     if (missingKeysCount > 0) {
       console.warn(`${missingKeysCount} files missing encryption keys.`);
-      alert(`Attention : ${missingKeysCount} fichiers dans ce dossier n'ont pas de clé de chiffrement (anciens fichiers ?). Ils ne seront pas lisibles via le partage.`);
+      useUIStore().showWarning('Attention : ' + missingKeysCount + ' fichiers dans ce dossier n\'ont pas de clé de chiffrement. Ils ne seront pas lisibles via le partage.');
     }
   } catch (e) {
     console.error('Error preparing folder share:', e);
@@ -452,7 +452,7 @@ export const useFileStore = defineStore('files', {
             // Assuming direct share logic (RSA) similar to SharedWithMe.vue
             if (!shareItem.encrypted_key) {
                 console.error("Shared folder has no key");
-                alert("Dossier partagé verrouillé (clé manquante).");
+                useUIStore().showError("Dossier partagé verrouillé (clé manquante).");
                 return;
             }
 
@@ -484,7 +484,7 @@ export const useFileStore = defineStore('files', {
 
         } catch (e) {
             console.error("Error opening shared folder:", e);
-            alert("Erreur lors de l'ouverture du dossier partagé.");
+            useUIStore().showError("Erreur lors de l'ouverture du dossier partagé.");
             this.viewMode = 'drive';
         }
     },
@@ -567,7 +567,7 @@ export const useFileStore = defineStore('files', {
 
         } catch (error) {
             console.error("Error fetching shared folder content:", error);
-            alert("Erreur de chargement du contenu.");
+            useUIStore().showError("Erreur de chargement du contenu.");
         }
     },
 
@@ -726,7 +726,7 @@ export const useFileStore = defineStore('files', {
             await this.fetchSharedFolderContent(current.id);
         } catch (error) {
             console.error('Shared upload error:', error);
-            alert('Erreur upload partagé: ' + error.message);
+            useUIStore().showError('Erreur upload partagé: ' + error.message);
         } finally {
             this.isUploading = false;
             this.uploadProgress = 0;
@@ -738,7 +738,7 @@ export const useFileStore = defineStore('files', {
     /** Download a shared folder as a ZIP. */
     async downloadSharedFolderAsZip(folderId, folderName) {
         if (!this.sharedShareId || !this.sharedKey) {
-            alert("Partage non disponible.");
+            useUIStore().showError("Partage non disponible.");
             return;
         }
         try {
@@ -747,7 +747,7 @@ export const useFileStore = defineStore('files', {
             const rootPath = treeRes.data.root_path || '';
 
             if (files.length === 0) {
-                alert('Ce dossier est vide.');
+                useUIStore().showWarning('Ce dossier est vide.');
                 return;
             }
 
@@ -782,7 +782,7 @@ export const useFileStore = defineStore('files', {
             triggerBlobDownload(new Blob([zipped], { type: 'application/zip' }), folderName + '.zip');
         } catch (e) {
             console.error('Shared folder ZIP error:', e);
-            alert('Erreur téléchargement dossier: ' + e.message);
+            useUIStore().showError('Erreur téléchargement dossier: ' + e.message);
         }
     },
 
@@ -832,9 +832,9 @@ export const useFileStore = defineStore('files', {
       await sodium.ready;
       if (preview) this.preview.status = 'Récupération de la clé...';
       const file = this.files.find(f => f.ID === fileId);
-      if (!file) { alert('Fichier introuvable.'); if (preview) this.preview.show = false; return; }
-      if (!this.sharedKey) { alert('Clé de déchiffrement manquante.'); if (preview) this.preview.show = false; return; }
-      if (!file.EncryptedKey) { alert('Clé de fichier manquante'); if (preview) this.preview.show = false; return; }
+      if (!file) { useUIStore().showError('Fichier introuvable.'); if (preview) this.preview.show = false; return; }
+      if (!this.sharedKey) { useUIStore().showError('Clé de déchiffrement manquante.'); if (preview) this.preview.show = false; return; }
+      if (!file.EncryptedKey) { useUIStore().showError('Clé de fichier manquante'); if (preview) this.preview.show = false; return; }
 
       try {
         const fileKeyCrypto = await decryptFileKeyWithFolderKey(file.EncryptedKey, this.sharedKey);
@@ -854,7 +854,7 @@ export const useFileStore = defineStore('files', {
         }
       } catch (e) {
         console.error('Shared download error', e);
-        alert('Erreur téléchargement partagé: ' + e.message);
+        useUIStore().showError('Erreur téléchargement partagé: ' + e.message);
         if (preview) this.preview.show = false;
       }
     },
@@ -893,7 +893,7 @@ export const useFileStore = defineStore('files', {
       }
 
       if (!authStore.masterKey) {
-        alert('Erreur d\'authentification (Clé manquante). Veuillez vous reconnecter.');
+        useUIStore().showError('Erreur d\'authentification (Clé manquante). Veuillez vous reconnecter.');
         if (preview) this.preview.show = false;
         if (!preview) this.stopHeartbeat();
         return;
@@ -909,7 +909,7 @@ export const useFileStore = defineStore('files', {
           fileKey = await unwrapMasterKey(targetEncryptedKey, authStore.masterKey);
         } catch (e) {
           console.error('Failed to decrypt file key', e);
-          alert('Erreur de déchiffrement de la clé du fichier.');
+          useUIStore().showError('Erreur de déchiffrement de la clé du fichier.');
           if (preview) this.preview.show = false;
           if (!preview) this.stopHeartbeat();
           return;
@@ -925,7 +925,7 @@ export const useFileStore = defineStore('files', {
           fileKey = await unwrapMasterKey(res.data.file_encrypted_key, folderKey);
         } catch (e) {
           console.error('Folder-key fallback failed for file', targetFileId, e);
-          alert('Ce fichier ne peut pas être déchiffré (clé manquante).');
+          useUIStore().showError('Ce fichier ne peut pas être déchiffré (clé manquante).');
           if (preview) this.preview.show = false;
           if (!preview) this.stopHeartbeat();
           return;
@@ -958,7 +958,7 @@ export const useFileStore = defineStore('files', {
         this.addToHistory({ id: fileId, type: 'file', displayName: fileName, MimeType: mimeType, EncryptedKey: encryptedKey });
       } catch (error) {
         console.error('Erreur download:', error);
-        alert('Erreur lors du téléchargement.');
+        useUIStore().showError('Erreur lors du téléchargement.');
         if (preview) this.preview.show = false;
       } finally {
         if (!preview) this.stopHeartbeat();
@@ -1142,7 +1142,7 @@ export const useFileStore = defineStore('files', {
           }
         }
         
-        alert("Erreur lors de l'envoi du fichier: " + error.message);
+        useUIStore().showError("Erreur lors de l'envoi du fichier: " + error.message);
         this.isUploading = false;
         this.uploadProgress = 0;
         this.uploadSpeed = 0;
@@ -1229,7 +1229,7 @@ export const useFileStore = defineStore('files', {
         this.fetchItems(this.currentPath)
       } catch (error) {
         console.error('Error moving items:', error)
-        alert("Erreur lors du déplacement de certains éléments.")
+        useUIStore().showError("Erreur lors du déplacement de certains éléments.")
         this.fetchItems(this.currentPath)
       }
     },

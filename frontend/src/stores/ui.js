@@ -21,6 +21,44 @@ export const useUIStore = defineStore('ui', () => {
         onConfirm: null
     })
 
+    // --- Toast State ---
+    const toasts = ref([])
+    let toastIdCounter = 0
+
+    const showToast = (message, type = 'success') => {
+        const id = ++toastIdCounter
+        toasts.value.push({ id, message, type })
+        setTimeout(() => {
+            toasts.value = toasts.value.filter(t => t.id !== id)
+        }, 3000)
+    }
+
+    const dismissToast = (id) => {
+        toasts.value = toasts.value.filter(t => t.id !== id)
+    }
+
+    // --- General Confirm Dialog ---
+    const confirmDialog = ref({
+        visible: false,
+        title: '',
+        message: '',
+        confirmLabel: 'Confirmer',
+        cancelLabel: 'Annuler',
+        confirmClass: 'primary', // 'primary' | 'danger'
+        resolve: null
+    })
+
+    const showConfirm = ({ title, message, confirmLabel = 'Confirmer', cancelLabel = 'Annuler', confirmClass = 'danger' } = {}) => {
+        return new Promise((resolve) => {
+            confirmDialog.value = { visible: true, title, message, confirmLabel, cancelLabel, confirmClass, resolve }
+        })
+    }
+
+    const resolveConfirm = (result) => {
+        if (confirmDialog.value.resolve) confirmDialog.value.resolve(result)
+        confirmDialog.value = { ...confirmDialog.value, visible: false, resolve: null }
+    }
+
     const showError = (message, title = 'Erreur') => {
         alert.value = {
             visible: true,
@@ -71,12 +109,18 @@ export const useUIStore = defineStore('ui', () => {
     return {
         alert,
         pendingMobileAction,
-        deleteDialog, // Export state
+        deleteDialog,
+        toasts,
+        confirmDialog,
         showError,
         showWarning,
         showInfo,
         closeAlert,
-        requestDeleteConfirmation, // Export action
-        closeDeleteDialog // Export action
+        requestDeleteConfirmation,
+        closeDeleteDialog,
+        showToast,
+        dismissToast,
+        showConfirm,
+        resolveConfirm,
     }
 })

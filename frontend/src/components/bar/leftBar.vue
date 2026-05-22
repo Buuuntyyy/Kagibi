@@ -67,6 +67,28 @@
         <span>{{ t('nav.p2pTransfer') }}</span>
       </div>
 
+      <div class="menu-item" :class="{ active: isActive('/dashboard/organizations') }" @click="navigateTo('/dashboard/organizations')">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z" fill="currentColor"/>
+        </svg>
+        <span>{{ t('orgs.title') }}</span>
+      </div>
+
+      <!-- Pinned orgs shortcuts -->
+      <template v-if="pinnedOrgs.length > 0">
+        <div
+          v-for="org in pinnedOrgs"
+          :key="'pinned-' + org.id"
+          class="menu-item pinned-org-item"
+          :class="{ active: route.path.startsWith('/dashboard/organizations/' + org.id) }"
+          :title="org.name"
+          @click="navigateTo('/dashboard/organizations/' + org.id)"
+        >
+          <span class="pinned-org-dot" :style="{ background: orgAccent(org) }"></span>
+          <span class="pinned-org-name">{{ org.name }}</span>
+        </div>
+      </template>
+
       <!-- Friends Accordion -->
       <div class="friends-accordion" :class="{ open: friendsOpen }">
         <div class="menu-item" @click="toggleFriendsAccordion">
@@ -153,6 +175,18 @@
         @cancel="handleInputCancel"
       />
     </div>
+
+    <!-- Upload conflict dialog -->
+    <div v-if="uploadStore.conflictState" class="modal-overlay" @click.self="uploadStore.resolveConflict('cancel')">
+      <div class="modal-box">
+        <h3>{{ t('orgs.uploadConflictTitle') }}</h3>
+        <p>{{ t('orgs.uploadConflictMsg', { name: uploadStore.conflictState.fileName }) }}</p>
+        <div class="modal-actions">
+          <button class="btn-primary" @click="uploadStore.resolveConflict('keepBoth')">{{ t('orgs.uploadConflictKeepBoth') }}</button>
+          <button class="btn-secondary" @click="uploadStore.resolveConflict('cancel')">{{ t('orgs.uploadConflictCancel') }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -166,6 +200,8 @@ import { useFriendStore } from '../../stores/friends'
 import { useBillingStore } from '../../stores/billing'
 import { uploadQueueManager } from '../../utils/uploadQueueManager'
 import { useUploadStore } from '../../stores/uploads'
+import { useUIStore } from '../../stores/ui'
+import { useOrgStore } from '../../stores/organizations'
 import InputDialog from '../InputDialog.vue'
 import FriendsSidebar from '../FriendsSidebar.vue'
 
@@ -180,8 +216,25 @@ const fileStore = useFileStore()
 const friendStore = useFriendStore()
 const uploadStore = useUploadStore()
 const billingStore = useBillingStore()
+const uiStore = useUIStore()
+const orgStore = useOrgStore()
 const router = useRouter()
 const route = useRoute()
+
+const ACCENT_PALETTE = [
+  'linear-gradient(135deg, #6366f1, #8b5cf6)',
+  'linear-gradient(135deg, #0ea5e9, #6366f1)',
+  'linear-gradient(135deg, #10b981, #0ea5e9)',
+  'linear-gradient(135deg, #f59e0b, #ef4444)',
+  'linear-gradient(135deg, #ec4899, #8b5cf6)',
+  'linear-gradient(135deg, #14b8a6, #10b981)',
+  'linear-gradient(135deg, #f97316, #f59e0b)',
+]
+const orgAccent = (org) => ACCENT_PALETTE[org.id % ACCENT_PALETTE.length]
+
+const pinnedOrgs = computed(() =>
+  orgStore.orgs.filter(o => orgStore.isPinned(o.id))
+)
 
 const showNewMenu = ref(false)
 const friendsOpen = ref(true) // Default open or closed
@@ -359,7 +412,7 @@ const handleFolderUpload = async (event) => {
 
   if (invalidNames.length > 0) {
     const lines = invalidNames.map(e => `${e.relPath} → caractère(s) interdit(s) : ${e.bad}`)
-    alert('Noms de dossiers invalides :\n\n' + lines.join('\n') + '\n\nCaractères autorisés : lettres, chiffres, espaces, - . _')
+    uiStore.showError('Noms de dossiers invalides :\n' + lines.join('\n') + '\n\nCaractères autorisés : lettres, chiffres, espaces, - . _')
     return
   }
 
@@ -367,7 +420,7 @@ const handleFolderUpload = async (event) => {
   const rootName = files[0].webkitRelativePath.split('/')[0]
   const hasConflict = fileStore.folders.some(f => f.Name === rootName)
   if (hasConflict) {
-    alert(t('file.folderConflictTitle') + '\n\n' + t('file.folderConflictMsg', { name: rootName }) + '\n' + t('file.folderConflictHint'))
+    uiStore.showWarning(t('file.folderConflictMsg', { name: rootName }))
     return
   }
 
@@ -377,7 +430,7 @@ const handleFolderUpload = async (event) => {
   const storageUsed = authStore.user?.storage_used ?? authStore.user?.plan_storage_used ?? 0
   const available = storageLimit - storageUsed
   if (storageLimit > 0 && totalSize > available) {
-    alert(`Espace insuffisant\n\nTaille du dossier : ${formatSize(totalSize)}\nEspace disponible : ${formatSize(Math.max(0, available))}\n\nLibérez de l'espace ou passez à un abonnement supérieur.`)
+    uiStore.showError(`Taille du dossier : ${formatSize(totalSize)}\nEspace disponible : ${formatSize(Math.max(0, available))}`, 'Espace insuffisant')
     return
   }
 
@@ -413,7 +466,7 @@ const handleFolderUpload = async (event) => {
   } catch (error) {
     uploadStore.endFolderCreation()
     console.error('Folder upload failed:', error)
-    alert('Erreur lors de l\'upload du dossier : ' + (error.response?.data?.error || error.message))
+    uiStore.showError('Erreur lors de l\'upload du dossier : ' + (error.response?.data?.error || error.message))
   }
 }
 
@@ -638,6 +691,34 @@ const storageLimitGB = computed(() => {
   border-radius: 3px;
   overflow: hidden;
 }
+
+/* ── Pinned org shortcuts ─────────────────────────────────────────────── */
+.pinned-org-item {
+  padding-left: 28px;
+}
+
+.pinned-org-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  margin-right: 10px;
+}
+
+.pinned-org-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.left-bar.collapsed .pinned-org-item {
+  padding: 0;
+  justify-content: center;
+}
+.left-bar.collapsed .pinned-org-name { display: none; }
+.left-bar.collapsed .pinned-org-dot { margin: 0; width: 12px; height: 12px; border-radius: 4px; }
 
 .friends-accordion {
   display: flex;
@@ -985,9 +1066,30 @@ const storageLimitGB = computed(() => {
     padding: 6px;
   }
 
+  .left-bar .pinned-org-item {
+    padding: 0;
+    justify-content: center;
+  }
+  .left-bar .pinned-org-name { display: none; }
+  .left-bar .pinned-org-dot { margin: 0; width: 12px; height: 12px; border-radius: 4px; }
+
   /* Hide the manual toggle — sidebar is auto-collapsed by breakpoint */
   .collapse-toggle {
     display: none;
   }
 }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.modal-box {
+  background: var(--surface-primary); border-radius: 12px; padding: 24px 28px;
+  max-width: 400px; width: 90%; display: flex; flex-direction: column; gap: 16px;
+}
+.modal-box h3 { margin: 0; font-size: 16px; color: var(--text-primary); }
+.modal-box p  { margin: 0; font-size: 14px; color: var(--text-secondary); }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.btn-primary  { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; background: var(--primary-color); color: #fff; font-size: 14px; }
+.btn-secondary{ padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer; background: transparent; color: var(--text-primary); font-size: 14px; }
 </style>

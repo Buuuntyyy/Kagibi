@@ -49,6 +49,7 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTagStore } from '../stores/tags'
+import { useUIStore } from '../stores/ui'
 
 const { t } = useI18n()
 
@@ -60,6 +61,7 @@ const props = defineProps({
 const emit = defineEmits(['update:isOpen', 'confirm'])
 
 const tagStore = useTagStore()
+const uiStore = useUIStore()
 const selectedTags = ref([])
 const newTagName = ref('')
 const pastelColors = [
@@ -97,7 +99,7 @@ const createTag = async () => {
     newTagName.value = ''
     newTagColor.value = pastelColors[0]
   } catch (e) {
-    alert("Erreur lors de la création du tag")
+    uiStore.showError("Erreur lors de la création du tag")
   }
 }
 

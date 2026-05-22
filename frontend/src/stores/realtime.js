@@ -24,7 +24,8 @@ export const useRealtimeStore = defineStore('realtime', () => {
     storage_update: [],
     friend_update: [],
     p2p_signal: [],
-    presence_update: []
+    presence_update: [],
+    org_update: [],
   }
 
   function onEvent(eventType, handler) {
@@ -151,7 +152,10 @@ export const useRealtimeStore = defineStore('realtime', () => {
       dispatchEvent(msg.event_type, msg.payload)
     } else if (msg.type === 'p2p_signal') {
       if (_seenSignalIds.has(msg.id)) return
-      if (msg.id) _seenSignalIds.add(msg.id)
+      if (msg.id) {
+        if (_seenSignalIds.size > 2000) _seenSignalIds.clear()
+        _seenSignalIds.add(msg.id)
+      }
       dispatchEvent('p2p_signal', {
         from: msg.from,
         type: msg.signal_type,
@@ -200,6 +204,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
       signals.forEach(signal => {
         if (_seenSignalIds.has(signal.id)) return
+        if (_seenSignalIds.size > 2000) _seenSignalIds.clear()
         _seenSignalIds.add(signal.id)
         dispatchEvent('p2p_signal', {
           from: signal.sender_id,

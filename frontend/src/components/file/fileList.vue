@@ -38,7 +38,7 @@
     </div>
 
     <!-- Selection Action Bar / Toolbar Bar -->
-    <div class="selection-gap" :class="{ 'has-content': selectedItems.length > 0 || preferenceStore.showToolBar }">
+    <div class="selection-gap" :class="{ 'has-content': preferenceStore.showToolBar }">
       <Transition name="selection-bar" mode="out-in">
         <!-- Toolbar Bar (always shown when enabled, with selection state integrated) -->
         <div v-if="preferenceStore.showToolBar" key="toolbar-bar" class="toolbar-bar">
@@ -125,24 +125,6 @@
           </div>
         </div>
 
-        <!-- Selection Action Bar (fallback quand toolbar désactivé) -->
-        <div v-else-if="selectedItems.length > 0" key="selection-bar" class="selection-action-bar">
-          <div class="selection-actions">
-            <button class="action-btn download-action" @click.stop="downloadSelectedFiles" :title="t('file.download')">
-              <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/></svg>
-              <span>{{ t('file.download') }}</span>
-            </button>
-            <button class="action-btn share-action" @click.stop="openShareForSelected" :title="t('file.share')" :disabled="selectedItems.length !== 1">
-              <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
-              <span>{{ t('file.share') }}</span>
-            </button>
-            <button class="action-btn delete-action" @click.stop="deleteSelectedItems" :title="t('common.delete')">
-              <svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="currentColor"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/></svg>
-              <span>{{ t('common.delete') }}</span>
-            </button>
-          </div>
-          <span class="selection-count">{{ t('file.selectedItems', { count: selectedItems.length }) }}</span>
-        </div>
       </Transition>
     </div>
 
@@ -1084,9 +1066,9 @@ const handleContextAction = (action) => {
       if (item.type === 'file' && item.share_token) {
         const shareUrl = `${window.location.origin}/s/${item.share_token}`;
         navigator.clipboard.writeText(shareUrl).then(() => {
-          alert('Lien de partage copié dans le presse-papiers !');
+          uiStore.showToast('Lien de partage copié dans le presse-papiers !', 'success');
         }).catch(err => {
-          alert('Impossible de copier le lien.');
+          uiStore.showError('Impossible de copier le lien.');
           console.error('Could not copy text: ', err);
         });
       }
@@ -1324,6 +1306,10 @@ const getDeleteWarningMessage = (items) => {
 
 const deleteSelectedItems = () => {
   if (selectedItems.value.length === 0) return;
+  // Snapshot now: the container's @click="deselectAll" fires after this handler
+  // (click bubbling), so selectedItems.value would be empty by the time the
+  // async onConfirm callback runs if we read the ref lazily.
+  const itemsToDelete = [...selectedItems.value]
 
   if (fileStore.viewMode === 'shared') {
     if (!fileStore.sharedPermissions.delete) {
@@ -1333,10 +1319,10 @@ const deleteSelectedItems = () => {
     uiStore.requestDeleteConfirmation({
       title: "Supprimer les éléments",
       message: '',
-      itemName: selectedItems.value.length === 1 ? selectedItems.value[0].Name : null,
-      itemsCount: selectedItems.value.length,
+      itemName: itemsToDelete.length === 1 ? itemsToDelete[0].Name : null,
+      itemsCount: itemsToDelete.length,
       onConfirm: async () => {
-        for (const item of selectedItems.value) {
+        for (const item of itemsToDelete) {
           await fileStore.deleteFromShare(item.ID, item.type);
         }
         selectedItems.value = [];
@@ -1345,32 +1331,30 @@ const deleteSelectedItems = () => {
     return;
   }
 
-  const warningMessage = getDeleteWarningMessage(selectedItems.value)
+  const warningMessage = getDeleteWarningMessage(itemsToDelete)
 
   uiStore.requestDeleteConfirmation({
     title: "Supprimer les éléments",
     message: warningMessage,
-    itemName: selectedItems.value.length === 1 ? selectedItems.value[0].Name : null,
-    itemsCount: selectedItems.value.length,
+    itemName: itemsToDelete.length === 1 ? itemsToDelete[0].Name : null,
+    itemsCount: itemsToDelete.length,
     onConfirm: async () => {
-      const fileIDs = selectedItems.value.filter(i => i.type === 'file').map(i => i.ID);
-      const folderIDs = selectedItems.value.filter(i => i.type === 'folder').map(i => i.ID);
+      const fileIDs = itemsToDelete.filter(i => i.type === 'file').map(i => i.ID);
+      const folderIDs = itemsToDelete.filter(i => i.type === 'folder').map(i => i.ID);
 
       if (fileIDs.length > 0) {
           await fileStore.deleteFiles(fileIDs);
       }
 
-      // Delete folders one by one for now as bulk delete folders is not implemented
       for (const folderID of folderIDs) {
           await api.delete(`/files/folder/${folderID}`);
       }
 
-      // Refresh list if we deleted folders manually (deleteFiles already refreshes)
       if (folderIDs.length > 0 && fileIDs.length === 0) {
           fileStore.fetchItems(fileStore.currentPath);
       }
 
-      selectedItems.value = [] // Clear selection after deletion
+      selectedItems.value = []
     }
   });
 };
@@ -1390,7 +1374,7 @@ const renameSelectedItem = async () => {
       }
       selectedItems.value = [];
     } catch (error) {
-      alert("Erreur lors du renommage : " + (error.response?.data?.error || error.message));
+      uiStore.showError("Erreur lors du renommage : " + (error.response?.data?.error || error.message));
     }
   }
 }
@@ -1402,7 +1386,7 @@ const removeTag = async (item, type, tagToRemove) => {
     await fileStore.updateTags(item.ID, type, newTags);
   } catch (error) {
     console.error(error);
-    alert("Erreur lors de la suppression du tag.");
+    uiStore.showError("Erreur lors de la suppression du tag.");
   }
 }
 
@@ -1419,7 +1403,7 @@ const updateTags = async () => {
       await fileStore.updateTags(item.ID, item.type, newTags);
       selectedItems.value = []; // Clear selection
     } catch (error) {
-      alert("Erreur lors de la mise à jour des tags : " + (error.response?.data?.error || error.message));
+      uiStore.showError("Erreur lors de la mise à jour des tags : " + (error.response?.data?.error || error.message));
     }
   }
 }
@@ -2483,24 +2467,24 @@ button {
 
   .toolbar-left,
   .toolbar-right {
-    flex-wrap: wrap;
     gap: 0.2rem;
   }
 
+  /* Icon-only buttons on mobile: hide text labels, square up the button */
+  .tb-btn:not(.tb-btn--icon) span {
+    display: none;
+  }
+
   .tb-btn:not(.tb-btn--icon) {
-    font-size: 0.75rem;
-    padding: 0.28rem 0.55rem;
+    padding: 0.32rem;
+    width: 32px;
+    height: 32px;
+    justify-content: center;
   }
 
   .breadcrumbs {
     font-size: 0.85rem;
     flex-wrap: wrap;
-  }
-
-  .selection-action-bar {
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    padding: 0.5rem;
   }
 
   .security-tips-popover {

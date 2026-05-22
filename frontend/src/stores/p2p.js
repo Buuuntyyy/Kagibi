@@ -303,9 +303,10 @@ export const useP2PStore = defineStore('p2p', {
     // preGeneratedKey: optional CryptoKey already created (invite flow).
     async startTransfer(friend, file, preGeneratedKey = null) {
          await sodium.ready;
+         const uiStore = useUIStore();
 
          if (!friend.public_key) {
-             alert("L'ami n'a pas de clé publique (Il doit se reconnecter une fois pour la publier).");
+             uiStore.showError("L'ami n'a pas de clé publique (Il doit se reconnecter une fois pour la publier).");
              return;
          }
 
@@ -402,13 +403,14 @@ export const useP2PStore = defineStore('p2p', {
     async acceptTransfer() {
         if (!this.incomingOffer) return;
         const offerData = this.incomingOffer;
-        // Don't nullify yet, keep ref for transferId check if needed? 
+        // Don't nullify yet, keep ref for transferId check if needed?
         // Actually we copy it to activeTransfer.
-        this.incomingOffer = null; 
+        this.incomingOffer = null;
 
         await sodium.ready;
         const authStore = useAuthStore();
-        
+        const uiStore = useUIStore();
+
         // --- GUARD: Check Keys ---
         if (!authStore.privateKey) {
             console.warn("Private key missing in store. Attempting re-restoration...");
@@ -418,7 +420,7 @@ export const useP2PStore = defineStore('p2p', {
             // Double check
             if (!authStore.privateKey) {
                 console.error("Critical: User has no decrypted private RSA key. Cannot accept transfer.");
-                alert("Erreur de sécurité : Votre clé de chiffrement n'est pas disponible. Essayez de recharger la page ou de vous reconnecter.");
+                uiStore.showError("Erreur de sécurité : Votre clé de chiffrement n'est pas disponible. Essayez de recharger la page ou de vous reconnecter.");
                 return;
             }
         }
@@ -430,7 +432,7 @@ export const useP2PStore = defineStore('p2p', {
             fileKey = await window.crypto.subtle.importKey("raw", rawKey, "AES-GCM", true, ["decrypt"]);
         } catch(e) {
             console.error("Decryption failed", e);
-            alert("Erreur de déchiffrement de la clé");
+            uiStore.showError("Erreur de déchiffrement de la clé");
             return;
         }
 
@@ -438,7 +440,7 @@ export const useP2PStore = defineStore('p2p', {
         const rtcConfig = await fetchICEConfig();
         const pc = new RTCPeerConnection(rtcConfig);
         const realtimeStore = useRealtimeStore();
-        const uiStore = useUIStore();
+        
 
         // We don't necessarily need to send transferId back for candidates, but good practice.
         // Or we assume candidates from receiver belong to the same session implicitly.
@@ -803,7 +805,30 @@ export const useP2PStore = defineStore('p2p', {
         // Only finalise if this invocation is still the active one
         if (!this.activeTransfer || this.activeTransfer.sendGeneration !== myGeneration) return;
 
-        await waitForBuffer();
+        // Drain the send buffer completely before sending EOF — waitForBuffer() only
+        // blocks when bufferedAmount > 8 MB, so up to 8 MB could still be queued here.
+        // We must wait until bufferedAmount reaches 0 (SCTP-acknowledged by the remote).
+        if (dc.readyState === 'open' && dc.bufferedAmount > 0) {
+            await new Promise(resolve => {
+                const done = () => {
+                    dc.removeEventListener('bufferedamountlow', done);
+                    dc.removeEventListener('close', done);
+                    dc.removeEventListener('error', done);
+                    resolve();
+                };
+                dc.bufferedAmountLowThreshold = 0;
+                dc.addEventListener('bufferedamountlow', done);
+                dc.addEventListener('close', done);
+                dc.addEventListener('error', done);
+            });
+        }
+
+        if (!this.activeTransfer || this.activeTransfer.sendGeneration !== myGeneration) return;
+
+        // If the channel closed while draining (connection dropped), do not mark as Done —
+        // the ICE state handler will take over and trigger the resume negotiation.
+        if (dc.readyState !== 'open') return;
+
         try { dc.send(new TextEncoder().encode("EOF")); } catch (_) {}
         this.activeTransfer.status = 'Done';
 
@@ -815,12 +840,15 @@ export const useP2PStore = defineStore('p2p', {
             }
         }, 500);
 
+        // Keep activeTransfer alive long enough for the resume mechanism to complete
+        // if the receiver's connection dropped right at the end of the transfer.
+        // 32 s = 30 s (resume signal timeout) + 2 s margin.
         setTimeout(() => {
             if (this.activeTransfer && this.activeTransfer.sendGeneration === myGeneration) {
                 this.activeTransfer = null;
                 this.stopHeartbeat();
             }
-        }, 2000);
+        }, 32000);
     },
 
     async handleReceiveMessage(event) {
@@ -930,28 +958,26 @@ export const useP2PStore = defineStore('p2p', {
         // Since we trust we received everything (or mostly), let's just use the array.
         
         const blob = new Blob(this.activeTransfer.buffer, { type: this.activeTransfer.fileType });
+        // Release the receive buffer immediately; the Blob holds its own copy.
+        this.activeTransfer.buffer = null
         const url = URL.createObjectURL(blob);
 
         const a = document.createElement('a');
         a.href = url;
         a.download = this.activeTransfer.fileName;
         a.click();
-        
+
         window.URL.revokeObjectURL(url);
-        
+
         this.activeTransfer.status = 'Complete';
-        
-        // Close PeerConnection after successful reception
+
+        // Close PeerConnection after successful reception; keep activeTransfer alive
+        // so the dialog stays open until the user explicitly closes it.
         setTimeout(() => {
             if (this.activeTransfer && this.activeTransfer.pc && this.activeTransfer.pc.connectionState !== 'closed') {
                 this.activeTransfer.pc.close();
             }
         }, 500);
-        
-        setTimeout(() => {
-            this.activeTransfer = null;
-            this.stopHeartbeat();
-        }, 2000);
     }
   }
 })

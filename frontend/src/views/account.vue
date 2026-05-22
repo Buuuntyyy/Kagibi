@@ -461,6 +461,7 @@ import { useAuthStore } from '../stores/auth'
 import { useBillingStore } from '../stores/billing'
 import { usePreferencesStore } from '../stores/preferences'
 import { useMFA } from '../utils/useMFA'
+import { useUIStore } from '../stores/ui'
 import api from '../api'
 import AvatarSelector from '../components/AvatarSelector.vue'
 import DeleteAccountDialog from '../components/DeleteAccountDialog.vue'
@@ -476,6 +477,7 @@ const authStore = useAuthStore()
 const billingStore = useBillingStore()
 const preferenceStore = usePreferencesStore()
 const { isMFARequired } = useMFA()
+const uiStore = useUIStore()
 
 // MFA Challenge state
 const showMFAChallenge = ref(false)
@@ -854,17 +856,13 @@ const handleDeleteAccount = async () => {
   }
 
   // Confirmation supplémentaire pour éviter les suppressions accidentelles
-  const finalConfirm = confirm(
-    'DERNIERE CONFIRMATION\n\n' +
-    'Votre compte et TOUTES vos donnees seront SUPPRIMES IMMEDIATEMENT.\n\n' +
-    'Cette action est DEFINITIVEMENT IRREVERSIBLE.\n\n' +
-    'AUCUNE RECUPERATION ne sera possible.\n\n' +
-    'Etes-vous absolument certain(e) ?'
-  )
-
-  if (!finalConfirm) {
-    return
-  }
+  const finalConfirm = await uiStore.showConfirm({
+    title: 'Dernière confirmation',
+    message: 'Votre compte et TOUTES vos données seront SUPPRIMÉES IMMÉDIATEMENT. Cette action est DÉFINITIVEMENT IRRÉVERSIBLE. Aucune récupération ne sera possible. Êtes-vous absolument certain(e) ?',
+    confirmLabel: 'Supprimer définitivement',
+    confirmClass: 'danger'
+  })
+  if (!finalConfirm) return
 
   // Check if MFA is required for destructive actions
   try {
@@ -897,11 +895,7 @@ const executeDeleteAccount = async () => {
     router.push('/')
 
     // Notification de succès
-    alert(
-      'Votre compte a ete definitivement supprime.\n\n' +
-      'Toutes vos donnees sont irrecuperables.\n\n' +
-      'Conformement au RGPD (Article 17), vos donnees personnelles ont ete effacees.'
-    )
+    uiStore.showToast('Votre compte a été définitivement supprimé.', 'info')
 
   } catch (error) {
     console.error('Failed to delete account:', error)
@@ -920,7 +914,9 @@ const executeDeleteAccount = async () => {
   background-color: var(--background-color);
   height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   box-sizing: border-box;
+  max-width: 100%;
 }
 
 .page-header {
@@ -1040,13 +1036,16 @@ const executeDeleteAccount = async () => {
   align-items: start;
 }
 
+@media (min-width: 901px) {
+  .user-card {
+    position: sticky;
+    top: 2rem;
+  }
+}
+
 @media (max-width: 900px) {
   .content-grid {
     grid-template-columns: 1fr;
-  }
-
-  .user-card {
-    position: static;
   }
 }
 
@@ -1071,9 +1070,19 @@ const executeDeleteAccount = async () => {
     padding: 1.25rem;
   }
 
+  .section-header,
+  .section-body {
+    padding: 1rem;
+  }
+
   .form-row {
     flex-direction: column;
+    align-items: stretch;
     gap: 0.75rem;
+  }
+
+  .form-row .input-group {
+    width: 100%;
   }
 
   .form-row button {
@@ -1082,6 +1091,32 @@ const executeDeleteAccount = async () => {
 
   .password-form {
     gap: 0.75rem;
+  }
+
+  .password-row {
+    flex-direction: column;
+  }
+
+  .danger-zone-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .danger-zone-item .btn-danger-outline {
+    width: 100%;
+  }
+
+  .form-actions {
+    justify-content: stretch;
+  }
+
+  .form-actions button,
+  .portability-actions button {
+    width: 100%;
+  }
+
+  .portability-actions {
+    justify-content: stretch;
   }
 }
 
@@ -1095,8 +1130,6 @@ const executeDeleteAccount = async () => {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  position: sticky;
-  top: 2rem;
 }
 
 .avatar-container {
@@ -1238,6 +1271,8 @@ input {
   color: var(--main-text-color);
   font-size: 1rem;
   transition: border-color 0.2s;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 input:focus {

@@ -82,6 +82,84 @@ func p2pInviteBodyEN(toEmail, senderName, fileName string, fileSize int64, token
 		"to send you a file transfer invitation.\n"
 }
 
+// SendOrgInvite notifies a recipient that they have been invited to join an organization.
+// lang must be "fr" or "en"; any other value falls back to "fr".
+// Runs asynchronously — errors are only logged.
+func SendOrgInvite(toEmail, inviterName, orgName, role, joinURL, lang string) error {
+	var subject, body string
+	if lang == "en" {
+		subject = inviterName + " invited you to join " + orgName + " on Kagibi"
+		body = orgInviteBodyEN(toEmail, inviterName, orgName, role, joinURL)
+	} else {
+		subject = inviterName + " vous invite à rejoindre " + orgName + " sur Kagibi"
+		body = orgInviteBodyFR(toEmail, inviterName, orgName, role, joinURL)
+	}
+	return Send(Message{To: toEmail, Subject: subject, Body: body})
+}
+
+func orgRoleLabelFR(role string) string {
+	switch role {
+	case "admin":
+		return "administrateur"
+	case "viewer":
+		return "lecteur"
+	case "owner":
+		return "propriétaire"
+	default:
+		return "membre"
+	}
+}
+
+func orgRoleLabelEN(role string) string {
+	switch role {
+	case "admin":
+		return "administrator"
+	case "viewer":
+		return "viewer"
+	case "owner":
+		return "owner"
+	default:
+		return "member"
+	}
+}
+
+func orgInviteBodyFR(toEmail, inviterName, orgName, role, joinURL string) string {
+	roleLabel := orgRoleLabelFR(role)
+	return "Bonjour,\n\n" +
+		inviterName + " vous invite à rejoindre l'organisation « " + orgName + " » sur Kagibi\n" +
+		"en tant que " + roleLabel + ".\n\n" +
+		"Pour accepter l'invitation, cliquez sur le lien ci-dessous :\n\n" +
+		"  " + joinURL + "\n\n" +
+		"Kagibi est un service de stockage cloud chiffré de bout en bout. Toutes les données\n" +
+		"partagées dans cette organisation restent illisibles pour nos serveurs — seuls les membres\n" +
+		"autorisés peuvent y accéder.\n\n" +
+		"Si vous n'avez pas encore de compte Kagibi, vous pourrez en créer un gratuitement\n" +
+		"lors de l'acceptation de cette invitation.\n\n" +
+		"Si vous ne vous attendiez pas à recevoir ce message, vous pouvez l'ignorer en toute sécurité.\n\n" +
+		"—\n" +
+		"L'équipe Kagibi · https://kagibi.cloud\n\n" +
+		"Vous recevez cet e-mail car " + inviterName + " a utilisé votre adresse (" + toEmail + ")\n" +
+		"pour vous envoyer une invitation à rejoindre son organisation.\n"
+}
+
+func orgInviteBodyEN(toEmail, inviterName, orgName, role, joinURL string) string {
+	roleLabel := orgRoleLabelEN(role)
+	return "Hello,\n\n" +
+		inviterName + " has invited you to join the organization \"" + orgName + "\" on Kagibi\n" +
+		"as a " + roleLabel + ".\n\n" +
+		"Click the link below to accept the invitation:\n\n" +
+		"  " + joinURL + "\n\n" +
+		"Kagibi is an end-to-end encrypted cloud storage service. All data shared in this\n" +
+		"organization is unreadable to our servers — only authorized members can access it.\n\n" +
+		"If you don't have a Kagibi account yet, you can create one for free when accepting\n" +
+		"this invitation.\n\n" +
+		"If you weren't expecting this message, you can safely ignore it.\n\n" +
+		"—\n" +
+		"The Kagibi team · https://kagibi.cloud\n\n" +
+		"You received this email because " + inviterName + " used your address (" + toEmail + ")\n" +
+		"to send you an invitation to join their organization.\n"
+}
+
 func formatBytes(b int64) string {
 	const unit = 1024
 	if b < unit {

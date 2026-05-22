@@ -48,11 +48,19 @@
             <div class="friend-name">{{ friend.name }}</div>
             <div class="friend-email">{{ friend.email }}</div>
           </div>
-          <button @click="confirmRemove(friend)" class="btn-icon delete" :title="t('friends.removeFriend')">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M18 6L6 18M6 6l12 12"></path>
-            </svg>
-          </button>
+          <div class="friend-actions">
+            <button @click="sendToP2P(friend)" class="btn-icon send" :title="t('friends.sendFile')">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+            <button @click="confirmRemove(friend)" class="btn-icon delete" :title="t('friends.removeFriend')">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -141,13 +149,17 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useFriendStore } from '../stores/friends'
 import { useAuthStore } from '../stores/auth'
+import { useUIStore } from '../stores/ui'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const friendStore = useFriendStore()
 const authStore = useAuthStore()
+const uiStore = useUIStore()
 
 const activeTab = ref('list')
 const friendCodeInput = ref('')
@@ -206,10 +218,13 @@ const submitAddFriend = async () => {
   }
 }
 
-const confirmRemove = (friend) => {
-  if (confirm(`Êtes-vous sûr de vouloir supprimer ${friend.name} de vos amis ?`)) {
-    friendStore.removeFriend(friend.id)
-  }
+const confirmRemove = async (friend) => {
+  if (!await uiStore.showConfirm({ title: 'Supprimer l\'ami', message: `Êtes-vous sûr de vouloir supprimer ${friend.name} de vos amis ?`, confirmLabel: 'Supprimer' })) return
+  friendStore.removeFriend(friend.id)
+}
+
+const sendToP2P = (friend) => {
+  router.push({ path: '/p2p', query: { friendId: friend.id } })
 }
 </script>
 
@@ -382,6 +397,18 @@ const confirmRemove = (friend) => {
 .btn-icon:hover.delete {
   background-color: rgba(220, 53, 69, 0.1);
   color: #dc3545;
+}
+
+.btn-icon:hover.send {
+  background-color: var(--hover-background-color);
+  color: var(--primary-color);
+}
+
+.friend-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
 }
 
 /* Empty State */
