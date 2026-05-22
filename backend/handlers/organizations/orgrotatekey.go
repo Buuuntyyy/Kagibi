@@ -43,6 +43,10 @@ func (h *OrgHandler) RotateOrgKey(c *gin.Context) {
 		return
 	}
 
+	if !h.checkMFAEnforcement(c, orgID, callerID) {
+		return
+	}
+
 	ctx := c.Request.Context()
 
 	callerRole, err := h.memberRole(ctx, orgID, callerID)

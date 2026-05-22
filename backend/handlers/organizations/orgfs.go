@@ -130,6 +130,10 @@ func (h *OrgHandler) CreateOrgFolder(c *gin.Context) {
 		return
 	}
 
+	if !h.checkMFAEnforcement(c, orgID, userID) {
+		return
+	}
+
 	parentPath := normPath(req.ParentPath)
 	folderPath := normPath(path.Join(parentPath, req.Name))
 	ctx := c.Request.Context()
@@ -184,6 +188,11 @@ func (h *OrgHandler) DeleteOrgFolder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid folder id"})
 		return
 	}
+
+	if !h.checkMFAEnforcement(c, orgID, userID) {
+		return
+	}
+
 	ctx := c.Request.Context()
 
 	var folder pkg.OrgFolder
