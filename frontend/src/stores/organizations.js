@@ -1242,6 +1242,27 @@ export const useOrgStore = defineStore('organizations', () => {
     }
   }
 
+  async function transferOwnership(orgID, targetMemberID) {
+    const orgKey = await getOrgKey(orgID)
+    if (!members.value.length) await fetchMembers(orgID)
+    const target = members.value.find(m => m.id === targetMemberID)
+    if (!target?.public_key) throw new Error('Clé publique du membre introuvable.')
+
+    const encryptedOrgKey = await encryptOrgKeyForUser(orgKey, target.public_key)
+    await api.post(`/orgs/${orgID}/transfer-ownership`, {
+      target_member_id: targetMemberID,
+      encrypted_org_key: encryptedOrgKey,
+    })
+
+    const authStore = useAuthStore()
+    const myID = authStore.user?.id || authStore.user?.user_id
+    if (currentOrg.value) currentOrg.value = { ...currentOrg.value, my_role: 'admin' }
+    const callerMember = members.value.find(m => m.user_id === myID)
+    if (callerMember) callerMember.role = 'admin'
+    const targetMember = members.value.find(m => m.id === targetMemberID)
+    if (targetMember) targetMember.role = 'owner'
+  }
+
   /**
    * Initialize the org key for the current user when they have none (e.g. org created before
    * encryption was introduced). Generates a fresh OrgKey, encrypts it with the caller's RSA
@@ -1320,7 +1341,7 @@ export const useOrgStore = defineStore('organizations', () => {
     fetchGroups, fetchMyGroups, createGroup, updateGroup, deleteGroup,
     addGroupMember, removeGroupMember, updateGroupMemberRole, fetchGroupMembers,
     setGroupPermission, deleteGroupPermission, fetchGroupPermissions,
-    fetchAuditLog, fetchAuditSummary, deleteAuditLog, exportAuditLog, fetchAllFileKeys, rotateOrgKey, initializeOrgKey,
+    fetchAuditLog, fetchAuditSummary, deleteAuditLog, exportAuditLog, fetchAllFileKeys, rotateOrgKey, initializeOrgKey, transferOwnership,
     fetchOrgStats, createOrgFileShare,
     orgConflictState, resolveOrgConflict,
     pinnedOrgIDs, togglePin, isPinned,
