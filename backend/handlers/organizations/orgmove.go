@@ -37,6 +37,10 @@ func (h *OrgHandler) MoveOrgFile(c *gin.Context) {
 		return
 	}
 
+	if !h.checkMFAEnforcement(c, orgID, userID) {
+		return
+	}
+
 	destPath := normPath(req.NewFolderPath)
 	ctx := c.Request.Context()
 
@@ -136,6 +140,10 @@ func (h *OrgHandler) MoveOrgFolder(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if !h.checkMFAEnforcement(c, orgID, userID) {
 		return
 	}
 

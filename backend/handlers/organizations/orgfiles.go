@@ -40,6 +40,11 @@ func (h *OrgHandler) DownloadOrgFile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file id"})
 		return
 	}
+
+	if !h.checkMFAEnforcement(c, orgID, userID) {
+		return
+	}
+
 	ctx := c.Request.Context()
 
 	var file pkg.OrgFile
@@ -123,6 +128,11 @@ func (h *OrgHandler) DeleteOrgFile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file id"})
 		return
 	}
+
+	if !h.checkMFAEnforcement(c, orgID, userID) {
+		return
+	}
+
 	ctx := c.Request.Context()
 
 	var file pkg.OrgFile
@@ -179,6 +189,11 @@ func (h *OrgHandler) GetOrgFileKey(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file id"})
 		return
 	}
+
+	if !h.checkMFAEnforcement(c, orgID, userID) {
+		return
+	}
+
 	ctx := c.Request.Context()
 
 	var file pkg.OrgFile
