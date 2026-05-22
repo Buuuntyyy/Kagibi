@@ -221,6 +221,205 @@ var (
 		},
 	)
 
+	// --- Métriques Organisations ---
+
+	// Gauge: Nombre total d'organisations actives (sondé)
+	OrgsTotal = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_orgs_total",
+			Help: "Nombre total d'organisations actives en base",
+		},
+	)
+
+	// Counter: Organisations créées
+	OrgCreatedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_org_created_total",
+			Help: "Nombre total d'organisations créées",
+		},
+	)
+
+	// Counter: Organisations supprimées
+	OrgDeletedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_org_deleted_total",
+			Help: "Nombre total d'organisations supprimées",
+		},
+	)
+
+	// Gauge: Nombre total d'appartenances à une organisation (sondé)
+	OrgMembersTotal = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_org_members_total",
+			Help: "Nombre total d'appartenances à une organisation en base",
+		},
+	)
+
+	// Gauge: Nombre de fichiers actuellement stockés dans les organisations (sondé)
+	OrgFilesTotal = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_org_files_total",
+			Help: "Nombre de fichiers non supprimés actuellement stockés dans les organisations",
+		},
+	)
+
+	// Gauge: Nombre de dossiers dans les organisations (sondé)
+	OrgFoldersTotal = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_org_folders_total",
+			Help: "Nombre de dossiers non supprimés actuellement dans les organisations",
+		},
+	)
+
+	// Gauge: Invitations d'organisation actives en attente (sondé)
+	OrgInvitationsPendingTotal = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_org_invitations_pending_total",
+			Help: "Nombre d'invitations d'organisation actives non encore acceptées ni révoquées",
+		},
+	)
+
+	// Gauge: Stockage total utilisé par les organisations en octets (sondé)
+	OrgStorageUsedBytes = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_org_storage_used_bytes",
+			Help: "Somme du stockage utilisé par toutes les organisations en octets",
+		},
+	)
+
+	// Gauge: Médiane du nombre de membres par organisation (sondé via PERCENTILE_CONT)
+	OrgMembersPerOrgMedian = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_org_members_per_org_median",
+			Help: "Nombre médian de membres par organisation",
+		},
+	)
+
+	// Gauge: Médiane du nombre d'organisations par membre (sondé via PERCENTILE_CONT)
+	OrgOrgsPerMemberMedian = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "kagibi_org_orgs_per_member_median",
+			Help: "Nombre médian d'organisations auxquelles appartient un membre",
+		},
+	)
+
+	// Counter: Uploads de fichiers dans une organisation
+	OrgFileUploadsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_org_file_uploads_total",
+			Help: "Nombre total de fichiers uploadés dans une organisation",
+		},
+	)
+
+	// Counter: Téléchargements de fichiers depuis une organisation
+	OrgFileDownloadsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_org_file_downloads_total",
+			Help: "Nombre total de fichiers téléchargés depuis une organisation",
+		},
+	)
+
+	// Counter: Suppressions de fichiers dans une organisation (soft-delete)
+	OrgFileDeletionsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_org_file_deletions_total",
+			Help: "Nombre total de fichiers supprimés (mis en corbeille) dans une organisation",
+		},
+	)
+
+	// Counter: Liens de partage d'organisation créés
+	OrgShareCreatedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_org_share_created_total",
+			Help: "Nombre total de liens de partage d'organisation créés",
+		},
+	)
+
+	// Counter: Accès aux liens de partage d'organisation
+	OrgShareAccessTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "kagibi_org_share_access_total",
+			Help: "Accès aux liens de partage d'organisation",
+		},
+		[]string{"result"}, // "success", "password_required", "already_used", "not_found"
+	)
+
+	// Counter: Provisionnements de clé d'organisation
+	OrgKeyProvisionedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_org_key_provisioned_total",
+			Help: "Nombre total de provisionnements de clé d'organisation (admin → membre)",
+		},
+	)
+
+	// Counter: Événements du journal d'audit d'organisation
+	OrgAuditEventsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_org_audit_events_total",
+			Help: "Nombre total d'événements enregistrés dans les journaux d'audit d'organisation",
+		},
+	)
+
+	// Counter: Restaurations depuis la corbeille d'organisation
+	OrgTrashRestoredTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_org_trash_restored_total",
+			Help: "Nombre total d'éléments restaurés depuis la corbeille d'organisation",
+		},
+	)
+
+	// Counter: Adhésions à une organisation
+	OrgMemberJoinedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_org_member_joined_total",
+			Help: "Nombre total d'adhésions à une organisation (via invitation ou ajout direct)",
+		},
+	)
+
+	// Counter: Suppressions de membres d'organisation
+	OrgMemberRemovedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_org_member_removed_total",
+			Help: "Nombre total de membres supprimés d'une organisation",
+		},
+	)
+
+	// Counter: Modifications de permissions de dossier dans une organisation
+	OrgPermissionSetTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_org_permission_set_total",
+			Help: "Nombre total de modifications de permissions de dossier dans une organisation",
+		},
+	)
+
+	// --- Métriques P2P ---
+
+	// Counter: Invitations P2P créées
+	P2PInviteCreatedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_p2p_invite_created_total",
+			Help: "Nombre total d'invitations P2P créées",
+		},
+	)
+
+	// Counter: Invitations P2P acceptées
+	P2PInviteAcceptedTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_p2p_invite_accepted_total",
+			Help: "Nombre total d'invitations P2P acceptées par le destinataire",
+		},
+	)
+
+	// --- Métriques Partages ---
+
+	// Counter: Téléchargements ZIP de dossiers partagés
+	ShareZipDownloadsTotal = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "kagibi_share_zip_downloads_total",
+			Help: "Nombre total de téléchargements ZIP de dossiers partagés",
+		},
+	)
+
 	// --- Métriques de réplication S3 (backup) ---
 
 	// Counter: Nombre de runs de réplication (label status: "success" / "failure")
@@ -386,6 +585,32 @@ func IncrementActiveConnections() {
 func DecrementActiveConnections() {
 	ActiveConnections.Dec()
 }
+
+// --- Fonctions d'enregistrement Organisations ---
+
+func RecordOrgCreated()        { OrgCreatedTotal.Inc() }
+func RecordOrgDeleted()        { OrgDeletedTotal.Inc() }
+func RecordOrgFileUploaded()   { OrgFileUploadsTotal.Inc() }
+func RecordOrgFileDownloaded() { OrgFileDownloadsTotal.Inc() }
+func RecordOrgFileDeleted()    { OrgFileDeletionsTotal.Inc() }
+func RecordOrgShareCreated()   { OrgShareCreatedTotal.Inc() }
+func RecordOrgKeyProvisioned() { OrgKeyProvisionedTotal.Inc() }
+func RecordOrgAuditEvent()     { OrgAuditEventsTotal.Inc() }
+func RecordOrgTrashRestored()  { OrgTrashRestoredTotal.Inc() }
+func RecordOrgMemberJoined()   { OrgMemberJoinedTotal.Inc() }
+func RecordOrgMemberRemoved()  { OrgMemberRemovedTotal.Inc() }
+func RecordOrgPermissionSet()  { OrgPermissionSetTotal.Inc() }
+
+func RecordOrgShareAccess(result string) { OrgShareAccessTotal.WithLabelValues(result).Inc() }
+
+// --- Fonctions d'enregistrement P2P ---
+
+func RecordP2PInviteCreated()  { P2PInviteCreatedTotal.Inc() }
+func RecordP2PInviteAccepted() { P2PInviteAcceptedTotal.Inc() }
+
+// --- Fonctions d'enregistrement Partages ---
+
+func RecordShareZipDownload() { ShareZipDownloadsTotal.Inc() }
 
 // RecordBackupReplication enregistre le résultat d'un run de réplication S3.
 func RecordBackupReplication(success bool, duration time.Duration, objectCount int) {
