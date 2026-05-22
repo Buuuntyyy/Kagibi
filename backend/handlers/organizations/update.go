@@ -4,6 +4,7 @@
 package organizations
 
 import (
+	"database/sql"
 	"net/http"
 	"strconv"
 	"time"
@@ -104,4 +105,96 @@ func (h *OrgHandler) DeleteOrg(c *gin.Context) {
 		Exec(ctx)
 
 	c.JSON(http.StatusOK, gin.H{"message": "organization deleted"})
+}
+
+// TransferOwnership atomically transfers org ownership from the caller to a target member.
+// The caller must be the current owner. The client pre-encrypts the org key with the
+// target's RSA public key so E2E encryption is maintained.
+// POST /orgs/:orgID/transfer-ownership
+func (h *OrgHandler) TransferOwnership(c *gin.Context) {
+	callerID := c.GetString("user_id")
+	orgID, err := strconv.ParseInt(c.Param("orgID"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid organization id"})
+		return
+	}
+
+	var req struct {
+		TargetMemberID  int64  `json:"target_member_id" binding:"required"`
+		EncryptedOrgKey string `json:"encrypted_org_key" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	callerRole, err := h.memberRole(ctx, orgID, callerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check membership"})
+		return
+	}
+	if !isOwner(callerRole) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only the organization owner can transfer ownership"})
+		return
+	}
+
+	var target pkg.OrgMember
+	if err := h.DB.NewSelect().Model(&target).
+		Where("id = ? AND org_id = ?", req.TargetMemberID, orgID).
+		Scan(ctx); err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "target member not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch target member"})
+		return
+	}
+	if target.UserID == callerID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot transfer ownership to yourself"})
+		return
+	}
+
+	tx, err := h.DB.BeginTx(ctx, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to begin transaction"})
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.NewUpdate().Model((*pkg.OrgMember)(nil)).
+		Set("role = 'owner'").
+		Set("encrypted_org_key = ?", req.EncryptedOrgKey).
+		Where("id = ? AND org_id = ?", req.TargetMemberID, orgID).
+		Exec(ctx); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to promote new owner"})
+		return
+	}
+
+	if _, err := tx.NewUpdate().Model((*pkg.OrgMember)(nil)).
+		Set("role = 'admin'").
+		Where("org_id = ? AND user_id = ?", orgID, callerID).
+		Exec(ctx); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to demote caller"})
+		return
+	}
+
+	if _, err := tx.NewUpdate().Model((*pkg.Organization)(nil)).
+		Set("owner_id = ?", target.UserID).
+		Where("id = ?", orgID).
+		Exec(ctx); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update organization owner"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit ownership transfer"})
+		return
+	}
+
+	h.logAudit(ctx, orgID, callerID, "ownership_transferred", target.UserID, "user",
+		"ownership transferred to "+target.UserID)
+
+	c.JSON(http.StatusOK, gin.H{"message": "ownership transferred"})
 }

@@ -224,6 +224,13 @@ func (h *OrgHandler) RemoveMember(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove member"})
 		return
 	}
+	_, _ = h.DB.NewDelete().Model((*pkg.OrgFolderPermission)(nil)).
+		Where("org_id = ? AND user_id = ?", orgID, target.UserID).
+		Exec(ctx)
+	_, _ = h.DB.NewRaw(
+		`DELETE FROM org_group_members WHERE user_id = ? AND group_id IN (SELECT id FROM org_groups WHERE org_id = ?)`,
+		target.UserID, orgID,
+	).Exec(ctx)
 	detail := "self-removal"
 	if !isSelf {
 		detail = "removed by " + callerID
