@@ -5,7 +5,7 @@
   <div class="legal-container">
     <div class="legal-content">
       <h1>Politique de Confidentialité</h1>
-      <p class="last-updated">Dernière mise à jour : 21 Avril 2026</p>
+      <p class="last-updated">Dernière mise à jour : 26 Mai 2026</p>
 
       <section>
         <h2>1. Introduction</h2>
@@ -28,6 +28,16 @@
           <li><strong>Données de signalisation P2P :</strong> Lors d'un transfert P2P, Kagibi enregistre temporairement les métadonnées nécessaires à la mise en relation technique : identifiant de l'expéditeur, email ou identifiant du destinataire (si renseigné), nom et taille du fichier, jeton d'invitation.</li>
           <li><strong>Flux TURN :</strong> Lorsque la connexion directe entre appareils n'est pas possible, le flux de données chiffré transite par le serveur TURN de Kagibi. Ce flux n'est <strong>jamais stocké</strong> : il est commuté en mémoire en temps réel entre les deux parties. Le contenu des fichiers reste chiffré de bout en bout (AES-256-GCM) et Kagibi ne dispose d'aucune clé permettant de le déchiffrer.</li>
           <li><strong>Données de facturation :</strong> En cas d'abonnement payant, les données de paiement sont traitées par notre prestataire Stripe (Stripe Inc.) et ne sont pas stockées par Kagibi.</li>
+          <li>
+            <strong>Import depuis Google Drive (fonctionnalité optionnelle) :</strong>
+            Lorsque l'Utilisateur utilise la fonctionnalité d'import depuis Google Drive, les données suivantes sont traitées :
+            <ul style="margin-top: 0.5rem;">
+              <li><strong>Dans le navigateur de l'Utilisateur uniquement (jamais envoyées à Kagibi) :</strong> jeton d'accès OAuth Google (durée de vie courte, utilisé exclusivement pendant l'import), noms et chemins des fichiers/dossiers Google Drive, tailles et types MIME des fichiers, contenu des fichiers (traité chunk par chunk en mémoire pour chiffrement immédiat).</li>
+              <li><strong>Envoyés aux serveurs Kagibi (identiques à un upload ordinaire) :</strong> blobs chiffrés (contenu illisible sans la clé de l'Utilisateur), métadonnées de fichier (nom, chemin, taille chiffrée) — déjà collectées pour tout fichier stocké sur Kagibi.</li>
+              <li><strong>Ce que Kagibi ne reçoit pas :</strong> le jeton OAuth Google, le contenu des fichiers en clair, aucune donnée provenant directement de Google.</li>
+            </ul>
+            Le jeton d'accès Google est stocké uniquement en mémoire vive du navigateur pendant la durée de l'import et n'est jamais persisté (ni localStorage, ni cookie, ni envoi réseau vers Kagibi).
+          </li>
           <li><strong>Données de mesure d'audience :</strong> Kagibi utilise l'outil d'analyse Umami, hébergé sur sa propre infrastructure (sans transfert vers des tiers). Umami collecte des données anonymisées : pages visitées, URL de provenance (referrer), type de navigateur, système d'exploitation, résolution d'écran, et pays déduit de l'adresse IP par hachage irréversible. <strong>Aucune adresse IP brute n'est conservée et aucun cookie de traçage n'est déposé.</strong></li>
         </ul>
       </section>
@@ -36,7 +46,7 @@
         <h2>4. Finalités du traitement</h2>
         <p>Vos données sont collectées pour les finalités suivantes :</p>
         <ul>
-          <li>Fourniture et gestion du service Kagibi (création de compte, stockage, partage, transferts P2P).</li>
+          <li>Fourniture et gestion du service Kagibi (création de compte, stockage, partage, transferts P2P, import depuis services tiers).</li>
           <li>Sécurité du service et prévention de la fraude.</li>
           <li>Communication avec les utilisateurs (support technique, notifications importantes).</li>
           <li>Respect des obligations légales et réglementaires, notamment la conservation des données de connexion imposée par la LCEN.</li>
@@ -71,6 +81,7 @@
           <li>Kagibi ne conserve aucune clé de déchiffrement de vos données.</li>
         </ul>
         <p>Cette architecture implique que la perte de vos clés de chiffrement peut entraîner la perte définitive d'accès à vos données. Kagibi ne peut être tenu responsable de cette perte.</p>
+        <p><strong>Dans le cadre de l'import Google Drive :</strong> Kagibi ne reçoit, ne stocke ni ne transmet le jeton OAuth Google de l'Utilisateur. Le contenu des fichiers importés est chiffré dans le navigateur avant tout envoi, selon le même mécanisme que pour les uploads ordinaires. Kagibi ne peut donc pas lire les fichiers importés depuis Google Drive, ni a fortiori accéder à votre compte Google.</p>
       </section>
 
       <section>

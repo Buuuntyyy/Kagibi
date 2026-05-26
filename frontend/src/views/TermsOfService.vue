@@ -5,7 +5,7 @@
   <div class="legal-container">
     <div class="legal-content">
       <h1>Conditions Générales d'Utilisation (CGU)</h1>
-      <p class="last-updated">Dernière mise à jour : 21 Avril 2026</p>
+      <p class="last-updated">Dernière mise à jour : 26 Mai 2026</p>
 
       <section>
         <h2>1. Objet</h2>
@@ -85,24 +85,38 @@
       </section>
 
       <section>
-        <h2>8. Propriété Intellectuelle</h2>
+        <h2>8. Import depuis des services tiers (Google Drive)</h2>
+        <p>Kagibi propose une fonctionnalité d'import de fichiers depuis des services de stockage tiers, notamment Google Drive. L'utilisation de cette fonctionnalité est soumise aux conditions suivantes :</p>
+        <ul>
+          <li><strong>Consentement explicite :</strong> L'import ne peut être initié qu'après que l'Utilisateur a accordé une autorisation explicite via le mécanisme OAuth du service tiers. L'Utilisateur peut révoquer cet accès à tout moment depuis les paramètres de sécurité de son compte tiers (par exemple : <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">myaccount.google.com/permissions</a>).</li>
+          <li><strong>Accès en lecture seule :</strong> Kagibi ne demande qu'un accès en lecture seule (<em>drive.readonly</em>). Aucune modification, suppression ou création de fichier n'est effectuée dans le compte tiers de l'Utilisateur.</li>
+          <li><strong>Chiffrement côté client :</strong> Le contenu des fichiers importés est téléchargé directement dans le navigateur de l'Utilisateur, chiffré par ses propres clés, puis envoyé aux serveurs Kagibi sous forme chiffrée. <strong>Kagibi n'accède jamais au contenu en clair des fichiers importés.</strong></li>
+          <li><strong>Jeton d'accès :</strong> Le jeton OAuth obtenu après l'autorisation de l'Utilisateur est utilisé uniquement dans le navigateur, pendant la durée de l'import, et n'est jamais transmis ni stocké sur les serveurs Kagibi.</li>
+          <li><strong>Responsabilité de l'Utilisateur :</strong> L'Utilisateur est seul responsable des fichiers qu'il choisit d'importer depuis un service tiers, et garantit disposer des droits nécessaires pour les héberger sur Kagibi.</li>
+          <li><strong>Conditions du service tiers :</strong> L'utilisation de Google Drive est soumise aux Conditions d'utilisation de Google. Kagibi n'est pas affilié à Google et n'est pas responsable du service Google Drive.</li>
+        </ul>
+        <p><strong>Documents Google Workspace :</strong> Les fichiers Google Docs, Sheets, Slides et autres formats natifs Google ne peuvent pas être téléchargés directement. Ils sont automatiquement exportés dans un format Office compatible (.docx, .xlsx, .pptx, etc.) lors de l'import. Ce processus de conversion peut entraîner une légère perte de mise en forme. L'Utilisateur est informé de cette conversion avant de confirmer l'import.</p>
+      </section>
+
+      <section>
+        <h2>9. Propriété Intellectuelle</h2>
         <p>Les marques, logos, signes ainsi que tous les contenus du site (textes, images, son...) font l'objet d'une protection par le Code de la propriété intellectuelle et plus particulièrement par le droit d'auteur.</p>
         <p>L'Utilisateur doit solliciter l'autorisation préalable du site pour toute reproduction, publication, copie des différents contenus. Il s'engage à une utilisation des contenus du site dans un cadre strictement privé, toute utilisation à des fins commerciales et publicitaires est strictement interdite.</p>
       </section>
 
       <section>
-        <h2>9. Données Personnelles et Mesure d'Audience</h2>
+        <h2>10. Données Personnelles et Mesure d'Audience</h2>
         <p>L'Utilisateur dispose de droits d'opposition, d'accès, de rectification et de suppression portant sur les données personnelles le concernant, conformément à la Politique de Confidentialité du site.</p>
         <p>Kagibi utilise l'outil de mesure d'audience <strong>Umami</strong>, auto-hébergé sur sa propre infrastructure. Umami ne dépose aucun cookie et collecte uniquement des données anonymisées (pages visitées, navigateur, pays approximatif). Aucune donnée permettant d'identifier personnellement un Utilisateur n'est collectée à cette fin, et aucun transfert vers un service tiers n'est effectué. Pour plus de détails, consulter la <a @click.prevent="$router.push('/privacy')" href="#">Politique de Confidentialité</a>.</p>
       </section>
 
       <section>
-        <h2>10. Évolution des CGU</h2>
+        <h2>11. Évolution des CGU</h2>
         <p>Le site Kagibi se réserve le droit de modifier les clauses de ces conditions générales d'utilisation à tout moment. En cas de modification substantielle, l'Utilisateur sera informé par notification ou par email. La poursuite de l'utilisation du Service après modification vaut acceptation des nouvelles CGU.</p>
       </section>
 
       <section>
-        <h2>11. Droit applicable, médiation et juridiction compétente</h2>
+        <h2>12. Droit applicable, médiation et juridiction compétente</h2>
         <p>La législation française s'applique au présent contrat. En cas d'absence de résolution amiable d'un litige né entre les parties, les tribunaux français seront seuls compétents pour en connaître.</p>
         <p>Pour tout litige de consommation qui n'aurait pu être résolu directement avec l'Éditeur, le consommateur peut recourir gratuitement à un médiateur de la consommation en vue de la résolution amiable du litige (Code de la consommation art. L.612-1). Les coordonnées du médiateur de référence sont : [NOM ET COORDONNÉES DU MÉDIATEUR].</p>
         <p>La Commission Européenne met à disposition une plateforme de règlement en ligne des litiges (RLL) : <a href="https://ec.europa.eu/consumers/odr" target="_blank">https://ec.europa.eu/consumers/odr</a>.</p>

@@ -347,6 +347,9 @@
     "dataPortabilityDetails": "L'export inclut votre profil, l'arborescence de vos fichiers et dossiers, vos tags, vos liens de partage, vos contacts et votre activité récente.",
     "exportData": "Exporter mes données",
     "exportingData": "Export en cours...",
+    "importGDriveDesc": "Importez vos fichiers existants depuis Google Drive directement dans Kagibi.",
+    "importGDriveDetails": "Vos fichiers sont téléchargés et chiffrés dans votre navigateur avant tout envoi. Kagibi n'accède jamais à leur contenu.",
+    "importGDriveBtn": "Importer depuis Google Drive",
     "dangerZone": "Zone sensible",
     "deleteAccount": "Supprimer ce compte",
     "deleteAccountDesc": "Cette action est définitive et entraîne la suppression de toutes vos données.",
@@ -1272,5 +1275,33 @@
       "uploadChunkProgress": "Chunk {n} / {total} —",
       "rfArgonSalt": "sel 16 octets (CSPRNG)"
     }
+  },
+  "gdImport": {
+    "title": "Importer depuis Google Drive",
+    "connectIntro": "Connectez votre compte Google Drive pour importer vos fichiers dans Kagibi. La connexion est strictement en lecture seule.",
+    "infoE2E": "Chaque fichier est chiffré dans votre navigateur avant d'être envoyé à Kagibi (zéro connaissance).",
+    "infoReadOnly": "L'accès demandé est en lecture seule — Kagibi ne peut rien modifier ni supprimer dans votre Drive.",
+    "infoTokenNotStored": "Votre jeton d'accès Google n'est jamais envoyé ni stocké sur les serveurs Kagibi.",
+    "infoWorkspace": "Les documents Google (Docs, Sheets, Slides) sont convertis en format Office (.docx / .xlsx / .pptx).",
+    "connectBtn": "Se connecter à Google Drive",
+    "connecting": "Connexion en cours…",
+    "statusAuth": "Authentification Google…",
+    "statusListing": "Récupération de la liste des fichiers…",
+    "statusBuilding": "Analyse de l'arborescence…",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "fileCount": "{n} fichier(s) trouvé(s)",
+    "selectAll": "Tout sélectionner",
+    "deselectAll": "Tout désélectionner",
+    "selectedSummary": "{n} fichier(s) sélectionné(s) · {size}",
+    "importBtn": "Importer {n} fichier(s)",
+    "progressTitle": "{done} / {total} fichiers",
+    "abort": "Arrêter",
+    "importing": "Import en cours…",
+    "doneSuccess": "{n} fichier(s) importé(s) avec succès.",
+    "donePartial": "{ok} fichier(s) importé(s), {errors} erreur(s).",
+    "errorNotConfigured": "L'import Google Drive n'est pas activé sur cette instance.",
+    "errorConnect": "Impossible de se connecter à Google Drive. Vérifiez que vous avez autorisé l'accès.",
+    "fatalError": "Erreur critique de l'import"
   }
 }
