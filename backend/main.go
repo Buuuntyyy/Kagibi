@@ -9,6 +9,7 @@ import (
 	"kagibi/backend/handlers/auth"
 	billinghandlers "kagibi/backend/handlers/billing"
 	"kagibi/backend/handlers/files"
+	"kagibi/backend/handlers/gdimport"
 	"kagibi/backend/handlers/folders"
 	"kagibi/backend/handlers/friends"
 	"kagibi/backend/handlers/keys"
@@ -229,6 +230,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	registerP2PGuestRoutes(api, db, authMW)
 	registerPublicP2PRoutes(api, db, provider)
 	registerEventRoutes(protected, db)
+	registerImportRoutes(protected)
 
 	// WebSocket endpoint — authenticated via Authorization header or Sec-WebSocket-Protocol trick.
 	wsAllowedOrigins := strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",")
@@ -620,6 +622,11 @@ func registerEventRoutes(g *gin.RouterGroup, db *bun.DB) {
 func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup, authMW gin.HandlerFunc, db *bun.DB) {
 	billinghandlers.RegisterWebhookRoute(api, db)
 	billinghandlers.RegisterRoutes(protected, authMW, db)
+}
+
+func registerImportRoutes(g *gin.RouterGroup) {
+	importG := g.Group("/import")
+	importG.GET("/google/config", gdimport.GetGoogleConfig)
 }
 
 // setupPresenceHooks wires WebSocket connect/disconnect events to broadcast
