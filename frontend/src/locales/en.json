@@ -1301,7 +1301,26 @@
     "doneSuccess": "{n} file(s) imported successfully.",
     "donePartial": "{ok} file(s) imported, {errors} error(s).",
     "errorNotConfigured": "Google Drive import is not enabled on this instance.",
+    "loadMore": "+ {n} file(s) not shown — load more",
     "errorConnect": "Unable to connect to Google Drive. Please check that you have granted access.",
-    "fatalError": "Fatal import error"
+    "fatalError": "Fatal import error",
+    "driveRoot": "My Drive (root files)",
+    "back": "← Back",
+    "dedicatedFolder": "Import into a dedicated folder at Kagibi root",
+    "dedicatedFolderPlaceholder": "Folder name",
+    "destinationHint": "Kagibi destination",
+    "foldersIntro": "Choose the root folders to import from Google Drive. Subfolders and files they contain will be automatically included.",
+    "rootFolderCount": "{n} root folder(s) found",
+    "foldersConfirm": "Continue with {n} folder(s)",
+    "conflictTitle": "Folder already exists",
+    "conflictDesc": "The folder \"{name}\" already exists at this location.",
+    "conflictMerge": "Merge",
+    "conflictSkip": "Skip",
+    "conflictApplyAll": "Apply this choice to all conflicts",
+    "fileSkipped": "Skipped",
+    "doneWithSkips": "{ok} file(s) imported, {skips} skipped.",
+    "donePartialWithSkips": "{ok} file(s) imported, {skips} skipped, {errors} error(s).",
+    "transferred": "transferred",
+    "creatingFolders": "Creating folders ({done}/{total})"
   }
 }

@@ -309,53 +309,39 @@ func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, 
 func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) (int64, error) {
 	log.Printf("[UpsertFile] Attempting to upsert file: path=%s, user_id=%s, size=%d", file.Path, file.UserID, size)
 
-	exists, _ := tx.NewSelect().Model((*pkg.File)(nil)).
+	// Fetch old size before upsert so we can compute the storage delta.
+	var oldSize int64
+	_ = tx.NewSelect().Model((*pkg.File)(nil)).ColumnExpr("size").
 		Where(queryUserIDAndPath, file.UserID, file.Path).
-		Exists(ctx)
+		Scan(ctx, &oldSize)
 
-	if exists {
-		log.Printf("[UpsertFile] File exists, updating: path=%s", file.Path)
-		var oldFile pkg.File
-		if err := tx.NewSelect().Model(&oldFile).Where(queryUserIDAndPath, file.UserID, file.Path).Scan(ctx); err == nil {
-			// Update user storage: remove old, add new
-			_, _ = tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
-				Set("storage_used = storage_used - ? + ?", oldFile.Size, size).
-				Where("user_id = ?", file.UserID).Exec(ctx)
-			file.ID = oldFile.ID
-			// Return delta for folder sizes
-			delta := size - oldFile.Size
-			_, err := tx.NewUpdate().Model(file).Where(queryUserIDAndPath, file.UserID, file.Path).Exec(ctx)
-			if err != nil {
-				log.Printf("[UpsertFile] ERROR updating file: %v", err)
-			} else {
-				log.Printf("[UpsertFile] Successfully updated file with ID: %d", file.ID)
-			}
-			return delta, err
-		}
-		_, err := tx.NewUpdate().Model(file).Where(queryUserIDAndPath, file.UserID, file.Path).Exec(ctx)
-		if err != nil {
-			log.Printf("[UpsertFile] ERROR updating file: %v", err)
-		} else {
-			log.Printf("[UpsertFile] Successfully updated file with ID: %d", file.ID)
-		}
-		return 0, err
-	}
-
-	log.Printf("[UpsertFile] File doesn't exist, inserting new: path=%s", file.Path)
-	_, err := tx.NewInsert().Model(file).Exec(ctx)
+	// Atomic upsert: the UNIQUE index uq_files_user_path guarantees no duplicates
+	// even under concurrent imports (CONCURRENT_FILES=3).
+	_, err := tx.NewInsert().Model(file).
+		On("CONFLICT (user_id, path) DO UPDATE").
+		Set("name = EXCLUDED.name").
+		Set("size = EXCLUDED.size").
+		Set("mime_type = EXCLUDED.mime_type").
+		Set("encrypted_key = EXCLUDED.encrypted_key").
+		Set("chunk_size = EXCLUDED.chunk_size").
+		Set("preview_id = EXCLUDED.preview_id").
+		Set("is_preview = EXCLUDED.is_preview").
+		Set("synced = EXCLUDED.synced").
+		Exec(ctx)
 	if err != nil {
-		log.Printf("[UpsertFile] ERROR inserting file: %v", err)
+		log.Printf("[UpsertFile] ERROR upserting file: %v", err)
 		return 0, err
 	}
-	log.Printf("[UpsertFile] Successfully inserted file with ID: %d", file.ID)
+	log.Printf("[UpsertFile] Successfully upserted file with ID: %d", file.ID)
 
+	delta := size - oldSize
 	_, err = tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
-		Set("storage_used = storage_used + ?", size).
+		Set("storage_used = GREATEST(storage_used + ?, 0)", delta).
 		Where("user_id = ?", file.UserID).Exec(ctx)
 	if err != nil {
 		log.Printf("[UpsertFile] ERROR updating storage_used: %v", err)
 	}
-	return size, err
+	return delta, err
 }
 
 func processShareKeys(ctx context.Context, tx bun.Tx, shareKeysJSON string, file *pkg.File) error {
