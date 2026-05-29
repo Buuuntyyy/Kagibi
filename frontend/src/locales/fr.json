@@ -1301,7 +1301,26 @@
     "doneSuccess": "{n} fichier(s) importé(s) avec succès.",
     "donePartial": "{ok} fichier(s) importé(s), {errors} erreur(s).",
     "errorNotConfigured": "L'import Google Drive n'est pas activé sur cette instance.",
+    "loadMore": "+ {n} fichier(s) non affichés — charger la suite",
     "errorConnect": "Impossible de se connecter à Google Drive. Vérifiez que vous avez autorisé l'accès.",
-    "fatalError": "Erreur critique de l'import"
+    "fatalError": "Erreur critique de l'import",
+    "driveRoot": "Mon Drive (fichiers racine)",
+    "back": "← Retour",
+    "dedicatedFolder": "Importer dans un dossier dédié à la racine de Kagibi",
+    "dedicatedFolderPlaceholder": "Nom du dossier",
+    "destinationHint": "Destination Kagibi",
+    "foldersIntro": "Choisissez les dossiers racine à importer depuis Google Drive. Les sous-dossiers et fichiers qu'ils contiennent seront automatiquement inclus.",
+    "rootFolderCount": "{n} dossier(s) racine trouvé(s)",
+    "foldersConfirm": "Continuer avec {n} dossier(s)",
+    "conflictTitle": "Dossier déjà existant",
+    "conflictDesc": "Le dossier « {name} » existe déjà à cet emplacement.",
+    "conflictMerge": "Fusionner",
+    "conflictSkip": "Ignorer",
+    "conflictApplyAll": "Appliquer ce choix à tous les conflits",
+    "fileSkipped": "Ignoré",
+    "doneWithSkips": "{ok} fichier(s) importé(s), {skips} ignoré(s).",
+    "donePartialWithSkips": "{ok} fichier(s) importé(s), {skips} ignoré(s), {errors} erreur(s).",
+    "transferred": "transférés",
+    "creatingFolders": "Création des dossiers ({done}/{total})"
   }
 }

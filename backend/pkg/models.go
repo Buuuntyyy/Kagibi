@@ -76,6 +76,7 @@ type File struct {
 	MimeType     string    `bun:"mime_type,notnull"`                                // Ex: "application/pdf"
 	UserID       string    `bun:"user_id,notnull"`                                  // Propriétaire du fichier
 	EncryptedKey string    `bun:"encrypted_key"`                                    // Clé du fichier chiffrée avec la MasterKey (pour les nouveaux fichiers)
+	ChunkSize    int64     `bun:"chunk_size,notnull,default:10485760" json:"chunk_size"` // Taille du chunk AES-GCM en octets (DEFAULT = 10 MB pour rétrocompat)
 	Tags         []string  `bun:"tags,array"`                                       // Tags
 	PreviewID    *int64    `bun:"preview_id" json:"preview_id"`                     // ID du fichier de prévisualisation (miniature/compressé)
 	Preview      *File     `bun:"rel:belongs-to,join:preview_id=id" json:"preview"` // Metadata du fichier preview

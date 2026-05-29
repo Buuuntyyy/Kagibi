@@ -54,6 +54,10 @@ func Migrate(db *bun.DB) error {
 		return err
 	}
 	migrateEnsurePartialOrgIndexes(ctx, db)
+	if err := migrateFilesUniqueIndex(ctx, db); err != nil {
+		return err
+	}
+	migrateChunkSizeColumns(ctx, db)
 
 	return nil
 }
@@ -828,7 +832,7 @@ func migrateEnsurePartialOrgIndexes(ctx context.Context, db *bun.DB) {
 		// Check if the index is already a partial index; if so, skip.
 		var isPartial bool
 		_ = db.QueryRowContext(ctx,
-			`SELECT indpred IS NOT NULL FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = $1`, name,
+			`SELECT indpred IS NOT NULL FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = ?`, name,
 		).Scan(&isPartial)
 		if isPartial {
 			continue
@@ -842,6 +846,44 @@ func migrateEnsurePartialOrgIndexes(ctx context.Context, db *bun.DB) {
 			log.Printf("Warning: migrateEnsurePartialOrgIndexes create %s: %v", name, err)
 		}
 	}
+}
+
+// migrateChunkSizeColumns adds the chunk_size column to files (and org_files) with a
+// DEFAULT of 10 485 760 (10 MB). PostgreSQL fills existing rows with the default value
+// at query time without rewriting the table, so old files transparently keep 10 MB
+// semantics and new files store their actual encryption chunk size.
+func migrateChunkSizeColumns(ctx context.Context, db *bun.DB) {
+	for _, stmt := range []string{
+		`ALTER TABLE "files"     ADD COLUMN IF NOT EXISTS "chunk_size" BIGINT NOT NULL DEFAULT 10485760`,
+		`ALTER TABLE "org_files" ADD COLUMN IF NOT EXISTS "chunk_size" BIGINT NOT NULL DEFAULT 10485760`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateChunkSizeColumns: %v", err)
+		}
+	}
+}
+
+// migrateFilesUniqueIndex deduplicates any duplicate (user_id, path) rows in the
+// files table created by the pre-fix non-atomic upsert, then adds a UNIQUE index
+// so the new ON CONFLICT DO UPDATE upsert can operate safely.
+func migrateFilesUniqueIndex(ctx context.Context, db *bun.DB) error {
+	// Remove duplicate rows keeping the newest (highest id) for each (user_id, path).
+	if _, err := db.ExecContext(ctx, `
+		DELETE FROM files a
+		USING files b
+		WHERE a.id < b.id
+		  AND a.user_id = b.user_id
+		  AND a.path = b.path
+	`); err != nil {
+		log.Printf("Warning: migrateFilesUniqueIndex dedup: %v", err)
+	}
+
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_files_user_path ON files (user_id, path)`,
+	); err != nil {
+		return fmt.Errorf("migrateFilesUniqueIndex: %w", err)
+	}
+	return nil
 }
 
 func migrateP2PInviteEmails(ctx context.Context, db *bun.DB) {

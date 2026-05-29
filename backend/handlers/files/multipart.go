@@ -74,6 +74,9 @@ type CompleteMultipartRequest struct {
 	PreviewID       *int64         `json:"preview_id"`
 	IsPreview       bool           `json:"is_preview"`
 	Synced          bool           `json:"synced"`
+	// ChunkSize is the AES-GCM plaintext chunk size used during encryption.
+	// 0 or absent means the client did not specify — defaults to 10 MB (legacy behaviour).
+	ChunkSize int64 `json:"chunk_size"`
 }
 
 // CompletePart represents a completed part with ETag
@@ -253,7 +256,7 @@ func buildCompletedParts(parts []CompletePart) []types.CompletedPart {
 
 // CompleteMultipartHandler assembles parts and creates DB record
 func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 300*time.Second)
 	defer cancel()
 
 	userID := c.GetString("user_id")
@@ -304,6 +307,20 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	// Verify actual S3 object size: client-provided TotalSize may diverge from the bytes
+	// S3 actually assembled (e.g. GDrive import where Drive metadata != real download size).
+	// Storing the wrong size causes NS_ERROR_NET_PARTIAL_TRANSFER on download.
+	actualSize := req.TotalSize
+	headOut, headErr := s3storage.Client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(s3storage.BucketName),
+		Key:    aws.String(req.Key),
+	})
+	if headErr == nil && headOut.ContentLength != nil {
+		actualSize = *headOut.ContentLength
+	} else if headErr != nil {
+		log.Printf("HeadObject after CompleteMultipartUpload failed, using client-provided size: %v", headErr)
+	}
+
 	// Validate path
 	filePath := req.FilePath
 	if filePath == "" {
@@ -335,19 +352,25 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		contentType = "application/octet-stream"
 	}
 
+	chunkSize := req.ChunkSize
+	if chunkSize <= 0 {
+		chunkSize = 10 * 1024 * 1024 // legacy default: 10 MB
+	}
+
 	fileRecord := &pkg.File{
 		Name:         req.FileName,
 		Path:         fullPathDB,
-		Size:         req.TotalSize,
+		Size:         actualSize,
 		MimeType:     contentType,
 		UserID:       userID,
 		EncryptedKey: req.EncryptedKey,
+		ChunkSize:    chunkSize,
 		PreviewID:    req.PreviewID,
 		IsPreview:    req.IsPreview,
 		Synced:       req.Synced,
 	}
 
-	delta, err := upsertFileInDB(ctx, tx, fileRecord, req.TotalSize)
+	delta, err := upsertFileInDB(ctx, tx, fileRecord, actualSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file record"})
 		return
@@ -493,6 +516,13 @@ func GetPresignedDownloadHandler(c *gin.Context, db *bun.DB) {
 	log.Printf("Presigned streaming download URL generated - UserID: %s, FileID: %d, Size: %d", userID, fileID, file.Size)
 	monitoring.FileDownloadsTotal.Inc()
 
+	// Resolve chunk size: files uploaded before this migration have chunk_size=0 in DB
+	// (column didn't exist yet), so fall back to the legacy 10 MB default.
+	chunkSize := file.ChunkSize
+	if chunkSize <= 0 {
+		chunkSize = 10 * 1024 * 1024
+	}
+
 	// Return URL with decryption metadata
 	c.JSON(http.StatusOK, gin.H{
 		"url":            presignReq.URL,
@@ -502,7 +532,7 @@ func GetPresignedDownloadHandler(c *gin.Context, db *bun.DB) {
 		"mime_type":      file.MimeType,
 		"encrypted_key":  file.EncryptedKey,
 		"encryption_alg": "AES-GCM-256",
-		"chunk_size":     10 * 1024 * 1024, // 10MB - must match frontend CHUNK_SIZE
+		"chunk_size":     chunkSize,
 		"iv_length":      12,
 		"tag_length":     16,
 	})

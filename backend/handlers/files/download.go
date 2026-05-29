@@ -269,7 +269,13 @@ func streamFileFromS3(c *gin.Context, file *pkg.File) {
 	if file.MimeType != "" {
 		c.Header("Content-Type", file.MimeType)
 	}
-	c.Header("Content-Length", strconv.FormatInt(file.Size, 10))
+	// Use actual S3 object size: DB value may diverge from reality (e.g. after GDrive import
+	// where the Drive API metadata size doesn't match the actual downloaded bytes).
+	contentLen := file.Size
+	if output.ContentLength != nil {
+		contentLen = *output.ContentLength
+	}
+	c.Header("Content-Length", strconv.FormatInt(contentLen, 10))
 
 	if _, err := io.Copy(c.Writer, output.Body); err != nil {
 		log.Printf("Error streaming file to client: %v", err)
