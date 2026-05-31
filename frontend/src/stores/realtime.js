@@ -26,6 +26,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
     p2p_signal: [],
     presence_update: [],
     org_update: [],
+    notification_update: [],
   }
 
   function onEvent(eventType, handler) {
