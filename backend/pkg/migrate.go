@@ -59,6 +59,13 @@ func Migrate(db *bun.DB) error {
 	}
 	migrateChunkSizeColumns(ctx, db)
 
+	if err := migrateComments(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateNotifications(ctx, db); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -882,6 +889,86 @@ func migrateFilesUniqueIndex(ctx context.Context, db *bun.DB) error {
 		`CREATE UNIQUE INDEX IF NOT EXISTS uq_files_user_path ON files (user_id, path)`,
 	); err != nil {
 		return fmt.Errorf("migrateFilesUniqueIndex: %w", err)
+	}
+	return nil
+}
+
+func migrateComments(ctx context.Context, db *bun.DB) error {
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS file_comments (
+			id          BIGSERIAL PRIMARY KEY,
+			file_id     BIGINT REFERENCES files(id) ON DELETE CASCADE,
+			org_file_id BIGINT REFERENCES org_files(id) ON DELETE CASCADE,
+			org_id      BIGINT REFERENCES organizations(id) ON DELETE CASCADE,
+			author_id   TEXT NOT NULL,
+			content     TEXT NOT NULL,
+			is_resolved BOOLEAN NOT NULL DEFAULT false,
+			parent_id   BIGINT REFERENCES file_comments(id) ON DELETE CASCADE,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create file_comments table: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS file_comment_reads (
+			comment_id BIGINT NOT NULL REFERENCES file_comments(id) ON DELETE CASCADE,
+			user_id    TEXT NOT NULL,
+			read_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (comment_id, user_id)
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create file_comment_reads table: %w", err)
+	}
+	for _, idx := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_file_comments_file_id     ON file_comments (file_id)     WHERE file_id IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_file_comments_org_file_id ON file_comments (org_file_id) WHERE org_file_id IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_file_comments_author_id   ON file_comments (author_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_comment_reads_user   ON file_comment_reads (user_id)`,
+	} {
+		if _, err := db.ExecContext(ctx, idx); err != nil {
+			log.Printf("Warning: failed to create file_comments index: %v", err)
+		}
+	}
+	return nil
+}
+
+func migrateNotifications(ctx context.Context, db *bun.DB) error {
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS notifications (
+			id            BIGSERIAL PRIMARY KEY,
+			user_id       TEXT NOT NULL,
+			actor_id      TEXT NOT NULL,
+			actor_name    TEXT NOT NULL,
+			type          TEXT NOT NULL,
+			resource_id   BIGINT NOT NULL,
+			resource_type TEXT NOT NULL,
+			resource_name TEXT NOT NULL,
+			resource_path TEXT NOT NULL DEFAULT '',
+			org_id        BIGINT,
+			comment_id    BIGINT REFERENCES file_comments(id) ON DELETE SET NULL,
+			is_read       BOOLEAN NOT NULL DEFAULT false,
+			created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create notifications table: %w", err)
+	}
+	// Idempotent column additions for instances that created the table before these fields.
+	for _, stmt := range []string{
+		`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS resource_path TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS org_id        BIGINT`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: failed to alter notifications table: %v", err)
+		}
+	}
+	for _, idx := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_notifications_user_read  ON notifications (user_id, is_read, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_notifications_comment_id ON notifications (comment_id) WHERE comment_id IS NOT NULL`,
+	} {
+		if _, err := db.ExecContext(ctx, idx); err != nil {
+			log.Printf("Warning: failed to create notifications index: %v", err)
+		}
 	}
 	return nil
 }

@@ -484,6 +484,52 @@ type OrgAuditLog struct {
 	CreatedAt  time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
+// FileComment stores a text comment on a personal file or an org file.
+// Exactly one of FileID or OrgFileID must be set.
+type FileComment struct {
+	bun.BaseModel `bun:"table:file_comments,alias:fc"`
+
+	ID         int64     `bun:"id,pk,autoincrement" json:"id"`
+	FileID     *int64    `bun:"file_id" json:"file_id,omitempty"`
+	OrgFileID  *int64    `bun:"org_file_id" json:"org_file_id,omitempty"`
+	OrgID      *int64    `bun:"org_id" json:"org_id,omitempty"`
+	AuthorID   string    `bun:"author_id,notnull" json:"author_id"`
+	AuthorName string    `bun:"-" json:"author_name,omitempty"` // populated from join, not stored
+	Content    string    `bun:"content,notnull" json:"content"`
+	IsResolved bool      `bun:"is_resolved,notnull,default:false" json:"is_resolved"`
+	ParentID   *int64    `bun:"parent_id" json:"parent_id,omitempty"`
+	CreatedAt  time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt  time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
+// FileCommentRead tracks which comments a given user has acknowledged (to compute unread counts).
+type FileCommentRead struct {
+	bun.BaseModel `bun:"table:file_comment_reads,alias:fcr"`
+
+	CommentID int64     `bun:"comment_id,pk" json:"comment_id"`
+	UserID    string    `bun:"user_id,pk" json:"user_id"`
+	ReadAt    time.Time `bun:"read_at,nullzero,notnull,default:current_timestamp" json:"read_at"`
+}
+
+// Notification is a persistent in-app notification stored per recipient.
+type Notification struct {
+	bun.BaseModel `bun:"table:notifications,alias:notif"`
+
+	ID           int64     `bun:"id,pk,autoincrement" json:"id"`
+	UserID       string    `bun:"user_id,notnull" json:"user_id"`
+	ActorID      string    `bun:"actor_id,notnull" json:"actor_id"`
+	ActorName    string    `bun:"actor_name,notnull" json:"actor_name"`
+	Type         string    `bun:"type,notnull" json:"type"`                   // "comment_added" | "reply_added"
+	ResourceID   int64     `bun:"resource_id,notnull" json:"resource_id"`
+	ResourceType string    `bun:"resource_type,notnull" json:"resource_type"` // "file" | "org_file"
+	ResourceName string    `bun:"resource_name,notnull" json:"resource_name"`
+	ResourcePath string    `bun:"resource_path,notnull,default:''" json:"resource_path"` // folder path for navigation
+	OrgID        *int64    `bun:"org_id" json:"org_id,omitempty"`             // set for org_file notifications
+	CommentID    *int64    `bun:"comment_id" json:"comment_id,omitempty"`
+	IsRead       bool      `bun:"is_read,notnull,default:false" json:"is_read"`
+	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
 // EmitRealtimeEvent inserts an event into the realtime_events table and
 // pushes it immediately over WebSocket if the user is connected.
 func EmitRealtimeEvent(ctx context.Context, db *bun.DB, userID, eventType string, payload map[string]any) error {

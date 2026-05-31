@@ -8,11 +8,13 @@ import (
 	"encoding/json"
 	"kagibi/backend/handlers/auth"
 	billinghandlers "kagibi/backend/handlers/billing"
+	commenthandlers "kagibi/backend/handlers/comments"
 	"kagibi/backend/handlers/files"
 	"kagibi/backend/handlers/gdimport"
 	"kagibi/backend/handlers/folders"
 	"kagibi/backend/handlers/friends"
 	"kagibi/backend/handlers/keys"
+	notifhandlers "kagibi/backend/handlers/notifications"
 	orghandlers "kagibi/backend/handlers/organizations"
 	p2phandlers "kagibi/backend/handlers/p2p"
 	"kagibi/backend/handlers/security"
@@ -224,13 +226,15 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	registerFriendRoutes(protected, friendHandler)
 	registerShareRoutes(protected, db)
 	registerSecurityRoutes(protected)
-	registerOrganizationRoutes(api, protected, orgHandler)
+	registerOrganizationRoutes(api, protected, orgHandler, db)
 	registerBillingRoutes(api, protected, authMW, db)
 	registerP2PRoutes(protected, db)
 	registerP2PGuestRoutes(api, db, authMW)
 	registerPublicP2PRoutes(api, db, provider)
 	registerEventRoutes(protected, db)
 	registerImportRoutes(protected)
+	registerCommentRoutes(protected, db)
+	registerNotificationRoutes(protected, db)
 
 	// WebSocket endpoint — authenticated via Authorization header or Sec-WebSocket-Protocol trick.
 	wsAllowedOrigins := strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",")
@@ -357,7 +361,7 @@ func registerSecurityRoutes(g *gin.RouterGroup) {
 	securityG.GET("/events", func(c *gin.Context) { security.GetSecurityEvents(c) })
 }
 
-func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHandler) {
+func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHandler, db *bun.DB) {
 	orgsG := g.Group("/orgs")
 
 	// Organization CRUD
@@ -466,6 +470,10 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 
 	// Client-side search index (encrypted names, client decrypts + filters)
 	orgsG.GET("/:orgID/fs/all-items", h.GetAllOrgItems)
+
+	// File comments (org context)
+	orgsG.GET("/:orgID/fs/file/:fileID/comments", func(c *gin.Context) { commenthandlers.ListOrgFileComments(c, db) })
+	orgsG.POST("/:orgID/fs/file/:fileID/comments", func(c *gin.Context) { commenthandlers.AddOrgFileComment(c, db) })
 
 	// Token-based join routes — GET is public (unauthenticated preview), POST requires auth
 	public.GET("/org-invitations/:token", h.GetInvitation)
@@ -627,6 +635,33 @@ func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup, aut
 func registerImportRoutes(g *gin.RouterGroup) {
 	importG := g.Group("/import")
 	importG.GET("/google/config", gdimport.GetGoogleConfig)
+}
+
+func registerCommentRoutes(g *gin.RouterGroup, db *bun.DB) {
+	commentsG := g.Group("/comments")
+
+	// Personal file comments — under /comments/file/:fileID to avoid wildcard
+	// conflicts with the existing /files/:id/folder-key route.
+	commentsG.GET("/file/:fileID", func(c *gin.Context) { commenthandlers.ListFileComments(c, db) })
+	commentsG.POST("/file/:fileID", func(c *gin.Context) { commenthandlers.AddFileComment(c, db) })
+
+	// Batch counts (must be before /:id to avoid false matches)
+	commentsG.POST("/batch-counts", func(c *gin.Context) { commenthandlers.BatchCommentCounts(c, db) })
+
+	// Per-comment operations
+	commentsG.PUT("/:id", func(c *gin.Context) { commenthandlers.EditComment(c, db) })
+	commentsG.DELETE("/:id", func(c *gin.Context) { commenthandlers.DeleteComment(c, db) })
+	commentsG.POST("/:id/read", func(c *gin.Context) { commenthandlers.MarkCommentRead(c, db) })
+	commentsG.PATCH("/:id/resolve", func(c *gin.Context) { commenthandlers.ResolveComment(c, db) })
+}
+
+func registerNotificationRoutes(g *gin.RouterGroup, db *bun.DB) {
+	notifsG := g.Group("/notifications")
+	notifsG.GET("", func(c *gin.Context) { notifhandlers.ListNotifications(c, db) })
+	notifsG.GET("/unread-count", func(c *gin.Context) { notifhandlers.GetUnreadCount(c, db) })
+	notifsG.POST("/read-all", func(c *gin.Context) { notifhandlers.MarkAllRead(c, db) })
+	notifsG.POST("/:id/read", func(c *gin.Context) { notifhandlers.MarkNotificationRead(c, db) })
+	notifsG.DELETE("/:id", func(c *gin.Context) { notifhandlers.DeleteNotification(c, db) })
 }
 
 // setupPresenceHooks wires WebSocket connect/disconnect events to broadcast

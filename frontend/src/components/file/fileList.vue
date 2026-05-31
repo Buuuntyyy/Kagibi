@@ -192,6 +192,7 @@
       :columns="columns"
       :sortKey="currentSortKey"
       :sortDirection="currentSortDirection"
+      :commentType="'file'"
       @sort-change="handleSortChange"
       @select-item="selectItem"
       @toggle-select="toggleItemSelection"
@@ -205,7 +206,9 @@
       @folder-drag-leave="onFolderDragLeave"
       @manage-share="openManageShareDialog"
       @remove-tag="removeTag"
+      @open-comments="openComments"
     />
+    <CommentPanel />
 
 
   <div
@@ -349,6 +352,8 @@ import MoveDialog from '../MoveDialog.vue';
 import ManageShareDialog from '../ManageShareDialog.vue';
 import FileTable from './FileTable.vue';
 import MFAChallengeModal from '../MFAChallengeModal.vue';
+import CommentPanel from './CommentPanel.vue';
+import { useCommentStore } from '../../stores/comments';
 import { formatSpeed, formatSize } from '../../utils/format'
 
 const router = useRouter()
@@ -356,6 +361,7 @@ const { t } = useI18n()
 const authStore = useAuthStore()
 const uiStore = useUIStore()
 const fileStore = useFileStore()
+const commentStore = useCommentStore()
 const preferenceStore = usePreferencesStore()
 const tagStore = useTagStore()
 const uploadStore = useUploadStore()
@@ -1730,6 +1736,44 @@ const onMFACancelled = () => {
   showMFAChallenge.value = false
   pendingDownload.value = null
 }
+
+const openComments = (file, type) => {
+  commentStore.openPanel(file, type)
+}
+
+// Refresh comment counts and consume any pending notification navigation.
+watch(
+  () => fileStore.files,
+  (files) => {
+    if (!files || !files.length) return
+    const ids = files.map(f => f.ID).filter(Boolean)
+    if (ids.length) commentStore.fetchCounts(ids, [])
+
+    // Pending nav: a notification click asked us to open the comment panel for a file.
+    const nav = commentStore.pendingNav
+    if (nav && nav.type === 'file') {
+      const target = files.find(f => (f.ID ?? f.id) === nav.fileID)
+      if (target) {
+        commentStore.clearPendingNav()
+        commentStore.openPanel(target, 'file')
+      }
+    }
+  },
+  { immediate: true }
+)
+
+// When mounting with a pending nav, navigate to the right folder first.
+watch(
+  () => commentStore.pendingNav,
+  async (nav) => {
+    if (!nav || nav.type !== 'file') return
+    // Navigate to the folder if we're not already there
+    if (nav.folderPath && fileStore.currentPath !== nav.folderPath) {
+      await fileStore.fetchItems(nav.folderPath)
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>

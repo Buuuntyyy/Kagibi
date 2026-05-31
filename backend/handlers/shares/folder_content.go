@@ -181,13 +181,21 @@ func enrichFilesWithKeys(ctx context.Context, db *bun.DB, folderID int64, files 
 	}
 	keyMap := make(map[int64]string)
 	if len(fileIDs) > 0 {
+		// Prefer the key stored under the root share folder ID. If none exists
+		// (file was uploaded to a sub-folder after the share was created and the
+		// frontend used the sub-folder ID), fall back to any FolderFileKey for the
+		// file. We load without the folder_id filter and pick the root-folder entry
+		// first, so the correct key is always returned.
 		var keys []pkg.FolderFileKey
 		if err := db.NewSelect().Model(&keys).
-			Where("folder_id = ?", folderID).
 			Where("file_id IN (?)", bun.In(fileIDs)).
+			OrderExpr("CASE WHEN folder_id = ? THEN 0 ELSE 1 END ASC", folderID).
 			Scan(ctx); err == nil {
 			for _, k := range keys {
-				keyMap[k.FileID] = k.EncryptedKey
+				// Keep the first (preferred) entry per file.
+				if _, exists := keyMap[k.FileID]; !exists {
+					keyMap[k.FileID] = k.EncryptedKey
+				}
 			}
 		}
 	}

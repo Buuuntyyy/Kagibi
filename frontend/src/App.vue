@@ -37,7 +37,8 @@ import { useThemeStore } from './stores/theme'
 import { useAuthStore } from './stores/auth'
 import { useBillingStore } from './stores/billing'
 import { useRealtimeStore } from './stores/realtime'
-import { watch, computed, onMounted } from 'vue'
+import { useNotificationStore } from './stores/notifications'
+import { watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { isP2PSubdomain } from './composables/useSubdomain'
 
@@ -45,6 +46,7 @@ const themeStore = useThemeStore()
 const authStore = useAuthStore()
 const billingStore = useBillingStore()
 const realtimeStore = useRealtimeStore()
+const notifStore = useNotificationStore()
 const route = useRoute()
 
 // Check if current route is a landing page
@@ -52,14 +54,18 @@ const isLandingPage = computed(() => {
   return ['LandingHome', 'Pricing', 'Transfer', 'Compare', 'Security'].includes(route.name)
 })
 
-// Connect Supabase Realtime and fetch billing status when authenticated.
-// Both calls require a valid session — never call them before auth is confirmed.
+// Connect realtime services when authenticated.
+// The notification subscription is wired here (not inside a navbar component)
+// so it survives page navigation and Vite HMR reloads.
 watch(() => authStore.isAuthenticated, (isAuthenticated) => {
   if (isAuthenticated) {
     realtimeStore.connect()
     billingStore.fetchBillingStatus()
+    notifStore.fetchNotifications()
+    notifStore.connectRealtime(realtimeStore)
   } else {
     realtimeStore.disconnect()
+    notifStore.disconnectRealtime()
   }
 }, { immediate: true })
 </script>
