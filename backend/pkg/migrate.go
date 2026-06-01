@@ -54,6 +54,17 @@ func Migrate(db *bun.DB) error {
 		return err
 	}
 	migrateEnsurePartialOrgIndexes(ctx, db)
+	if err := migrateFilesUniqueIndex(ctx, db); err != nil {
+		return err
+	}
+	migrateChunkSizeColumns(ctx, db)
+
+	if err := migrateComments(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateNotifications(ctx, db); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -828,7 +839,7 @@ func migrateEnsurePartialOrgIndexes(ctx context.Context, db *bun.DB) {
 		// Check if the index is already a partial index; if so, skip.
 		var isPartial bool
 		_ = db.QueryRowContext(ctx,
-			`SELECT indpred IS NOT NULL FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = $1`, name,
+			`SELECT indpred IS NOT NULL FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = ?`, name,
 		).Scan(&isPartial)
 		if isPartial {
 			continue
@@ -842,6 +853,124 @@ func migrateEnsurePartialOrgIndexes(ctx context.Context, db *bun.DB) {
 			log.Printf("Warning: migrateEnsurePartialOrgIndexes create %s: %v", name, err)
 		}
 	}
+}
+
+// migrateChunkSizeColumns adds the chunk_size column to files (and org_files) with a
+// DEFAULT of 10 485 760 (10 MB). PostgreSQL fills existing rows with the default value
+// at query time without rewriting the table, so old files transparently keep 10 MB
+// semantics and new files store their actual encryption chunk size.
+func migrateChunkSizeColumns(ctx context.Context, db *bun.DB) {
+	for _, stmt := range []string{
+		`ALTER TABLE "files"     ADD COLUMN IF NOT EXISTS "chunk_size" BIGINT NOT NULL DEFAULT 10485760`,
+		`ALTER TABLE "org_files" ADD COLUMN IF NOT EXISTS "chunk_size" BIGINT NOT NULL DEFAULT 10485760`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateChunkSizeColumns: %v", err)
+		}
+	}
+}
+
+// migrateFilesUniqueIndex deduplicates any duplicate (user_id, path) rows in the
+// files table created by the pre-fix non-atomic upsert, then adds a UNIQUE index
+// so the new ON CONFLICT DO UPDATE upsert can operate safely.
+func migrateFilesUniqueIndex(ctx context.Context, db *bun.DB) error {
+	// Remove duplicate rows keeping the newest (highest id) for each (user_id, path).
+	if _, err := db.ExecContext(ctx, `
+		DELETE FROM files a
+		USING files b
+		WHERE a.id < b.id
+		  AND a.user_id = b.user_id
+		  AND a.path = b.path
+	`); err != nil {
+		log.Printf("Warning: migrateFilesUniqueIndex dedup: %v", err)
+	}
+
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_files_user_path ON files (user_id, path)`,
+	); err != nil {
+		return fmt.Errorf("migrateFilesUniqueIndex: %w", err)
+	}
+	return nil
+}
+
+func migrateComments(ctx context.Context, db *bun.DB) error {
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS file_comments (
+			id          BIGSERIAL PRIMARY KEY,
+			file_id     BIGINT REFERENCES files(id) ON DELETE CASCADE,
+			org_file_id BIGINT REFERENCES org_files(id) ON DELETE CASCADE,
+			org_id      BIGINT REFERENCES organizations(id) ON DELETE CASCADE,
+			author_id   TEXT NOT NULL,
+			content     TEXT NOT NULL,
+			is_resolved BOOLEAN NOT NULL DEFAULT false,
+			parent_id   BIGINT REFERENCES file_comments(id) ON DELETE CASCADE,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create file_comments table: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS file_comment_reads (
+			comment_id BIGINT NOT NULL REFERENCES file_comments(id) ON DELETE CASCADE,
+			user_id    TEXT NOT NULL,
+			read_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (comment_id, user_id)
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create file_comment_reads table: %w", err)
+	}
+	for _, idx := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_file_comments_file_id     ON file_comments (file_id)     WHERE file_id IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_file_comments_org_file_id ON file_comments (org_file_id) WHERE org_file_id IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_file_comments_author_id   ON file_comments (author_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_comment_reads_user   ON file_comment_reads (user_id)`,
+	} {
+		if _, err := db.ExecContext(ctx, idx); err != nil {
+			log.Printf("Warning: failed to create file_comments index: %v", err)
+		}
+	}
+	return nil
+}
+
+func migrateNotifications(ctx context.Context, db *bun.DB) error {
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS notifications (
+			id            BIGSERIAL PRIMARY KEY,
+			user_id       TEXT NOT NULL,
+			actor_id      TEXT NOT NULL,
+			actor_name    TEXT NOT NULL,
+			type          TEXT NOT NULL,
+			resource_id   BIGINT NOT NULL,
+			resource_type TEXT NOT NULL,
+			resource_name TEXT NOT NULL,
+			resource_path TEXT NOT NULL DEFAULT '',
+			org_id        BIGINT,
+			comment_id    BIGINT REFERENCES file_comments(id) ON DELETE SET NULL,
+			is_read       BOOLEAN NOT NULL DEFAULT false,
+			created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create notifications table: %w", err)
+	}
+	// Idempotent column additions for instances that created the table before these fields.
+	for _, stmt := range []string{
+		`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS resource_path TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS org_id        BIGINT`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: failed to alter notifications table: %v", err)
+		}
+	}
+	for _, idx := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_notifications_user_read  ON notifications (user_id, is_read, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_notifications_comment_id ON notifications (comment_id) WHERE comment_id IS NOT NULL`,
+	} {
+		if _, err := db.ExecContext(ctx, idx); err != nil {
+			log.Printf("Warning: failed to create notifications index: %v", err)
+		}
+	}
+	return nil
 }
 
 func migrateP2PInviteEmails(ctx context.Context, db *bun.DB) {
