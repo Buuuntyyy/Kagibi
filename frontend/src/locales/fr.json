@@ -1322,5 +1322,58 @@
     "donePartialWithSkips": "{ok} fichier(s) importé(s), {skips} ignoré(s), {errors} erreur(s).",
     "transferred": "transférés",
     "creatingFolders": "Création des dossiers ({done}/{total})"
+  },
+  "tour": {
+    "skip": "Passer",
+    "next": "Suivant",
+    "finish": "Terminer",
+    "startUsing": "Commencer",
+    "step1": {
+      "title": "Bienvenue sur SaferCloud",
+      "desc": "Voici un aperçu rapide des fonctionnalités qui vous attendent. Explorez-les à votre rythme.",
+      "feat1": "Stockage chiffré",
+      "feat2": "Organisations",
+      "feat3": "Échange P2P",
+      "feat4": "Partages de fichiers",
+      "feat5": "Authentification à deux facteurs (MFA)"
+    },
+    "step2": {
+      "title": "Stockage chiffré de bout en bout",
+      "desc": "Tous vos fichiers sont chiffrés sur votre appareil avant d'être envoyés. Même nous ne pouvons pas lire vos données.",
+      "pill1": "Chiffrement E2E",
+      "pill2": "Zéro connaissance",
+      "pill3": "Import Google Drive"
+    },
+    "step3": {
+      "title": "Collaborez en équipe",
+      "desc": "Créez ou rejoignez des organisations pour partager des dossiers chiffrés avec vos collègues ou proches.",
+      "pill1": "Dossiers partagés",
+      "pill2": "Rôles & permissions",
+      "pill3": "Invitations sécurisées"
+    },
+    "step4": {
+      "title": "Échange P2P en temps réel",
+      "desc": "Transférez des fichiers directement à un ami en temps réel, sans passer par nos serveurs. Rapide et sécurisé.",
+      "pill1": "Transfert direct",
+      "pill2": "Chiffré de bout en bout",
+      "pill3": "Via votre liste d'amis"
+    },
+    "step5": {
+      "title": "Partagez vos fichiers",
+      "desc": "Générez un lien de partage sécurisé pour n'importe quel fichier ou dossier. Protégez-le par un mot de passe ou une date d'expiration.",
+      "pill1": "Liens sécurisés",
+      "pill2": "Protection par mot de passe",
+      "pill3": "Date d'expiration"
+    },
+    "step6": {
+      "title": "Protégez votre compte",
+      "desc": "Activez l'authentification à deux facteurs (MFA) depuis vos paramètres de sécurité pour une protection renforcée.",
+      "pill1": "Application TOTP",
+      "pill2": "Protection renforcée"
+    },
+    "done": {
+      "title": "Vous êtes prêt !",
+      "desc": "Découvrez toutes les fonctionnalités de SaferCloud et gardez vos fichiers en sécurité."
+    }
   }
 }

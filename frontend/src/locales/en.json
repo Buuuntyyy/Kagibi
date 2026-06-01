@@ -1322,5 +1322,58 @@
     "donePartialWithSkips": "{ok} file(s) imported, {skips} skipped, {errors} error(s).",
     "transferred": "transferred",
     "creatingFolders": "Creating folders ({done}/{total})"
+  },
+  "tour": {
+    "skip": "Skip",
+    "next": "Next",
+    "finish": "Finish",
+    "startUsing": "Get started",
+    "step1": {
+      "title": "Welcome to SaferCloud",
+      "desc": "Here's a quick overview of what awaits you. Explore at your own pace.",
+      "feat1": "Encrypted storage",
+      "feat2": "Organizations",
+      "feat3": "P2P transfer",
+      "feat4": "File sharing",
+      "feat5": "Two-factor authentication (MFA)"
+    },
+    "step2": {
+      "title": "End-to-end encrypted storage",
+      "desc": "All your files are encrypted on your device before being uploaded. Even we cannot read your data.",
+      "pill1": "E2E encryption",
+      "pill2": "Zero knowledge",
+      "pill3": "Google Drive import"
+    },
+    "step3": {
+      "title": "Collaborate as a team",
+      "desc": "Create or join organizations to share encrypted folders with colleagues or family.",
+      "pill1": "Shared folders",
+      "pill2": "Roles & permissions",
+      "pill3": "Secure invitations"
+    },
+    "step4": {
+      "title": "Real-time P2P transfer",
+      "desc": "Send files directly to a friend in real time, without going through our servers. Fast and secure.",
+      "pill1": "Direct transfer",
+      "pill2": "End-to-end encrypted",
+      "pill3": "Via your friends list"
+    },
+    "step5": {
+      "title": "Share your files",
+      "desc": "Generate a secure sharing link for any file or folder. Protect it with a password or an expiration date.",
+      "pill1": "Secure links",
+      "pill2": "Password protection",
+      "pill3": "Expiration date"
+    },
+    "step6": {
+      "title": "Protect your account",
+      "desc": "Enable two-factor authentication (MFA) in your security settings to strengthen your account protection.",
+      "pill1": "TOTP app",
+      "pill2": "Enhanced protection"
+    },
+    "done": {
+      "title": "You're all set!",
+      "desc": "Discover all SaferCloud features and keep your files safe."
+    }
   }
 }
