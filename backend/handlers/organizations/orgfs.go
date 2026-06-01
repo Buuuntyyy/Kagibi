@@ -10,6 +10,7 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"kagibi/backend/pkg"
@@ -17,7 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var validFolderName = regexp.MustCompile(`^[\p{L}\p{N}\s\-\._'\x{2018}\x{2019}]+$`)
+var forbiddenOrgFolderChars = regexp.MustCompile(`[/\\\x00-\x1f<>]`)
 
 // ListOrgItems returns files and folders at a given path within the org.
 func (h *OrgHandler) ListOrgItems(c *gin.Context) {
@@ -125,7 +126,8 @@ func (h *OrgHandler) CreateOrgFolder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if !validFolderName.MatchString(req.Name) {
+	trimmedName := strings.TrimSpace(req.Name)
+	if trimmedName == "" || trimmedName == "." || trimmedName == ".." || forbiddenOrgFolderChars.MatchString(req.Name) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid folder name"})
 		return
 	}

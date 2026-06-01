@@ -347,6 +347,9 @@
     "dataPortabilityDetails": "The export includes your profile, your file and folder tree, your tags, your share links, your contacts and your recent activity.",
     "exportData": "Export my data",
     "exportingData": "Export in progress...",
+    "importGDriveDesc": "Import your existing files from Google Drive directly into Kagibi.",
+    "importGDriveDetails": "Files are downloaded and encrypted in your browser before upload. Kagibi never accesses their content.",
+    "importGDriveBtn": "Import from Google Drive",
     "dangerZone": "Danger zone",
     "deleteAccount": "Delete this account",
     "deleteAccountDesc": "This action is final and will delete all your data.",
@@ -1271,6 +1274,106 @@
       "uploadTagSize": "16 bytes",
       "uploadChunkProgress": "Chunk {n} / {total} —",
       "rfArgonSalt": "salt 16 bytes (CSPRNG)"
+    }
+  },
+  "gdImport": {
+    "title": "Import from Google Drive",
+    "connectIntro": "Connect your Google Drive account to import your files into Kagibi. The connection is strictly read-only.",
+    "infoE2E": "Each file is encrypted in your browser before being sent to Kagibi (zero knowledge).",
+    "infoReadOnly": "The requested access is read-only — Kagibi cannot modify or delete anything in your Drive.",
+    "infoTokenNotStored": "Your Google access token is never sent to or stored on Kagibi servers.",
+    "infoWorkspace": "Google Workspace files (Docs, Sheets, Slides) are converted to Office format (.docx / .xlsx / .pptx).",
+    "connectBtn": "Connect to Google Drive",
+    "connecting": "Connecting…",
+    "statusAuth": "Authenticating with Google…",
+    "statusListing": "Fetching file list…",
+    "statusBuilding": "Analysing folder structure…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "fileCount": "{n} file(s) found",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "selectedSummary": "{n} file(s) selected · {size}",
+    "importBtn": "Import {n} file(s)",
+    "progressTitle": "{done} / {total} files",
+    "abort": "Stop",
+    "importing": "Importing…",
+    "doneSuccess": "{n} file(s) imported successfully.",
+    "donePartial": "{ok} file(s) imported, {errors} error(s).",
+    "errorNotConfigured": "Google Drive import is not enabled on this instance.",
+    "loadMore": "+ {n} file(s) not shown — load more",
+    "errorConnect": "Unable to connect to Google Drive. Please check that you have granted access.",
+    "fatalError": "Fatal import error",
+    "driveRoot": "My Drive (root files)",
+    "back": "← Back",
+    "dedicatedFolder": "Import into a dedicated folder at Kagibi root",
+    "dedicatedFolderPlaceholder": "Folder name",
+    "destinationHint": "Kagibi destination",
+    "foldersIntro": "Choose the root folders to import from Google Drive. Subfolders and files they contain will be automatically included.",
+    "rootFolderCount": "{n} root folder(s) found",
+    "foldersConfirm": "Continue with {n} folder(s)",
+    "conflictTitle": "Folder already exists",
+    "conflictDesc": "The folder \"{name}\" already exists at this location.",
+    "conflictMerge": "Merge",
+    "conflictSkip": "Skip",
+    "conflictApplyAll": "Apply this choice to all conflicts",
+    "fileSkipped": "Skipped",
+    "doneWithSkips": "{ok} file(s) imported, {skips} skipped.",
+    "donePartialWithSkips": "{ok} file(s) imported, {skips} skipped, {errors} error(s).",
+    "transferred": "transferred",
+    "creatingFolders": "Creating folders ({done}/{total})"
+  },
+  "tour": {
+    "skip": "Skip",
+    "next": "Next",
+    "finish": "Finish",
+    "startUsing": "Get started",
+    "step1": {
+      "title": "Welcome to SaferCloud",
+      "desc": "Here's a quick overview of what awaits you. Explore at your own pace.",
+      "feat1": "Encrypted storage",
+      "feat2": "Organizations",
+      "feat3": "P2P transfer",
+      "feat4": "File sharing",
+      "feat5": "Two-factor authentication (MFA)"
+    },
+    "step2": {
+      "title": "End-to-end encrypted storage",
+      "desc": "All your files are encrypted on your device before being uploaded. Even we cannot read your data.",
+      "pill1": "E2E encryption",
+      "pill2": "Zero knowledge",
+      "pill3": "Google Drive import"
+    },
+    "step3": {
+      "title": "Collaborate as a team",
+      "desc": "Create or join organizations to share encrypted folders with colleagues or family.",
+      "pill1": "Shared folders",
+      "pill2": "Roles & permissions",
+      "pill3": "Secure invitations"
+    },
+    "step4": {
+      "title": "Real-time P2P transfer",
+      "desc": "Send files directly to a friend in real time, without going through our servers. Fast and secure.",
+      "pill1": "Direct transfer",
+      "pill2": "End-to-end encrypted",
+      "pill3": "Via your friends list"
+    },
+    "step5": {
+      "title": "Share your files",
+      "desc": "Generate a secure sharing link for any file or folder. Protect it with a password or an expiration date.",
+      "pill1": "Secure links",
+      "pill2": "Password protection",
+      "pill3": "Expiration date"
+    },
+    "step6": {
+      "title": "Protect your account",
+      "desc": "Enable two-factor authentication (MFA) in your security settings to strengthen your account protection.",
+      "pill1": "TOTP app",
+      "pill2": "Enhanced protection"
+    },
+    "done": {
+      "title": "You're all set!",
+      "desc": "Discover all SaferCloud features and keep your files safe."
     }
   }
 }

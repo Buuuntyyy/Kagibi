@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"kagibi/backend/pkg"
 
@@ -18,9 +19,9 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// \p{L} matches any Unicode letter (covers accented and non-Latin characters).
-// \p{N} matches any Unicode number. The remaining chars are safe punctuation.
-var validNameRegex = regexp.MustCompile(`^[\p{L}\p{N}\s\-\._'\x{2018}\x{2019}]+$`)
+// Block path separators, control characters, and XSS vectors.
+// Path traversal is also caught by SecureJoin below.
+var forbiddenNameChars = regexp.MustCompile(`[/\\\x00-\x1f<>]`)
 
 type CreateFolderRequest struct {
 	Name string `json:"name" binding:"required" validate:"required,foldername"`
@@ -34,8 +35,9 @@ func CreateHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// Validation du nom (Injection XSS)
-	if !validNameRegex.MatchString(req.Name) {
+	// Reject empty names, dot-only names (path traversal), and forbidden characters.
+	trimmed := strings.TrimSpace(req.Name)
+	if trimmed == "" || trimmed == "." || trimmed == ".." || forbiddenNameChars.MatchString(req.Name) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Nom de dossier invalide (caractères interdits)"})
 		return
 	}
