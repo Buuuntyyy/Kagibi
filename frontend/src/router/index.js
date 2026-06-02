@@ -21,6 +21,7 @@ import LandingHome from '../views/landing/HomeView.vue'
 import LandingPricing from '../views/landing/PricingView.vue'
 import LandingTransfer from '../views/landing/TransferView.vue'
 import LandingSecurity from '../views/landing/SecurityView.vue'
+import LandingValues from '../views/landing/ValuesView.vue'
 import { useAuthStore } from '../stores/auth'
 import { isP2PSubdomain } from '../composables/useSubdomain'
 
@@ -55,6 +56,11 @@ const routes = [
     path: '/security',
     name: 'Security',
     component: LandingSecurity,
+  },
+  {
+    path: '/values',
+    name: 'Values',
+    component: LandingValues,
   },
   {
     path: '/login',

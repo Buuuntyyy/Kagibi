@@ -203,7 +203,7 @@ const STEPS = 7
 const step = ref(1)
 
 const isLandingPage = computed(() =>
-  ['LandingHome', 'Pricing', 'Transfer', 'Compare', 'Security'].includes(route.name)
+  ['LandingHome', 'Pricing', 'Transfer', 'Compare', 'Security', 'Values'].includes(route.name)
 )
 
 const visible = computed(() =>
