@@ -926,6 +926,7 @@
       "transfer": "Transfert P2P",
       "compare": "Comparatif",
       "security": "Zéro-knowledge",
+      "values": "Valeurs",
       "login": "Connexion"
     },
     "home": {
@@ -1274,6 +1275,102 @@
       "uploadTagSize": "16 octets",
       "uploadChunkProgress": "Chunk {n} / {total} —",
       "rfArgonSalt": "sel 16 octets (CSPRNG)"
+    },
+    "values": {
+      "eyebrow": "NOS VALEURS & ENGAGEMENTS",
+      "title1": "Ce qui guide",
+      "titleHighlight": "chacune de nos décisions",
+      "heroSub": "Kagibi n'est pas qu'un outil de stockage. C'est une promesse : celle que vos données vous appartiennent — pleinement, définitivement.",
+      "sec1Label": "FONDATIONS",
+      "sec1Title": "Quatre valeurs, aucun compromis",
+      "sec1Sub": "Ces valeurs ne sont pas des mots sur un site. Elles sont gravées dans chaque ligne de notre code.",
+      "v1": {
+        "title": "Confidentiel par conception",
+        "desc": "La confidentialité n'est pas une fonctionnalité ajoutée après coup. Elle est l'architecture fondamentale de Kagibi. Vos données ne sont lisibles que par vous."
+      },
+      "v2": {
+        "title": "Transparence",
+        "desc": "Notre code est open source et auditable par quiconque. Nous n'avons rien à cacher — et nous le prouvons en publiant chaque ligne sur GitHub. Nous nous engageons à ne jamais migrer vers une licence plus restrictive."
+      },
+      "v3": {
+        "title": "Souveraineté numérique",
+        "desc": "Vos données vous appartiennent. Pas à nous. Pas à des annonceurs. Pas à des gouvernements. Vous êtes le seul maître de vos fichiers."
+      },
+      "v4": {
+        "title": "Sécurité d'abord",
+        "desc": "Chaque fonctionnalité est conçue avec la sécurité en tête dès le départ — pas comme une couche ajoutée après. Zéro-knowledge par défaut, partout."
+      },
+      "sec2Label": "ENGAGEMENTS",
+      "sec2Title": "Ce que nous promettons, concrètement",
+      "sec2Sub": "Des engagements vérifiables, pas des déclarations marketing.",
+      "c1": {
+        "title": "Chiffrement de bout en bout",
+        "desc": "Vos fichiers sont chiffrés sur votre appareil avant de nous parvenir. AES-256-GCM. Personne — y compris nos équipes — ne peut déchiffrer vos données.",
+        "badge": "Vérifiable"
+      },
+      "c2": {
+        "title": "Hébergé en Europe",
+        "desc": "Nos serveurs sont chez OVHcloud, en France. Soumis au droit français et au RGPD. Vos données ne quittent jamais l'Union Européenne.",
+        "badge": "OVHcloud · France"
+      },
+      "c3": {
+        "title": "Open source, AGPL-3.0",
+        "desc": "L'intégralité de notre code est publique sur GitHub. Auditez-le, proposez des améliorations, ou hébergez votre propre instance.",
+        "badge": "AGPL-3.0"
+      },
+      "c4": {
+        "title": "Zéro publicité, zéro revente",
+        "desc": "Nous ne diffusons jamais de publicité. Nous ne vendons, ne partageons, ni ne monétisons jamais vos données personnelles ou vos fichiers.",
+        "badge": "Garanti"
+      },
+      "c5": {
+        "title": "Vos fichiers, pas notre carburant",
+        "desc": "Vos données ne sont jamais utilisées pour entraîner des modèles d'intelligence artificielle — ni les nôtres, ni ceux de tiers.",
+        "badge": "Promis"
+      },
+      "c6": {
+        "title": "Collecte de données minimale",
+        "desc": "Nous ne collectons que ce qui est strictement nécessaire au fonctionnement du service. Aucune télémétrie cachée, aucun pistage comportemental.",
+        "badge": "RGPD"
+      },
+      "sovLabel": "SOUVERAINETÉ",
+      "sovTitle": "La souveraineté selon Kagibi",
+      "sovSub": "La souveraineté numérique ne se réduit pas à un seul enjeu. Elle se joue sur trois niveaux distincts — et Kagibi les adresse tous les trois.",
+      "sov1": {
+        "tag": "Géographique",
+        "title": "Où vivent physiquement vos données",
+        "desc": "La souveraineté géographique désigne l'emplacement physique des serveurs. Héberger hors d'Europe, c'est exposer vos fichiers à des juridictions étrangères, indépendamment de la nationalité du prestataire.",
+        "b1": "OVHcloud · Roubaix & Gravelines, France",
+        "b2": "Infrastructure 100 % européenne",
+        "b3": "Aucune réplication hors Union Européenne"
+      },
+      "sov2": {
+        "tag": "Nationale & Juridique",
+        "title": "Sous quelle loi tombent vos données",
+        "desc": "Le Cloud Act américain (2018) contraint les entreprises technologiques US à fournir des données aux autorités américaines, où qu'elles soient stockées dans le monde. Kagibi est une entité européenne, soumise au seul droit français et au RGPD.",
+        "b1": "Immunisé au Cloud Act américain",
+        "b2": "RGPD et droit français uniquement",
+        "b3": "Aucune dépendance à des fournisseurs soumis à des lois étrangères"
+      },
+      "sov3": {
+        "tag": "Personnelle",
+        "title": "Qui détient réellement vos clés",
+        "desc": "C'est le niveau le plus fondamental : vous seul possédez les clés cryptographiques qui déchiffrent vos données. Même si Kagibi était contraint légalement de coopérer, nous ne pourrions rien fournir — nous n'avons jamais accès à vos clés.",
+        "b1": "Clés de chiffrement générées sur votre appareil",
+        "b2": "Votre mot de passe ne quitte jamais votre navigateur",
+        "b3": "Zéro-knowledge : mathématiquement impossible pour nous de déchiffrer"
+      },
+      "manifestoLabel": "MANIFESTE",
+      "manifestoTitle": "Pourquoi Kagibi existe",
+      "manifestoQuote": "Internet était censé nous libérer. Il nous a transformés en produit.",
+      "manifestoP1": "Kagibi est né d'une conviction simple : vos fichiers, vos conversations et vos données personnelles ne doivent jamais servir d'autre chose que ce pour quoi vous les avez créés. Pas de la publicité ciblée. Pas de l'entraînement de modèles d'IA. Pas de la surveillance.",
+      "manifestoP2": "Nous ne sommes pas une start-up qui cherche à valoriser vos habitudes numériques pour mieux les revendre. Nous sommes des développeurs qui pensent que la vie privée est un droit fondamental — pas un luxe réservé aux techniciens, pas une case à cocher dans les mentions légales.",
+      "manifestoP3": "C'est pourquoi Kagibi est open source, hébergé en Europe, et construit sur un principe unique : nous ne pouvons techniquement pas lire vos données. Ce n'est pas une promesse marketing. C'est l'architecture.",
+      "manifestoSig": "L'équipe Kagibi",
+      "ctaTitle": "Rejoignez Kagibi",
+      "ctaSub": "Prenez le contrôle de vos données. Commencez gratuitement, sans engagement.",
+      "ctaBtn1": "Créer un compte",
+      "ctaBtn2": "Notre architecture de sécurité →"
     }
   },
   "gdImport": {

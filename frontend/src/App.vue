@@ -53,7 +53,7 @@ const route = useRoute()
 
 // Check if current route is a landing page
 const isLandingPage = computed(() => {
-  return ['LandingHome', 'Pricing', 'Transfer', 'Compare', 'Security'].includes(route.name)
+  return ['LandingHome', 'Pricing', 'Transfer', 'Compare', 'Security', 'Values'].includes(route.name)
 })
 
 // Connect realtime services when authenticated.
