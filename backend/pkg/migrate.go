@@ -58,6 +58,7 @@ func Migrate(db *bun.DB) error {
 		return err
 	}
 	migrateChunkSizeColumns(ctx, db)
+	migrateFolderSyncedColumn(ctx, db)
 
 	if err := migrateComments(ctx, db); err != nil {
 		return err
@@ -891,6 +892,17 @@ func migrateFilesUniqueIndex(ctx context.Context, db *bun.DB) error {
 		return fmt.Errorf("migrateFilesUniqueIndex: %w", err)
 	}
 	return nil
+}
+
+// migrateFolderSyncedColumn ajoute la colonne synced à la table folders.
+// Les dossiers créés par la sync desktop ont synced=true — permet d'afficher
+// l'icône de synchronisation côté cloud exactement comme pour les fichiers.
+func migrateFolderSyncedColumn(ctx context.Context, db *bun.DB) {
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "folders" ADD COLUMN IF NOT EXISTS "synced" BOOLEAN NOT NULL DEFAULT false`,
+	); err != nil {
+		log.Printf("Warning: migrateFolderSyncedColumn: %v", err)
+	}
 }
 
 func migrateComments(ctx context.Context, db *bun.DB) error {

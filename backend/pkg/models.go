@@ -157,6 +157,7 @@ type Folder struct {
 	UserID       string    `bun:"user_id,notnull"`
 	EncryptedKey string    `bun:"encrypted_key"` // FolderKey encrypted with MasterKey
 	Tags         []string  `bun:"tags,array"`    // Tags
+	Synced       bool      `bun:"synced,default:false" json:"synced"` // true si créé/géré par la sync desktop
 	SizeBytes    int64     `bun:"size_bytes,scanonly" json:"size_bytes,omitempty"`
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt    time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
