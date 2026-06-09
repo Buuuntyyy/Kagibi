@@ -24,8 +24,10 @@ import (
 var forbiddenNameChars = regexp.MustCompile(`[/\\\x00-\x1f<>]`)
 
 type CreateFolderRequest struct {
-	Name string `json:"name" binding:"required" validate:"required,foldername"`
-	Path string `json:"path" binding:"required"`
+	Name     string `json:"name" binding:"required" validate:"required,foldername"`
+	Path     string `json:"path" binding:"required"`
+	Synced   bool   `json:"synced"`    // true quand créé par la sync desktop
+	IsSynced bool   `json:"is_synced"` // alias envoyé par certains clients desktop
 }
 
 func CreateHandler(c *gin.Context, db *bun.DB) {
@@ -79,6 +81,7 @@ func CreateHandler(c *gin.Context, db *bun.DB) {
 		Name:   req.Name,
 		Path:   logicalPath,
 		UserID: userID,
+		Synced: req.Synced || req.IsSynced,
 	}
 
 	if err := pkg.CreateFolderDB(db, folder); err != nil {

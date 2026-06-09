@@ -635,6 +635,8 @@ func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup, aut
 func registerImportRoutes(g *gin.RouterGroup) {
 	importG := g.Group("/import")
 	importG.GET("/google/config", gdimport.GetGoogleConfig)
+	// Échange du code PKCE contre un access_token côté serveur (client_secret sécurisé)
+	importG.POST("/google/desktop-token", gdimport.ExchangeDesktopToken)
 }
 
 func registerCommentRoutes(g *gin.RouterGroup, db *bun.DB) {
