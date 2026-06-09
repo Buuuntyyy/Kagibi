@@ -818,7 +818,10 @@ const executePasswordUpdate = async () => {
 
     if (error.response) {
       if (error.response.status === 401) {
-        errorMessage = 'Mot de passe actuel incorrect.'
+        const serverMsg = error.response.data?.error || ''
+        errorMessage = serverMsg.toLowerCase().includes('révoqué')
+          ? 'Session expirée après le changement de mot de passe. Reconnectez-vous et réessayez.'
+          : 'Mot de passe actuel incorrect.'
       } else if (error.response.data && error.response.data.error) {
         errorMessage = error.response.data.error
       }
