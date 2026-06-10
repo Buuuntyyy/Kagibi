@@ -330,12 +330,8 @@ func ResolveComment(c *gin.Context, db *bun.DB) {
 	c.JSON(http.StatusOK, gin.H{"status": "updated"})
 }
 
-// BatchCommentCounts returns, for each file ID, the number of unresolved comments
-// not yet read by the current user.
+// BatchCommentCounts returns, for each file ID, the total number of unresolved comments.
 func BatchCommentCounts(c *gin.Context, db *bun.DB) {
-	userID, _ := c.Get("user_id")
-	uid := userID.(string)
-
 	var req struct {
 		FileIDs    []int64 `json:"file_ids"`
 		OrgFileIDs []int64 `json:"org_file_ids"`
@@ -358,7 +354,6 @@ func BatchCommentCounts(c *gin.Context, db *bun.DB) {
 			ColumnExpr("fc.file_id AS id, COUNT(*) AS count").
 			Where("fc.file_id IN (?)", bun.In(req.FileIDs)).
 			Where("fc.is_resolved = false").
-			Where("NOT EXISTS (SELECT 1 FROM file_comment_reads fcr WHERE fcr.comment_id = fc.id AND fcr.user_id = ?)", uid).
 			GroupExpr("fc.file_id").
 			Scan(c.Request.Context(), &rows)
 		for _, r := range rows {
@@ -374,7 +369,6 @@ func BatchCommentCounts(c *gin.Context, db *bun.DB) {
 			ColumnExpr("fc.org_file_id AS id, COUNT(*) AS count").
 			Where("fc.org_file_id IN (?)", bun.In(req.OrgFileIDs)).
 			Where("fc.is_resolved = false").
-			Where("NOT EXISTS (SELECT 1 FROM file_comment_reads fcr WHERE fcr.comment_id = fc.id AND fcr.user_id = ?)", uid).
 			GroupExpr("fc.org_file_id").
 			Scan(c.Request.Context(), &rows)
 		for _, r := range rows {
