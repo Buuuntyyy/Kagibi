@@ -107,6 +107,7 @@ const loading = ref(false);
 const error = ref(null);
 
 const currentFolder = ref(null);
+const currentFolderKey = ref(null); // CryptoKey AES-GCM si on est à l'intérieur d'un dossier partagé
 
 watch(() => fileStore.shareUpdateTrigger, () => {
     if (currentFolder.value) {
