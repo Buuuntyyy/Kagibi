@@ -553,6 +553,7 @@ export const useFileStore = defineStore('files', {
                 Name: f.Name || f.name,
                 ID: f.ID || f.id,
                 Size: f.Size || f.size,
+                MimeType: f.MimeType || f.mime_type,
                 file_id: f.ID || f.id // Ensure we have something component might look for
             }));
 
