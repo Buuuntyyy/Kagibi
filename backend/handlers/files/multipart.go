@@ -91,6 +91,16 @@ type AbortMultipartRequest struct {
 	Key      string `json:"key" binding:"required"`
 }
 
+// isVersioningEnabled returns true if the user has opted into file versioning.
+func isVersioningEnabled(ctx context.Context, db *bun.DB, userID string) bool {
+	var enabled bool
+	_ = db.NewSelect().TableExpr("profiles").
+		ColumnExpr("versioning_enabled").
+		Where("id = ?", userID).
+		Scan(ctx, &enabled)
+	return enabled
+}
+
 // ensureUserPlan returns the user's plan, creating a free plan if one does not exist.
 func ensureUserPlan(db *bun.DB, userID string) *pkg.UserPlan {
 	planState, err := pkg.FindUserPlanByUserID(db, userID)
@@ -338,6 +348,48 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		fullPathDB = "/" + fullPathDB
 	}
 
+	// Versioning: if the user has versioning enabled and this file already exists,
+	// copy the current S3 object to a versioned key BEFORE CompleteMultipartUpload
+	// overwrites it. This must happen before the S3 call below.
+	type priorVersionInfo struct {
+		encryptedKey string
+		size         int64
+		chunkSize    int64
+		mimeType     string
+		s3Key        string
+	}
+	var savedVersion *priorVersionInfo
+
+	if isVersioningEnabled(ctx, db, userID) {
+		var existingFile pkg.File
+		if err := db.NewSelect().Model(&existingFile).
+			Where("user_id = ? AND path = ?", userID, fullPathDB).
+			Scan(ctx); err == nil && existingFile.ID > 0 {
+			mainS3Key := fmt.Sprintf("users/%s%s", userID, fullPathDB)
+			versionS3Key := fmt.Sprintf("users/%s%s~v%d", userID, fullPathDB, time.Now().UnixMilli())
+			_, copyErr := s3storage.Client.CopyObject(ctx, &s3.CopyObjectInput{
+				Bucket:     aws.String(s3storage.BucketName),
+				Key:        aws.String(versionS3Key),
+				CopySource: aws.String(s3storage.BucketName + "/" + mainS3Key),
+			})
+			if copyErr == nil {
+				cs := existingFile.ChunkSize
+				if cs <= 0 {
+					cs = 10 * 1024 * 1024
+				}
+				savedVersion = &priorVersionInfo{
+					encryptedKey: existingFile.EncryptedKey,
+					size:         existingFile.Size,
+					chunkSize:    cs,
+					mimeType:     existingFile.MimeType,
+					s3Key:        versionS3Key,
+				}
+			} else {
+				log.Printf("[Versioning] S3 copy failed, skipping version: %v", copyErr)
+			}
+		}
+	}
+
 	// Database transaction
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -386,9 +438,42 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		log.Printf("Error processing direct share keys: %v", err)
 	}
 
+	// Save version record if a prior version was captured above
+	if savedVersion != nil {
+		var maxVer int
+		_ = tx.NewSelect().TableExpr("file_versions").
+			ColumnExpr("COALESCE(MAX(version_number), 0)").
+			Where("file_id = ?", fileRecord.ID).
+			Scan(ctx, &maxVer)
+
+		fv := &pkg.FileVersion{
+			FileID:        fileRecord.ID,
+			UserID:        userID,
+			VersionNumber: maxVer + 1,
+			S3Key:         savedVersion.s3Key,
+			EncryptedKey:  savedVersion.encryptedKey,
+			Size:          savedVersion.size,
+			ChunkSize:     savedVersion.chunkSize,
+			MimeType:      savedVersion.mimeType,
+		}
+		if _, err := tx.NewInsert().Model(fv).Exec(ctx); err != nil {
+			log.Printf("[Versioning] Failed to insert version record: %v", err)
+		} else {
+			_, _ = tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
+				Set("version_storage_bytes = version_storage_bytes + ?", savedVersion.size).
+				Where("user_id = ?", userID).Exec(ctx)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
+	}
+
+	// Enforce plan version limits and update folder sizes asynchronously
+	if savedVersion != nil {
+		planState := ensureUserPlan(db, userID)
+		go enforceVersionLimitForFile(context.Background(), db, fileRecord.ID, userID, planState.Plan)
 	}
 
 	// Update folder sizes (non-blocking)

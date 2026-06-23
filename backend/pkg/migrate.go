@@ -66,6 +66,12 @@ func Migrate(db *bun.DB) error {
 	if err := migrateNotifications(ctx, db); err != nil {
 		return err
 	}
+	if err := migrateVersioning(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateOrgLDAP(ctx, db); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -985,6 +991,52 @@ func migrateNotifications(ctx context.Context, db *bun.DB) error {
 	return nil
 }
 
+func migrateVersioning(ctx context.Context, db *bun.DB) error {
+	// versioning_enabled flag on user profiles (opt-in, default off)
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "versioning_enabled" BOOLEAN NOT NULL DEFAULT false`,
+	); err != nil {
+		log.Printf("Warning: migrateVersioning add versioning_enabled: %v", err)
+	}
+
+	// version_storage_bytes tracks how much quota old versions consume
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "user_plans" ADD COLUMN IF NOT EXISTS "version_storage_bytes" BIGINT NOT NULL DEFAULT 0`,
+	); err != nil {
+		log.Printf("Warning: migrateVersioning add version_storage_bytes: %v", err)
+	}
+
+	// file_versions table — one row per historical version of a personal file
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS file_versions (
+			id             BIGSERIAL PRIMARY KEY,
+			file_id        BIGINT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+			user_id        TEXT NOT NULL,
+			version_number INT NOT NULL,
+			s3_key         TEXT NOT NULL,
+			encrypted_key  TEXT NOT NULL,
+			size           BIGINT NOT NULL DEFAULT 0,
+			chunk_size     BIGINT NOT NULL DEFAULT 10485760,
+			mime_type      TEXT NOT NULL DEFAULT '',
+			created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(file_id, version_number)
+		)
+	`); err != nil {
+		return fmt.Errorf("migrateVersioning create file_versions: %w", err)
+	}
+
+	for _, idx := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_file_versions_file_id   ON file_versions (file_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_versions_user_id   ON file_versions (user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_versions_file_ver  ON file_versions (file_id, version_number DESC)`,
+	} {
+		if _, err := db.ExecContext(ctx, idx); err != nil {
+			log.Printf("Warning: migrateVersioning index: %v", err)
+		}
+	}
+	return nil
+}
+
 func migrateP2PInviteEmails(ctx context.Context, db *bun.DB) {
 	type row struct {
 		ID             int64  `bun:"id"`
@@ -1014,4 +1066,45 @@ func migrateP2PInviteEmails(ctx context.Context, db *bun.DB) {
 			log.Printf("Warning: migrateP2PInviteEmails update id=%d: %v", r.ID, err)
 		}
 	}
+}
+
+func migrateOrgLDAP(ctx context.Context, db *bun.DB) error {
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "org_ldap_configs" (
+		"id"                    BIGSERIAL PRIMARY KEY,
+		"org_id"                BIGINT NOT NULL UNIQUE REFERENCES "organizations"("id") ON DELETE CASCADE,
+		"enabled"               BOOLEAN NOT NULL DEFAULT false,
+		"url"                   TEXT NOT NULL DEFAULT '',
+		"bind_dn"               TEXT NOT NULL DEFAULT '',
+		"bind_password_enc"     TEXT NOT NULL DEFAULT '',
+		"user_base_dn"          TEXT NOT NULL DEFAULT '',
+		"user_filter"           TEXT NOT NULL DEFAULT '(objectClass=person)',
+		"group_base_dn"         TEXT NOT NULL DEFAULT '',
+		"group_filter"          TEXT NOT NULL DEFAULT '(objectClass=groupOfNames)',
+		"attr_email"            TEXT NOT NULL DEFAULT 'mail',
+		"attr_display_name"     TEXT NOT NULL DEFAULT 'cn',
+		"attr_uid"              TEXT NOT NULL DEFAULT 'uid',
+		"tls_skip_verify"       BOOLEAN NOT NULL DEFAULT false,
+		"sync_interval_minutes" INTEGER NOT NULL DEFAULT 60,
+		"auto_deprovision_days" INTEGER NOT NULL DEFAULT 30,
+		"min_expected_users"    INTEGER NOT NULL DEFAULT 1,
+		"last_sync_at"          TIMESTAMPTZ,
+		"last_sync_error"       TEXT NOT NULL DEFAULT '',
+		"last_sync_stats"       JSONB,
+		"created_at"            TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		"updated_at"            TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create org_ldap_configs table: %w", err)
+	}
+
+	for _, col := range []string{
+		`ALTER TABLE "org_members" ADD COLUMN IF NOT EXISTS "source"       TEXT NOT NULL DEFAULT 'internal'`,
+		`ALTER TABLE "org_members" ADD COLUMN IF NOT EXISTS "ldap_uid"     TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE "org_members" ADD COLUMN IF NOT EXISTS "suspended_at" TIMESTAMPTZ`,
+	} {
+		if _, err := db.ExecContext(ctx, col); err != nil {
+			log.Printf("Warning: migrateOrgLDAP column: %v", err)
+		}
+	}
+	return nil
 }

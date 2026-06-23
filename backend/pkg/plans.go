@@ -45,6 +45,25 @@ func GetStorageLimit(plan string) int64 {
 	}
 }
 
+// Version history limits per plan (max number of historical versions kept per file).
+const (
+	MaxVersionsFree     = 5
+	MaxVersionsPro      = 30
+	MaxVersionsBusiness = 90
+)
+
+// GetMaxVersions returns the maximum number of historical versions per file for a plan.
+func GetMaxVersions(plan string) int {
+	switch plan {
+	case PlanPro:
+		return MaxVersionsPro
+	case PlanBusiness:
+		return MaxVersionsBusiness
+	default:
+		return MaxVersionsFree
+	}
+}
+
 // GetP2PLimit returns the maximum number of active P2P shares for a plan.
 func GetP2PLimit(plan string) int {
 	switch plan {
