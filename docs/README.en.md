@@ -129,6 +129,18 @@ Within an organization, **groups** allow clustering members to assign permission
 - Group members inherit a role within the group: **admin** or **member**.
 - Folder-level permissions can be assigned to an entire group at once.
 
+### LDAP / Active Directory Sync
+
+Organizations can connect to a corporate **LDAP or Active Directory** server to automatically synchronize their members and groups, without managing invitations manually:
+
+- **Automatic provisioning** — new LDAP users receive an invitation email and join the organization as soon as they accept it.
+- **Group synchronization** — LDAP groups are recreated as Kagibi groups and their membership is updated at every sync cycle.
+- **Two-phase deprovisioning** — a user who leaves the directory is first suspended, then automatically removed after a configurable grace period (or manually by an admin).
+- **Safeguards** — the sync is aborted if LDAP returns an empty result or if more than 20% of existing members disappear in one cycle, protecting against filter errors and network failures.
+- **Bind password encryption** — the service account password is stored AES-256-GCM encrypted.
+
+Configuration is done in the **Administration → LDAP / AD** tab of the organization (restricted to admins and owners). See the [full LDAP documentation](../desktop-app/DOCUMENTATION_EN.md#10-ldap--active-directory-integration) for complete configuration and operational details.
+
 ### Onboarding Wizard
 
 When a user creates their first organization, a step-by-step wizard guides them through:

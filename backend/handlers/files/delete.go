@@ -58,7 +58,11 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 		}
 	}
 
-	// 3. Supprimer de la BDD et décrémenter le quota dans une transaction.
+	// 3. Collect versions before deletion so we can free version_storage_bytes and
+	// delete their S3 objects after commit (file_versions rows cascade-delete with files).
+	go deleteAllVersionsForFile(c.Request.Context(), db, fileID, userID)
+
+	// 4. Supprimer de la BDD et décrémenter le quota dans une transaction.
 	// S3 est supprimé APRÈS le commit pour éviter l'état fantôme (objet S3 absent
 	// mais enregistrement DB présent) si la transaction échoue.
 	tx, err := db.BeginTx(c.Request.Context(), nil)

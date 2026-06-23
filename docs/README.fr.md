@@ -129,6 +129,18 @@ Au sein d'une organisation, les **groupes** permettent de regrouper des membres 
 - Les membres d'un groupe héritent d'un rôle au sein du groupe : **admin** ou **membre**.
 - Les permissions de dossier peuvent être assignées à un groupe entier en une seule opération.
 
+### Synchronisation LDAP / Active Directory
+
+Les organisations peuvent se connecter à un annuaire d'entreprise **LDAP ou Active Directory** pour synchroniser automatiquement leurs membres et groupes, sans avoir à gérer manuellement les invitations :
+
+- **Provisionnement automatique** — les nouveaux utilisateurs du LDAP reçoivent une invitation par e-mail et rejoignent l'organisation dès qu'ils l'acceptent.
+- **Synchronisation des groupes** — les groupes LDAP sont recréés comme groupes Kagibi et leurs membres mis à jour à chaque cycle.
+- **Déprovisionnement en deux phases** — un utilisateur qui quitte l'annuaire est d'abord suspendu, puis retiré automatiquement après un délai de grâce configurable (ou manuellement par un admin).
+- **Garde-fous** — la sync est annulée si le LDAP retourne un résultat vide ou si plus de 20 % des membres existants disparaissent d'un coup, protégeant contre les erreurs de filtre et les pannes réseau.
+- **Chiffrement du mot de passe Bind** — le mot de passe du compte de service est chiffré AES-256-GCM avant stockage.
+
+La configuration s'effectue dans l'onglet **Administration → LDAP / AD** de l'organisation (réservé aux admins et owners). Voir la [documentation complète LDAP](../desktop-app/DOCUMENTATION.md#10-annuaire-ldap--active-directory) pour tous les détails de configuration et de fonctionnement.
+
 ### Assistant d'initialisation (Onboarding Wizard)
 
 Quand un utilisateur crée sa première organisation, un assistant pas-à-pas le guide :

@@ -22,6 +22,7 @@ import (
 	"kagibi/backend/handlers/tags"
 	"kagibi/backend/handlers/users"
 	wshandler "kagibi/backend/handlers/ws"
+	ldapscheduler "kagibi/backend/internal/ldap"
 	"kagibi/backend/middleware"
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
@@ -69,6 +70,7 @@ func main() {
 	workers.StartWorker(redisClient)
 	workers.StartCleanupWorker(db)
 	workers.StartAccountCleanupWorker(db) // RGPD Article 17
+	ldapscheduler.Start(db)
 
 	friendHandler := friends.NewFriendHandler(db, wshandler.GlobalHub.IsConnected)
 	orgHandler := orghandlers.NewOrgHandler(db, redisClient)
@@ -272,6 +274,8 @@ func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	usersG.GET("/export", func(c *gin.Context) { users.ExportUserDataHandler(c, db) })
 	usersG.GET("/security-settings", func(c *gin.Context) { users.GetSecuritySettingsHandler(c, db) })
 	usersG.PUT("/security-settings", func(c *gin.Context) { users.UpdateSecuritySettingsHandler(c, db) })
+	usersG.GET("/versioning", func(c *gin.Context) { users.GetVersioningHandler(c, db) })
+	usersG.PUT("/versioning", func(c *gin.Context) { users.UpdateVersioningHandler(c, db) })
 }
 
 func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Client) {
@@ -296,6 +300,11 @@ func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	filesG.POST("/batch-presign", func(c *gin.Context) { files.BatchPresignDownloadHandler(c, db) })
 	filesG.POST("/selection-tree", func(c *gin.Context) { files.GetSelectionTreeHandler(c, db) })
 	filesG.GET("/:id/folder-key", func(c *gin.Context) { files.GetFileFolderKeyHandler(c, db) })
+	// Version history routes (use :id to match /:id/folder-key param name at same level)
+	filesG.GET("/:id/versions", func(c *gin.Context) { files.ListVersionsHandler(c, db) })
+	filesG.POST("/:id/versions/:versionID/restore", func(c *gin.Context) { files.RestoreVersionHandler(c, db) })
+	filesG.DELETE("/:id/versions/:versionID", func(c *gin.Context) { files.DeleteVersionHandler(c, db) })
+	filesG.GET("/:id/versions/:versionID/presigned", func(c *gin.Context) { files.GetVersionPresignedDownloadHandler(c, db) })
 }
 
 func registerFolderRoutes(g *gin.RouterGroup, db *bun.DB) {
@@ -438,6 +447,13 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	orgsG.GET("/:orgID/fs/all-keys", h.GetOrgAllFileKeys)
 	orgsG.POST("/:orgID/rotate-key", h.RotateOrgKey)
 	orgsG.POST("/:orgID/transfer-ownership", h.TransferOwnership)
+
+	// LDAP / directory sync (admin/owner only)
+	orgsG.GET("/:orgID/ldap", h.GetLDAPConfig)
+	orgsG.PUT("/:orgID/ldap", h.SaveLDAPConfig)
+	orgsG.POST("/:orgID/ldap/test", h.TestLDAPConnection)
+	orgsG.POST("/:orgID/ldap/sync", h.TriggerLDAPSync)
+	orgsG.GET("/:orgID/ldap/suspended", h.ListSuspendedLDAPMembers)
 
 	// Dashboard stats
 	orgsG.GET("/:orgID/stats", h.GetOrgStats)

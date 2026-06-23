@@ -43,6 +43,7 @@ type User struct {
 	PublicKey                  string     `bun:"public_key" json:"public_key"`                                     // RSA Public Key (Standard PEM format)
 	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"`               // RSA Private Key (Encrypted with MasterKey)
 	EncryptFilenames           bool       `bun:"encrypt_filenames,notnull,default:false" json:"encrypt_filenames"` // Client-side filename encryption opt-in
+	VersioningEnabled          bool       `bun:"versioning_enabled,notnull,default:false" json:"versioning_enabled"` // File version history opt-in
 	CreatedAt                  time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt                  time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 	DeletedAt                  *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"` // RGPD Article 17 - Soft delete
@@ -57,15 +58,16 @@ type Friendship struct {
 }
 
 type UserPlan struct {
-	bun.BaseModel    `bun:"table:user_plans,alias:up"`
-	UserID           string    `bun:"user_id,pk" json:"user_id"`
-	Plan             string    `bun:"plan,notnull,default:'free'" json:"plan"`
-	StorageLimit     int64     `bun:"storage_limit,notnull,default:21474836480" json:"storage_limit"`
-	StorageUsed      int64     `bun:"storage_used,notnull,default:0" json:"storage_used"`
-	P2PMaxExchanges  int       `bun:"p2p_max_exchanges,notnull,default:-1" json:"p2p_max_exchanges"`
-	P2PExchangesUsed int       `bun:"p2p_exchanges_used,notnull,default:0" json:"p2p_exchanges_used"`
-	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt        time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	bun.BaseModel      `bun:"table:user_plans,alias:up"`
+	UserID             string    `bun:"user_id,pk" json:"user_id"`
+	Plan               string    `bun:"plan,notnull,default:'free'" json:"plan"`
+	StorageLimit       int64     `bun:"storage_limit,notnull,default:21474836480" json:"storage_limit"`
+	StorageUsed        int64     `bun:"storage_used,notnull,default:0" json:"storage_used"`
+	VersionStorageBytes int64    `bun:"version_storage_bytes,notnull,default:0" json:"version_storage_bytes"`
+	P2PMaxExchanges    int       `bun:"p2p_max_exchanges,notnull,default:-1" json:"p2p_max_exchanges"`
+	P2PExchangesUsed   int       `bun:"p2p_exchanges_used,notnull,default:0" json:"p2p_exchanges_used"`
+	CreatedAt          time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt          time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 }
 
 type File struct {
@@ -304,13 +306,58 @@ type Organization struct {
 type OrgMember struct {
 	bun.BaseModel `bun:"table:org_members,alias:om"`
 
-	ID              int64     `bun:"id,pk,autoincrement" json:"id"`
-	OrgID           int64     `bun:"org_id,notnull" json:"org_id"`
-	UserID          string    `bun:"user_id,notnull" json:"user_id"`
-	Role            string    `bun:"role,notnull,default:'member'" json:"role"`            // owner | admin | member | viewer
-	EncryptedOrgKey string    `bun:"encrypted_org_key" json:"encrypted_org_key,omitempty"` // org key encrypted with this member's RSA public key
-	QuotaBytes      int64     `bun:"quota_bytes,default:0" json:"quota_bytes"`             // 0 = use org-level default
-	JoinedAt        time.Time `bun:"joined_at,nullzero,notnull,default:current_timestamp" json:"joined_at"`
+	ID              int64      `bun:"id,pk,autoincrement" json:"id"`
+	OrgID           int64      `bun:"org_id,notnull" json:"org_id"`
+	UserID          string     `bun:"user_id,notnull" json:"user_id"`
+	Role            string     `bun:"role,notnull,default:'member'" json:"role"`            // owner | admin | member | viewer
+	EncryptedOrgKey string     `bun:"encrypted_org_key" json:"encrypted_org_key,omitempty"` // org key encrypted with this member's RSA public key
+	QuotaBytes      int64      `bun:"quota_bytes,default:0" json:"quota_bytes"`             // 0 = use org-level default
+	Source          string     `bun:"source,notnull,default:'internal'" json:"source"`      // "internal" | "ldap"
+	LdapUID         string     `bun:"ldap_uid,notnull,default:''" json:"ldap_uid,omitempty"`
+	SuspendedAt     *time.Time `bun:"suspended_at" json:"suspended_at,omitempty"`
+	JoinedAt        time.Time  `bun:"joined_at,nullzero,notnull,default:current_timestamp" json:"joined_at"`
+}
+
+// OrgLDAPConfig stores the LDAP/AD directory settings for an organization.
+// Bind password is stored encrypted (AES-256-GCM via emailcrypto).
+type OrgLDAPConfig struct {
+	bun.BaseModel `bun:"table:org_ldap_configs,alias:olc"`
+
+	ID                  int64          `bun:"id,pk,autoincrement" json:"id"`
+	OrgID               int64          `bun:"org_id,notnull,unique" json:"org_id"`
+	Enabled             bool           `bun:"enabled,notnull,default:false" json:"enabled"`
+	URL                 string         `bun:"url,notnull,default:''" json:"url"`
+	BindDN              string         `bun:"bind_dn,notnull,default:''" json:"bind_dn"`
+	BindPasswordEnc     string         `bun:"bind_password_enc,notnull,default:''" json:"-"`
+	UserBaseDN          string         `bun:"user_base_dn,notnull,default:''" json:"user_base_dn"`
+	UserFilter          string         `bun:"user_filter,notnull,default:'(objectClass=person)'" json:"user_filter"`
+	GroupBaseDN         string         `bun:"group_base_dn,notnull,default:''" json:"group_base_dn"`
+	GroupFilter         string         `bun:"group_filter,notnull,default:'(objectClass=groupOfNames)'" json:"group_filter"`
+	AttrEmail           string         `bun:"attr_email,notnull,default:'mail'" json:"attr_email"`
+	AttrDisplayName     string         `bun:"attr_display_name,notnull,default:'cn'" json:"attr_display_name"`
+	AttrUID             string         `bun:"attr_uid,notnull,default:'uid'" json:"attr_uid"`
+	TLSSkipVerify       bool           `bun:"tls_skip_verify,notnull,default:false" json:"tls_skip_verify"`
+	SyncIntervalMinutes int            `bun:"sync_interval_minutes,notnull,default:60" json:"sync_interval_minutes"`
+	AutoDeprovisionDays int            `bun:"auto_deprovision_days,notnull,default:30" json:"auto_deprovision_days"` // 0 = manual only
+	MinExpectedUsers    int            `bun:"min_expected_users,notnull,default:1" json:"min_expected_users"`
+	LastSyncAt          *time.Time     `bun:"last_sync_at" json:"last_sync_at,omitempty"`
+	LastSyncError       string         `bun:"last_sync_error,notnull,default:''" json:"last_sync_error,omitempty"`
+	LastSyncStats       *LDAPSyncStats `bun:"last_sync_stats,type:jsonb" json:"last_sync_stats,omitempty"`
+	CreatedAt           time.Time      `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt           time.Time      `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
+// LDAPSyncStats is stored as JSONB in OrgLDAPConfig.LastSyncStats.
+type LDAPSyncStats struct {
+	UsersFound     int `json:"users_found"`
+	UsersInvited   int `json:"users_invited"`
+	UsersSkipped   int `json:"users_skipped"`
+	UsersSuspended int `json:"users_suspended"`
+	UsersDeleted   int `json:"users_deleted"`
+	GroupsFound    int `json:"groups_found"`
+	GroupsCreated  int `json:"groups_created"`
+	GroupsUpdated  int `json:"groups_updated"`
+	DurationMs     int `json:"duration_ms"`
 }
 
 // OrgInvitation is a token-based or direct invite to join an organization.
@@ -510,6 +557,24 @@ type FileCommentRead struct {
 	CommentID int64     `bun:"comment_id,pk" json:"comment_id"`
 	UserID    string    `bun:"user_id,pk" json:"user_id"`
 	ReadAt    time.Time `bun:"read_at,nullzero,notnull,default:current_timestamp" json:"read_at"`
+}
+
+// FileVersion stores a historical snapshot of a personal file (E2E encrypted).
+// Created automatically when a file is overwritten and versioning_enabled=true in profiles.
+// The S3Key field is internal and never sent to clients.
+type FileVersion struct {
+	bun.BaseModel `bun:"table:file_versions,alias:fv"`
+
+	ID            int64     `bun:"id,pk,autoincrement" json:"id"`
+	FileID        int64     `bun:"file_id,notnull" json:"file_id"`
+	UserID        string    `bun:"user_id,notnull" json:"-"`
+	VersionNumber int       `bun:"version_number,notnull" json:"version_number"`
+	S3Key         string    `bun:"s3_key,notnull" json:"-"`
+	EncryptedKey  string    `bun:"encrypted_key,notnull" json:"encrypted_key"`
+	Size          int64     `bun:"size,notnull,default:0" json:"size"`
+	ChunkSize     int64     `bun:"chunk_size,notnull,default:10485760" json:"chunk_size"`
+	MimeType      string    `bun:"mime_type,notnull,default:''" json:"mime_type"`
+	CreatedAt     time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 // Notification is a persistent in-app notification stored per recipient.

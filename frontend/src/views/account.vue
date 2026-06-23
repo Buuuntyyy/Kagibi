@@ -269,6 +269,17 @@
                   <span class="slider"></span>
                 </label>
               </div>
+              <!-- Versioning toggle -->
+              <div class="pref-item">
+                <div class="pref-text">
+                  <span class="pref-title">Historique des versions</span>
+                  <span class="pref-desc">Sauvegarde automatiquement chaque ancienne version lors d'un remplacement de fichier ({{ versioningMaxVersions }} versions max)</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" :checked="versioningEnabled" @change="toggleVersioning($event.target.checked)" :disabled="versioningLoading">
+                  <span class="slider"></span>
+                </label>
+              </div>
             </div>
           </div>
         </section>
@@ -622,6 +633,35 @@ const onMFACancelled = () => {
   showError('Action annulée', 'La vérification MFA a été annulée. Votre action n\'a pas été exécutée.')
 }
 
+// ── Versioning preference ───────────────────────────────────────────
+const versioningEnabled = ref(false)
+const versioningMaxVersions = ref(5)
+const versioningLoading = ref(false)
+
+async function loadVersioningSettings() {
+  try {
+    const { data } = await api.get('/users/versioning')
+    versioningEnabled.value = data.versioning_enabled ?? false
+    versioningMaxVersions.value = data.max_versions ?? 5
+  } catch (e) {
+    console.warn('[account] loadVersioningSettings:', e)
+  }
+}
+
+async function toggleVersioning(enabled) {
+  versioningLoading.value = true
+  const prev = versioningEnabled.value
+  versioningEnabled.value = enabled
+  try {
+    await api.put('/users/versioning', { enabled })
+  } catch (e) {
+    versioningEnabled.value = prev
+    console.error('[account] toggleVersioning:', e)
+  } finally {
+    versioningLoading.value = false
+  }
+}
+
 onMounted(async () => {
   try {
     await authStore.fetchUser()
@@ -629,6 +669,7 @@ onMounted(async () => {
       usernameForm.value.newName = authStore.user.name
       selectedAvatar.value = authStore.user.avatar_url || '/avatars/default.png'
     }
+    await loadVersioningSettings()
   } catch (e) {
     console.error("Error loading profile", e)
   } finally {

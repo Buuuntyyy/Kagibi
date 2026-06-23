@@ -223,6 +223,40 @@ Le résumé par jour (pour construire l'interface calendrier) est disponible via
 
 ---
 
+### Synchronisation LDAP / Active Directory
+
+Chaque organisation peut se connecter à un annuaire **LDAP** ou **Active Directory** pour importer automatiquement les membres et les groupes. La configuration est réservée aux rôles `admin` et `owner`.
+
+#### Flux de synchronisation
+
+1. Le scheduler lance un cycle complet à l'intervalle configuré (défaut : 60 min).
+2. Une connexion LDAP est ouverte et le compte de service effectue un `bind`.
+3. Une recherche d'utilisateurs est effectuée sous `user_base_dn` avec `user_filter`.
+4. **Garde-fou 1** : si le nombre de résultats < `min_expected_users`, la sync est annulée.
+5. **Garde-fou 2** : si > 20 % des membres LDAP existants disparaissent d'un coup, la sync est annulée.
+6. Pour chaque utilisateur LDAP :
+   - S'il a déjà un compte Kagibi et est membre → `source` et `ldap_uid` mis à jour.
+   - S'il a un compte mais n'est pas encore membre → une invitation directe lui est envoyée.
+   - S'il n'a pas de compte → une invitation par lien lui est envoyée par e-mail.
+7. Les membres avec `source = 'ldap'` absents du résultat LDAP sont **suspendus** (`suspended_at`).
+8. Les membres suspendus depuis plus de `auto_deprovision_days` jours sont **retirés** de l'org.
+9. Si `group_base_dn` est défini, les groupes LDAP sont créés ou mis à jour comme groupes Kagibi (`source = 'ldap'`).
+
+#### Chiffrement du mot de passe Bind
+
+Le mot de passe du compte de service est chiffré **AES-256-GCM** via `emailcrypto.Encrypt` (clé dérivée de `EMAIL_ENCRYPTION_KEY`) avant stockage en base. Il n'est jamais transmis en clair.
+
+#### Déprovisionnement
+
+| Phase | Déclencheur | Effet |
+|-------|-------------|-------|
+| Suspension | Absent du LDAP au cycle suivant | `suspended_at` enregistré, accès org retiré |
+| Suppression | `suspended_at` + `auto_deprovision_days` dépassé | Permissions, groupes et adhésion supprimés |
+
+Si `auto_deprovision_days = 0`, la suppression reste manuelle.
+
+---
+
 ### Modèles de données
 
 #### Organization
@@ -246,7 +280,36 @@ Le résumé par jour (pour construire l'interface calendrier) est disponible via
 | `user_id` | string | Référence à l'utilisateur |
 | `role` | string | `owner` / `admin` / `member` / `viewer` |
 | `encrypted_org_key` | string | OrgKey chiffrée RSA-OAEP (base64) |
+| `source` | string | `internal` (manuel) / `ldap` (sync annuaire) |
+| `ldap_uid` | string | UID LDAP de l'utilisateur (vide si `source = internal`) |
+| `suspended_at` | timestamp? | Date de suspension par LDAP (nil si actif) |
 | `joined_at` | timestamp | Date d'adhésion |
+
+#### OrgLDAPConfig
+
+Configuration LDAP d'une organisation (une ligne par org).
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `org_id` | int64 | Référence à l'organisation (unique) |
+| `enabled` | bool | Sync activée ou non |
+| `url` | string | URL du serveur (`ldap://` ou `ldaps://`) |
+| `bind_dn` | string | DN du compte de service |
+| `bind_password_enc` | string | Mot de passe chiffré AES-256-GCM |
+| `user_base_dn` | string | Racine de la recherche utilisateurs |
+| `user_filter` | string | Filtre LDAP (défaut : `(objectClass=person)`) |
+| `group_base_dn` | string | Racine des groupes (vide = désactivé) |
+| `group_filter` | string | Filtre groupes (défaut : `(objectClass=groupOfNames)`) |
+| `attr_email` | string | Attribut e-mail (défaut : `mail`) |
+| `attr_display_name` | string | Attribut nom affiché (défaut : `cn`) |
+| `attr_uid` | string | Attribut UID unique (défaut : `uid`) |
+| `tls_skip_verify` | bool | Ignorer la vérification TLS |
+| `sync_interval_minutes` | int | Intervalle de sync en minutes (min. 5) |
+| `auto_deprovision_days` | int | Délai de grâce avant suppression (0 = manuel) |
+| `min_expected_users` | int | Seuil de sécurité anti-vidage |
+| `last_sync_at` | timestamp? | Horodatage de la dernière sync |
+| `last_sync_error` | string | Message d'erreur de la dernière sync (vide si OK) |
+| `last_sync_stats` | jsonb | Statistiques de la dernière sync (`LDAPSyncStats`) |
 
 #### OrgInvitation
 
@@ -360,6 +423,16 @@ Sur le cloud, les routes marquées ★ renvoient HTTP 402 pour les utilisateurs 
 | `GET` | `/api/v1/orgs/:orgID/fs/all-keys` | JWT (admin+) | Toutes les FileKeys (pour rotation) |
 | `POST` | `/api/v1/orgs/:orgID/rotate-key` | JWT (owner) | Pivoter la clé d'organisation |
 
+#### LDAP / Active Directory
+
+| Méthode | Route | Auth | Description |
+|---------|-------|------|-------------|
+| `GET` | `/api/v1/orgs/:orgID/ldap` | JWT (admin+) | Lire la configuration LDAP |
+| `PUT` | `/api/v1/orgs/:orgID/ldap` | JWT (admin+) | Créer ou mettre à jour la configuration |
+| `POST` | `/api/v1/orgs/:orgID/ldap/test` | JWT (admin+) | Tester la connexion et le bind |
+| `POST` | `/api/v1/orgs/:orgID/ldap/sync` | JWT (admin+) | Déclencher une sync immédiate |
+| `GET` | `/api/v1/orgs/:orgID/ldap/suspended` | JWT (admin+) | Lister les membres suspendus par la sync |
+
 ---
 
 ### Implémentation — où trouver le code
@@ -378,10 +451,15 @@ Sur le cloud, les routes marquées ★ renvoient HTTP 402 pour les utilisateurs 
 | Permissions par dossier | `backend/handlers/organizations/permissions.go` |
 | Journal d'audit + all-keys | `backend/handlers/organizations/orgaudit.go` |
 | Rotation de clé | `backend/handlers/organizations/orgrotatekey.go` |
+| **LDAP : handlers HTTP** | `backend/handlers/organizations/ldap.go` |
+| **LDAP : connexion et recherche** | `backend/internal/ldap/client.go` |
+| **LDAP : logique de sync** | `backend/internal/ldap/sync.go` |
+| **LDAP : scheduler par org** | `backend/internal/ldap/scheduler.go` |
 | Primitives crypto org | `frontend/src/utils/orgCrypto.js` |
 | Store Pinia (état + actions) | `frontend/src/stores/organizations.js` |
 | Page liste des organisations | `frontend/src/views/OrganizationsView.vue` |
 | Page détail d'une organisation | `frontend/src/views/OrgDetailView.vue` |
+| **Panneau LDAP (admin UI)** | `frontend/src/components/organizations/OrgLDAPPanel.vue` |
 | Page acceptation d'invitation | `frontend/src/views/JoinView.vue` |
 | Modèle de chiffrement détaillé | `docs/org-e2e-encryption.md` |
 
@@ -606,6 +684,40 @@ The per-day summary (used to build the calendar UI) is available via `GET /orgs/
 
 ---
 
+### LDAP / Active Directory Sync
+
+Each organization can connect to an **LDAP** or **Active Directory** server to automatically import members and groups. Configuration is restricted to `admin` and `owner` roles.
+
+#### Sync flow
+
+1. The scheduler runs a full cycle at the configured interval (default: 60 min).
+2. An LDAP connection is opened and the service account performs a `bind`.
+3. A user search is performed under `user_base_dn` with `user_filter`.
+4. **Safeguard 1**: if the result count < `min_expected_users`, the sync is aborted.
+5. **Safeguard 2**: if > 20% of existing LDAP members disappear at once, the sync is aborted.
+6. For each LDAP user:
+   - If they already have a Kagibi account and are already a member → `source` and `ldap_uid` updated.
+   - If they have an account but are not yet a member → a direct invitation is sent.
+   - If they have no account → a link invitation is sent by email.
+7. Members with `source = 'ldap'` absent from the LDAP result are **suspended** (`suspended_at` set).
+8. Members suspended for longer than `auto_deprovision_days` are **removed** from the org.
+9. If `group_base_dn` is set, LDAP groups are created or updated as Kagibi groups (`source = 'ldap'`).
+
+#### Bind password encryption
+
+The service account password is encrypted with **AES-256-GCM** via `emailcrypto.Encrypt` (key derived from `EMAIL_ENCRYPTION_KEY`) before storage. It is never transmitted in plain text.
+
+#### Deprovisioning
+
+| Phase | Trigger | Effect |
+|-------|---------|--------|
+| Suspension | Absent from LDAP on the next cycle | `suspended_at` recorded, org access removed |
+| Removal | `suspended_at` + `auto_deprovision_days` exceeded | Permissions, groups, and membership deleted |
+
+If `auto_deprovision_days = 0`, removal is manual only.
+
+---
+
 ### Data models
 
 #### Organization
@@ -629,7 +741,36 @@ The per-day summary (used to build the calendar UI) is available via `GET /orgs/
 | `user_id` | string | Reference to the user |
 | `role` | string | `owner` / `admin` / `member` / `viewer` |
 | `encrypted_org_key` | string | RSA-OAEP encrypted OrgKey (base64) |
+| `source` | string | `internal` (manual) / `ldap` (directory sync) |
+| `ldap_uid` | string | LDAP UID of the user (empty if `source = internal`) |
+| `suspended_at` | timestamp? | LDAP suspension date (nil if active) |
 | `joined_at` | timestamp | Join date |
+
+#### OrgLDAPConfig
+
+LDAP configuration for an organisation (one row per org).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `org_id` | int64 | Reference to the organisation (unique) |
+| `enabled` | bool | Whether sync is active |
+| `url` | string | Server URL (`ldap://` or `ldaps://`) |
+| `bind_dn` | string | Service account DN |
+| `bind_password_enc` | string | AES-256-GCM encrypted password |
+| `user_base_dn` | string | Root for user searches |
+| `user_filter` | string | LDAP filter (default: `(objectClass=person)`) |
+| `group_base_dn` | string | Root for group searches (empty = disabled) |
+| `group_filter` | string | Group filter (default: `(objectClass=groupOfNames)`) |
+| `attr_email` | string | Email attribute (default: `mail`) |
+| `attr_display_name` | string | Display name attribute (default: `cn`) |
+| `attr_uid` | string | Unique UID attribute (default: `uid`) |
+| `tls_skip_verify` | bool | Skip TLS certificate verification |
+| `sync_interval_minutes` | int | Sync interval in minutes (min. 5) |
+| `auto_deprovision_days` | int | Grace period before removal (0 = manual) |
+| `min_expected_users` | int | Anti-wipe safety threshold |
+| `last_sync_at` | timestamp? | Timestamp of the last sync |
+| `last_sync_error` | string | Error message from the last sync (empty if OK) |
+| `last_sync_stats` | jsonb | Last sync statistics (`LDAPSyncStats`) |
 
 #### OrgInvitation
 
@@ -742,6 +883,11 @@ On cloud, routes marked ★ return HTTP 402 for users on the free plan.
 | `DELETE` | `/api/v1/orgs/:orgID/audit` | JWT (admin+) | Delete entries (all / months / days) |
 | `GET` | `/api/v1/orgs/:orgID/fs/all-keys` | JWT (admin+) | All file keys (for rotation) |
 | `POST` | `/api/v1/orgs/:orgID/rotate-key` | JWT (owner) | Rotate the organisation key |
+| `GET` | `/api/v1/orgs/:orgID/ldap` | JWT (admin+) | Get LDAP configuration |
+| `PUT` | `/api/v1/orgs/:orgID/ldap` | JWT (admin+) | Save LDAP configuration |
+| `POST` | `/api/v1/orgs/:orgID/ldap/test` | JWT (admin+) | Test LDAP connection |
+| `POST` | `/api/v1/orgs/:orgID/ldap/sync` | JWT (admin+) | Trigger a manual sync |
+| `GET` | `/api/v1/orgs/:orgID/ldap/suspended` | JWT (admin+) | List suspended LDAP members |
 
 ---
 
@@ -761,9 +907,14 @@ On cloud, routes marked ★ return HTTP 402 for users on the free plan.
 | Per-folder permissions | `backend/handlers/organizations/permissions.go` |
 | Audit log + all-keys | `backend/handlers/organizations/orgaudit.go` |
 | Key rotation | `backend/handlers/organizations/orgrotatekey.go` |
+| LDAP API handlers | `backend/handlers/organizations/ldap.go` |
+| LDAP client (dial, bind, search) | `backend/internal/ldap/client.go` |
+| LDAP sync engine | `backend/internal/ldap/sync.go` |
+| LDAP scheduler (per-org goroutines) | `backend/internal/ldap/scheduler.go` |
 | Org crypto primitives | `frontend/src/utils/orgCrypto.js` |
 | Pinia store (state + actions) | `frontend/src/stores/organizations.js` |
 | Organisations list page | `frontend/src/views/OrganizationsView.vue` |
 | Organisation detail page | `frontend/src/views/OrgDetailView.vue` |
 | Invitation acceptance page | `frontend/src/views/JoinView.vue` |
+| LDAP configuration panel (Vue) | `frontend/src/components/organizations/OrgLDAPPanel.vue` |
 | Detailed encryption model | `docs/org-e2e-encryption.md` |
