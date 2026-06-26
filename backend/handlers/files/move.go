@@ -12,6 +12,7 @@ import (
 
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/workers"
+	"kagibi/backend/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -108,7 +109,10 @@ func getItemInfo(ctx context.Context, db *bun.DB, id int64, itemType, userID str
 }
 
 func validateMove(ctx context.Context, db *bun.DB, req MoveRequest, userID, oldPath, itemName string) (string, error) {
-	destPath := normalizeDestPath(req.DestinationPath)
+	destPath, err := normalizeDestPath(req.DestinationPath)
+	if err != nil {
+		return "", err
+	}
 	newPath := destPath + "/" + itemName
 
 	if err := checkFolderConstraints(req.Type, oldPath, destPath); err != nil {
@@ -126,15 +130,18 @@ func validateMove(ctx context.Context, db *bun.DB, req MoveRequest, userID, oldP
 	return newPath, nil
 }
 
-func normalizeDestPath(rawPath string) string {
-	destPath := filepath.ToSlash(filepath.Clean(rawPath))
-	if destPath == "." || destPath == "/" || destPath == "\\" {
-		return ""
+func normalizeDestPath(rawPath string) (string, error) {
+	if rawPath == "" || rawPath == "/" {
+		return "", nil
 	}
-	if !strings.HasPrefix(destPath, "/") {
-		return "/" + destPath
+	clean, err := utils.SanitizeVirtualPath(rawPath)
+	if err != nil {
+		return "", fmt.Errorf("chemin de destination invalide : %w", err)
 	}
-	return destPath
+	if clean == "/" {
+		return "", nil
+	}
+	return clean, nil
 }
 
 func checkFolderConstraints(itemType, oldPath, destPath string) error {

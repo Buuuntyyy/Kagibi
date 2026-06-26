@@ -43,7 +43,15 @@ func CreateHandler(c *gin.Context, db *bun.DB) {
 	userIDInterface, _ := c.Get("user_id")
 	userID, _ := userIDInterface.(string)
 
-	logicalPath := filepath.ToSlash(filepath.Join(req.Path, req.Name))
+	// Validate the parent path before constructing the logical path.
+	// SanitizeVirtualPath rejects encoded traversal sequences (%2e%2e, %252e%252e…).
+	safePath, err := utils.SanitizeVirtualPath(req.Path)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chemin invalide"})
+		return
+	}
+
+	logicalPath := filepath.ToSlash(filepath.Join(safePath, req.Name))
 
 	// Vérifier si un dossier existe déjà avec ce path pour cet utilisateur
 	exists, err := pkg.FolderExistsByPath(db, userID, logicalPath)

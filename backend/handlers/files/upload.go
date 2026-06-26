@@ -21,6 +21,7 @@ import (
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/monitoring"
 	"kagibi/backend/pkg/workers"
+	"kagibi/backend/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -45,40 +46,21 @@ type UploadRequest struct {
 	IsPreview    bool
 }
 
-// validatePath validates and sanitizes file paths to prevent path traversal
+// validatePath validates and sanitizes file paths to prevent path traversal.
+// Delegates URL-decoding and ".." checks to utils.SanitizeVirtualPath so that
+// encoded variants (%2e%2e, %252e%252e, …) are also rejected.
 func validatePath(inputPath string) (string, error) {
-	// Normalize separators and check traversal early
-	rawPath := strings.ReplaceAll(inputPath, "\\", "/")
-	if strings.Contains(rawPath, "..") {
-		return "", fmt.Errorf(errPathTraversal)
-	}
-
-	// 1. Clean the path using POSIX rules (virtual paths)
-	cleanPath := path.Clean(rawPath)
-
-	// 2. Check if it starts with ".."
-	if strings.HasPrefix(cleanPath, "..") {
-		return "", fmt.Errorf(errPathTraversal)
-	}
-
-	// 3. Check if it contains ".."
-	if strings.Contains(cleanPath, "..") {
-		return "", fmt.Errorf(errPathTraversal)
-	}
-
-	// 4. Ensure it starts with "/"
-	if !strings.HasPrefix(cleanPath, "/") {
-		cleanPath = "/" + cleanPath
-	}
-
-	// 5. Check for forbidden characters
-	invalidChars := []string{"\x00", "\n", "\r"}
-	for _, char := range invalidChars {
-		if strings.Contains(cleanPath, char) {
+	// Reject raw null bytes / CRLF before any decoding
+	for _, c := range []string{"\x00", "\n", "\r"} {
+		if strings.Contains(inputPath, c) {
 			return "", fmt.Errorf("invalid characters in path")
 		}
 	}
 
+	cleanPath, err := utils.SanitizeVirtualPath(inputPath)
+	if err != nil {
+		return "", fmt.Errorf(errPathTraversal)
+	}
 	return cleanPath, nil
 }
 

@@ -5,9 +5,42 @@ package utils
 
 import (
 	"errors"
+	"net/url"
+	"path"
 	"path/filepath"
 	"strings"
 )
+
+// SanitizeVirtualPath normalise un chemin logique fourni par l'utilisateur.
+// Décode itérativement les séquences URL (%2e%2e, %252e%252e…) avant toute
+// vérification, puis rejette tout chemin contenant un composant "..".
+func SanitizeVirtualPath(inputPath string) (string, error) {
+	decoded := inputPath
+	for {
+		next, err := url.PathUnescape(decoded)
+		if err != nil {
+			return "", errors.New("encodage de chemin invalide")
+		}
+		if next == decoded {
+			break
+		}
+		decoded = next
+	}
+
+	normalized := strings.ReplaceAll(decoded, "\\", "/")
+	if strings.Contains(normalized, "..") {
+		return "", errors.New("path traversal detected")
+	}
+
+	clean := path.Clean(normalized)
+	if clean == "." {
+		clean = "/"
+	}
+	if !strings.HasPrefix(clean, "/") {
+		clean = "/" + clean
+	}
+	return clean, nil
+}
 
 // SecureJoin combine un chemin racine et un chemin utilisateur de manière sécurisée.
 // Il empêche les attaques de type "Path Traversal" (../).
