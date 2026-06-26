@@ -5,7 +5,7 @@ package middleware
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -85,7 +85,10 @@ func AuthMiddleware(provider authprovider.AuthProvider, redisClient *redis.Clien
 		})
 
 		if err != nil || !token.Valid {
-			log.Printf("[Auth/%s] Token validation error: %v", provider.Name(), err)
+			slog.Warn("auth.token_invalid",
+				"provider", provider.Name(),
+				"err", err,
+			)
 			c.AbortWithStatusJSON(401, gin.H{"error": "Token invalide"})
 			return
 		}
@@ -98,7 +101,7 @@ func AuthMiddleware(provider authprovider.AuthProvider, redisClient *redis.Clien
 
 		userID, valid := extractUserID(provider, claims)
 		if !valid {
-			log.Printf("[Auth/%s] Missing or invalid user ID claim in token", provider.Name())
+			slog.Warn("auth.missing_user_id_claim", "provider", provider.Name())
 			c.AbortWithStatusJSON(401, gin.H{"error": "Claims invalides"})
 			return
 		}
@@ -106,8 +109,7 @@ func AuthMiddleware(provider authprovider.AuthProvider, redisClient *redis.Clien
 		// Token revocation check — rejects tokens issued before a password change or MFA disable.
 		revoked, redisErr := checkTokenRevocation(redisClient, userID, claims)
 		if redisErr != nil {
-			// Redis error (timeout, connection failure) — fail-closed.
-			log.Printf("[Auth] Redis revocation check failed for user %s: %v", userID, redisErr)
+			slog.Error("auth.revocation_check_failed", "user_id", userID, "err", redisErr)
 			c.AbortWithStatusJSON(503, gin.H{"error": "Service temporarily unavailable"})
 			return
 		}

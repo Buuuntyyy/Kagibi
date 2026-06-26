@@ -9,7 +9,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -44,9 +44,9 @@ func (s *Syncer) Run(ctx context.Context) {
 	errStr := ""
 	if err != nil {
 		errStr = err.Error()
-		log.Printf("[ldap] org=%d sync error: %v", s.cfg.OrgID, err)
+		slog.Error("ldap.sync_error", "org_id", s.cfg.OrgID, "err", err)
 	} else {
-		log.Printf("[ldap] org=%d sync OK in %dms: %+v", s.cfg.OrgID, duration, stats)
+		slog.Info("ldap.sync_ok", "org_id", s.cfg.OrgID, "duration_ms", duration, "stats", stats)
 	}
 
 	update := map[string]any{
@@ -65,7 +65,7 @@ func (s *Syncer) Run(ctx context.Context) {
 		SetColumn("updated_at", "?", now).
 		Where("org_id = ?", s.cfg.OrgID).
 		Exec(ctx); dbErr != nil {
-		log.Printf("[ldap] org=%d failed to persist sync result: %v", s.cfg.OrgID, dbErr)
+		slog.Error("ldap.persist_result_failed", "org_id", s.cfg.OrgID, "err", dbErr)
 	}
 }
 
@@ -147,14 +147,14 @@ func (s *Syncer) run(ctx context.Context) (*pkg.LDAPSyncStats, error) {
 	// Process each LDAP user.
 	for _, lu := range ldapUsers {
 		if err := s.processUser(ctx, lu, stats); err != nil {
-			log.Printf("[ldap] org=%d user=%s error: %v", s.cfg.OrgID, lu.Email, err)
+			slog.Warn("ldap.process_user_error", "org_id", s.cfg.OrgID, "email", lu.Email, "err", err)
 			stats.UsersSkipped++
 		}
 	}
 
 	// Deprovision members absent from the directory.
 	if err := s.deprovisionAbsent(ctx, ldapUIDSet, stats); err != nil {
-		log.Printf("[ldap] org=%d deprovision error: %v", s.cfg.OrgID, err)
+		slog.Error("ldap.deprovision_error", "org_id", s.cfg.OrgID, "err", err)
 	}
 
 	// Sync groups if configured.
@@ -239,7 +239,7 @@ func (s *Syncer) processUser(ctx context.Context, lu LDAPUser, stats *pkg.LDAPSy
 	joinURL := os.Getenv("APP_URL") + "/join/" + token
 	go func() {
 		if err := mailer.SendOrgInvite(lu.Email, "LDAP sync", getOrgName(s.db, s.cfg.OrgID), "member", joinURL, "fr"); err != nil {
-			log.Printf("[ldap] failed to send invite to %s: %v", lu.Email, err)
+			slog.Warn("ldap.invite_email_failed", "email", lu.Email, "err", err)
 		}
 	}()
 	stats.UsersInvited++
@@ -268,7 +268,7 @@ func (s *Syncer) createInvitation(ctx context.Context, targetUserID, email, disp
 	joinURL := os.Getenv("APP_URL") + "/join/" + token
 	go func() {
 		if err := mailer.SendOrgInvite(email, "LDAP sync", getOrgName(s.db, s.cfg.OrgID), "member", joinURL, "fr"); err != nil {
-			log.Printf("[ldap] failed to send direct invite to %s: %v", email, err)
+			slog.Warn("ldap.direct_invite_email_failed", "email", email, "err", err)
 		}
 	}()
 	return nil
@@ -301,11 +301,11 @@ func (s *Syncer) deprovisionAbsent(ctx context.Context, ldapUIDSet map[string]LD
 				SetColumn("suspended_at", "?", now).
 				Where("org_id = ? AND user_id = ?", s.cfg.OrgID, m.UserID).
 				Exec(ctx); err != nil {
-				log.Printf("[ldap] org=%d suspend user=%s: %v", s.cfg.OrgID, m.UserID, err)
+				slog.Error("ldap.suspend_failed", "org_id", s.cfg.OrgID, "user_id", m.UserID, "err", err)
 				continue
 			}
 			stats.UsersSuspended++
-			log.Printf("[ldap] org=%d suspended user=%s (absent from directory)", s.cfg.OrgID, m.UserID)
+			slog.Info("ldap.user_suspended", "org_id", s.cfg.OrgID, "user_id", m.UserID)
 			continue
 		}
 
@@ -320,11 +320,11 @@ func (s *Syncer) deprovisionAbsent(ctx context.Context, ldapUIDSet map[string]LD
 
 		// Grace period expired — remove member.
 		if err := s.removeMember(ctx, m.UserID); err != nil {
-			log.Printf("[ldap] org=%d remove user=%s: %v", s.cfg.OrgID, m.UserID, err)
+			slog.Error("ldap.remove_failed", "org_id", s.cfg.OrgID, "user_id", m.UserID, "err", err)
 			continue
 		}
 		stats.UsersDeleted++
-		log.Printf("[ldap] org=%d removed user=%s (grace period expired)", s.cfg.OrgID, m.UserID)
+		slog.Info("ldap.user_removed", "org_id", s.cfg.OrgID, "user_id", m.UserID, "reason", "grace_period_expired")
 	}
 	return nil
 }
@@ -374,12 +374,12 @@ func (s *Syncer) syncGroup(ctx context.Context, lg LDAPGroup, dnToUID map[string
 			CreatedBy:    "ldap-sync",
 		}
 		if _, err := s.db.NewInsert().Model(&group).Exec(ctx); err != nil {
-			log.Printf("[ldap] org=%d create group %q: %v", s.cfg.OrgID, lg.Name, err)
+			slog.Error("ldap.create_group_failed", "org_id", s.cfg.OrgID, "group", lg.Name, "err", err)
 			return
 		}
 		stats.GroupsCreated++
 	} else if err != nil {
-		log.Printf("[ldap] org=%d lookup group %q: %v", s.cfg.OrgID, lg.Name, err)
+		slog.Error("ldap.lookup_group_failed", "org_id", s.cfg.OrgID, "group", lg.Name, "err", err)
 		return
 	} else {
 		// Update name and sync timestamp.
@@ -389,7 +389,7 @@ func (s *Syncer) syncGroup(ctx context.Context, lg LDAPGroup, dnToUID map[string
 			SetColumn("updated_at", "?", now).
 			Where("id = ?", group.ID).
 			Exec(ctx); err != nil {
-			log.Printf("[ldap] org=%d update group %q: %v", s.cfg.OrgID, lg.Name, err)
+			slog.Warn("ldap.update_group_failed", "org_id", s.cfg.OrgID, "group", lg.Name, "err", err)
 		}
 		stats.GroupsUpdated++
 	}

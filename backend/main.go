@@ -31,11 +31,14 @@ import (
 	"kagibi/backend/pkg/s3storage"
 	"kagibi/backend/pkg/workers"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+
+	applogger "kagibi/backend/pkg/logger"
 
 	"time"
 
@@ -48,6 +51,7 @@ import (
 
 func main() {
 	loadEnv()
+	applogger.Init()
 	emailcrypto.Init()
 
 	// DB must be initialized before auth so LocalProvider can access auth_users
@@ -106,9 +110,10 @@ func initS3() {
 
 func migrateDB(db *bun.DB) {
 	if err := pkg.Migrate(db); err != nil {
-		log.Printf("Failed to migrate: %v", err)
+		slog.Error("migration_failed", "err", err)
+		os.Exit(1)
 	}
-	log.Println("Migrations executed successfully!")
+	slog.Info("migrations_ok")
 }
 
 func initRedis() *redis.Client {
