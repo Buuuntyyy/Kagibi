@@ -85,10 +85,8 @@ func AuthMiddleware(provider authprovider.AuthProvider, redisClient *redis.Clien
 		})
 
 		if err != nil || !token.Valid {
-			slog.Warn("auth.token_invalid",
-				"provider", provider.Name(),
-				"err", err,
-			)
+			slog.WarnContext(c.Request.Context(), "auth.token_invalid",
+				"provider", provider.Name(), "err", err)
 			c.AbortWithStatusJSON(401, gin.H{"error": "Token invalide"})
 			return
 		}
@@ -101,7 +99,8 @@ func AuthMiddleware(provider authprovider.AuthProvider, redisClient *redis.Clien
 
 		userID, valid := extractUserID(provider, claims)
 		if !valid {
-			slog.Warn("auth.missing_user_id_claim", "provider", provider.Name())
+			slog.WarnContext(c.Request.Context(), "auth.missing_user_id_claim",
+				"provider", provider.Name())
 			c.AbortWithStatusJSON(401, gin.H{"error": "Claims invalides"})
 			return
 		}
@@ -109,7 +108,9 @@ func AuthMiddleware(provider authprovider.AuthProvider, redisClient *redis.Clien
 		// Token revocation check — rejects tokens issued before a password change or MFA disable.
 		revoked, redisErr := checkTokenRevocation(redisClient, userID, claims)
 		if redisErr != nil {
-			slog.Error("auth.revocation_check_failed", "user_id", userID, "err", redisErr)
+			// Redis error (timeout, connection failure) — fail-closed.
+			slog.ErrorContext(c.Request.Context(), "auth.revocation_check_failed",
+				"user_id", userID, "err", redisErr)
 			c.AbortWithStatusJSON(503, gin.H{"error": "Service temporarily unavailable"})
 			return
 		}

@@ -79,7 +79,9 @@ func RateLimitMiddleware(redisClient *redis.Client) gin.HandlerFunc {
 		ctx := c.Request.Context()
 		count, err := redisClient.Incr(ctx, key).Result()
 		if err != nil {
-			slog.Warn("ratelimit.redis_error", "key", key, "err", err)
+			// Redis unavailable — fail open for rate limiting.
+			slog.WarnContext(c.Request.Context(), "ratelimit.redis_error",
+				"key", key, "err", err)
 			c.Next()
 			return
 		}
