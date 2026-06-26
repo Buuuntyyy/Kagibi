@@ -255,7 +255,6 @@ func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	g.DELETE("/auth/account", auth.DeleteAccount(db, provider))
 
 	usersG := g.Group("/users")
-	usersG.GET("/", func(c *gin.Context) { users.ListUsersHandler(c, db) })
 	usersG.GET("/me", func(c *gin.Context) { users.MeHandler(c, db) })
 	usersG.POST("/change-password", func(c *gin.Context) { users.UpdatePasswordHandler(c, db) })
 	usersG.PUT("/profile", func(c *gin.Context) { users.UpdateProfileHandler(c, db) })

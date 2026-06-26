@@ -64,13 +64,6 @@ func NewDB() *bun.DB {
 	return db
 }
 
-func ListUsers(db *bun.DB) ([]User, error) {
-	ctx := context.Background()
-	var users []User
-	err := db.NewSelect().Model(&users).Scan(ctx)
-	return users, err
-}
-
 // DecryptUserEmail decrypts user.EmailEncrypted and stores the result in user.Email.
 // Must be called after any DB load that needs the plaintext email.
 func DecryptUserEmail(u *User) error {
