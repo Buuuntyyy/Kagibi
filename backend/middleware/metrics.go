@@ -21,8 +21,10 @@ func generateRequestID() string {
 	return hex.EncodeToString(b)
 }
 
-// MetricsMiddleware est un middleware Gin qui enregistre automatiquement
-// les métriques pour chaque requête HTTP et logue les erreurs 5xx
+// MetricsMiddleware enregistre les métriques Prometheus et logue chaque requête
+// HTTP avec slog (JSON structuré). Toutes les requêtes sont loguées ; les 5xx
+// sont loguées au niveau Error, les 4xx au niveau Warn, le reste en Info.
+// L'adresse IP est anonymisée conformément à la délibération CNIL 2021-122.
 func MetricsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requestID := generateRequestID()
@@ -42,15 +44,18 @@ func MetricsMiddleware() gin.HandlerFunc {
 
 		monitoring.RecordRequestMetrics(method, endpoint, status, duration)
 
+		if status >= 500 {
+			monitoring.InternalErrorsTotal.WithLabelValues(method, endpoint).Inc()
+		}
+
 		userID := c.GetString("user_id")
 		if userID == "" {
-			userID = "anon"
+			userID = "unauthenticated"
 		}
 
 		level := slog.LevelInfo
 		if status >= 500 {
 			level = slog.LevelError
-			monitoring.InternalErrorsTotal.WithLabelValues(method, endpoint).Inc()
 		} else if status >= 400 {
 			level = slog.LevelWarn
 		}

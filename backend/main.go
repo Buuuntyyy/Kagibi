@@ -27,6 +27,7 @@ import (
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
 	"kagibi/backend/pkg/emailcrypto"
+	applogger "kagibi/backend/pkg/logger"
 	"kagibi/backend/pkg/monitoring"
 	"kagibi/backend/pkg/s3storage"
 	"kagibi/backend/pkg/workers"

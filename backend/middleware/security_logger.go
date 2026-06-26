@@ -1,135 +1,128 @@
 // Copyright (C) 2025-2026  Buuuntyyy
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package middleware — security_logger.go fournit un logger slog dédié aux
-// événements de sécurité. Tous les événements sont émis en JSON sur stdout
-// avec le champ event_type pour faciliter le filtrage dans Loki/Grafana.
+// Package middleware — security_logger.go expose des helpers de log de
+// sécurité structurés via slog. Les événements sont émis avec l'attribut
+// component="security" pour faciliter le filtrage dans Loki / Grafana.
+//
+// Exemples de requêtes LogQL :
+//
+//	{service="kagibi-backend"} | json | component="security"
+//	{service="kagibi-backend"} | json | event_type="auth.failed"
 package middleware
 
 import (
 	"context"
 	"log/slog"
+
+	"kagibi/backend/pkg/logger"
 )
 
-// Security est le logger de sécurité applicatif.
-// Il utilise le logger slog par défaut (initialisé dans pkg/logger) avec un
-// attribut "component" fixe pour permettre le filtrage dans Loki via :
-//   {service="kagibi-backend"} | json | component="security"
-var Security = slog.Default().With("component", "security")
+// seclog retourne toujours le logger par défaut courant avec l'attribut
+// component="security". On ne le cache pas en var globale pour éviter de
+// capturer le logger avant que applogger.Init() l'ait configuré.
+func seclog() *slog.Logger { return slog.Default().With("component", "security") }
 
 // LogAuthAttempt enregistre une tentative d'authentification.
-func LogAuthAttempt(userID, ip string, success bool, reason string) {
-	lvl := slog.LevelInfo
+func LogAuthAttempt(ctx context.Context, userID, ip string, success bool, reason string) {
+	level := slog.LevelInfo
 	if !success {
-		lvl = slog.LevelWarn
+		level = slog.LevelWarn
 	}
-	Security.Log(context.TODO(), lvl, "auth.attempt",
-		"event_type", "AUTH_ATTEMPT",
+	seclog().Log(ctx, level, "auth.attempt",
+		"event_type", "auth.attempt",
 		"user_id", userID,
-		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
 		"success", success,
-		"reason", reason,
-	)
-}
-
-// LogTokenRevoked enregistre une révocation de token (déconnexion, changement de MDP).
-func LogTokenRevoked(userID, reason string) {
-	Security.Info("auth.token_revoked",
-		"event_type", "TOKEN_REVOKED",
-		"user_id", userID,
 		"reason", reason,
 	)
 }
 
 // LogPasswordChange enregistre un changement de mot de passe.
-func LogPasswordChange(userID, ip string) {
-	Security.Info("auth.password_change",
-		"event_type", "PASSWORD_CHANGE",
+func LogPasswordChange(ctx context.Context, userID, ip string) {
+	seclog().Log(ctx, slog.LevelInfo, "auth.password_changed",
+		"event_type", "auth.password_changed",
 		"user_id", userID,
-		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
 	)
 }
 
-// LogMFAEvent enregistre un événement MFA (enroll, verify, unenroll).
-func LogMFAEvent(userID, ip, action string, success bool) {
-	lvl := slog.LevelInfo
-	if !success {
-		lvl = slog.LevelWarn
-	}
-	Security.Log(context.TODO(), lvl, "auth.mfa",
-		"event_type", "MFA_"+action,
-		"user_id", userID,
-		"ip", ip,
-		"success", success,
-	)
-}
-
-// LogUnauthorizedAccess enregistre un accès refusé à une ressource.
-func LogUnauthorizedAccess(userID, resource, ip string) {
-	Security.Warn("access.unauthorized",
-		"event_type", "UNAUTHORIZED_ACCESS",
+// LogUnauthorizedAccess enregistre un accès refusé.
+func LogUnauthorizedAccess(ctx context.Context, userID, resource, ip string) {
+	seclog().Log(ctx, slog.LevelWarn, "access.denied",
+		"event_type", "access.denied",
 		"user_id", userID,
 		"resource", resource,
-		"ip", ip,
-	)
-}
-
-// LogRateLimitExceeded enregistre un dépassement de limite de taux.
-func LogRateLimitExceeded(ip, endpoint string) {
-	Security.Warn("ratelimit.exceeded",
-		"event_type", "RATE_LIMIT_EXCEEDED",
-		"ip", ip,
-		"endpoint", endpoint,
-	)
-}
-
-// LogFileAccess enregistre un accès à un fichier (téléchargement, partage).
-func LogFileAccess(userID, fileID, action, ip string, success bool) {
-	lvl := slog.LevelInfo
-	if !success {
-		lvl = slog.LevelWarn
-	}
-	Security.Log(context.TODO(), lvl, "file.access",
-		"event_type", "FILE_"+action,
-		"user_id", userID,
-		"file_id", fileID,
-		"ip", ip,
-		"success", success,
+		"ip_anon", logger.AnonymiseIP(ip),
 	)
 }
 
 // LogSuspiciousActivity enregistre une activité suspecte.
-func LogSuspiciousActivity(userID, activity, ip string) {
-	Security.Warn("security.suspicious",
-		"event_type", "SUSPICIOUS_ACTIVITY",
+func LogSuspiciousActivity(ctx context.Context, userID, activity, ip string) {
+	seclog().Log(ctx, slog.LevelWarn, "security.suspicious",
+		"event_type", "security.suspicious",
 		"user_id", userID,
 		"activity", activity,
-		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
 	)
 }
 
-// LogAccountDeletion enregistre la suppression d'un compte (RGPD art. 17).
-func LogAccountDeletion(userID, ip string) {
-	Security.Info("account.deleted",
-		"event_type", "ACCOUNT_DELETION",
+// LogFileAccess enregistre un accès à un fichier.
+func LogFileAccess(ctx context.Context, userID, fileID, ip string, success bool) {
+	level := slog.LevelDebug
+	if !success {
+		level = slog.LevelWarn
+	}
+	seclog().Log(ctx, level, "file.access",
+		"event_type", "file.access",
 		"user_id", userID,
-		"ip", ip,
+		"file_id", fileID,
+		"ip_anon", logger.AnonymiseIP(ip),
+		"success", success,
+	)
+}
+
+// LogProfileUpdate enregistre une mise à jour de profil.
+func LogProfileUpdate(ctx context.Context, userID, ip string) {
+	seclog().Log(ctx, slog.LevelInfo, "user.profile_updated",
+		"event_type", "user.profile_updated",
+		"user_id", userID,
+		"ip_anon", logger.AnonymiseIP(ip),
+	)
+}
+
+// LogRateLimitExceeded enregistre un dépassement de limite de débit.
+func LogRateLimitExceeded(ctx context.Context, ip, endpoint string) {
+	seclog().Log(ctx, slog.LevelWarn, "ratelimit.exceeded",
+		"event_type", "ratelimit.exceeded",
+		"ip_anon", logger.AnonymiseIP(ip),
+		"endpoint", endpoint,
 	)
 }
 
 // LogLDAPSync enregistre le résultat d'une synchronisation LDAP.
-func LogLDAPSync(orgID int64, usersFound, added, suspended, removed int, syncErr string) {
-	lvl := slog.LevelInfo
+func LogLDAPSync(ctx context.Context, orgID int64, usersFound, added, suspended, removed int, syncErr string) {
+	level := slog.LevelInfo
 	if syncErr != "" {
-		lvl = slog.LevelError
+		level = slog.LevelError
 	}
-	Security.Log(context.TODO(), lvl, "ldap.sync",
-		"event_type", "LDAP_SYNC",
+	seclog().Log(ctx, level, "ldap.sync",
+		"event_type", "ldap.sync",
 		"org_id", orgID,
 		"users_found", usersFound,
 		"users_added", added,
 		"users_suspended", suspended,
 		"users_removed", removed,
 		"error", syncErr,
+	)
+}
+
+// LogTokenRevoked enregistre la révocation d'un token (déconnexion, MFA unenroll…).
+func LogTokenRevoked(ctx context.Context, userID, reason, ip string) {
+	seclog().Log(ctx, slog.LevelInfo, "auth.token_revoked",
+		"event_type", "auth.token_revoked",
+		"user_id", userID,
+		"reason", reason,
+		"ip_anon", logger.AnonymiseIP(ip),
 	)
 }
