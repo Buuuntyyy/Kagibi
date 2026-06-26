@@ -6,9 +6,10 @@ package middleware
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"log"
+	"log/slog"
 	"time"
 
+	"kagibi/backend/pkg/logger"
 	"kagibi/backend/pkg/monitoring"
 
 	"github.com/gin-gonic/gin"
@@ -41,23 +42,27 @@ func MetricsMiddleware() gin.HandlerFunc {
 
 		monitoring.RecordRequestMetrics(method, endpoint, status, duration)
 
-		if status >= 500 {
-			monitoring.InternalErrorsTotal.WithLabelValues(method, endpoint).Inc()
-
-			userID := c.GetString("user_id")
-			if userID == "" {
-				userID = "unauthenticated"
-			}
-
-			log.Printf("[ERROR_500] request_id=%s method=%s endpoint=%s status=%d duration=%s user_id=%s ip=%s",
-				requestID,
-				method,
-				endpoint,
-				status,
-				duration.Round(time.Millisecond),
-				userID,
-				c.ClientIP(),
-			)
+		userID := c.GetString("user_id")
+		if userID == "" {
+			userID = "anon"
 		}
+
+		level := slog.LevelInfo
+		if status >= 500 {
+			level = slog.LevelError
+			monitoring.InternalErrorsTotal.WithLabelValues(method, endpoint).Inc()
+		} else if status >= 400 {
+			level = slog.LevelWarn
+		}
+
+		slog.Log(c.Request.Context(), level, "http_request",
+			"request_id", requestID,
+			"method", method,
+			"path", endpoint,
+			"status", status,
+			"duration_ms", duration.Milliseconds(),
+			"user_id", userID,
+			"ip_anon", logger.AnonymiseIP(c.ClientIP()),
+		)
 	}
 }
