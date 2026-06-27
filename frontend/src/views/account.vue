@@ -850,8 +850,8 @@ const handleExportData = async () => {
 }
 
 const handleDeleteAccount = async () => {
-  if (deleteConfirmationText.value !== 'SUPPRIMER DEFINITIVEMENT') {
-    showError('Erreur', 'Veuillez taper "SUPPRIMER DEFINITIVEMENT" pour confirmer la suppression irréversible')
+  if (deleteConfirmationText.value !== 'SUPPRIMER MON COMPTE') {
+    showError('Erreur', 'Veuillez taper "SUPPRIMER MON COMPTE" pour confirmer la suppression irréversible')
     return
   }
 
