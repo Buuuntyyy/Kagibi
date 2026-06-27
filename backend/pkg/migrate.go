@@ -72,6 +72,7 @@ func Migrate(db *bun.DB) error {
 	if err := migrateOrgLDAP(ctx, db); err != nil {
 		return err
 	}
+	migrateCompressionColumn(ctx, db)
 
 	return nil
 }
@@ -1107,4 +1108,17 @@ func migrateOrgLDAP(ctx context.Context, db *bun.DB) error {
 		}
 	}
 	return nil
+}
+
+// migrateCompressionColumn adds the compression column to files and org_files.
+// Empty string means no compression (legacy); "gzip" means plaintext was compressed before encryption.
+func migrateCompressionColumn(ctx context.Context, db *bun.DB) {
+	for _, stmt := range []string{
+		`ALTER TABLE "files"     ADD COLUMN IF NOT EXISTS "compression" VARCHAR(20) NOT NULL DEFAULT ''`,
+		`ALTER TABLE "org_files" ADD COLUMN IF NOT EXISTS "compression" VARCHAR(20) NOT NULL DEFAULT ''`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateCompressionColumn: %v", err)
+		}
+	}
 }
