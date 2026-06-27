@@ -77,6 +77,9 @@ type CompleteMultipartRequest struct {
 	// ChunkSize is the AES-GCM plaintext chunk size used during encryption.
 	// 0 or absent means the client did not specify — defaults to 10 MB (legacy behaviour).
 	ChunkSize int64 `json:"chunk_size"`
+	// Compression is the algorithm applied to the plaintext before encryption.
+	// "" (empty) means no compression; "gzip" means gzip was applied.
+	Compression string `json:"compression"`
 }
 
 // CompletePart represents a completed part with ETag
@@ -417,6 +420,7 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		UserID:       userID,
 		EncryptedKey: req.EncryptedKey,
 		ChunkSize:    chunkSize,
+		Compression:  req.Compression,
 		PreviewID:    req.PreviewID,
 		IsPreview:    req.IsPreview,
 		Synced:       req.Synced,
@@ -620,6 +624,7 @@ func GetPresignedDownloadHandler(c *gin.Context, db *bun.DB) {
 		"chunk_size":     chunkSize,
 		"iv_length":      12,
 		"tag_length":     16,
+		"compression":    file.Compression,
 	})
 }
 

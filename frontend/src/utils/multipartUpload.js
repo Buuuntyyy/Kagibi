@@ -436,7 +436,8 @@ export class MultipartUploadManager {
         direct_share_keys: metadata.directShareKeys || '',
         preview_id: metadata.previewId || null,
         is_preview: metadata.isPreview || false,
-        chunk_size: this.chunkSize || PART_SIZE
+        chunk_size: this.chunkSize || PART_SIZE,
+        compression: metadata.compression || ''
       })
 
       this.state = UploadState.COMPLETED

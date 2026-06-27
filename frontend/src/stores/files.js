@@ -771,7 +771,7 @@ export const useFileStore = defineStore('files', {
                     const fileKeyCrypto = await decryptFileKeyWithFolderKey(file.encrypted_key, this.sharedKey);
                     const resp = await fetch(url);
                     const encryptedBlob = await resp.blob();
-                    const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, file.mime_type || 'application/octet-stream');
+                    const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, file.mime_type || 'application/octet-stream', file.compression || '');
                     const relativePath = (file.path.startsWith(rootPath) ? file.path.slice(rootPath.length) : file.path).replace(/^\//, '');
                     zipData[folderName + '/' + relativePath] = new Uint8Array(await decryptedBlob.arrayBuffer());
                 } catch (e) {
@@ -843,7 +843,7 @@ export const useFileStore = defineStore('files', {
         const response = await api.get(`/files/download/${fileId}`, { responseType: 'blob' });
         if (preview) this.preview.status = 'Déchiffrement (Client-Side)...';
         const encryptedBlob = new Blob([await response.data.arrayBuffer()]);
-        const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, mimeType);
+        const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, mimeType, file.compression || '');
         const url = window.URL.createObjectURL(decryptedBlob);
         if (preview) {
           this.preview = { show: true, url, type: mimeType, name: fileName, loading: false, status: '' };
@@ -939,7 +939,7 @@ export const useFileStore = defineStore('files', {
         const response = await api.get(endpoint, { responseType: 'blob' });
 
         if (preview) this.preview.status = 'Déchiffrement local...';
-        let decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, finalMimeType);
+        let decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, finalMimeType, file?.compression || '');
 
         if (preview && finalMimeType.startsWith('image/') && !finalMimeType.includes('svg')) {
           this.preview.status = 'Optimisation pour affichage...';

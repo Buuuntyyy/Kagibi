@@ -170,7 +170,7 @@ export async function encryptFileForOrg(file, orgKey, onProgress) {
  * @param {string} [mimeType]
  * @returns {Promise<Blob>} plaintext file
  */
-export async function decryptFileFromOrg(encryptedBlob, encryptedFileKeyB64, orgKey, mimeType) {
+export async function decryptFileFromOrg(encryptedBlob, encryptedFileKeyB64, orgKey, mimeType, compression = '') {
   const fileKey = await unwrapFileKey(encryptedFileKeyB64, orgKey)
-  return decryptChunkedFileWorker(encryptedBlob, fileKey, mimeType || 'application/octet-stream')
+  return decryptChunkedFileWorker(encryptedBlob, fileKey, mimeType || 'application/octet-stream', compression)
 }

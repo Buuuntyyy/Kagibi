@@ -1,5 +1,6 @@
 import sodium from 'libsodium-wrappers-sumo';
 import { cryptoWorkerPool } from '../workers/cryptoWorkerPool.js';
+import { decompressBlob } from './compress.js';
 
 // ============================================================================
 // NIST SP 800-38D / ANSSI Compliant AES-GCM Configuration
@@ -233,10 +234,14 @@ export async function decryptChunkWorker(encryptedChunkBuffer, key, chunkIndex) 
 }
 
 /**
- * Déchiffre un fichier complet (composé de chunks) via Worker
- * Utilisé pour le téléchargement final
+ * Déchiffre un fichier complet (composé de chunks) via Worker.
+ * Si compression est "gzip", décompresse après déchiffrement.
+ * @param {Blob} encryptedBlob
+ * @param {CryptoKey} key
+ * @param {string} mimeType
+ * @param {string} [compression=''] - "" ou "gzip"
  */
-export async function decryptChunkedFileWorker(encryptedBlob, key, mimeType) {
+export async function decryptChunkedFileWorker(encryptedBlob, key, mimeType, compression = '') {
     const totalSize = encryptedBlob.size;
     let offset = 0;
     const decryptedParts = [];
@@ -256,11 +261,15 @@ export async function decryptChunkedFileWorker(encryptedBlob, key, mimeType) {
         chunkIndex ++;
     }
 
-    const blob = new Blob(decryptedParts, { type: mimeType || 'application/octet-stream' });
-    // Release all decrypted ArrayBuffers immediately; Blob keeps its own internal copy.
+    // Assembler les chunks déchiffrés (compression gzip ou non)
+    const rawBlob = new Blob(decryptedParts, { type: compression === 'gzip' ? 'application/gzip' : (mimeType || 'application/octet-stream') });
     for (let i = 0; i < decryptedParts.length; i++) decryptedParts[i] = null
     decryptedParts.length = 0
-    return blob;
+
+    if (compression === 'gzip') {
+        return decompressBlob(rawBlob, mimeType || 'application/octet-stream');
+    }
+    return rawBlob;
 }
 
 
