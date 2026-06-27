@@ -38,9 +38,6 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-
-	applogger "kagibi/backend/pkg/logger"
-
 	"time"
 
 	"github.com/gin-contrib/cors"
