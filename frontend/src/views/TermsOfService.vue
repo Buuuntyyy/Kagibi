@@ -71,7 +71,7 @@
         <p>La fonctionnalité de transfert de fichiers en pair-à-pair (P2P) repose sur la technologie WebRTC. Dans ce cadre, Kagibi intervient en tant qu'intermédiaire technique selon deux modalités :</p>
         <ul>
           <li><strong>Signalisation :</strong> Kagibi facilite l'établissement de la connexion entre les appareils des utilisateurs (échange d'offres, réponses et candidats ICE). Ce trafic de signalisation ne contient aucun contenu de fichier.</li>
-          <li><strong>Relais TURN :</strong> Lorsque la configuration réseau des utilisateurs (NAT, pare-feu) ne permet pas d'établir une connexion directe, le flux de données transite par un serveur TURN opéré par Kagibi. Ce serveur assure une <strong>commutation technique du flux sans aucun stockage</strong> : les données entrent et sortent en temps réel sans être écrites sur disque.</li>
+          <li><strong>Relais TURN (en dernier recours) :</strong> WebRTC tente toujours d'abord une connexion directe entre les appareils. Ce n'est que lorsque la configuration réseau (NAT strict, pare-feu) rend cette connexion impossible que le flux bascule sur un serveur TURN opéré par Kagibi. Ce serveur assure une <strong>commutation technique du flux sans aucun stockage et sans journalisation</strong> : les données entrent et sortent en temps réel sans être écrites sur disque ni enregistrées dans des logs.</li>
         </ul>
         <p><strong>Dans tous les cas, le contenu des fichiers est chiffré de bout en bout (AES-256-GCM) avant d'être transmis.</strong> Le serveur TURN, comme les serveurs de signalisation, ne dispose d'aucune clé de déchiffrement et ne peut donc pas accéder au contenu des fichiers transférés.</p>
         <p>En conséquence :</p>
