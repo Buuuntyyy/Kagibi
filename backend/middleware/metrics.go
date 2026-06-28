@@ -68,6 +68,7 @@ func MetricsMiddleware() gin.HandlerFunc {
 			"duration_ms", duration.Milliseconds(),
 			"user_id", userID,
 			"ip_anon", logger.AnonymiseIP(c.ClientIP()),
+			"user_agent", c.Request.UserAgent(),
 		)
 	}
 }
