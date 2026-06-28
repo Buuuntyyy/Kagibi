@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"kagibi/backend/middleware"
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
 	"kagibi/backend/pkg/monitoring"
@@ -78,6 +79,7 @@ func DeleteAccount(db *bun.DB, provider authprovider.AuthProvider) gin.HandlerFu
 
 		monitoring.UserDeletionsTotal.Inc()
 		log.Printf("[RGPD] COMPLETE DELETION: Account PERMANENTLY deleted: %s (email: %s)", userID, user.Email)
+		middleware.LogAccountDeleted(c.Request.Context(), userID, c.ClientIP(), c.Request.UserAgent())
 		monitoring.RecordUserDeletion()
 		c.JSON(http.StatusOK, gin.H{
 			"success":      true,

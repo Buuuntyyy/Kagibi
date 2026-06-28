@@ -5,6 +5,7 @@ package auth
 
 import (
 	"crypto/rand"
+	"kagibi/backend/middleware"
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
 	"kagibi/backend/pkg/emailcrypto"
@@ -128,6 +129,7 @@ func RegisterHandler(c *gin.Context, db *bun.DB, provider authprovider.AuthProvi
 	}
 
 	monitoring.UserRegistrationsTotal.Inc()
+	middleware.LogAccountCreated(c.Request.Context(), userID, c.ClientIP(), c.Request.UserAgent())
 	mailer.SendWelcome(req.Email, req.Name)
 	c.JSON(http.StatusCreated, gin.H{"message": "Profil créé avec succès"})
 }

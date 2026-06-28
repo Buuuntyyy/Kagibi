@@ -6,6 +6,7 @@ package shares
 
 import (
 	"fmt"
+	"kagibi/backend/middleware"
 	"kagibi/backend/pkg"
 	"net/http"
 	"strings"
@@ -70,5 +71,6 @@ func DeleteShareLinkHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	middleware.LogShareRevoked(c.Request.Context(), userID, shareIDStr, c.ClientIP(), c.Request.UserAgent())
 	c.JSON(http.StatusOK, gin.H{"message": "Lien de partage supprimé avec succès"})
 }

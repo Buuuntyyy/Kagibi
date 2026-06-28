@@ -32,6 +32,7 @@ func LogAuthAttempt(ctx context.Context, userID, ip string, success bool, reason
 	seclog().Log(ctx, level, "auth.attempt",
 		"event_type", "auth.attempt",
 		"user_id", userID,
+		"ip", ip,
 		"ip_anon", logger.AnonymiseIP(ip),
 		"success", success,
 		"reason", reason,
@@ -43,6 +44,7 @@ func LogPasswordChange(ctx context.Context, userID, ip string) {
 	seclog().Log(ctx, slog.LevelInfo, "auth.password_changed",
 		"event_type", "auth.password_changed",
 		"user_id", userID,
+		"ip", ip,
 		"ip_anon", logger.AnonymiseIP(ip),
 	)
 }
@@ -53,6 +55,7 @@ func LogUnauthorizedAccess(ctx context.Context, userID, resource, ip string) {
 		"event_type", "access.denied",
 		"user_id", userID,
 		"resource", resource,
+		"ip", ip,
 		"ip_anon", logger.AnonymiseIP(ip),
 	)
 }
@@ -63,13 +66,16 @@ func LogSuspiciousActivity(ctx context.Context, userID, activity, ip string) {
 		"event_type", "security.suspicious",
 		"user_id", userID,
 		"activity", activity,
+		"ip", ip,
 		"ip_anon", logger.AnonymiseIP(ip),
 	)
 }
 
 // LogFileAccess enregistre un accès à un fichier.
+// Le niveau est Info (succès) ou Warn (échec) — jamais Debug, pour satisfaire
+// l'obligation de conservation des logs d'accès (LCEN, 1 an).
 func LogFileAccess(ctx context.Context, userID, fileID, ip string, success bool) {
-	level := slog.LevelDebug
+	level := slog.LevelInfo
 	if !success {
 		level = slog.LevelWarn
 	}
@@ -77,6 +83,7 @@ func LogFileAccess(ctx context.Context, userID, fileID, ip string, success bool)
 		"event_type", "file.access",
 		"user_id", userID,
 		"file_id", fileID,
+		"ip", ip,
 		"ip_anon", logger.AnonymiseIP(ip),
 		"success", success,
 	)
@@ -87,6 +94,7 @@ func LogProfileUpdate(ctx context.Context, userID, ip string) {
 	seclog().Log(ctx, slog.LevelInfo, "user.profile_updated",
 		"event_type", "user.profile_updated",
 		"user_id", userID,
+		"ip", ip,
 		"ip_anon", logger.AnonymiseIP(ip),
 	)
 }
@@ -95,6 +103,7 @@ func LogProfileUpdate(ctx context.Context, userID, ip string) {
 func LogRateLimitExceeded(ctx context.Context, ip, endpoint string) {
 	seclog().Log(ctx, slog.LevelWarn, "ratelimit.exceeded",
 		"event_type", "ratelimit.exceeded",
+		"ip", ip,
 		"ip_anon", logger.AnonymiseIP(ip),
 		"endpoint", endpoint,
 	)
@@ -123,6 +132,69 @@ func LogTokenRevoked(ctx context.Context, userID, reason, ip string) {
 		"event_type", "auth.token_revoked",
 		"user_id", userID,
 		"reason", reason,
+		"ip", ip,
 		"ip_anon", logger.AnonymiseIP(ip),
+	)
+}
+
+// LogAccountCreated enregistre la création d'un compte utilisateur.
+func LogAccountCreated(ctx context.Context, userID, ip, userAgent string) {
+	seclog().Log(ctx, slog.LevelInfo, "account.created",
+		"event_type", "account.created",
+		"user_id", userID,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+		"user_agent", userAgent,
+	)
+}
+
+// LogAccountDeleted enregistre la suppression définitive d'un compte (RGPD art. 17).
+func LogAccountDeleted(ctx context.Context, userID, ip, userAgent string) {
+	seclog().Log(ctx, slog.LevelInfo, "account.deleted",
+		"event_type", "account.deleted",
+		"user_id", userID,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+		"user_agent", userAgent,
+	)
+}
+
+// LogShareCreated enregistre la création d'un lien de partage public.
+func LogShareCreated(ctx context.Context, userID, resourceType string, resourceID int64, token, ip, userAgent string) {
+	seclog().Log(ctx, slog.LevelInfo, "share.created",
+		"event_type", "share.created",
+		"user_id", userID,
+		"resource_type", resourceType,
+		"resource_id", resourceID,
+		"token", token,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+		"user_agent", userAgent,
+	)
+}
+
+// LogShareRevoked enregistre la suppression d'un lien de partage public.
+func LogShareRevoked(ctx context.Context, userID, shareID, ip, userAgent string) {
+	seclog().Log(ctx, slog.LevelInfo, "share.revoked",
+		"event_type", "share.revoked",
+		"user_id", userID,
+		"share_id", shareID,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+		"user_agent", userAgent,
+	)
+}
+
+// LogDirectShareCreated enregistre la création d'un partage direct entre utilisateurs.
+func LogDirectShareCreated(ctx context.Context, ownerID, recipientID, resourceType string, resourceID int64, ip, userAgent string) {
+	seclog().Log(ctx, slog.LevelInfo, "share.direct_created",
+		"event_type", "share.direct_created",
+		"owner_id", ownerID,
+		"recipient_id", recipientID,
+		"resource_type", resourceType,
+		"resource_id", resourceID,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+		"user_agent", userAgent,
 	)
 }
