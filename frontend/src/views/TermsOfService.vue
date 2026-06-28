@@ -5,7 +5,7 @@
   <div class="legal-container">
     <div class="legal-content">
       <h1>Conditions Générales d'Utilisation (CGU)</h1>
-      <p class="last-updated">Dernière mise à jour : 26 Mai 2026</p>
+      <p class="last-updated">Dernière mise à jour : 28 Juin 2026</p>
 
       <section>
         <h2>1. Objet</h2>
@@ -62,6 +62,7 @@
           <li>L'Utilisateur est seul responsable de la licéité du contenu qu'il stocke.</li>
         </ul>
         <p>Nonobstant ce qui précède, l'Éditeur se réserve le droit de suspendre ou supprimer tout compte faisant l'objet d'un signalement d'activité illicite par les autorités compétentes, et coopérera pleinement avec toute réquisition judiciaire ou administrative dans le cadre de la législation applicable (notamment la LCEN et le Code de procédure pénale).</p>
+        <p><strong>Journalisation des opérations :</strong> conformément à ses obligations légales (LCEN, décret n°2021-1363), l'Éditeur enregistre et conserve pendant 1 an les données techniques associées à chaque action significative effectuée sur le Service : création et suppression de compte, connexions et déconnexions, création et révocation de liens de partage, partages directs entre utilisateurs, accès aux fichiers stockés. Ces journaux incluent l'adresse IP de l'Utilisateur (complète pour les événements de sécurité, anonymisée pour les journaux applicatifs généraux), l'agent utilisateur, ainsi que la date et l'heure de l'opération. Ils peuvent être communiqués aux autorités judiciaires ou administratives sur réquisition légale.</p>
         <p>Conformément à l'article 6 de la loi n°2004-575 du 21 juin 2004 pour la confiance dans l'économie numérique (LCEN), l'Éditeur agit en qualité d'hébergeur pour les fichiers stockés et bénéficie du régime de responsabilité limitée prévu par ce texte.</p>
       </section>
 
@@ -108,6 +109,7 @@
         <h2>10. Données Personnelles et Mesure d'Audience</h2>
         <p>L'Utilisateur dispose de droits d'opposition, d'accès, de rectification et de suppression portant sur les données personnelles le concernant, conformément à la Politique de Confidentialité du site.</p>
         <p>Kagibi utilise l'outil de mesure d'audience <strong>Umami</strong>, auto-hébergé sur sa propre infrastructure. Umami ne dépose aucun cookie et collecte uniquement des données anonymisées (pages visitées, navigateur, pays approximatif). Aucune donnée permettant d'identifier personnellement un Utilisateur n'est collectée à cette fin, et aucun transfert vers un service tiers n'est effectué. Pour plus de détails, consulter la <a @click.prevent="$router.push('/privacy')" href="#">Politique de Confidentialité</a>.</p>
+        <p>En application de la LCEN et du RGPD, les données techniques collectées lors de l'utilisation du Service (adresse IP, agent utilisateur, horodatage) sont traitées aux fins de sécurité, de détection des abus et de réponse aux réquisitions légales. L'adresse IP complète est conservée uniquement dans les journaux d'événements de sécurité, conformément à la délibération CNIL n°2021-122, et l'IP anonymisée dans les journaux applicatifs généraux. Ces données sont conservées 1 an conformément au décret n°2021-1363. Les droits d'accès, rectification et effacement sont exercés selon les modalités de la <a @click.prevent="$router.push('/privacy')" href="#">Politique de Confidentialité</a>, sous réserve des obligations légales de conservation.</p>
       </section>
 
       <section>
