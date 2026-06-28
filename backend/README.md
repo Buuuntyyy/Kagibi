@@ -12,9 +12,9 @@ Le backend Kagibi est une API Go qui respecte les principes **Zero-Knowledge** :
 - JWT validation via Supabase
 - Rate limiting avec `sync.Map`
 - WebSocket temps réel pour notifications
-- **Upload S3 Multipart** avec URLs présignées (direct client → S3)
-- **Download multi-fichiers** avec batch presigned URLs et folder tree
-- Logs sécurisés (aucune clé exposée)
+- **Upload S3 Multipart** avec URLs présignées (direct client → S3, parts 5–100 MB, TTL 3 min)
+- **Download multi-fichiers** avec batch presigned URLs (génération parallèle 10 goroutines) et folder tree
+- **Logs structurés JSON** (slog) avec double IP (complète pour événements sécurité, anonymisée CNIL 2021-122 pour logs HTTP), user-agent, et couverture complète LCEN : compte, auth, partages, fichiers
 
 ---
 
@@ -435,18 +435,110 @@ type visitor struct {
 
 ### Security Logger
 
+Logs structurés JSON via `log/slog`, filtrables dans Loki/Grafana avec `component="security"`.
+
+**Politique IP** (CNIL délibération 2021-122) :
+- Logs HTTP applicatifs (`MetricsMiddleware`) → `ip_anon` uniquement (dernier octet IPv4 / 80 bits IPv6 masqués)
+- Événements de sécurité → `ip` (complète) **+** `ip_anon` dans le même log
+
+**Fonctions disponibles** :
+
 ```go
 // middleware/security_logger.go
-func (sl *SecurityLogger) LogAuthAttempt(userID, ip string, success bool)
-func (sl *SecurityLogger) LogPasswordChange(userID, ip string)
-func (sl *SecurityLogger) LogUnauthorizedAccess(userID, resource, ip string)
-func (sl *SecurityLogger) LogFileAccess(userID, fileID, ip string, success bool)
 
-// Format logs/security.log:
-// 2026-02-02T10:30:00Z - Event: AUTH_ATTEMPT, UserID: xxx, IP: 192.168.1.1, Success: true
+// Authentification
+func LogAuthAttempt(ctx, userID, ip string, success bool, reason string)
+func LogPasswordChange(ctx, userID, ip string)
+func LogTokenRevoked(ctx, userID, reason, ip string)
+
+// Compte
+func LogAccountCreated(ctx, userID, ip, userAgent string)   // ← nouveau
+func LogAccountDeleted(ctx, userID, ip, userAgent string)   // ← nouveau
+
+// Accès ressources
+func LogFileAccess(ctx, userID, fileID, ip string, success bool)
+func LogUnauthorizedAccess(ctx, userID, resource, ip string)
+
+// Partages
+func LogShareCreated(ctx, userID, resourceType string, resourceID int64, token, ip, userAgent string) // ← nouveau
+func LogShareRevoked(ctx, userID, shareID, ip, userAgent string)                                       // ← nouveau
+func LogDirectShareCreated(ctx, ownerID, recipientID, resourceType string, resourceID int64, ip, userAgent string) // ← nouveau
+
+// Divers
+func LogProfileUpdate(ctx, userID, ip string)
+func LogRateLimitExceeded(ctx, ip, endpoint string)
+func LogSuspiciousActivity(ctx, userID, activity, ip string)
+func LogLDAPSync(ctx context.Context, orgID int64, usersFound, added, suspended, removed int, syncErr string)
 ```
 
-**Garantie ZK**: Aucune clé cryptographique n'est jamais loguée.
+**Format JSON (exemple `account.created`)** :
+```json
+{
+  "time": "2026-06-28T14:30:00Z",
+  "level": "INFO",
+  "msg": "account.created",
+  "component": "security",
+  "event_type": "account.created",
+  "user_id": "550e8400-...",
+  "ip": "203.0.113.42",
+  "ip_anon": "203.0.113.0",
+  "user_agent": "Mozilla/5.0 ..."
+}
+```
+
+**Format JSON (logs HTTP via `MetricsMiddleware`)** :
+```json
+{
+  "time": "2026-06-28T14:30:00Z",
+  "level": "INFO",
+  "msg": "http_request",
+  "request_id": "a1b2c3d4e5f6a7b8",
+  "method": "POST",
+  "path": "/api/v1/files/upload",
+  "status": 201,
+  "duration_ms": 42,
+  "user_id": "550e8400-...",
+  "ip_anon": "203.0.113.0",
+  "user_agent": "Go-http-client/2.0"
+}
+```
+
+**Événements couverts** (conformité LCEN / décret 2021-1363 — conservation 1 an) :
+
+| Événement | `event_type` | Niveau |
+|-----------|-------------|--------|
+| Création de compte | `account.created` | INFO |
+| Suppression de compte | `account.deleted` | INFO |
+| Tentative d'auth | `auth.attempt` | INFO / WARN |
+| Changement de mot de passe | `auth.password_changed` | INFO |
+| Révocation de token | `auth.token_revoked` | INFO |
+| Accès fichier | `file.access` | INFO / WARN |
+| Création lien public | `share.created` | INFO |
+| Révocation lien public | `share.revoked` | INFO |
+| Partage direct créé | `share.direct_created` | INFO |
+| Mise à jour profil | `user.profile_updated` | INFO |
+| Rate limit dépassé | `ratelimit.exceeded` | WARN |
+| Accès refusé | `access.denied` | WARN |
+| Activité suspecte | `security.suspicious` | WARN |
+| Sync LDAP | `ldap.sync` | INFO / ERROR |
+
+**Garantie ZK** : Aucune clé cryptographique n'est jamais loguée.
+
+**LogQL utiles** :
+```logql
+# Tous les événements sécurité
+{service="kagibi-backend"} | json | component="security"
+
+# Créations/suppressions de compte
+{service="kagibi-backend"} | json | event_type=~"account\\.(created|deleted)"
+
+# Partages par utilisateur
+{service="kagibi-backend"} | json | component="security" | event_type=~"share\\..*" | user_id="550e8400-..."
+
+# Client web vs desktop (dans les logs HTTP)
+{service="kagibi-backend"} | json | user_agent=~"Mozilla.*"        # web
+{service="kagibi-backend"} | json | user_agent=~"Go-http-client.*" # desktop
+```
 
 ---
 
@@ -504,15 +596,19 @@ func TestCreateFolderHandler(t *testing.T) {
 | **Concurrency** | `sync.Map` pour rate limiting | -60% contention |
 | **Connection Pooling** | Bun ORM avec pool PostgreSQL | +200% throughput |
 | **Redis Cache** | Cache metadata fichiers | -80% requêtes DB |
-| **Chunked Upload** | Multipart 10MB chunks | Support gros fichiers |
-| **Goroutines** | Cleanup async, preview generation | Non-bloquant |
+| **Upload S3 Multipart** | Parts 5–100 MB, URLs présignées (TTL 3 min), upload direct client → S3 | Support gros fichiers, zéro transit backend |
+| **Pipeline Upload parallèle** | Chiffrement côté client + multipart S3 en parallèle (frontend) | Débit x3–5 sur connexion rapide |
+| **Batch Presign parallèle** | Sémaphore 10 goroutines concurrentes pour `batch-presign` | ~50 ms pour 100 fichiers |
+| **Goroutines async** | Cleanup, preview generation, worker S3 via Redis queue | Non-bloquant pour l'utilisateur |
+| **Logs structurés JSON** | `slog` → Loki/Grafana Cloud, 0 parse custom | Observabilité production-ready |
 
 ### Métriques
 
-- Latence p95 upload (10MB): < 500ms
-- Latence p95 download: < 200ms
-- Latence p95 list files: < 100ms
-- Throughput: 1000 req/s (middleware rate limit)
+- Latence p95 upload multipart (initiate) : < 200 ms
+- Latence p95 batch-presign 100 fichiers : ~50 ms
+- Latence p95 download presigned URL : < 200 ms
+- Latence p95 list files : < 100 ms
+- Throughput : 1 000 req/s (rate limiter middleware)
 
 ---
 
@@ -544,17 +640,57 @@ ALLOWED_ORIGINS=https://kagibi.com
 
 ---
 
+## Frontend — Pages & Composants Notables
+
+> Ces éléments sont dans `frontend/src/` et s'appuient sur l'API backend ci-dessus.
+
+### Page FAQ (`/faq`)
+
+Route publique — accessible sans authentification depuis la landing page et le bouton **Aide & Support** du dashboard.
+
+- **Fichier** : `views/landing/FaqView.vue`
+- **Route** : `/faq` (nom `Faq`, enregistrée dans `router/index.js`)
+- **Nav** : lien dans `LandingNav.vue` (desktop + mobile) entre `/values` et le bouton de connexion
+- **HelpDialog** : bouton "FAQ" avec icône `BookOpen` (lucide-vue-next) dans le menu Aide & Support
+- **i18n** : clés sous `landing.faq.*` dans `fr.json` / `en.json` (4 catégories, 19 Q&A)
+
+Catégories couvertes :
+1. Général & Souveraineté (g1–g5)
+2. Sécurité & Chiffrement (s1–s5)
+3. Fonctionnalités — P2P, partages, Organisations, Amis (f1–f5)
+4. Valeurs & Engagements de Kagibi (v1–v4)
+
+### Upload — Pipeline côté client
+
+Le frontend chiffre les chunks AES-256-GCM **en parallèle** avant de les envoyer via S3 Multipart :
+1. `POST /api/v1/files/multipart/initiate` → reçoit `upload_id` + URLs présignées par part
+2. Upload direct de chaque part chiffrée vers S3 (bypass backend)
+3. `POST /api/v1/files/multipart/complete` → finalisation avec ETags
+4. `POST /api/v1/files/multipart/refresh-url` si une URL présignée expire (TTL 3 min)
+
+Si l'opération est annulée : `POST /api/v1/files/multipart/abort` nettoie les parts S3.
+
+---
+
 ## 🐛 Debugging
 
 ### Logs
 
 ```bash
-# Logs applicatifs (stdout)
+# Logs applicatifs JSON (stdout) — ingérés par Loki/Grafana Cloud
 go run main.go 2>&1 | tee app.log
 
-# Logs sécurité (fichier)
-tail -f logs/security.log
+# Filtrer les événements de sécurité en local
+go run main.go 2>&1 | jq 'select(.component == "security")'
+
+# Filtrer par type d'événement
+go run main.go 2>&1 | jq 'select(.event_type == "account.created")'
+
+# Filtrer les requêtes HTTP avec user-agent
+go run main.go 2>&1 | jq 'select(.msg == "http_request") | {path, status, user_agent}'
 ```
+
+> En production, les logs sont collectés automatiquement par **Grafana Cloud Loki** (managé). Aucune configuration locale requise.
 
 ### Hot Reload
 

@@ -26,7 +26,7 @@ Kagibi is released under the **AGPLv3** license: the code is auditable, and self
 
 - **File upload** — drag-and-drop or file picker, with real-time progress (encryption phase then upload phase).
 - **Folder upload** — upload an entire directory tree in one operation. When a name conflict arises, three options are available: auto-rename, skip, or replace.
-- **Multipart upload** — large files (> 10 MB) are split into 10 MB chunks, individually encrypted and uploaded in parallel.
+- **Multipart upload** — large files are split into parts (5 to 100 MB each), individually encrypted with AES-256-GCM in the browser, then uploaded **in parallel** directly to S3 via pre-signed URLs (TTL 3 min). The backend never handles the raw content — it only orchestrates presigned URLs and finalises the multipart operation.
 - **Download** — client-side streaming decryption: the file is never fully reconstructed in plaintext in memory before being written to disk.
 - **Organization** — create folders, rename, move, delete (single file or recursive folder).
 - **Tags** — label your folders to find them quickly via search and filters.
@@ -82,6 +82,7 @@ Send a file directly from one device to another, end-to-end encrypted, without i
 - **Keyboard navigation**: Ctrl+K for search, arrow keys in lists.
 - **Responsive design**: mobile-adapted navigation with a bottom bar and bottom sheets.
 - **Storage quota** displayed in real time in the sidebar (updated within 2 seconds of each operation).
+- **FAQ page** (`/faq`) — publicly accessible, covering general questions (sovereignty, security, encryption), features (P2P, sharing, Organisations, Friends), and Kagibi's values. Also accessible from the **Help & Support** menu in the dashboard navbar.
 
 ---
 
@@ -531,12 +532,29 @@ Modern networks sometimes make direct connections impossible (NAT, firewalls). I
 - P2P invitations: token + file name + size + expiration date (content never stored)
 - Organization share links: token + encrypted key + optional password hash + single-use flag
 
+### Connection Logs (LCEN compliance)
+
+In accordance with French law (LCEN Article 6 II and Decree 2021-1363), the following technical data is retained for **1 year**:
+
+| Event logged | Data recorded |
+|---|---|
+| Account creation / deletion | User ID, full IP, anonymised IP, user-agent, timestamp |
+| Login attempts (success / failure) | User ID, full IP, anonymised IP, timestamp |
+| Password / token changes | User ID, full IP, anonymised IP, timestamp |
+| File access | User ID, file ID, full IP, anonymised IP, timestamp |
+| Public share link creation / revocation | User ID, resource, token, full IP, user-agent, timestamp |
+| Direct share creation | Owner ID, recipient ID, resource, full IP, user-agent, timestamp |
+| HTTP requests | Anonymised IP only (CNIL 2021-122), user-agent, status, duration |
+
+**IP address policy**: full IP is stored only in security event logs (account lifecycle, auth, shares). Standard HTTP request logs contain only the anonymised IP (last IPv4 octet / last 80 IPv6 bits masked), in accordance with CNIL deliberation 2021-122. Logs are shipped to Grafana Cloud Loki and retained for 1 year.
+
+All log data may be disclosed to judicial or administrative authorities upon a valid legal request. These logs are access-controlled and never contain decryption keys.
+
 ### What Is Not Collected
 
 - File content (never in plaintext on the server)
-- Browsing or search history
-- IP addresses (except temporary logging for security/abuse purposes)
-- Device or browser information
+- Browsing or search history within your files
+- Full IP in standard HTTP logs (anonymised only — CNIL 2021-122)
 
 ---
 

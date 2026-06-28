@@ -26,7 +26,7 @@ Kagibi est publié sous licence **AGPLv3** : le code est auditable, le déploiem
 
 - **Upload de fichiers** — glisser-déposer ou sélection classique, avec progression en temps réel (phase de chiffrement puis phase d'envoi).
 - **Upload de dossiers** — téléversez une arborescence entière en une fois. En cas de conflit de nom, trois options s'offrent à vous : renommer automatiquement, ignorer ou remplacer.
-- **Upload multipart** — les fichiers volumineux (> 10 Mo) sont découpés en fragments de 10 Mo, chiffrés individuellement et envoyés en parallèle.
+- **Upload multipart** — les fichiers volumineux sont découpés en fragments de 5 à 100 Mo, chiffrés individuellement avec AES-256-GCM dans le navigateur, puis envoyés **en parallèle** directement vers S3 via des URLs présignées (TTL 3 min). Le backend orchestre les URLs présignées et finalise l'opération multipart, mais ne touche jamais le contenu brut.
 - **Téléchargement** — déchiffrement en streaming côté client : le fichier n'est jamais reconstruit en clair en mémoire avant d'être écrit sur disque.
 - **Organisation** — création de dossiers, renommage, déplacement, suppression (simple ou récursive).
 - **Tags** — étiquetez vos dossiers pour les retrouver plus facilement via la recherche et les filtres.
@@ -82,6 +82,7 @@ Envoi direct d'un fichier d'un appareil à un autre, chiffré de bout en bout, s
 - **Navigation au clavier** : Ctrl+K pour la recherche, touches fléchées dans les listes.
 - **Design responsive** : navigation adaptée mobile avec barre inférieure et feuilles de bas de page.
 - **Quota de stockage** affiché en temps réel dans la barre latérale (mis à jour en moins de 2 secondes après chaque opération).
+- **Page FAQ** (`/faq`) — accessible publiquement, sans compte, depuis la landing page et le menu **Aide & Support** de la navbar du dashboard. Couvre les questions générales (souveraineté, sécurité, chiffrement), les fonctionnalités (P2P, partages, Organisations, Amis) et les valeurs de Kagibi.
 
 ---
 
@@ -531,12 +532,29 @@ Les réseaux modernes rendent parfois les connexions directes impossibles (NAT, 
 - Invitations P2P : token + nom du fichier + taille + date d'expiration (contenu non stocké)
 - Liens de partage d'organisation : token + clé chiffrée + hash de mot de passe optionnel + indicateur à usage unique
 
+### Journaux de connexion (conformité LCEN)
+
+Conformément à la loi française (LCEN article 6 II et décret 2021-1363), les données techniques suivantes sont conservées **1 an** :
+
+| Événement journalisé | Données enregistrées |
+|---|---|
+| Création / suppression de compte | ID utilisateur, IP complète, IP anonymisée, user-agent, horodatage |
+| Tentatives de connexion (succès / échec) | ID utilisateur, IP complète, IP anonymisée, horodatage |
+| Changement de mot de passe / révocation de token | ID utilisateur, IP complète, IP anonymisée, horodatage |
+| Accès aux fichiers | ID utilisateur, ID fichier, IP complète, IP anonymisée, horodatage |
+| Création / révocation d'un lien de partage public | ID utilisateur, ressource, token, IP complète, user-agent, horodatage |
+| Création d'un partage direct | ID propriétaire, ID destinataire, ressource, IP complète, user-agent, horodatage |
+| Requêtes HTTP | IP anonymisée uniquement (CNIL 2021-122), user-agent, statut, durée |
+
+**Politique IP** : l'IP complète est conservée uniquement dans les journaux d'événements de sécurité (cycle de vie du compte, auth, partages). Les journaux HTTP applicatifs contiennent uniquement l'IP anonymisée (dernier octet IPv4 / 80 bits IPv6 masqués), conformément à la délibération CNIL 2021-122. Les journaux sont centralisés dans Grafana Cloud Loki et conservés 1 an.
+
+Ces données peuvent être communiquées aux autorités judiciaires ou administratives sur réquisition légale. Elles sont soumises à contrôle d'accès et ne contiennent jamais de clé de déchiffrement.
+
 ### Ce qui n'est pas collecté
 
 - Contenu des fichiers (jamais en clair sur le serveur)
-- Historique de navigation ou de recherche
-- Adresses IP (sauf journalisation temporaire à des fins de sécurité/abus)
-- Informations sur l'appareil ou le navigateur
+- Historique de navigation ou de recherche dans vos fichiers
+- IP complète dans les logs HTTP standards (anonymisée uniquement — CNIL 2021-122)
 
 ---
 
