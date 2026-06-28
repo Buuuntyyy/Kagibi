@@ -15,6 +15,7 @@
         <router-link to="/compare" class="nav-link">{{ t('landing.nav.compare') }}</router-link>
         <router-link to="/security" class="nav-link">{{ t('landing.nav.security') }}</router-link>
         <router-link to="/values" class="nav-link">{{ t('landing.nav.values') }}</router-link>
+        <router-link to="/faq" class="nav-link">{{ t('landing.nav.faq') }}</router-link>
         <router-link to="/login" class="nav-btn">{{ t('landing.nav.login') }}</router-link>
         <LanguageSwitcher />
       </div>
@@ -40,6 +41,7 @@
       <router-link to="/compare" class="mobile-link" @click="closeMenu">{{ t('landing.nav.compare') }}</router-link>
       <router-link to="/security" class="mobile-link" @click="closeMenu">{{ t('landing.nav.security') }}</router-link>
       <router-link to="/values" class="mobile-link" @click="closeMenu">{{ t('landing.nav.values') }}</router-link>
+      <router-link to="/faq" class="mobile-link" @click="closeMenu">{{ t('landing.nav.faq') }}</router-link>
       <router-link to="/login" class="mobile-btn" @click="closeMenu">{{ t('landing.nav.login') }}</router-link>
       <LanguageSwitcher />
     </div>

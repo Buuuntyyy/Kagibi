@@ -927,6 +927,7 @@
       "compare": "Compare",
       "security": "Zero-Knowledge",
       "values": "Values",
+      "faq": "FAQ",
       "login": "Sign in"
     },
     "home": {
@@ -1371,6 +1372,86 @@
       "ctaSub": "Take control of your data. Start for free, no commitment.",
       "ctaBtn1": "Create an account",
       "ctaBtn2": "Our security architecture →"
+    },
+    "faq": {
+      "eyebrow": "FREQUENTLY ASKED QUESTIONS",
+      "title1": "Everything you want",
+      "titleHighlight": "to know about Kagibi",
+      "heroSub": "Clear answers about Kagibi's sovereignty, security, features and commitments.",
+
+      "cat1Label": "GENERAL & SOVEREIGNTY",
+      "cat1Title": "General questions about the service",
+
+      "g1q": "What is Kagibi?",
+      "g1a": "Kagibi is a sovereign, open-source cloud storage service built on a Zero-Knowledge principle. Your files are encrypted on your device before being sent — Kagibi technically cannot read your data.",
+
+      "g2q": "Where is my data physically stored?",
+      "g2a": "All your data is hosted exclusively on OVHcloud servers located in France (Roubaix and Gravelines). No replication outside the European Union is performed.",
+
+      "g3q": "Is Kagibi subject to the US CLOUD Act?",
+      "g3a": "No. Kagibi is a European entity hosted in France, subject only to French law and GDPR. The US CLOUD Act only applies to US-incorporated companies or those with servers in the United States — which is not our case.",
+
+      "g4q": "Is Kagibi free? How is it funded?",
+      "g4a": "Kagibi offers a free tier. Funding comes from paid subscriptions that provide more storage space. No personal data is sold or monetised for advertising purposes.",
+
+      "g5q": "Is the source code available?",
+      "g5a": "Yes, entirely. Kagibi is published under the GNU AGPLv3 license — the strongest copyleft license. Any modification deployed in production must be made public. The code is freely auditable on GitHub.",
+
+      "cat2Label": "SECURITY & ENCRYPTION",
+      "cat2Title": "How is your data protected?",
+
+      "s1q": "What is Zero-Knowledge encryption?",
+      "s1a": "Zero-Knowledge means that encryption and decryption happen only on your device. Your password is never sent to the server. Kagibi receives only encrypted bytes — without your key, it is mathematically unable to read anything.",
+
+      "s2q": "Can Kagibi read my files?",
+      "s2a": "No. This is a mathematical constraint, not just a promise. Files are encrypted with AES-256-GCM before leaving your browser. Kagibi never holds your password or decryption keys.",
+
+      "s3q": "What happens if I forget my password?",
+      "s3a": "During registration, you are given a 24-word recovery code. This code — and only this code — can unlock your account. Kagibi cannot reset your password on your behalf: no one holds your key, including us.",
+
+      "s4q": "Which cryptographic algorithms does Kagibi use?",
+      "s4a": "Kagibi uses AES-256-GCM for file encryption, Argon2id (64 MB RAM, 4 passes) to derive the key from your password, and RSA-OAEP 4096-bit for key sharing between users. All operations rely on the browser's native WebCrypto API.",
+
+      "s5q": "Are file names also encrypted?",
+      "s5a": "Kagibi offers optional file name encryption. When enabled, even metadata (names) is encrypted and unreadable by the server. By default, names may be visible in plaintext server-side to support certain features.",
+
+      "cat3Label": "FEATURES",
+      "cat3Title": "What you can do with Kagibi",
+
+      "f1q": "How does P2P transfer work?",
+      "f1a": "P2P transfer lets you send files up to 10 GB directly from one browser to another, without going through our servers. The connection is established via WebRTC (with TURN relay if needed). Files are end-to-end encrypted during transfer and are never stored on our infrastructure.",
+
+      "f2q": "How does public sharing (link) work?",
+      "f2a": "You can generate a sharing link for any file or folder. The recipient does not need a Kagibi account. The decryption key is included in the URL fragment (after the #), which is never sent to the server — only your browser can decrypt the file.",
+
+      "f3q": "What is direct sharing between Friends?",
+      "f3a": "The Friends list lets you add trusted Kagibi users. A direct share uses asymmetric cryptography: the file key is encrypted with the recipient's RSA public key, then sent. Only the recipient can decrypt — even Kagibi cannot intercept.",
+
+      "f4q": "What is an Organisation?",
+      "f4a": "Organisations let you create collaborative storage spaces for a team or company. Members of an organisation can share files in a common encrypted space with granular per-group permissions. Administrators can also synchronise members via LDAP/Active Directory.",
+
+      "f5q": "Can I access my files from multiple devices?",
+      "f5a": "Yes. Your Master Key is encrypted by your password and stored on the server. At each login, it is decrypted locally in your browser. You can therefore connect from any device and retrieve all your files.",
+
+      "cat4Label": "VALUES & COMMITMENTS",
+      "cat4Title": "What Kagibi stands for",
+
+      "v1q": "Does Kagibi use my data for advertising or commercial purposes?",
+      "v1a": "Never. Kagibi does not sell, rent, or analyse your data for commercial or advertising purposes. Our business model relies solely on paid subscriptions. Your files are cryptographically inaccessible to us anyway.",
+
+      "v2q": "Can I self-host Kagibi on my own infrastructure?",
+      "v2a": "Yes. Kagibi is designed to be self-hostable. The complete source code is available under AGPLv3. You can deploy your own instance on any compatible infrastructure, keeping full control over your data.",
+
+      "v3q": "Can Kagibi become proprietary or change its license?",
+      "v3a": "No, and this is a structural guarantee. The AGPLv3 license is irrevocable on already-published versions. Any future version remains covered by the same copyleft license, which prohibits creating closed proprietary forks. Kagibi formally commits to never switching to a more restrictive license.",
+
+      "v4q": "How does Kagibi make a lasting commitment to privacy?",
+      "v4a": "Privacy is Kagibi's architecture, not an option. In practice: client-side encryption by default, fully auditable open-source code, infrastructure in Europe, no data reuse, MFA available to all users, and a recovery code that ensures even under legal pressure on Kagibi, your files remain unreadable.",
+
+      "ctaTitle": "Still have questions?",
+      "ctaSub": "Create a free account and explore for yourself — or dive into our security architecture for more depth.",
+      "ctaBtn1": "Create my account",
+      "ctaBtn2": "Security architecture"
     }
   },
   "gdImport": {
