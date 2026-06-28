@@ -452,9 +452,9 @@ La page "Partages" centralise tous vos partages actifs en deux sections repliabl
 
 ### 3. Transfert P2P (appareil à appareil)
 
-Le transfert P2P envoie des fichiers directement d'un appareil à un autre, chiffré de bout en bout, sans stockage serveur intermédiaire.
+Le transfert P2P envoie des fichiers directement d'un appareil à un autre, chiffré de bout en bout, sans stockage serveur intermédiaire. **Il n'y a pas de limite de taille de fichier.**
 
-Les réseaux modernes rendent parfois les connexions directes impossibles (NAT, pare-feu). Dans ce cas, Kagibi utilise un serveur TURN (relais) qui appartient à Kagibi. **Les données transitant par ce relais restent chiffrées en AES-GCM — le serveur ne voit que des flux opaques, pas le contenu.**
+WebRTC tente toujours une **connexion directe en premier** (LAN ou traversée NAT via STUN). Ce n'est que si aucun chemin direct ne peut être établi — à cause d'un NAT ou d'un pare-feu trop restrictif — que le transfert bascule sur un **relais TURN opéré par Kagibi**. Ce relais est un simple commutateur de flux : les données entrent et sortent en temps réel sans être écrites sur disque. **Le serveur TURN ne produit aucun log et ne peut pas accéder au contenu**, qui reste chiffré AES-256-GCM de bout en bout tout au long du transfert.
 
 #### Deux modes de transfert
 

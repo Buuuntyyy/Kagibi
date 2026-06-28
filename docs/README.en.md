@@ -452,9 +452,9 @@ The "Shares" page centralises all your active shares in two collapsible sections
 
 ### 3. P2P Transfer (device-to-device)
 
-P2P transfer sends files directly from one device to another, end-to-end encrypted, without intermediate storage on our servers.
+P2P transfer sends files directly from one device to another, end-to-end encrypted, without intermediate storage on our servers. **There is no file size limit.**
 
-Modern networks sometimes make direct connections impossible (NAT, firewalls). In those cases, Kagibi uses a TURN relay server owned by Kagibi. **Data passing through this relay remains AES-GCM encrypted — the server sees only opaque streams, not the content.**
+WebRTC always attempts a **direct connection first** (LAN or NAT traversal via STUN). Only if a direct path cannot be established — due to a restrictive NAT or firewall — does the transfer fall back to a **Kagibi-operated TURN relay**. This relay is a pure traffic switcher: data enters and exits in real time without being written to disk. **The TURN server produces no logs and cannot access the content**, which remains AES-256-GCM encrypted end-to-end throughout.
 
 #### Two transfer modes
 

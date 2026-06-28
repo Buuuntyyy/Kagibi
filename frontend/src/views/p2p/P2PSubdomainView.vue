@@ -22,7 +22,7 @@
             </div>
 
             <div class="guest-consent-info">
-              <p>Le fichier sera transféré <strong>directement</strong> entre les appareils, chiffré de bout en bout. Kagibi n'a aucun accès au contenu.</p>
+              <p>Le fichier sera transféré <strong>directement</strong> entre les appareils, chiffré de bout en bout. Si la connexion directe est impossible, un relais TURN Kagibi est utilisé en secours — il commute le flux chiffré sans le stocker et sans produire de logs. Aucune limite de taille. Kagibi n'a aucun accès au contenu.</p>
             </div>
 
             <label class="guest-consent-check">
