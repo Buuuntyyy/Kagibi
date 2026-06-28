@@ -5,7 +5,7 @@
   <div class="legal-container">
     <div class="legal-content">
       <h1>Politique de Confidentialité</h1>
-      <p class="last-updated">Dernière mise à jour : 26 Mai 2026</p>
+      <p class="last-updated">Dernière mise à jour : 28 Juin 2026</p>
 
       <section>
         <h2>1. Introduction</h2>
@@ -23,7 +23,24 @@
         <p>Nous collectons et traitons les données suivantes :</p>
         <ul>
           <li><strong>Données d'identification :</strong> Nom d'utilisateur, adresse email, identifiant unique de compte.</li>
-          <li><strong>Données de connexion :</strong> Adresse IP source, date et heure de connexion, type de navigateur et d'appareil. Ces données sont collectées en application de l'obligation légale prévue par l'article 6 II de la LCEN et le décret n°2021-1363.</li>
+          <li>
+            <strong>Données de connexion :</strong> Adresse IP source, date et heure de connexion, méthode et chemin HTTP, code de réponse, durée de traitement, agent utilisateur (navigateur, système d'exploitation ou application desktop). Ces données sont collectées en application de l'obligation légale prévue par l'article 6 II de la LCEN et le décret n°2021-1363.
+            <br><br>
+            <strong>Traitement de l'adresse IP :</strong> dans les journaux applicatifs généraux, l'adresse IP est <em>anonymisée</em> conformément à la délibération CNIL 2021-122 (dernier octet masqué pour l'IPv4 ; 80 bits finaux masqués pour l'IPv6). Pour les événements de sécurité (tentative d'authentification, dépassement de limite de débit, accès refusé, activité suspecte, révocation de session, création/révocation d'un partage, création/suppression de compte), <strong>l'adresse IP complète est conservée</strong> dans un journal de sécurité dédié, accessible aux seuls membres habilités de l'équipe Kagibi, afin de permettre la coopération avec les autorités judiciaires et administratives compétentes.
+          </li>
+          <li>
+            <strong>Journaux d'événements de sécurité et d'activité :</strong> Kagibi enregistre de manière structurée les événements suivants, associés à l'identifiant de compte, à l'adresse IP (complète) et à l'agent utilisateur :
+            <ul style="margin-top: 0.5rem;">
+              <li>Création et suppression définitive de compte ;</li>
+              <li>Tentatives de connexion (succès et échecs), changements de mot de passe, enrôlement et désenrôlement MFA, révocations de session ;</li>
+              <li>Création et révocation de liens de partage public (avec identification de la ressource partagée) ;</li>
+              <li>Partages directs entre utilisateurs (expéditeur, destinataire, nature et identifiant de la ressource) ;</li>
+              <li>Accès aux fichiers stockés (téléchargements) ;</li>
+              <li>Modifications de profil utilisateur ;</li>
+              <li>Dépassements de limite de débit et accès refusés.</li>
+            </ul>
+            Ces journaux sont conservés pendant <strong>1 an</strong> conformément à la LCEN, puis supprimés automatiquement.
+          </li>
           <li><strong>Contenu chiffré :</strong> Métadonnées des fichiers et dossiers (nom, taille, date de modification). <strong>Le contenu des fichiers est chiffré côté client et Kagibi n'y a aucun accès.</strong></li>
           <li><strong>Données de signalisation P2P :</strong> Lors d'un transfert P2P, Kagibi enregistre temporairement les métadonnées nécessaires à la mise en relation technique : identifiant de l'expéditeur, email ou identifiant du destinataire (si renseigné), nom et taille du fichier, jeton d'invitation.</li>
           <li><strong>Flux TURN :</strong> Lorsque la connexion directe entre appareils n'est pas possible, le flux de données chiffré transite par le serveur TURN de Kagibi. Ce flux n'est <strong>jamais stocké</strong> : il est commuté en mémoire en temps réel entre les deux parties. Le contenu des fichiers reste chiffré de bout en bout (AES-256-GCM) et Kagibi ne dispose d'aucune clé permettant de le déchiffrer.</li>
@@ -47,9 +64,10 @@
         <p>Vos données sont collectées pour les finalités suivantes :</p>
         <ul>
           <li>Fourniture et gestion du service Kagibi (création de compte, stockage, partage, transferts P2P, import depuis services tiers).</li>
-          <li>Sécurité du service et prévention de la fraude.</li>
+          <li>Sécurité du service, prévention de la fraude et détection des comportements abusifs (authentification, rate-limiting, surveillance d'activité suspecte).</li>
+          <li>Traçabilité des opérations sensibles : création et suppression de compte, création et révocation de liens de partage, partages directs entre utilisateurs, accès aux fichiers — afin de répondre aux obligations légales de conservation et aux éventuelles réquisitions judiciaires.</li>
           <li>Communication avec les utilisateurs (support technique, notifications importantes).</li>
-          <li>Respect des obligations légales et réglementaires, notamment la conservation des données de connexion imposée par la LCEN.</li>
+          <li>Respect des obligations légales et réglementaires, notamment la conservation des données de connexion et des journaux d'événements de sécurité imposée par la LCEN (1 an).</li>
           <li>Mesure d'audience anonyme : compréhension de l'utilisation du service à des fins d'amélioration, sans identification des utilisateurs.</li>
         </ul>
       </section>
@@ -65,7 +83,7 @@
         <h2>6. Durée de conservation</h2>
         <p>Les durées de conservation sont les suivantes :</p>
         <ul>
-          <li><strong>Données de connexion (logs, adresses IP) :</strong> 1 an à compter de la date d'enregistrement, conformément à l'obligation légale prévue par l'article 6 II de la LCEN et le décret n°2021-1363 du 24 novembre 2021.</li>
+          <li><strong>Données de connexion et journaux d'événements de sécurité (logs, adresses IP, agent utilisateur, événements de compte et de partage) :</strong> 1 an à compter de la date d'enregistrement, conformément à l'obligation légale prévue par l'article 6 II de la LCEN et le décret n°2021-1363 du 24 novembre 2021. Les journaux sont supprimés automatiquement à l'issue de cette période.</li>
           <li><strong>Données de compte et contenu chiffré :</strong> Conservés pendant toute la durée d'activité du compte, puis supprimés des serveurs actifs dans un délai de 30 jours suivant la suppression du compte.</li>
           <li><strong>Métadonnées P2P (invitations, signaux de signalisation) :</strong> Les invitations P2P expirent automatiquement après 24 heures. Les métadonnées résiduelles (nom de fichier, taille, identifiants) sont supprimées dans un délai de 30 jours suivant la complétion ou l'expiration du transfert. Les signaux WebRTC sont supprimés immédiatement après consommation.</li>
           <li><strong>Données de facturation :</strong> Conservées conformément aux obligations comptables (10 ans) pour les factures, durée réduite pour les autres données de facturation.</li>
@@ -103,6 +121,7 @@
       <section>
         <h2>9. Sécurité des données</h2>
         <p>Kagibi met en œuvre des mesures techniques et organisationnelles appropriées pour protéger vos données contre l'accès non autorisé, la modification, la divulgation ou la destruction, notamment : chiffrement AES-256-GCM des fichiers, chiffrement RSA-4096 des clés, communication via HTTPS/WSS, et authentification à deux facteurs disponible.</p>
+        <p><strong>Journaux de sécurité :</strong> l'ensemble des événements sensibles (authentification, gestion de compte, partages, accès aux fichiers) est enregistré dans des journaux structurés au format JSON, acheminés vers un système de collecte centralisé. Ces journaux constituent la piste d'audit du service et permettent de détecter les intrusions, d'analyser les incidents de sécurité et de répondre aux réquisitions légales. L'accès aux journaux contenant des adresses IP complètes est restreint aux membres habilités de l'équipe technique.</p>
       </section>
 
       <section>
