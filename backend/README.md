@@ -38,56 +38,53 @@ Le backend Kagibi est une API Go qui respecte les principes **Zero-Knowledge** :
 
 ### Prérequis
 
-```bash
-Go 1.21+
-PostgreSQL 16+
-Redis 7+
-MinIO ou AWS S3
-```
+- [Go 1.21+](https://go.dev/dl/)
+- [Docker](https://docs.docker.com/get-docker/) (pour PostgreSQL et Redis)
+- Un bucket S3 ou une instance [MinIO](https://min.io/)
 
-### Installation
+### 1. Dépendances Go
 
 ```bash
 cd backend
 go mod download
 ```
 
-### Configuration
+### 2. Infrastructure locale (PostgreSQL + Redis)
 
-Créez `.env`:
+Depuis la **racine du projet** :
 
 ```bash
-# Base de données
-DATABASE_URL=postgresql://user:password@localhost:5432/kagibi
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# Supabase (Authentification JWT)
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_JWT_SECRET=your-jwt-secret
-
-# Stockage S3/MinIO
-S3_ENDPOINT=http://localhost:9000
-S3_REGION=us-east-1
-S3_ACCESS_KEY=minioadmin
-S3_SECRET_KEY=minioadmin
-S3_BUCKET=kagibi-files
-
-# CORS
-ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
-
-# TURN (optionnel - WebRTC)
-TURN_URLS=turn:your-turn-server.com:3478
-TURN_SECRET=your-turn-secret
-TURN_USER=username
-TURN_PASSWORD=password
+docker compose up db redis-db -d
 ```
 
-### Lancement
+Cela démarre :
+- PostgreSQL 16 sur `localhost:5432` (user: `postgres`, password: `postgres`, db: `kagibi`)
+- Redis 7 sur `localhost:6379`
+
+Les migrations sont appliquées automatiquement au premier lancement du backend.
+
+### 3. Configuration
 
 ```bash
-go run main.go
+cp .env.example .env
+```
+
+Éditez `.env` et renseignez au minimum :
+
+| Variable | Description |
+|---|---|
+| `AUTH_PROVIDER` | `local` (recommandé pour l'auto-hébergement) |
+| `JWT_SECRET` | Chaîne aléatoire longue (`openssl rand -hex 32`) |
+| `EMAIL_ENCRYPTION_KEY` | Clé AES-256 pour les emails (`openssl rand -hex 32`) |
+| `DATABASE_URL` | Déjà pré-rempli pour Docker local |
+| `REDIS_URL` | Déjà pré-rempli pour Docker local |
+| `S3_ENDPOINT` / `S3_BUCKET` | Votre bucket S3 ou MinIO |
+| `BILLING_ENABLED` | `false` pour l'auto-hébergement (stockage illimité) |
+
+### 4. Lancement
+
+```bash
+go run .
 # → API disponible sur http://localhost:8080
 ```
 
@@ -678,16 +675,16 @@ Si l'opération est annulée : `POST /api/v1/files/multipart/abort` nettoie les 
 
 ```bash
 # Logs applicatifs JSON (stdout) — ingérés par Loki/Grafana Cloud
-go run main.go 2>&1 | tee app.log
+go run . 2>&1 | tee app.log
 
 # Filtrer les événements de sécurité en local
-go run main.go 2>&1 | jq 'select(.component == "security")'
+go run . 2>&1 | jq 'select(.component == "security")'
 
 # Filtrer par type d'événement
-go run main.go 2>&1 | jq 'select(.event_type == "account.created")'
+go run . 2>&1 | jq 'select(.event_type == "account.created")'
 
 # Filtrer les requêtes HTTP avec user-agent
-go run main.go 2>&1 | jq 'select(.msg == "http_request") | {path, status, user_agent}'
+go run . 2>&1 | jq 'select(.msg == "http_request") | {path, status, user_agent}'
 ```
 
 > En production, les logs sont collectés automatiquement par **Grafana Cloud Loki** (managé). Aucune configuration locale requise.

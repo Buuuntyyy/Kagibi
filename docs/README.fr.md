@@ -598,27 +598,204 @@ Si le code de récupération est également perdu, les données sont **définiti
 
 ---
 
-## Démarrage rapide (développement)
+## Auto-hébergement
 
-**Prérequis :** Docker, Docker Compose
+**Prérequis :** [Docker + Docker Compose](https://docs.docker.com/get-docker/) · un bucket S3 compatible (AWS, OVH, Scaleway, Cloudflare R2, MinIO…)
+
+### 3 étapes
+
+**1. Cloner et configurer**
 
 ```bash
 git clone https://github.com/Buuuntyyy/Kagibi.git
 cd Kagibi
-cp backend/.env.example backend/.env   # Configurer les variables S3, JWT_SECRET, etc.
-cp frontend/.env.example frontend/.env # Configurer VITE_BACKEND_URL=http://localhost:8080
-
-cd backend
-go run main.go
-
-cd frontend
-npm install
-npm run dev
+cp .env.example .env
 ```
 
-Frontend : `http://localhost` — Backend : `http://localhost:8080`
+**2. Éditer `.env` — valeurs obligatoires**
 
-Pour la configuration détaillée (variables d'environnement, S3, Kubernetes), voir [`backend/README.md`](../backend/README.md).
+| Variable | Description |
+|---|---|
+| `JWT_SECRET` | Clé secrète aléatoire — `openssl rand -hex 32` |
+| `EMAIL_ENCRYPTION_KEY` | Clé AES-256 pour le chiffrement des emails au repos — `openssl rand -hex 32` ⚠ ne jamais changer après la première utilisation (les emails existants deviendraient illisibles) |
+| `S3_ENDPOINT` | URL de votre endpoint S3 (ex. `https://s3.amazonaws.com`) |
+| `S3_BUCKET` / `S3_REGION` | Nom et région de votre bucket |
+| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | Identifiants S3 |
+| `VITE_API_URL` | URL que le navigateur utilise pour atteindre le backend — `http://localhost:8080/api/v1` en local, `https://votre-domaine.com/api/v1` en production |
+| `ALLOWED_ORIGINS` | URL du frontend pour le CORS — `http://localhost` en local, `https://votre-domaine.com` en production |
+
+**3. Démarrer**
+
+```bash
+docker compose up -d
+```
+
+L'ordre de démarrage est géré automatiquement : PostgreSQL et Redis démarrent en premier, le backend attend qu'ils soient healthy, le frontend attend que le backend soit healthy. Les migrations de base de données s'appliquent automatiquement au premier lancement.
+
+| Service | URL par défaut |
+|---|---|
+| Frontend | `http://localhost` |
+| Backend API | `http://localhost:8080` |
+
+Toutes les données sont persistées dans des volumes Docker nommés (`db_data`, `redis_data`).
+
+### Paramètres optionnels
+
+Toutes les variables optionnelles ont des valeurs par défaut adaptées à l'auto-hébergement :
+
+| Variable | Défaut | Description |
+|---|---|---|
+| `DB_PASSWORD` | `postgres` | Mot de passe PostgreSQL (à changer en production) |
+| `AUTH_PROVIDER` | `local` | `local` (recommandé), `supabase` ou `pocketbase` |
+| `BILLING_ENABLED` | `false` | `false` = stockage illimité, aucune UI billing |
+| `TURN_SERVER_URL` | — | Relais TURN P2P pour les appareils derrière un NAT strict |
+| `GOOGLE_OAUTH_CLIENT_ID` | — | Activer l'import Google Drive |
+| `FRONTEND_PORT` / `BACKEND_PORT` | `80` / `8080` | Modifier les ports exposés |
+
+### Vérifier le déploiement
+
+```bash
+docker compose ps                    # les 4 services doivent afficher "healthy"
+curl http://localhost:8080/health    # → {"status":"ok"}
+```
+
+Ouvrir [http://localhost](http://localhost) dans le navigateur.
+
+Pour suivre les logs en direct :
+
+```bash
+docker compose logs -f backend   # backend uniquement
+docker compose logs -f           # tous les services
+```
+
+### Production (reverse proxy + TLS)
+
+**Prérequis :**
+- Un nom de domaine avec un **enregistrement A** pointant vers l'IP publique du serveur
+- Les ports **80** et **443** ouverts dans le pare-feu du serveur
+
+**1. Mettre à jour `.env`**
+
+Libérer le port 80 pour le reverse proxy en changeant `FRONTEND_PORT`, et renseigner le domaine :
+
+```env
+VITE_API_URL=https://votre-domaine.com/api/v1
+ALLOWED_ORIGINS=https://votre-domaine.com
+DB_PASSWORD=<mot-de-passe-fort>
+BILLING_ENABLED=false
+FRONTEND_PORT=3000
+```
+
+**2. Reconstruire le frontend** (`VITE_API_URL` est intégré à la compilation) :
+
+```bash
+docker compose up -d --build frontend
+```
+
+**3. Configurer le reverse proxy**
+
+Le reverse proxy doit router :
+- `/api/*` et `/health` → backend sur le port `8080`
+- `/ws` → backend sur le port `8080` (WebSocket — nécessite les en-têtes d'upgrade)
+- tout le reste → frontend sur le port `3000`
+
+---
+
+**Option A — Caddy (recommandé, TLS automatique via Let's Encrypt)**
+
+[Installer Caddy](https://caddyserver.com/docs/install), puis créer `/etc/caddy/Caddyfile` :
+
+```
+votre-domaine.com {
+    reverse_proxy /api/* localhost:8080
+    reverse_proxy /health localhost:8080
+    reverse_proxy /ws localhost:8080
+    reverse_proxy * localhost:3000
+}
+```
+
+```bash
+systemctl reload caddy
+```
+
+Caddy obtient et renouvelle le certificat TLS automatiquement. Aucune configuration supplémentaire requise.
+
+---
+
+**Option B — Nginx + Certbot**
+
+```nginx
+# /etc/nginx/sites-available/kagibi
+server {
+    listen 80;
+    server_name votre-domaine.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name votre-domaine.com;
+
+    ssl_certificate     /etc/letsencrypt/live/votre-domaine.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/votre-domaine.com/privkey.pem;
+
+    # API backend + health
+    location ~ ^/(api|health) {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+
+    # WebSocket (présence temps réel, signalisation P2P)
+    location /ws {
+        proxy_pass http://localhost:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host       $host;
+        proxy_read_timeout 3600s;
+    }
+
+    # Frontend
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host            $host;
+        proxy_set_header X-Real-IP       $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+```bash
+ln -s /etc/nginx/sites-available/kagibi /etc/nginx/sites-enabled/
+certbot --nginx -d votre-domaine.com   # émet et configure le TLS automatiquement
+nginx -s reload
+```
+
+---
+
+## Développement local
+
+**Prérequis :** Go 1.21+, Node.js 18+, Docker
+
+```bash
+git clone https://github.com/Buuuntyyy/Kagibi.git
+cd Kagibi
+
+# Infrastructure uniquement (PostgreSQL + Redis)
+docker compose up db redis -d
+
+# Backend
+cp backend/.env.example backend/.env   # renseigner S3_*, JWT_SECRET, EMAIL_ENCRYPTION_KEY
+cd backend && go run .
+
+# Frontend (nouveau terminal)
+cd frontend && npm install && npm run dev
+```
+
+Frontend : `http://localhost:5173` — Backend : `http://localhost:8080`
 
 ---
 

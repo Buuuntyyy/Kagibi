@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,9 +44,9 @@ func NewDB() *bun.DB {
 		pgdriver.WithNetwork("tcp4"),
 	}
 
-	// Si on est en local (ou si explicitement demandé), on peut désactiver SSL au niveau du driver
-	// Note: Pour Supabase, il ne faut PAS utiliser WithInsecure(true)
-	if dsn == "postgresql://user:password@127.0.0.1:5432/mydb?sslmode=disable" {
+	// Désactive TLS au niveau du driver si le DSN indique sslmode=disable.
+	// Note: pour Supabase/services distants, ne pas mettre sslmode=disable dans le DSN.
+	if strings.Contains(dsn, "sslmode=disable") {
 		opts = append(opts, pgdriver.WithInsecure(true))
 	}
 

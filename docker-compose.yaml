@@ -1,57 +1,86 @@
-services:
-  # ── Shared infrastructure ────────────────────────────────────────────────────
+# Kagibi — Self-hosted stack
+# 1. cp .env.example .env
+# 2. Edit .env (JWT_SECRET, EMAIL_ENCRYPTION_KEY, S3_*, ALLOWED_ORIGINS)
+# 3. docker compose up -d
 
+services:
+
+  # ── Database ────────────────────────────────────────────────────────────────
   db:
-    image: postgres:14-alpine
+    image: postgres:16-alpine
     restart: always
     shm_size: 128mb
-    env_file:
-      - .env
     environment:
-      POSTGRES_DB: mydb
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: kagibi
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     volumes:
-      - ./db_data:/var/lib/postgresql/data/
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d kagibi"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  redis-db:
-    image: redis:alpine
+  # ── Cache ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
     restart: always
-    ports:
-      - "6379:6379"
     volumes:
-      - ./redis-data:/data
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  # ── Backend ──────────────────────────────────────────────────────────────────
-
+  # ── Backend ─────────────────────────────────────────────────────────────────
   backend:
     build:
       context: ./backend
     restart: unless-stopped
     depends_on:
-      - db
-      - redis-db
-    env_file:
-      - .env
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
-      AUTH_PROVIDER: local
-      DATABASE_URL: postgres://user:password@db:5432/mydb?sslmode=disable
-      REDIS_URL: redis://redis-db:6379
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-use-a-long-random-string}
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-local}
+      JWT_SECRET: ${JWT_SECRET}
+      EMAIL_ENCRYPTION_KEY: ${EMAIL_ENCRYPTION_KEY}
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/kagibi?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
+      BILLING_ENABLED: ${BILLING_ENABLED:-false}
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
 
   # ── Frontend ─────────────────────────────────────────────────────────────────
-
   frontend:
     build:
       context: ./frontend
     restart: unless-stopped
     depends_on:
-      - backend
-    env_file:
-      - .env
+      backend:
+        condition: service_healthy
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api/v1}
+      VITE_AUTH_PROVIDER: ${AUTH_PROVIDER:-local}
     ports:
-      - "80:80"
+      - "${FRONTEND_PORT:-80}:80"
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  db_data:
+  redis_data:

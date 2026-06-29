@@ -58,23 +58,93 @@ Read the documentation in your language:
 
 ---
 
-## Quick start
+## Self-hosting (Docker)
+
+**Prerequisites:** [Docker + Docker Compose](https://docs.docker.com/get-docker/) · an S3-compatible bucket (AWS, OVH, Scaleway, Cloudflare R2, MinIO…)
+
+**1. Clone and configure**
 
 ```bash
 git clone https://github.com/Buuuntyyy/Kagibi.git
 cd Kagibi
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-
-cd backend
-go run main.go
-
-cd frontend
-npm install
-npm run dev
+cp .env.example .env
 ```
 
+**2. Edit `.env` — required values**
+
+| Variable | Description |
+|---|---|
+| `JWT_SECRET` | Random secret — `openssl rand -hex 32` |
+| `EMAIL_ENCRYPTION_KEY` | AES-256 key — `openssl rand -hex 32` ⚠ never change after first use |
+| `S3_ENDPOINT` / `S3_BUCKET` / `S3_REGION` | Your S3 bucket coordinates |
+| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | S3 credentials |
+| `VITE_API_URL` | Browser-facing backend URL — `http://localhost:8080/api/v1` locally, `https://your-domain.com/api/v1` in production |
+| `ALLOWED_ORIGINS` | Frontend URL for CORS — `http://localhost` locally, `https://your-domain.com` in production |
+
+**3. Start**
+
+```bash
+docker compose up -d
+```
+
+Startup order is managed automatically: PostgreSQL and Redis start first, the backend waits for them to be healthy, the frontend waits for the backend. Database migrations run automatically on first startup.
+
 Frontend: `http://localhost` — Backend: `http://localhost:8080`
+
+All data is persisted in named Docker volumes (`db_data`, `redis_data`).
+
+**Optional settings** — all have safe defaults for self-hosting:
+
+| Variable | Default | Description |
+|---|---|---|
+| `DB_PASSWORD` | `postgres` | PostgreSQL password (change in production) |
+| `AUTH_PROVIDER` | `local` | `local` (recommended), `supabase`, or `pocketbase` |
+| `BILLING_ENABLED` | `false` | `false` = unlimited storage, no billing UI |
+| `TURN_SERVER_URL` | — | P2P relay for devices behind strict NAT |
+| `GOOGLE_OAUTH_CLIENT_ID` | — | Enable Google Drive import |
+| `FRONTEND_PORT` / `BACKEND_PORT` | `80` / `8080` | Exposed ports |
+
+**Verify the deployment**
+
+```bash
+docker compose ps                    # all 4 services should show "healthy"
+curl http://localhost:8080/health    # → {"status":"ok"}
+```
+
+Then open [http://localhost](http://localhost) in your browser.
+
+**Production (reverse proxy + TLS)**
+
+Update `.env` with your domain and free port 80 for the reverse proxy:
+
+```env
+VITE_API_URL=https://your-domain.com/api/v1
+ALLOWED_ORIGINS=https://your-domain.com
+FRONTEND_PORT=3000
+```
+
+Rebuild the frontend: `docker compose up -d --build frontend`
+
+Then configure your reverse proxy — see [`docs/README.en.md`](./docs/README.en.md) for Caddy and Nginx examples.
+
+## Local development
+
+**Prerequisites:** [Go 1.21+](https://go.dev/dl/), [Docker](https://docs.docker.com/get-docker/), [Node.js 18+](https://nodejs.org/)
+
+```bash
+# Infrastructure (PostgreSQL + Redis)
+docker compose up db redis -d
+
+# Backend
+cp backend/.env.example backend/.env   # edit S3_* and secrets
+cd backend && go run .
+
+# Frontend (new terminal)
+cp frontend/.env.example frontend/.env
+cd frontend && npm install && npm run dev
+```
+
+Frontend: `http://localhost:5173` — Backend: `http://localhost:8080`
 
 ## License
 
