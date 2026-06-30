@@ -31,6 +31,7 @@ Kagibi est publié sous licence **AGPLv3** : le code est auditable, le déploiem
 - **Organisation** — création de dossiers, renommage, déplacement, suppression (simple ou récursive).
 - **Tags** — étiquetez vos dossiers pour les retrouver plus facilement via la recherche et les filtres.
 - **Prévisualisation** — aperçu des images et PDF directement dans le navigateur, sans téléchargement.
+- **Favoris** — marquez n'importe quel fichier ou dossier comme favori via le bouton ★ dans le tableau ou le menu contextuel. Les favoris apparaissent dans une section dédiée sur la page d'accueil et peuvent servir de critère de tri dans le navigateur de fichiers.
 
 ### Recherche et filtrage
 
@@ -83,6 +84,14 @@ Envoi direct d'un fichier d'un appareil à un autre, chiffré de bout en bout, s
 - **Design responsive** : navigation adaptée mobile avec barre inférieure et feuilles de bas de page.
 - **Quota de stockage** affiché en temps réel dans la barre latérale (mis à jour en moins de 2 secondes après chaque opération).
 - **Page FAQ** (`/faq`) — accessible publiquement, sans compte, depuis la landing page et le menu **Aide & Support** de la navbar du dashboard. Couvre les questions générales (souveraineté, sécurité, chiffrement), les fonctionnalités (P2P, partages, Organisations, Amis) et les valeurs de Kagibi.
+
+### Page d'accueil
+
+La page d'accueil (`/dashboard/home`) présente trois sections accordéon :
+
+1. **Fichiers favoris** — affiche tous les fichiers et dossiers marqués en favori, en grille 5 colonnes. La section n'apparaît que si au moins un favori existe. Cliquer sur une carte ouvre directement l'élément ; l'étoile dorée visible au survol retire l'élément des favoris.
+2. **Récemment ouverts** — les 10 derniers fichiers ou dossiers consultés, avec navigation rapide en un clic.
+3. **Partagés avec moi** — fichiers et dossiers partagés par d'autres utilisateurs.
 
 ---
 

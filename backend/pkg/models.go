@@ -238,6 +238,16 @@ type RecentActivity struct {
 	AccessedAt time.Time `bun:"accessed_at,nullzero,notnull,default:current_timestamp"`
 }
 
+type UserFavorite struct {
+	ID        int64     `bun:"id,pk,autoincrement"`
+	UserID    string    `bun:"user_id,notnull"`
+	FileID    *int64    `bun:"file_id"`
+	FolderID  *int64    `bun:"folder_id"`
+	File      *File     `bun:"rel:belongs-to,join:file_id=id"`
+	Folder    *Folder   `bun:"rel:belongs-to,join:folder_id=id"`
+	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+}
+
 // RealtimeEvent represents an event for Supabase Realtime
 type RealtimeEvent struct {
 	bun.BaseModel `bun:"table:realtime_events"`

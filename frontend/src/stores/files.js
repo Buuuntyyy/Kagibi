@@ -254,6 +254,8 @@ export const useFileStore = defineStore('files', {
     shareUpdateTrigger: 0,
     recentFolders: [],
     recentFiles: [],
+    favoriteFolders: [],
+    favoriteFiles: [],
     // Used to coordinate navigation from Suggestions
     pendingNavigatePath: null,
     pendingHighlight: null,     // { id, type } — item to select after navigation
@@ -279,6 +281,59 @@ export const useFileStore = defineStore('files', {
         } catch (err) {
             console.error("Failed to fetch recent history", err)
         }
+    },
+
+    async fetchUserFavorites() {
+        try {
+            const res = await api.get('/users/favorites')
+            const items = res.data
+            this.favoriteFiles = items
+                .filter(i => i.type === 'file')
+                .map(i => ({ ...i.file, type: 'file', displayName: i.file.Name }))
+            this.favoriteFolders = items
+                .filter(i => i.type === 'folder')
+                .map(i => ({ ...i.folder, type: 'folder', displayName: i.folder.Name, path: i.folder.Path }))
+        } catch (err) {
+            console.error('Failed to fetch user favorites', err)
+        }
+    },
+
+    isUserFavorite(id, type) {
+        const numId = typeof id === 'string' ? parseInt(id, 10) : id
+        if (type === 'folder') {
+            return this.favoriteFolders.some(f => (f.ID || f.id) === numId)
+        }
+        return this.favoriteFiles.some(f => (f.ID || f.id) === numId)
+    },
+
+    async addUserFavorite(item) {
+        const itemId = item.ID || item.id
+        const numId = typeof itemId === 'string' ? parseInt(itemId, 10) : itemId
+        if (!numId) return
+        const type = item.type === 'folder' ? 'folder' : 'file'
+        if (type === 'folder') {
+            this.favoriteFolders.unshift({ ...item, type: 'folder', displayName: item.displayName || item.Name || item.name })
+        } else {
+            this.favoriteFiles.unshift({ ...item, type: 'file', displayName: item.displayName || item.Name || item.name })
+        }
+        await api.post('/users/favorites', { id: numId, type }).catch(err => {
+            console.error('Failed to add favorite', err)
+            if (type === 'folder') this.favoriteFolders = this.favoriteFolders.filter(f => (f.ID || f.id) !== numId)
+            else this.favoriteFiles = this.favoriteFiles.filter(f => (f.ID || f.id) !== numId)
+        })
+    },
+
+    async removeUserFavorite(item) {
+        const itemId = item.ID || item.id
+        const numId = typeof itemId === 'string' ? parseInt(itemId, 10) : itemId
+        if (!numId) return
+        const type = item.type === 'folder' ? 'folder' : 'file'
+        if (type === 'folder') {
+            this.favoriteFolders = this.favoriteFolders.filter(f => (f.ID || f.id) !== numId)
+        } else {
+            this.favoriteFiles = this.favoriteFiles.filter(f => (f.ID || f.id) !== numId)
+        }
+        await api.delete(`/users/favorites/${type}/${numId}`).catch(err => console.error('Failed to remove favorite', err))
     },
 
     addToHistory(item) {

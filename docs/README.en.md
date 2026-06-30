@@ -31,6 +31,7 @@ Kagibi is released under the **AGPLv3** license: the code is auditable, and self
 - **Organization** — create folders, rename, move, delete (single file or recursive folder).
 - **Tags** — label your folders to find them quickly via search and filters.
 - **Preview** — view images and PDFs directly in the browser, without downloading.
+- **Favorites** — mark any file or folder as a favorite via the ★ button in the file table or the right-click context menu. Favorites are persisted server-side and appear in a dedicated section on the home page; they can also be used as a sort criterion in the file browser.
 
 ### Search and Filtering
 
@@ -83,6 +84,14 @@ Send a file directly from one device to another, end-to-end encrypted, without i
 - **Responsive design**: mobile-adapted navigation with a bottom bar and bottom sheets.
 - **Storage quota** displayed in real time in the sidebar (updated within 2 seconds of each operation).
 - **FAQ page** (`/faq`) — publicly accessible, covering general questions (sovereignty, security, encryption), features (P2P, sharing, Organisations, Friends), and Kagibi's values. Also accessible from the **Help & Support** menu in the dashboard navbar.
+
+### Home Page
+
+The home page (`/dashboard/home`) displays three accordion sections:
+
+1. **Favorite files** — shows all files and folders marked as favorites, in a 5-column grid. The section is only visible when at least one favorite exists. Clicking a card opens the item directly; the golden star visible on hover removes it from favorites.
+2. **Recently opened** — the 10 most recently accessed files or folders, with one-click navigation.
+3. **Shared with me** — files and folders shared by other users.
 
 ---
 

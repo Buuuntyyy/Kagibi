@@ -56,6 +56,10 @@
     "columnSize": "Taille",
     "folderType": "Dossier",
     "fileType": "Fichier",
+    "addFavorite": "Ajouter aux favoris",
+    "removeFavorite": "Retirer des favoris",
+    "addedToFavorites": "Ajouté aux favoris",
+    "removedFromFavorites": "Retiré des favoris",
     "securityTipsTitle": "Conseils de sécurité",
     "securityTipWarningTitle": "Conseil :",
     "securityTipWarningBody": "Activez l'authentification à deux facteurs (MFA) pour sécuriser votre compte",
@@ -298,6 +302,7 @@
   },
   "home": {
     "welcome": "Bienvenue sur votre Stockage Sécurisé",
+    "favorites": "Fichiers favoris",
     "recentSuggestions": "Suggestions",
     "sharedItems": "Fichiers partagés avec moi"
   },

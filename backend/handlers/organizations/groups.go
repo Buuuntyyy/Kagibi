@@ -294,12 +294,31 @@ func (h *OrgHandler) DeleteGroup(c *gin.Context) {
 		return
 	}
 
-	// Cascade: remove members and permission overrides first.
-	h.DB.NewDelete().Model((*pkg.OrgGroupMember)(nil)).Where("group_id = ?", groupID).Exec(ctx)
-	h.DB.NewDelete().Model((*pkg.OrgGroupPermission)(nil)).Where("group_id = ?", groupID).Exec(ctx)
+	// Cascade: remove members, permission overrides and the group itself in a single
+	// transaction so a partial failure never leaves orphaned rows behind.
+	tx, err := h.DB.BeginTx(ctx, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start transaction"})
+		return
+	}
+	defer tx.Rollback()
 
-	if _, err := h.DB.NewDelete().Model(&group).WherePK().Exec(ctx); err != nil {
+	if _, err := tx.NewDelete().Model((*pkg.OrgGroupMember)(nil)).
+		Where("group_id = ?", groupID).Exec(ctx); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete group members"})
+		return
+	}
+	if _, err := tx.NewDelete().Model((*pkg.OrgGroupPermission)(nil)).
+		Where("group_id = ?", groupID).Exec(ctx); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete group permissions"})
+		return
+	}
+	if _, err := tx.NewDelete().Model(&group).WherePK().Exec(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete group"})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit deletion"})
 		return
 	}
 
@@ -425,7 +444,7 @@ func (h *OrgHandler) AddGroupMember(c *gin.Context) {
 		AddedBy: callerID,
 	}
 	if _, err := h.DB.NewInsert().Model(gm).
-		On("CONFLICT (group_id, user_id) DO NOTHING").
+		On("CONFLICT (group_id, user_id) DO UPDATE SET role = EXCLUDED.role, added_by = EXCLUDED.added_by").
 		Exec(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add group member"})
 		return
