@@ -83,6 +83,18 @@
               </span>
             </template>
 
+            <!-- Favorite (Folder) -->
+            <template v-else-if="col.key === 'favorite'">
+              <button
+                class="fav-btn"
+                :class="{ active: fileStore.isUserFavorite(folder.ID, 'folder') }"
+                @click.stop="fileStore.isUserFavorite(folder.ID, 'folder') ? fileStore.removeUserFavorite({ ...folder, type: 'folder' }) : fileStore.addUserFavorite({ ...folder, type: 'folder' })"
+                :title="fileStore.isUserFavorite(folder.ID, 'folder') ? '★' : '☆'"
+              >
+                {{ fileStore.isUserFavorite(folder.ID, 'folder') ? '★' : '☆' }}
+              </button>
+            </template>
+
             <!-- Created At -->
             <template v-else-if="col.key === 'created'">
               {{ formatDate(folder.CreatedAt) }}
@@ -207,6 +219,18 @@
               </span>
             </template>
 
+            <!-- Favorite (File) -->
+            <template v-else-if="col.key === 'favorite'">
+              <button
+                class="fav-btn"
+                :class="{ active: fileStore.isUserFavorite(file.ID, 'file') }"
+                @click.stop="fileStore.isUserFavorite(file.ID, 'file') ? fileStore.removeUserFavorite({ ...file, type: 'file' }) : fileStore.addUserFavorite({ ...file, type: 'file' })"
+                :title="fileStore.isUserFavorite(file.ID, 'file') ? '★' : '☆'"
+              >
+                {{ fileStore.isUserFavorite(file.ID, 'file') ? '★' : '☆' }}
+              </button>
+            </template>
+
             <!-- Created At -->
             <template v-else-if="col.key === 'created'">
               {{ formatDate(file.CreatedAt) }}
@@ -239,8 +263,11 @@
 import { computed } from 'vue'
 import { useTagStore } from '../../stores/tags'
 import { useCommentStore } from '../../stores/comments'
+import { useFileStore } from '../../stores/files'
 import { formatDate, formatSize } from '../../utils/format'
 import { MessageSquare } from 'lucide-vue-next'
+
+const fileStore = useFileStore()
 
 const props = defineProps({
   folders: {
@@ -305,7 +332,7 @@ const tagStore = useTagStore()
 const commentStore = useCommentStore()
 
 const isSortable = (key) => {
-  return ['name', 'size', 'created', 'updated'].includes(key);
+  return ['name', 'size', 'created', 'updated', 'favorite'].includes(key);
 }
 
 const handleSort = (key) => {
@@ -675,5 +702,30 @@ input[type="checkbox"]:hover {
     width: 16px;
     height: 16px;
   }
+}
+
+.fav-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--secondary-text-color);
+  padding: 2px 4px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.fav-btn.active {
+  color: #f4b400;
+}
+
+.fav-btn:hover {
+  color: #f4b400;
+}
+
+.col-favorite {
+  width: 36px;
+  text-align: center;
 }
 </style>

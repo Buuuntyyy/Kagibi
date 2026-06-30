@@ -159,14 +159,16 @@ func (h *OrgHandler) resolvePermission(ctx context.Context, orgID int64, userID,
 			// All groups had "none" — group none does not hard-block; continue walking up.
 		}
 
-		// 2b. If any group has a permission on this path and the user belongs to none
-		// of them, deny access. Group-based paths are exclusive by default.
+		// 2b. If any group has a restrict_to_groups permission on this path and the
+		// user belongs to none of them, deny access.
+		// restrict_to_groups=false means the permission is additive, not exclusive:
+		// members without a group permission still fall through to the role default.
 		if !userInGroupOnPath {
 			var groupPermCount int
 			if err := h.DB.NewSelect().
 				TableExpr("org_group_permissions").
 				ColumnExpr("COUNT(*)").
-				Where("org_id = ? AND folder_path = ?", orgID, p).
+				Where("org_id = ? AND folder_path = ? AND restrict_to_groups = true", orgID, p).
 				Scan(ctx, &groupPermCount); err == nil && groupPermCount > 0 {
 				return PermNone, nil
 			}
@@ -316,7 +318,11 @@ func (h *OrgHandler) checkMFAEnforcement(c *gin.Context, orgID int64, userID str
 
 	var org pkg.Organization
 	if err := h.DB.NewSelect().Model(&org).Column("require_mfa").Where("id = ?", orgID).Scan(ctx); err != nil {
-		return true // don't block on lookup failure
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "mfa_check_failed",
+			"message": "Unable to verify organization MFA requirements. Please try again.",
+		})
+		return false
 	}
 	if !org.RequireMFA {
 		return true

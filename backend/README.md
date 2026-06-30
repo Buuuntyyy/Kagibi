@@ -134,7 +134,8 @@ backend/
 │   ├── users/
 │   │   ├── profile.go          # GET/PUT /users/profile
 │   │   ├── update_password.go  # POST /users/change-password
-│   │   └── recent.go           # GET/POST /users/recent
+│   │   ├── recent.go           # GET/POST /users/recent
+│   │   └── favorites.go        # GET/POST/DELETE /users/favorites
 │   │
 │   ├── security/
 │   │   └── report.go           # POST /security/report (events)
@@ -291,6 +292,9 @@ users/550e8400-e29b-41d4-a716-446655440000/Documents/report.pdf.enc
 | GET | `/api/v1/users/` | Lister utilisateurs (search) | Oui |
 | POST | `/api/v1/users/recent` | Ajouter activité récente | Oui |
 | GET | `/api/v1/users/recent` | Récupérer activité récente | Oui |
+| GET | `/api/v1/users/favorites` | Lister les favoris personnels (fichiers et dossiers) | Oui |
+| POST | `/api/v1/users/favorites` | Ajouter un élément aux favoris (`{ id, type }`) | Oui |
+| DELETE | `/api/v1/users/favorites/:type/:id` | Retirer un élément des favoris | Oui |
 | POST | `/api/v1/users/keys` | Mettre à jour clés RSA | Oui |
 
 ### Amis

@@ -250,7 +250,7 @@ func (h *OrgHandler) GetOrgAllFileKeys(c *gin.Context) {
 	var files []pkg.OrgFile
 	if err := h.DB.NewSelect().Model(&files).
 		Column("id", "encrypted_key").
-		Where("org_id = ?", orgID).
+		Where("org_id = ? AND deleted_at IS NULL", orgID).
 		Scan(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch file keys"})
 		return

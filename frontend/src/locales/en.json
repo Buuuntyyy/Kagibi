@@ -56,6 +56,10 @@
     "columnSize": "Size",
     "folderType": "Folder",
     "fileType": "File",
+    "addFavorite": "Add to favorites",
+    "removeFavorite": "Remove from favorites",
+    "addedToFavorites": "Added to favorites",
+    "removedFromFavorites": "Removed from favorites",
     "securityTipsTitle": "Security tips",
     "securityTipWarningTitle": "Tip:",
     "securityTipWarningBody": "Enable two-factor authentication (MFA) to secure your account",
@@ -298,6 +302,7 @@
   },
   "home": {
     "welcome": "Welcome to your Secured Storage",
+    "favorites": "Favorite files",
     "recentSuggestions": "Suggestions",
     "sharedItems": "Files shared with me"
   },

@@ -171,11 +171,16 @@ export const useOrgStore = defineStore('organizations', () => {
   }
 
   async function updateOrg(orgID, payload) {
-    const { data } = await api.patch(`/orgs/${orgID}`, payload)
-    currentOrg.value = { ...currentOrg.value, ...data }
-    const idx = orgs.value.findIndex(o => o.id === orgID)
-    if (idx !== -1) orgs.value[idx] = { ...orgs.value[idx], ...data }
-    return data
+    try {
+      const { data } = await api.patch(`/orgs/${orgID}`, payload)
+      currentOrg.value = { ...currentOrg.value, ...data }
+      const idx = orgs.value.findIndex(o => o.id === orgID)
+      if (idx !== -1) orgs.value[idx] = { ...orgs.value[idx], ...data }
+      return data
+    } catch (err) {
+      error.value = err?.response?.data?.error || err.message
+      throw err
+    }
   }
 
   async function uploadOrgLogo(orgID, file) {
@@ -198,10 +203,15 @@ export const useOrgStore = defineStore('organizations', () => {
   }
 
   async function deleteOrg(orgID) {
-    await api.delete(`/orgs/${orgID}`)
-    orgKeyCache.delete(orgID)
-    orgs.value = orgs.value.filter(o => o.id !== orgID)
-    if (currentOrg.value?.id === orgID) currentOrg.value = null
+    try {
+      await api.delete(`/orgs/${orgID}`)
+      orgKeyCache.delete(orgID)
+      orgs.value = orgs.value.filter(o => o.id !== orgID)
+      if (currentOrg.value?.id === orgID) currentOrg.value = null
+    } catch (err) {
+      error.value = err?.response?.data?.error || err.message
+      throw err
+    }
   }
 
   // ── Members ───────────────────────────────────────────────────────────────
@@ -1085,15 +1095,26 @@ export const useOrgStore = defineStore('organizations', () => {
 
     const orgKey = await getOrgKey(orgID)
     const entries = {}
+    let completed = 0
+    let nextIdx = 0
 
-    for (let i = 0; i < zipList.length; i++) {
-      const { id, mime_type, zipPath } = zipList[i]
-      const encKey = keyMap[id] || (await getFileKey(orgID, id))
-      const res = await api.get(`/orgs/${orgID}/fs/file/${id}/download`, { responseType: 'blob' })
-      const blob = await decryptFileFromOrg(res.data, encKey, orgKey, mime_type || 'application/octet-stream')
-      entries[zipPath] = new Uint8Array(await blob.arrayBuffer())
-      if (onProgress) onProgress(i + 1, zipList.length)
+    // Worker pool bounded to 4 concurrent downloads: enough to hide network
+    // latency without saturating the server or the browser's crypto engine.
+    // nextIdx++ is safe — JS is single-threaded, no await between read and increment.
+    async function processNext() {
+      while (nextIdx < zipList.length) {
+        const i = nextIdx++
+        const { id, mime_type, zipPath } = zipList[i]
+        const encKey = keyMap[id] || (await getFileKey(orgID, id))
+        const res = await api.get(`/orgs/${orgID}/fs/file/${id}/download`, { responseType: 'blob' })
+        const blob = await decryptFileFromOrg(res.data, encKey, orgKey, mime_type || 'application/octet-stream')
+        entries[zipPath] = new Uint8Array(await blob.arrayBuffer())
+        completed++
+        if (onProgress) onProgress(completed, zipList.length)
+      }
     }
+
+    await Promise.all(Array.from({ length: Math.min(4, zipList.length) }, processNext))
 
     return entries
   }
@@ -1257,6 +1278,8 @@ export const useOrgStore = defineStore('organizations', () => {
     const authStore = useAuthStore()
     const myID = authStore.user?.id || authStore.user?.user_id
     if (currentOrg.value) currentOrg.value = { ...currentOrg.value, my_role: 'admin' }
+    const idx = orgs.value.findIndex(o => o.id === orgID)
+    if (idx !== -1) orgs.value[idx] = { ...orgs.value[idx], my_role: 'admin' }
     const callerMember = members.value.find(m => m.user_id === myID)
     if (callerMember) callerMember.role = 'admin'
     const targetMember = members.value.find(m => m.id === targetMemberID)

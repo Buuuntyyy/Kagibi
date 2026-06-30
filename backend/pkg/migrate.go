@@ -128,6 +128,7 @@ func migrateCoreModels(ctx context.Context, db *bun.DB) error {
 		(*FolderFileKey)(nil),
 		(*FolderFolderKey)(nil),
 		(*RecentActivity)(nil),
+		(*UserFavorite)(nil),
 		(*P2PSignal)(nil),
 		(*P2PInvite)(nil),
 		(*RealtimeEvent)(nil),

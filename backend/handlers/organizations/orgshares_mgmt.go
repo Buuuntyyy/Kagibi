@@ -12,6 +12,7 @@ import (
 	"kagibi/backend/pkg"
 
 	"github.com/gin-gonic/gin"
+	"github.com/uptrace/bun"
 )
 
 // OrgShareItem is the DTO returned by ListOrgShares.
@@ -72,11 +73,35 @@ func (h *OrgHandler) ListOrgShares(c *gin.Context) {
 		return
 	}
 
+	// Resolve all file names in a single batch query instead of one per share link.
+	type fileNameRow struct {
+		ID   int64  `bun:"id"`
+		Name string `bun:"name"`
+	}
+	fileNameMap := make(map[int64]string, len(rows))
+	if len(rows) > 0 {
+		fileIDs := make([]int64, len(rows))
+		for i, r := range rows {
+			fileIDs[i] = r.FileID
+		}
+		var fileNames []fileNameRow
+		if err := h.DB.NewSelect().
+			TableExpr("org_files").
+			ColumnExpr("id, name").
+			Where("id IN (?) AND org_id = ? AND deleted_at IS NULL", bun.In(fileIDs), orgID).
+			Scan(ctx, &fileNames); err == nil {
+			for _, fn := range fileNames {
+				fileNameMap[fn.ID] = fn.Name
+			}
+		}
+	}
+
 	items := make([]OrgShareItem, 0, len(rows))
 	for _, row := range rows {
-		item := OrgShareItem{
+		items = append(items, OrgShareItem{
 			ID:        row.ID,
 			FileID:    row.FileID,
+			FileName:  fileNameMap[row.FileID],
 			FilePath:  row.FilePath,
 			OwnerID:   row.OwnerID,
 			CreatedAt: row.CreatedAt,
@@ -84,14 +109,7 @@ func (h *OrgHandler) ListOrgShares(c *gin.Context) {
 			Views:     row.Views,
 			SingleUse: row.SingleUse,
 			Token:     row.Token,
-		}
-		var file pkg.OrgFile
-		if err := h.DB.NewSelect().Model(&file).
-			Where("ofile.id = ? AND ofile.org_id = ?", row.FileID, orgID).
-			Scan(ctx); err == nil {
-			item.FileName = file.Name
-		}
-		items = append(items, item)
+		})
 	}
 
 	c.JSON(http.StatusOK, items)

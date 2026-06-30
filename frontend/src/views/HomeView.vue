@@ -8,6 +8,7 @@
     </div>
     
     <div class="home-sections">
+      <FavoriteFiles />
       <RecentlyOpened @open-share-dialog="handleOpenShareDialog" />
       <FileShared />
     </div>
@@ -24,6 +25,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import FavoriteFiles from '../components/file/FavoriteFiles.vue'
 import RecentlyOpened from '../components/file/RecentlyOpened.vue'
 import FileShared from '../components/file/FileShared.vue'
 import ManageShareDialog from '../components/ManageShareDialog.vue'
