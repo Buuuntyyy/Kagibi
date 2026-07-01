@@ -76,6 +76,53 @@
       </button>
       <p v-if="error" class="error-message">{{ error }}</p>
     </form>
+
+    <!-- Weak password blocking modal -->
+    <div v-if="showWeakPasswordModal" class="modal-overlay" @click.self="closeWeakPasswordModal">
+      <div class="modal-content weak-pw-modal" role="alertdialog" aria-modal="true" aria-labelledby="weak-pw-title" ref="weakPwModalRef">
+        <div class="modal-header weak-pw-header">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="weak-pw-icon">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <h3 id="weak-pw-title">Mot de passe insuffisant</h3>
+        </div>
+        <div class="modal-body">
+          <div class="zk-critical-note">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <p>
+              Votre mot de passe dérive la <strong>clé de chiffrement maître</strong> qui protège l'intégralité de vos fichiers et données.
+              Un mot de passe faible compromet directement la confidentialité de tout votre contenu chiffré — même pour nous, il doit rester impossible à deviner.
+            </p>
+          </div>
+          <p class="criteria-heading">Critères non respectés :</p>
+          <ul class="weak-pw-criteria">
+            <li v-if="!weakPasswordCriteria.length">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              20 caractères minimum (actuellement : {{ weakPasswordCurrentLength }})
+            </li>
+            <li v-if="!weakPasswordCriteria.uppercase">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Au moins 1 lettre majuscule (A-Z)
+            </li>
+            <li v-if="!weakPasswordCriteria.digits">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Au moins 1 chiffre (0–9)
+            </li>
+            <li v-if="!weakPasswordCriteria.specials">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              Au moins 1 caractère spécial non ambigu
+            </li>
+          </ul>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-confirm" @click="closeWeakPasswordModal" ref="weakPwCloseBtnRef">Modifier mon mot de passe</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Recovery code display — UX-DR13: alertdialog with focus lock -->
@@ -154,12 +201,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
 import AvatarSelector from '../AvatarSelector.vue'
 import PasswordCriteria from './PasswordCriteria.vue'
-import { checkPasswordCriteria, getPasswordErrors } from '../../utils/passwordStrength'
+import { checkPasswordCriteria } from '../../utils/passwordStrength'
 
 const username = ref('')
 const email = ref('')
@@ -178,6 +225,20 @@ const recoveryDisplayRef = ref(null)
 const authStore = useAuthStore()
 const router = useRouter()
 
+const showWeakPasswordModal = ref(false)
+const weakPwCloseBtnRef = ref(null)
+const weakPasswordResult = computed(() => checkPasswordCriteria(password.value))
+const weakPasswordCriteria = computed(() => weakPasswordResult.value.criteria)
+const weakPasswordCurrentLength = computed(() => weakPasswordResult.value.currentLength)
+
+function closeWeakPasswordModal() {
+  showWeakPasswordModal.value = false
+  passwordFocused.value = true
+  nextTick(() => {
+    document.querySelector('.password-input-wrapper input')?.focus()
+  })
+}
+
 const handlePasswordBlur = () => {
   const { valid } = checkPasswordCriteria(password.value)
   if (valid) passwordFocused.value = false
@@ -187,11 +248,10 @@ const handlePasswordBlur = () => {
 const submit = async () => {
   error.value = ''
 
-  // Validate password strength before sending to backend
   const { valid } = checkPasswordCriteria(password.value)
   if (!valid) {
-    const errors = getPasswordErrors(password.value)
-    error.value = errors[0]
+    showWeakPasswordModal.value = true
+    nextTick(() => weakPwCloseBtnRef.value?.focus())
     return
   }
 
@@ -600,6 +660,75 @@ label,
 .toggle-password-btn svg {
   width: 18px;
   height: 18px;
+}
+
+/* Weak password modal */
+.weak-pw-modal {
+  max-width: 480px;
+}
+
+.weak-pw-header {
+  border-bottom: 1px solid rgba(231, 76, 60, 0.2);
+  background: rgba(231, 76, 60, 0.04);
+}
+
+.weak-pw-icon {
+  color: var(--error-color, #e74c3c);
+  flex-shrink: 0;
+}
+
+.weak-pw-header h3 {
+  color: var(--error-color, #e74c3c);
+}
+
+.zk-critical-note {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  background: rgba(231, 76, 60, 0.07);
+  border: 1px solid rgba(231, 76, 60, 0.2);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  color: var(--main-text-color);
+  margin-bottom: 1rem;
+}
+
+.zk-critical-note svg {
+  color: var(--error-color, #e74c3c);
+}
+
+.zk-critical-note p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.criteria-heading {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--main-text-color);
+}
+
+.weak-pw-criteria {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.weak-pw-criteria li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  color: var(--error-color, #e74c3c);
+}
+
+.weak-pw-criteria li svg {
+  flex-shrink: 0;
 }
 
 /* Modal Styles */
