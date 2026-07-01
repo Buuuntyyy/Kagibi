@@ -74,6 +74,30 @@ func Migrate(db *bun.DB) error {
 	}
 	migrateCompressionColumn(ctx, db)
 
+	if err := migrateOrgAccessRequests(ctx, db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func migrateOrgAccessRequests(ctx context.Context, db *bun.DB) error {
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS org_access_requests (
+		id           BIGSERIAL PRIMARY KEY,
+		org_id       BIGINT      NOT NULL,
+		user_id      TEXT        NOT NULL,
+		folder_path  TEXT        NOT NULL DEFAULT '/',
+		message      TEXT        NOT NULL DEFAULT '',
+		status       TEXT        NOT NULL DEFAULT 'pending',
+		resolved_by  TEXT        NOT NULL DEFAULT '',
+		resolved_at  TIMESTAMPTZ,
+		created_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE (org_id, user_id, folder_path)
+	)`)
+	if err != nil {
+		return fmt.Errorf("migrateOrgAccessRequests: %w", err)
+	}
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_oar_org_status ON org_access_requests (org_id, status)`)
 	return nil
 }
 

@@ -59,6 +59,33 @@ func (h *OrgHandler) ListOrgItems(c *gin.Context) {
 		return
 	}
 
+	// For each sub-folder check whether the caller can read it. If not, mark it
+	// locked so the frontend can show it as inaccessible (with a request-access CTA)
+	// rather than hiding it entirely.
+	if len(folders) > 0 {
+		// Fetch caller's pending access requests in one query.
+		var pendingPaths []struct {
+			FolderPath string `bun:"folder_path"`
+		}
+		_ = h.DB.NewSelect().
+			TableExpr("org_access_requests").
+			ColumnExpr("folder_path").
+			Where("org_id = ? AND user_id = ? AND status = 'pending'", orgID, userID).
+			Scan(ctx, &pendingPaths)
+		pendingSet := make(map[string]bool, len(pendingPaths))
+		for _, p := range pendingPaths {
+			pendingSet[p.FolderPath] = true
+		}
+
+		for i := range folders {
+			subPerm, err := h.resolvePermission(ctx, orgID, userID, folders[i].Path)
+			if err == nil && subPerm < PermRead {
+				folders[i].Locked = true
+				folders[i].AccessRequestPending = pendingSet[folders[i].Path]
+			}
+		}
+	}
+
 	var files []pkg.OrgFile
 	if err := h.DB.NewSelect().Model(&files).
 		Where("org_id = ? AND folder_path = ?", orgID, folderPath).
