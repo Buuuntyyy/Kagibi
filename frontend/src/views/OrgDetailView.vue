@@ -358,6 +358,7 @@
               @drop="onDropOnFolder($event, folder)"
               @click.stop="renamingItem?.id !== folder.id && handleRowClick($event, 'folder', folder.id)"
               @dblclick.stop="renamingItem?.id !== folder.id && navigateToPath(folder.path)"
+              @contextmenu.prevent.stop="handleContextMenu($event, folder, 'folder')"
             >
               <label class="checkbox-wrap" @click.stop>
                 <input type="checkbox" :checked="isSelected('folder', folder.id)" @change="e => toggleSelect(e, 'folder', folder.id)" class="item-checkbox" />
@@ -427,6 +428,7 @@
               @dragend="onItemDragEnd"
               @click.stop="handleRowClick($event, 'file', file.id)"
               @dblclick.stop="openPreview(file)"
+              @contextmenu.prevent.stop="handleContextMenu($event, file, 'file')"
             >
               <label class="checkbox-wrap" @click.stop>
                 <input type="checkbox" :checked="isSelected('file', file.id)" @change="e => toggleSelect(e, 'file', file.id)" class="item-checkbox" />
@@ -1585,6 +1587,54 @@
         </div>
       </div>
     </Transition>
+
+    <!-- Right-click context menu -->
+    <ContextMenu
+      v-if="contextMenu.visible"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :item="contextMenu.item"
+      @close="contextMenu.visible = false"
+    >
+      <template #custom-actions>
+        <div class="menu-item" @click="handleContextAction('tag')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
+          {{ t('orgs.addTag') }}
+        </div>
+        <div v-if="contextMenu.type === 'folder' && (canManage || isGroupAdmin)" class="menu-item" @click="handleContextAction('access')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+          {{ t('orgs.manageAccess') }}
+        </div>
+        <div v-if="contextMenu.type === 'file'" class="menu-item" @click="handleContextAction('download')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          {{ t('file.download') }}
+        </div>
+        <div v-if="contextMenu.type === 'folder'" class="menu-item" @click="handleContextAction('download-zip')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          {{ t('orgs.downloadZip') }}
+        </div>
+        <div v-if="contextMenu.type === 'file'" class="menu-item" @click="handleContextAction('share')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+          {{ t('orgs.shareFile') }}
+        </div>
+        <div v-if="canWrite" class="menu-item" @click="handleContextAction('move')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-2 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg>
+          {{ contextMenu.type === 'folder' ? t('orgs.moveFolder') : t('orgs.moveFile') }}
+        </div>
+        <div v-if="canWrite" class="menu-item" @click="handleContextAction('rename')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+          {{ contextMenu.type === 'folder' ? t('orgs.renameFolder') : t('orgs.renameFile') }}
+        </div>
+        <div class="menu-item" @click="handleContextAction('favorite')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>
+          {{ isFavorite(contextMenu.item?.id, contextMenu.type) ? t('orgs.unpinItem') : t('orgs.pinItem') }}
+        </div>
+        <div v-if="canWrite" class="menu-item delete" @click="handleContextAction('delete')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          {{ contextMenu.type === 'folder' ? t('orgs.deleteFolder') : t('orgs.deleteFile') }}
+        </div>
+      </template>
+    </ContextMenu>
   </div>
 </template>
 
@@ -1600,6 +1650,7 @@ import OrgGroupsPanel from '../components/organizations/OrgGroupsPanel.vue'
 import OrgLDAPPanel from '../components/organizations/OrgLDAPPanel.vue'
 import OrgFolderAccessDialog from '../components/organizations/OrgFolderAccessDialog.vue'
 import OrgOnboardingWizard from '../components/organizations/OrgOnboardingWizard.vue'
+import ContextMenu from '../components/file/ContextMenu.vue'
 import { generateOrgKey, decryptOrgKey, unwrapFileKey, wrapFileKey } from '../utils/orgCrypto.js'
 import api from '../api'
 
@@ -1619,6 +1670,7 @@ const toast = ref(null)
 
 const showAccessDialog = ref(false)
 const accessDialogFolder = ref(null)
+const contextMenu = ref({ visible: false, x: 0, y: 0, item: null, type: null })
 
 // ── Audit log pagination & cleanup ───────────────────────────────────────────
 
@@ -2015,7 +2067,10 @@ async function handleRestore(item) {
   try {
     await orgStore.restoreTrashItem(orgID.value, item.item_type, item.id)
     showToast(t('orgs.itemRestored'))
-  } catch (_) {}
+    await orgStore.fetchItems(orgID.value, currentPath.value)
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  }
 }
 
 async function handlePermanentDelete(item) {
@@ -2210,6 +2265,53 @@ const confirmDeleteFolder = async (folder) => {
     showToast(t('orgs.folderDeleted'))
   } catch (e) {
     showToast(e.response?.data?.error || e.message, 'error')
+  }
+}
+
+// ── Context menu ─────────────────────────────────────────────────────────────
+
+function handleContextMenu(event, item, type) {
+  contextMenu.value = { visible: true, x: event.clientX, y: event.clientY, item, type }
+}
+
+function handleContextAction(action) {
+  const { item, type, x, y } = contextMenu.value
+  contextMenu.value.visible = false
+  switch (action) {
+    case 'tag': {
+      const items = type === 'file' ? orgStore.currentItems.files : orgStore.currentItems.folders
+      const found = items.find(i => i.id === item.id)
+      tagPopoverStyle.value = { top: y + 'px', left: x + 'px' }
+      tagPopoverID.value = item.id
+      tagPopoverType.value = type
+      tagPopoverCurrentIDs.value = [...(found?.tag_ids || [])]
+      break
+    }
+    case 'access':
+      openAccessDialog(item)
+      break
+    case 'move':
+      openMoveDialog(item, type)
+      break
+    case 'rename':
+      startRename(item, type)
+      break
+    case 'download-zip':
+      handleFolderZipDownload(item)
+      break
+    case 'download':
+      handleDownload(item)
+      break
+    case 'share':
+      openShareModal(item)
+      break
+    case 'favorite':
+      toggleFavorite(item, type)
+      break
+    case 'delete':
+      if (type === 'folder') confirmDeleteFolder(item)
+      else confirmDeleteFile(item)
+      break
   }
 }
 

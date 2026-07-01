@@ -1011,7 +1011,7 @@ export const useOrgStore = defineStore('organizations', () => {
 
   async function restoreTrashItem(orgID, itemType, itemID) {
     await api.post(`/orgs/${orgID}/trash/${itemType}/${itemID}/restore`)
-    trash.value = trash.value.filter(i => !(i.id === itemID && i.item_type === itemType))
+    trash.value = trash.value.filter(i => !(String(i.id) === String(itemID) && i.item_type === itemType))
     searchCache.value = null
   }
 

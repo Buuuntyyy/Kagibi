@@ -126,6 +126,7 @@ func (h *OrgHandler) RestoreItem(c *gin.Context) {
 			return
 		}
 		if _, err := h.DB.NewUpdate().Model((*pkg.OrgFile)(nil)).
+			WhereAllWithDeleted().
 			Set("deleted_at = NULL, deleted_by = '', delete_root = FALSE").
 			Where("id = ?", itemID).
 			Exec(ctx); err != nil {
@@ -149,6 +150,7 @@ func (h *OrgHandler) RestoreItem(c *gin.Context) {
 		return
 	}
 	if _, err := h.DB.NewUpdate().Model((*pkg.OrgFolder)(nil)).
+		WhereAllWithDeleted().
 		Set("deleted_at = NULL, deleted_by = '', delete_root = FALSE").
 		Where("id = ?", itemID).
 		Exec(ctx); err != nil {
