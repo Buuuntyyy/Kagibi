@@ -58,25 +58,31 @@ func (h *OrgHandler) ListTrash(c *gin.Context) {
 		return
 	}
 
+	adminView := isAdminOrOwner(role)
+
 	items := make([]TrashItem, 0, 16)
 
-	var folders []pkg.OrgFolder
-	if err := h.DB.NewSelect().Model(&folders).
+	foldersQ := h.DB.NewSelect().Model(&[]pkg.OrgFolder{}).
 		WhereAllWithDeleted().
-		Where("org_id = ? AND deleted_at IS NOT NULL AND delete_root = TRUE", orgID).
-		OrderExpr("deleted_at DESC").
-		Scan(ctx); err == nil {
+		Where("org_id = ? AND deleted_at IS NOT NULL AND delete_root = TRUE", orgID)
+	if !adminView {
+		foldersQ = foldersQ.Where("deleted_by = ?", userID)
+	}
+	var folders []pkg.OrgFolder
+	if err := foldersQ.OrderExpr("deleted_at DESC").Scan(ctx, &folders); err == nil {
 		for _, f := range folders {
 			items = append(items, TrashItem{ID: f.ID, ItemType: "folder", Name: f.Name, Path: f.Path, DeletedAt: f.DeletedAt, DeletedBy: f.DeletedBy})
 		}
 	}
 
-	var files []pkg.OrgFile
-	if err := h.DB.NewSelect().Model(&files).
+	filesQ := h.DB.NewSelect().Model(&[]pkg.OrgFile{}).
 		WhereAllWithDeleted().
-		Where("org_id = ? AND deleted_at IS NOT NULL AND delete_root = TRUE", orgID).
-		OrderExpr("deleted_at DESC").
-		Scan(ctx); err == nil {
+		Where("org_id = ? AND deleted_at IS NOT NULL AND delete_root = TRUE", orgID)
+	if !adminView {
+		filesQ = filesQ.Where("deleted_by = ?", userID)
+	}
+	var files []pkg.OrgFile
+	if err := filesQ.OrderExpr("deleted_at DESC").Scan(ctx, &files); err == nil {
 		for _, f := range files {
 			items = append(items, TrashItem{ID: f.ID, ItemType: "file", Name: f.Name, Path: f.Path, DeletedAt: f.DeletedAt, DeletedBy: f.DeletedBy, Size: f.Size, MimeType: f.MimeType})
 		}
@@ -117,12 +123,18 @@ func (h *OrgHandler) RestoreItem(c *gin.Context) {
 		return
 	}
 
+	adminRestore := isAdminOrOwner(role)
+
 	if itemType == "file" {
 		var file pkg.OrgFile
 		if err := h.DB.NewSelect().Model(&file).WhereAllWithDeleted().
 			Where("id = ? AND org_id = ? AND deleted_at IS NOT NULL AND delete_root = TRUE", itemID, orgID).
 			Scan(ctx); err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "item not found in trash"})
+			return
+		}
+		if !adminRestore && file.DeletedBy != userID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "you can only restore items you deleted"})
 			return
 		}
 		if _, err := h.DB.NewUpdate().Model((*pkg.OrgFile)(nil)).
@@ -147,6 +159,10 @@ func (h *OrgHandler) RestoreItem(c *gin.Context) {
 		Where("id = ? AND org_id = ? AND deleted_at IS NOT NULL AND delete_root = TRUE", itemID, orgID).
 		Scan(ctx); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "item not found in trash"})
+		return
+	}
+	if !adminRestore && folder.DeletedBy != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only restore items you deleted"})
 		return
 	}
 	if _, err := h.DB.NewUpdate().Model((*pkg.OrgFolder)(nil)).
