@@ -62,27 +62,29 @@ func (h *OrgHandler) ListTrash(c *gin.Context) {
 
 	items := make([]TrashItem, 0, 16)
 
-	foldersQ := h.DB.NewSelect().Model(&[]pkg.OrgFolder{}).
-		WhereAllWithDeleted().
-		Where("org_id = ? AND deleted_at IS NOT NULL AND delete_root = TRUE", orgID)
-	if !adminView {
-		foldersQ = foldersQ.Where("deleted_by = ?", userID)
-	}
 	var folders []pkg.OrgFolder
-	if err := foldersQ.OrderExpr("deleted_at DESC").Scan(ctx, &folders); err == nil {
+	folderQ := h.DB.NewSelect().Model(&folders).
+		WhereAllWithDeleted().
+		Where("org_id = ? AND deleted_at IS NOT NULL AND delete_root = TRUE", orgID).
+		OrderExpr("deleted_at DESC")
+	if !adminView {
+		folderQ = folderQ.Where("deleted_by = ?", userID)
+	}
+	if err := folderQ.Scan(ctx); err == nil {
 		for _, f := range folders {
 			items = append(items, TrashItem{ID: f.ID, ItemType: "folder", Name: f.Name, Path: f.Path, DeletedAt: f.DeletedAt, DeletedBy: f.DeletedBy})
 		}
 	}
 
-	filesQ := h.DB.NewSelect().Model(&[]pkg.OrgFile{}).
-		WhereAllWithDeleted().
-		Where("org_id = ? AND deleted_at IS NOT NULL AND delete_root = TRUE", orgID)
-	if !adminView {
-		filesQ = filesQ.Where("deleted_by = ?", userID)
-	}
 	var files []pkg.OrgFile
-	if err := filesQ.OrderExpr("deleted_at DESC").Scan(ctx, &files); err == nil {
+	fileQ := h.DB.NewSelect().Model(&files).
+		WhereAllWithDeleted().
+		Where("org_id = ? AND deleted_at IS NOT NULL AND delete_root = TRUE", orgID).
+		OrderExpr("deleted_at DESC")
+	if !adminView {
+		fileQ = fileQ.Where("deleted_by = ?", userID)
+	}
+	if err := fileQ.Scan(ctx); err == nil {
 		for _, f := range files {
 			items = append(items, TrashItem{ID: f.ID, ItemType: "file", Name: f.Name, Path: f.Path, DeletedAt: f.DeletedAt, DeletedBy: f.DeletedBy, Size: f.Size, MimeType: f.MimeType})
 		}
