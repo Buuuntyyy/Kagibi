@@ -439,6 +439,15 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	orgsG.PUT("/:orgID/groups/:groupID/permissions", h.SetGroupPermission)
 	orgsG.DELETE("/:orgID/groups/:groupID/permissions", h.DeleteGroupPermission)
 
+	// Access requests
+	orgsG.POST("/:orgID/access-requests", h.RequestFolderAccess)
+	orgsG.GET("/:orgID/access-requests", h.ListAccessRequests)
+	orgsG.PATCH("/:orgID/access-requests/:requestID", h.ResolveAccessRequest)
+
+	// Effective access views
+	orgsG.GET("/:orgID/my-access", h.GetMyEffectiveAccess)
+	orgsG.GET("/:orgID/members/:userID/effective-access", h.GetMemberEffectiveAccess)
+
 	// Audit log (admin/owner only)
 	orgsG.GET("/:orgID/audit", h.ListAuditLog)
 	orgsG.GET("/:orgID/audit/summary", h.AuditSummary)

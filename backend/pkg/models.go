@@ -430,7 +430,9 @@ type OrgFolder struct {
 	DeletedAt    *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
 	DeletedBy    string     `bun:"deleted_by,notnull,default:''" json:"deleted_by,omitempty"`
 	DeleteRoot   bool       `bun:"delete_root,notnull,default:false" json:"-"`
-	TotalSize    int64      `bun:"-" json:"total_size,omitempty"` // computed on list, not stored
+	TotalSize            int64 `bun:"-" json:"total_size,omitempty"`             // computed on list, not stored
+	Locked               bool  `bun:"-" json:"locked,omitempty"`                 // caller has no read access to this folder
+	AccessRequestPending bool  `bun:"-" json:"access_request_pending,omitempty"` // caller already submitted a pending request
 }
 
 // OrgFile is a file inside an organization's shared storage.
@@ -527,6 +529,22 @@ type OrgGroupPermission struct {
 	// Owners and admins are never affected.
 	RestrictToGroups bool      `bun:"restrict_to_groups,notnull,default:false" json:"restrict_to_groups"`
 	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// OrgAccessRequest is a member's request to gain access to a restricted folder.
+// status: pending | approved | denied
+type OrgAccessRequest struct {
+	bun.BaseModel `bun:"table:org_access_requests,alias:oar"`
+
+	ID         int64      `bun:"id,pk,autoincrement" json:"id"`
+	OrgID      int64      `bun:"org_id,notnull" json:"org_id"`
+	UserID     string     `bun:"user_id,notnull" json:"user_id"`
+	FolderPath string     `bun:"folder_path,notnull" json:"folder_path"`
+	Message    string     `bun:"message,notnull,default:''" json:"message"`
+	Status     string     `bun:"status,notnull,default:'pending'" json:"status"`
+	ResolvedBy string     `bun:"resolved_by,notnull,default:''" json:"resolved_by,omitempty"`
+	ResolvedAt *time.Time `bun:"resolved_at,nullzero" json:"resolved_at,omitempty"`
+	CreatedAt  time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 // OrgAuditLog records security-relevant events within an organization.

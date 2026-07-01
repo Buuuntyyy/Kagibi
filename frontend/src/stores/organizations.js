@@ -1025,6 +1025,28 @@ export const useOrgStore = defineStore('organizations', () => {
     trash.value = []
   }
 
+  // ── Access requests ────────────────────────────────────────────────────────
+
+  const accessRequests = ref([])
+
+  async function fetchAccessRequests(orgID, status = '') {
+    const params = status ? { status } : {}
+    const { data } = await api.get(`/orgs/${orgID}/access-requests`, { params })
+    accessRequests.value = data || []
+    return accessRequests.value
+  }
+
+  async function requestFolderAccess(orgID, folderPath, message = '') {
+    const { data } = await api.post(`/orgs/${orgID}/access-requests`, { folder_path: folderPath, message })
+    return data
+  }
+
+  async function resolveAccessRequest(orgID, requestID, status) {
+    const { data } = await api.patch(`/orgs/${orgID}/access-requests/${requestID}`, { status })
+    accessRequests.value = accessRequests.value.map(r => r.id === requestID ? data : r)
+    return data
+  }
+
   async function fetchOrgShares(orgID) {
     const { data } = await api.get(`/orgs/${orgID}/shares`)
     const items = data || []
@@ -1321,6 +1343,16 @@ export const useOrgStore = defineStore('organizations', () => {
     if (myMember) myMember.encrypted_org_key = encryptedOrgKey
   }
 
+  async function fetchMyEffectiveAccess(orgID) {
+    const res = await api.get(`/orgs/${orgID}/my-access`)
+    return res.data
+  }
+
+  async function fetchMemberEffectiveAccess(orgID, userID) {
+    const res = await api.get(`/orgs/${orgID}/members/${userID}/effective-access`)
+    return res.data
+  }
+
   function $reset() {
     orgs.value = []
     currentOrg.value = null
@@ -1339,6 +1371,7 @@ export const useOrgStore = defineStore('organizations', () => {
     favorites.value = []
     trash.value = []
     orgShares.value = []
+    accessRequests.value = []
     loading.value = false
     error.value = null
     orgKeyCache.clear()
@@ -1368,6 +1401,8 @@ export const useOrgStore = defineStore('organizations', () => {
     fetchOrgStats, createOrgFileShare,
     orgConflictState, resolveOrgConflict,
     pinnedOrgIDs, togglePin, isPinned,
+    accessRequests, fetchAccessRequests, requestFolderAccess, resolveAccessRequest,
+    fetchMyEffectiveAccess, fetchMemberEffectiveAccess,
     $reset,
   }
 })

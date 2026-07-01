@@ -153,10 +153,10 @@ func (h *OrgHandler) resolvePermission(ctx context.Context, orgID int64, userID,
 					best = l
 				}
 			}
-			if best > PermNone {
-				return best, nil
-			}
-			// All groups had "none" — group none does not hard-block; continue walking up.
+			// best == PermNone means every group the user belongs to has an explicit
+			// "none" on this path — treat that as a hard deny, do not fall through to
+			// the role default.
+			return best, nil
 		}
 
 		// 2b. If any group has a restrict_to_groups permission on this path and the
@@ -255,7 +255,10 @@ func (h *OrgHandler) resolveDownloadAllowed(ctx context.Context, orgID int64, us
 			return perm.PermDownload, nil
 		}
 
-		// Group overrides — allowed if any group permits download.
+		// Group overrides — if the user belongs to any group with a permission on
+		// this path, the most permissive download flag wins. If all groups deny
+		// download (perm_download=false) that is an explicit deny — do not fall
+		// through to the role default.
 		var groupDL []struct {
 			PermDownload bool `bun:"perm_download"`
 		}
