@@ -25,10 +25,10 @@ import (
 )
 
 const (
-	lokiBatchSize    = 100             // flush si le batch atteint N entrées
-	lokiFlushPeriod  = 2 * time.Second // flush toutes les N secondes
-	lokiChannelSize  = 4096            // buffer du canal d'envoi
-	lokiSendTimeout  = 5 * time.Second // timeout HTTP
+	lokiBatchSize   = 100             // flush si le batch atteint N entrées
+	lokiFlushPeriod = 2 * time.Second // flush toutes les N secondes
+	lokiChannelSize = 4096            // buffer du canal d'envoi
+	lokiSendTimeout = 5 * time.Second // timeout HTTP
 )
 
 // lokiEntry représente une entrée de log prête à être envoyée.

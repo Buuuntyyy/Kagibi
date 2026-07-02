@@ -55,7 +55,7 @@ type OrgCompleteRequest struct {
 	ContentType  string    `json:"content_type"`
 	EncryptedKey string    `json:"encrypted_key" binding:"required"`
 	// GroupID is non-nil when the file key was wrapped with a group key instead of the org key.
-	GroupID      *int64    `json:"group_id,omitempty"`
+	GroupID *int64 `json:"group_id,omitempty"`
 }
 
 type orgPart struct {

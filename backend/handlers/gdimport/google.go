@@ -25,7 +25,7 @@ import (
 // non-test users can authenticate. See:
 // https://developers.google.com/identity/protocols/oauth2/production-readiness/oauth-app-verification
 func GetGoogleConfig(c *gin.Context) {
-	webClientID     := os.Getenv("GOOGLE_OAUTH_CLIENT_ID")
+	webClientID := os.Getenv("GOOGLE_OAUTH_CLIENT_ID")
 	desktopClientID := os.Getenv("GOOGLE_OAUTH_DESKTOP_CLIENT_ID")
 
 	if webClientID == "" && desktopClientID == "" {
@@ -49,7 +49,7 @@ func GetGoogleConfig(c *gin.Context) {
 // POST /import/google/desktop-token
 // body: {code, code_verifier, redirect_uri}
 func ExchangeDesktopToken(c *gin.Context) {
-	clientID     := os.Getenv("GOOGLE_OAUTH_DESKTOP_CLIENT_ID")
+	clientID := os.Getenv("GOOGLE_OAUTH_DESKTOP_CLIENT_ID")
 	clientSecret := os.Getenv("GOOGLE_OAUTH_DESKTOP_CLIENT_SECRET")
 
 	if clientID == "" || clientSecret == "" {

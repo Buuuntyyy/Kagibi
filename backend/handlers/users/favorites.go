@@ -39,15 +39,15 @@ func ListUserFavoritesHandler(c *gin.Context, db *bun.DB) {
 	for _, fav := range favs {
 		if fav.File != nil {
 			result = append(result, gin.H{
-				"type":   "file",
-				"id":     fav.File.ID,
-				"name":   fav.File.Name,
-				"path":   fav.File.Path,
-				"size":   fav.File.Size,
-				"mime_type":    fav.File.MimeType,
-				"updated_at":   fav.File.UpdatedAt,
+				"type":          "file",
+				"id":            fav.File.ID,
+				"name":          fav.File.Name,
+				"path":          fav.File.Path,
+				"size":          fav.File.Size,
+				"mime_type":     fav.File.MimeType,
+				"updated_at":    fav.File.UpdatedAt,
 				"encrypted_key": fav.File.EncryptedKey,
-				"file":   fav.File,
+				"file":          fav.File,
 			})
 		} else if fav.Folder != nil {
 			result = append(result, gin.H{
