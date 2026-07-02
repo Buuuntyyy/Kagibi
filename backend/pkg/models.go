@@ -424,6 +424,9 @@ type OrgFolder struct {
 	ParentPath   string     `bun:"parent_path,notnull,default:'/'" json:"parent_path"` // path.Dir(path)
 	CreatedBy    string     `bun:"created_by,notnull" json:"created_by"`               // user_id
 	EncryptedKey string     `bun:"encrypted_key" json:"encrypted_key,omitempty"`       // folder key encrypted with org_key
+	// GroupID links this folder to a group's encryption scope.
+	// When set, new files uploaded here have their keys wrapped with the group key.
+	GroupID      *int64     `bun:"group_id" json:"group_id,omitempty"`
 	TagIDs       []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
 	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt    time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
@@ -448,6 +451,9 @@ type OrgFile struct {
 	MimeType     string     `bun:"mime_type,notnull,default:''" json:"mime_type"`
 	UploadedBy   string     `bun:"uploaded_by,notnull" json:"uploaded_by"` // user_id
 	EncryptedKey string     `bun:"encrypted_key" json:"encrypted_key,omitempty"`
+	// GroupID, when non-nil, means the file key is wrapped with the group key (not the org key).
+	// Null = wrapped with org key (backward compatible).
+	GroupID      *int64     `bun:"group_id" json:"group_id,omitempty"`
 	Compression  string     `bun:"compression,notnull,default:''" json:"compression"`
 	TagIDs       []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
 	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
@@ -486,6 +492,12 @@ type OrgGroup struct {
 	Description string `bun:"description" json:"description"`
 	CreatedBy   string `bun:"created_by,notnull" json:"created_by"`
 
+	// EncryptedGroupKey is the group key wrapped with the org key (AES-GCM key-wrap).
+	// Empty string means no group key has been initialized yet.
+	// Admins use this to provision the group key for new members without needing their
+	// own entry in org_group_keys.
+	EncryptedGroupKey string `bun:"encrypted_group_key,notnull,default:''" json:"encrypted_group_key,omitempty"`
+
 	// LDAP fields — populated only when source = "ldap"
 	Source       string     `bun:"source,notnull,default:'internal'" json:"source"` // "internal" | "ldap"
 	LdapDN       string     `bun:"ldap_dn" json:"ldap_dn,omitempty"`
@@ -494,6 +506,19 @@ type OrgGroup struct {
 
 	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
+// OrgGroupKey stores the group key encrypted for a specific group member.
+// The key is wrapped with the member's RSA-4096 public key (RSA-OAEP SHA-256),
+// mirroring how OrgMember.encrypted_org_key stores the org key per member.
+type OrgGroupKey struct {
+	bun.BaseModel `bun:"table:org_group_keys,alias:ogk"`
+
+	ID           int64     `bun:"id,pk,autoincrement" json:"id"`
+	GroupID      int64     `bun:"group_id,notnull" json:"group_id"`
+	UserID       string    `bun:"user_id,notnull" json:"user_id"`
+	EncryptedKey string    `bun:"encrypted_key,notnull" json:"encrypted_key"`
+	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 // OrgGroupMember records a user's membership in an org group.
