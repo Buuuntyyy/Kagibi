@@ -103,7 +103,7 @@ func (s *Syncer) run(ctx context.Context) (*pkg.LDAPSyncStats, error) {
 	}
 
 	stats := &pkg.LDAPSyncStats{
-		UsersFound: len(ldapUsers),
+		UsersFound:  len(ldapUsers),
 		GroupsFound: len(ldapGroups),
 	}
 

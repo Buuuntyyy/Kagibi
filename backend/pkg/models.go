@@ -39,10 +39,10 @@ type User struct {
 	EncryptedMasterKeyRecovery string     `bun:"encrypted_master_key_recovery,notnull" json:"encrypted_master_key_recovery"`
 	RecoveryHash               string     `bun:"recovery_hash,notnull" json:"recovery_hash"`
 	RecoverySalt               string     `bun:"recovery_salt,notnull" json:"recovery_salt"`
-	FriendCode                 string     `bun:"friend_code,unique,notnull" json:"friend_code"`                    // Short unique code for friends
-	PublicKey                  string     `bun:"public_key" json:"public_key"`                                     // RSA Public Key (Standard PEM format)
-	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"`               // RSA Private Key (Encrypted with MasterKey)
-	EncryptFilenames           bool       `bun:"encrypt_filenames,notnull,default:false" json:"encrypt_filenames"` // Client-side filename encryption opt-in
+	FriendCode                 string     `bun:"friend_code,unique,notnull" json:"friend_code"`                      // Short unique code for friends
+	PublicKey                  string     `bun:"public_key" json:"public_key"`                                       // RSA Public Key (Standard PEM format)
+	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"`                 // RSA Private Key (Encrypted with MasterKey)
+	EncryptFilenames           bool       `bun:"encrypt_filenames,notnull,default:false" json:"encrypt_filenames"`   // Client-side filename encryption opt-in
 	VersioningEnabled          bool       `bun:"versioning_enabled,notnull,default:false" json:"versioning_enabled"` // File version history opt-in
 	CreatedAt                  time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt                  time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
@@ -58,33 +58,33 @@ type Friendship struct {
 }
 
 type UserPlan struct {
-	bun.BaseModel      `bun:"table:user_plans,alias:up"`
-	UserID             string    `bun:"user_id,pk" json:"user_id"`
-	Plan               string    `bun:"plan,notnull,default:'free'" json:"plan"`
-	StorageLimit       int64     `bun:"storage_limit,notnull,default:21474836480" json:"storage_limit"`
-	StorageUsed        int64     `bun:"storage_used,notnull,default:0" json:"storage_used"`
-	VersionStorageBytes int64    `bun:"version_storage_bytes,notnull,default:0" json:"version_storage_bytes"`
-	P2PMaxExchanges    int       `bun:"p2p_max_exchanges,notnull,default:-1" json:"p2p_max_exchanges"`
-	P2PExchangesUsed   int       `bun:"p2p_exchanges_used,notnull,default:0" json:"p2p_exchanges_used"`
-	CreatedAt          time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt          time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	bun.BaseModel       `bun:"table:user_plans,alias:up"`
+	UserID              string    `bun:"user_id,pk" json:"user_id"`
+	Plan                string    `bun:"plan,notnull,default:'free'" json:"plan"`
+	StorageLimit        int64     `bun:"storage_limit,notnull,default:21474836480" json:"storage_limit"`
+	StorageUsed         int64     `bun:"storage_used,notnull,default:0" json:"storage_used"`
+	VersionStorageBytes int64     `bun:"version_storage_bytes,notnull,default:0" json:"version_storage_bytes"`
+	P2PMaxExchanges     int       `bun:"p2p_max_exchanges,notnull,default:-1" json:"p2p_max_exchanges"`
+	P2PExchangesUsed    int       `bun:"p2p_exchanges_used,notnull,default:0" json:"p2p_exchanges_used"`
+	CreatedAt           time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt           time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 }
 
 type File struct {
 	ID           int64     `bun:"id,pk,autoincrement"`
 	Name         string    `bun:"name,notnull"`
-	Path         string    `bun:"path,notnull"`                                     // Chemin relatif (ex: "/dossier1/fichier.txt")
-	Size         int64     `bun:"size,notnull"`                                     // Taille en octets
-	MimeType     string    `bun:"mime_type,notnull"`                                // Ex: "application/pdf"
-	UserID       string    `bun:"user_id,notnull"`                                  // Propriétaire du fichier
-	EncryptedKey string    `bun:"encrypted_key"`                                    // Clé du fichier chiffrée avec la MasterKey (pour les nouveaux fichiers)
+	Path         string    `bun:"path,notnull"`                                          // Chemin relatif (ex: "/dossier1/fichier.txt")
+	Size         int64     `bun:"size,notnull"`                                          // Taille en octets
+	MimeType     string    `bun:"mime_type,notnull"`                                     // Ex: "application/pdf"
+	UserID       string    `bun:"user_id,notnull"`                                       // Propriétaire du fichier
+	EncryptedKey string    `bun:"encrypted_key"`                                         // Clé du fichier chiffrée avec la MasterKey (pour les nouveaux fichiers)
 	ChunkSize    int64     `bun:"chunk_size,notnull,default:10485760" json:"chunk_size"` // Taille du chunk AES-GCM en octets (DEFAULT = 10 MB pour rétrocompat)
 	Compression  string    `bun:"compression,notnull,default:''" json:"compression"`     // Compression avant chiffrement : "" ou "gzip"
-	Tags         []string  `bun:"tags,array"`                                       // Tags
-	PreviewID    *int64    `bun:"preview_id" json:"preview_id"`                     // ID du fichier de prévisualisation (miniature/compressé)
-	Preview      *File     `bun:"rel:belongs-to,join:preview_id=id" json:"preview"` // Metadata du fichier preview
-	IsPreview    bool      `bun:"is_preview,default:false" json:"is_preview"`       // Indique si c'est un fichier de prévisualisation (masqué par défaut)
-	Synced       bool      `bun:"synced,default:false" json:"synced"`               // true si uploadé via la sync desktop
+	Tags         []string  `bun:"tags,array"`                                            // Tags
+	PreviewID    *int64    `bun:"preview_id" json:"preview_id"`                          // ID du fichier de prévisualisation (miniature/compressé)
+	Preview      *File     `bun:"rel:belongs-to,join:preview_id=id" json:"preview"`      // Metadata du fichier preview
+	IsPreview    bool      `bun:"is_preview,default:false" json:"is_preview"`            // Indique si c'est un fichier de prévisualisation (masqué par défaut)
+	Synced       bool      `bun:"synced,default:false" json:"synced"`                    // true si uploadé via la sync desktop
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt    time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 }
@@ -158,8 +158,8 @@ type Folder struct {
 	Name         string    `bun:"name,notnull"`
 	Path         string    `bun:"path,notnull"` // Chemin relatif (ex: "/dossier1")
 	UserID       string    `bun:"user_id,notnull"`
-	EncryptedKey string    `bun:"encrypted_key"` // FolderKey encrypted with MasterKey
-	Tags         []string  `bun:"tags,array"`    // Tags
+	EncryptedKey string    `bun:"encrypted_key"`                      // FolderKey encrypted with MasterKey
+	Tags         []string  `bun:"tags,array"`                         // Tags
 	Synced       bool      `bun:"synced,default:false" json:"synced"` // true si créé/géré par la sync desktop
 	SizeBytes    int64     `bun:"size_bytes,scanonly" json:"size_bytes,omitempty"`
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
@@ -417,50 +417,50 @@ type OrgFavorite struct {
 type OrgFolder struct {
 	bun.BaseModel `bun:"table:org_folders,alias:of"`
 
-	ID           int64      `bun:"id,pk,autoincrement" json:"id"`
-	OrgID        int64      `bun:"org_id,notnull" json:"org_id"`
-	Name         string     `bun:"name,notnull" json:"name"`
-	Path         string     `bun:"path,notnull" json:"path"`                           // full virtual path, e.g. "/documents/contracts"
-	ParentPath   string     `bun:"parent_path,notnull,default:'/'" json:"parent_path"` // path.Dir(path)
-	CreatedBy    string     `bun:"created_by,notnull" json:"created_by"`               // user_id
-	EncryptedKey string     `bun:"encrypted_key" json:"encrypted_key,omitempty"`       // folder key encrypted with org_key
+	ID           int64  `bun:"id,pk,autoincrement" json:"id"`
+	OrgID        int64  `bun:"org_id,notnull" json:"org_id"`
+	Name         string `bun:"name,notnull" json:"name"`
+	Path         string `bun:"path,notnull" json:"path"`                           // full virtual path, e.g. "/documents/contracts"
+	ParentPath   string `bun:"parent_path,notnull,default:'/'" json:"parent_path"` // path.Dir(path)
+	CreatedBy    string `bun:"created_by,notnull" json:"created_by"`               // user_id
+	EncryptedKey string `bun:"encrypted_key" json:"encrypted_key,omitempty"`       // folder key encrypted with org_key
 	// GroupID links this folder to a group's encryption scope.
 	// When set, new files uploaded here have their keys wrapped with the group key.
-	GroupID      *int64     `bun:"group_id" json:"group_id,omitempty"`
-	TagIDs       []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
-	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt    time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
-	DeletedAt    *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
-	DeletedBy    string     `bun:"deleted_by,notnull,default:''" json:"deleted_by,omitempty"`
-	DeleteRoot   bool       `bun:"delete_root,notnull,default:false" json:"-"`
-	TotalSize            int64 `bun:"-" json:"total_size,omitempty"`             // computed on list, not stored
-	Locked               bool  `bun:"-" json:"locked,omitempty"`                 // caller has no read access to this folder
-	AccessRequestPending bool  `bun:"-" json:"access_request_pending,omitempty"` // caller already submitted a pending request
+	GroupID              *int64     `bun:"group_id" json:"group_id,omitempty"`
+	TagIDs               []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
+	CreatedAt            time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt            time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	DeletedAt            *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
+	DeletedBy            string     `bun:"deleted_by,notnull,default:''" json:"deleted_by,omitempty"`
+	DeleteRoot           bool       `bun:"delete_root,notnull,default:false" json:"-"`
+	TotalSize            int64      `bun:"-" json:"total_size,omitempty"`             // computed on list, not stored
+	Locked               bool       `bun:"-" json:"locked,omitempty"`                 // caller has no read access to this folder
+	AccessRequestPending bool       `bun:"-" json:"access_request_pending,omitempty"` // caller already submitted a pending request
 }
 
 // OrgFile is a file inside an organization's shared storage.
 type OrgFile struct {
 	bun.BaseModel `bun:"table:org_files,alias:ofile"`
 
-	ID           int64      `bun:"id,pk,autoincrement" json:"id"`
-	OrgID        int64      `bun:"org_id,notnull" json:"org_id"`
-	Name         string     `bun:"name,notnull" json:"name"`
-	Path         string     `bun:"path,notnull" json:"path"`                           // full path including name, e.g. "/documents/report.pdf"
-	FolderPath   string     `bun:"folder_path,notnull,default:'/'" json:"folder_path"` // path.Dir(path)
-	Size         int64      `bun:"size,notnull,default:0" json:"size"`
-	MimeType     string     `bun:"mime_type,notnull,default:''" json:"mime_type"`
-	UploadedBy   string     `bun:"uploaded_by,notnull" json:"uploaded_by"` // user_id
-	EncryptedKey string     `bun:"encrypted_key" json:"encrypted_key,omitempty"`
+	ID           int64  `bun:"id,pk,autoincrement" json:"id"`
+	OrgID        int64  `bun:"org_id,notnull" json:"org_id"`
+	Name         string `bun:"name,notnull" json:"name"`
+	Path         string `bun:"path,notnull" json:"path"`                           // full path including name, e.g. "/documents/report.pdf"
+	FolderPath   string `bun:"folder_path,notnull,default:'/'" json:"folder_path"` // path.Dir(path)
+	Size         int64  `bun:"size,notnull,default:0" json:"size"`
+	MimeType     string `bun:"mime_type,notnull,default:''" json:"mime_type"`
+	UploadedBy   string `bun:"uploaded_by,notnull" json:"uploaded_by"` // user_id
+	EncryptedKey string `bun:"encrypted_key" json:"encrypted_key,omitempty"`
 	// GroupID, when non-nil, means the file key is wrapped with the group key (not the org key).
 	// Null = wrapped with org key (backward compatible).
-	GroupID      *int64     `bun:"group_id" json:"group_id,omitempty"`
-	Compression  string     `bun:"compression,notnull,default:''" json:"compression"`
-	TagIDs       []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
-	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt    time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
-	DeletedAt    *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
-	DeletedBy    string     `bun:"deleted_by,notnull,default:''" json:"deleted_by,omitempty"`
-	DeleteRoot   bool       `bun:"delete_root,notnull,default:false" json:"-"`
+	GroupID     *int64     `bun:"group_id" json:"group_id,omitempty"`
+	Compression string     `bun:"compression,notnull,default:''" json:"compression"`
+	TagIDs      []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
+	CreatedAt   time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt   time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	DeletedAt   *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
+	DeletedBy   string     `bun:"deleted_by,notnull,default:''" json:"deleted_by,omitempty"`
+	DeleteRoot  bool       `bun:"delete_root,notnull,default:false" json:"-"`
 }
 
 // OrgFolderPermission stores per-user access overrides for a folder path within an org.
@@ -640,12 +640,12 @@ type Notification struct {
 	UserID       string    `bun:"user_id,notnull" json:"user_id"`
 	ActorID      string    `bun:"actor_id,notnull" json:"actor_id"`
 	ActorName    string    `bun:"actor_name,notnull" json:"actor_name"`
-	Type         string    `bun:"type,notnull" json:"type"`                   // "comment_added" | "reply_added"
+	Type         string    `bun:"type,notnull" json:"type"` // "comment_added" | "reply_added"
 	ResourceID   int64     `bun:"resource_id,notnull" json:"resource_id"`
 	ResourceType string    `bun:"resource_type,notnull" json:"resource_type"` // "file" | "org_file"
 	ResourceName string    `bun:"resource_name,notnull" json:"resource_name"`
 	ResourcePath string    `bun:"resource_path,notnull,default:''" json:"resource_path"` // folder path for navigation
-	OrgID        *int64    `bun:"org_id" json:"org_id,omitempty"`             // set for org_file notifications
+	OrgID        *int64    `bun:"org_id" json:"org_id,omitempty"`                        // set for org_file notifications
 	CommentID    *int64    `bun:"comment_id" json:"comment_id,omitempty"`
 	IsRead       bool      `bun:"is_read,notnull,default:false" json:"is_read"`
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`

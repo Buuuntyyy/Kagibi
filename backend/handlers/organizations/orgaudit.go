@@ -247,7 +247,7 @@ func (h *OrgHandler) GetOrgAllFileKeys(c *gin.Context) {
 		EncryptedKey string `json:"encrypted_key"`
 		// GroupID is non-nil when the file key is wrapped with a group key (not org key).
 		// The client must skip these files during org key rotation.
-		GroupID      *int64 `json:"group_id,omitempty"`
+		GroupID *int64 `json:"group_id,omitempty"`
 	}
 
 	var files []pkg.OrgFile

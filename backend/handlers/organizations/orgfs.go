@@ -159,10 +159,10 @@ func (h *OrgHandler) CreateOrgFolder(c *gin.Context) {
 	}
 
 	var req struct {
-		Name         string  `json:"name" binding:"required"`
-		ParentPath   string  `json:"parent_path"`
-		EncryptedKey string  `json:"encrypted_key"`
-		GroupID      *int64  `json:"group_id"`
+		Name         string `json:"name" binding:"required"`
+		ParentPath   string `json:"parent_path"`
+		EncryptedKey string `json:"encrypted_key"`
+		GroupID      *int64 `json:"group_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
