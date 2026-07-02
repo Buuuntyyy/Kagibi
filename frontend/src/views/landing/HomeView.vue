@@ -804,6 +804,15 @@ onMounted(() => {
 
 /* Responsive */
 @media (max-width: 768px) {
+  .hero {
+    padding-top: 3rem;
+    align-items: flex-start;
+  }
+
+  .hero-content {
+    padding-top: 1.5rem;
+  }
+
   .hero-title {
     font-size: 2.2rem;
   }
