@@ -13,6 +13,7 @@ import Credits from '../views/Credits.vue'
 import FriendsView from '../views/FriendsView.vue'
 import OrganizationsView from '../views/OrganizationsView.vue'
 import OrgDetailView from '../views/OrgDetailView.vue'
+import BillingView from '../views/BillingView.vue'
 import JoinView from '../views/JoinView.vue'
 import P2PView from '../views/P2PView.vue'
 import HomeView from '../views/HomeView.vue'
@@ -126,6 +127,11 @@ const routes = [
         path: 'organizations/:orgID',
         name: 'OrgDetail',
         component: OrgDetailView
+      },
+      {
+        path: 'billing',
+        name: 'Billing',
+        component: BillingView
       }
     ]
   },
