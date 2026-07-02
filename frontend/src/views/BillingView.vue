@@ -76,8 +76,8 @@ const router = useRouter()
 }
 
 .coming-soon-card {
-  background: var(--card-bg, #1a1a2e);
-  border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
   border-radius: 20px;
   padding: 3rem 2.5rem;
   max-width: 480px;
@@ -96,15 +96,15 @@ const router = useRouter()
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--primary-color, #6366f1) 12%, transparent);
-  color: var(--primary-color, #6366f1);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  color: var(--primary-color);
   margin-bottom: 0.25rem;
 }
 
 .cs-title {
   font-size: 1.75rem;
   font-weight: 700;
-  color: var(--text-primary, #f1f5f9);
+  color: var(--main-text-color);
   margin: 0;
 }
 
@@ -113,16 +113,16 @@ const router = useRouter()
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--primary-color, #6366f1);
+  color: var(--primary-color);
   margin: 0;
   padding: 0.25rem 0.75rem;
-  background: color-mix(in srgb, var(--primary-color, #6366f1) 12%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
   border-radius: 999px;
 }
 
 .cs-description {
   font-size: 0.95rem;
-  color: var(--text-secondary, #94a3b8);
+  color: var(--secondary-text-color);
   line-height: 1.6;
   margin: 0;
 }
@@ -140,15 +140,15 @@ const router = useRouter()
   align-items: center;
   gap: 0.65rem;
   padding: 0.6rem 0.9rem;
-  background: var(--hover-bg, rgba(255,255,255,0.04));
+  background: var(--hover-background-color);
   border-radius: 10px;
   font-size: 0.88rem;
-  color: var(--text-secondary, #94a3b8);
+  color: var(--secondary-text-color);
 }
 
 .cs-feature svg {
   flex-shrink: 0;
-  color: var(--primary-color, #6366f1);
+  color: var(--primary-color);
   opacity: 0.8;
 }
 
@@ -159,16 +159,16 @@ const router = useRouter()
   margin-top: 0.5rem;
   padding: 0.55rem 1.25rem;
   background: transparent;
-  border: 1px solid var(--border-color, rgba(255,255,255,0.12));
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  color: var(--text-secondary, #94a3b8);
+  color: var(--secondary-text-color);
   font-size: 0.88rem;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .btn-back:hover {
-  background: var(--hover-bg, rgba(255,255,255,0.06));
-  color: var(--text-primary, #f1f5f9);
+  background: var(--hover-background-color);
+  color: var(--main-text-color);
 }
 </style>
