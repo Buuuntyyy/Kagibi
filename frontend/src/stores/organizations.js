@@ -497,7 +497,7 @@ export const useOrgStore = defineStore('organizations', () => {
     }
   }
 
-  async function createFolder(orgID, name, parentPath, encryptedKey = '') {
+  async function createFolder(orgID, name, parentPath, encryptedKey = '', groupID = null) {
     let apiName = name
     try {
       const orgKey = await getOrgKey(orgID)
@@ -505,11 +505,14 @@ export const useOrgStore = defineStore('organizations', () => {
       folderNameCache.value[apiName] = name
     } catch (_) { /* key unavailable — fall back to plaintext */ }
 
-    const { data } = await api.post(`/orgs/${orgID}/fs/folder`, {
+    const body = {
       name: apiName,
       parent_path: parentPath,
       encrypted_key: encryptedKey,
-    })
+    }
+    if (groupID != null) body.group_id = groupID
+
+    const { data } = await api.post(`/orgs/${orgID}/fs/folder`, body)
     // Server echoes back the encrypted name; replace with plaintext for immediate display.
     data.name = name
     currentItems.value.folders = [...(currentItems.value.folders || []), data]
@@ -817,8 +820,25 @@ export const useOrgStore = defineStore('organizations', () => {
   }
 
   async function deleteGroup(orgID, groupID) {
-    await api.delete(`/orgs/${orgID}/groups/${groupID}`)
+    // If the group has encrypted files, re-wrap their keys with the OrgKey before
+    // deleting so they remain decryptable after the GroupKey is gone (B3 fix).
+    const grp = groups.value.find(g => g.id === groupID)
+    let fileKeys = []
+    if (grp?.encrypted_group_key) {
+      const { data: groupFileRows } = await api.get(`/orgs/${orgID}/groups/${groupID}/key/files`)
+      if (groupFileRows?.length) {
+        const orgKey = await getOrgKey(orgID)
+        const groupKey = await getGroupKey(orgID, groupID)
+        fileKeys = await Promise.all(groupFileRows.map(async (fk) => {
+          if (!fk.encrypted_key) return { file_id: fk.id, encrypted_key: '' }
+          const fileKey = await unwrapFileKey(fk.encrypted_key, groupKey)
+          return { file_id: fk.id, encrypted_key: await wrapFileKey(fileKey, orgKey) }
+        }))
+      }
+    }
+    await api.delete(`/orgs/${orgID}/groups/${groupID}`, { data: { file_keys: fileKeys } })
     groups.value = groups.value.filter(g => g.id !== groupID)
+    groupKeyCache.delete(`${orgID}:${groupID}`)
   }
 
   async function addGroupMember(orgID, groupID, userID, role = 'member') {
@@ -1264,8 +1284,9 @@ export const useOrgStore = defineStore('organizations', () => {
     if (zipList.length === 0) return {}
 
     const allKeys = await fetchAllFileKeys(orgID)
+    // B4: store { encrypted_key, group_id } so group-encrypted files use the correct wrapping key
     const keyMap = {}
-    for (const k of allKeys) if (k.encrypted_key) keyMap[k.id] = k.encrypted_key
+    for (const k of allKeys) if (k.encrypted_key) keyMap[k.id] = { encrypted_key: k.encrypted_key, group_id: k.group_id ?? null }
 
     const orgKey = await getOrgKey(orgID)
     const entries = {}
@@ -1279,9 +1300,10 @@ export const useOrgStore = defineStore('organizations', () => {
       while (nextIdx < zipList.length) {
         const i = nextIdx++
         const { id, mime_type, zipPath } = zipList[i]
-        const encKey = keyMap[id] || (await getFileKey(orgID, id))
+        const keyEntry = keyMap[id] ?? (await getFileKey(orgID, id))
+        const wrappingKey = keyEntry.group_id ? await getGroupKey(orgID, keyEntry.group_id) : orgKey
         const res = await api.get(`/orgs/${orgID}/fs/file/${id}/download`, { responseType: 'blob' })
-        const blob = await decryptFileFromOrg(res.data, encKey, orgKey, mime_type || 'application/octet-stream')
+        const blob = await decryptFileFromOrg(res.data, keyEntry.encrypted_key, wrappingKey, mime_type || 'application/octet-stream')
         entries[zipPath] = new Uint8Array(await blob.arrayBuffer())
         completed++
         if (onProgress) onProgress(completed, zipList.length)

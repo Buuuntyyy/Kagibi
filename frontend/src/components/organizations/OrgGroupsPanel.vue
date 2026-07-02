@@ -328,7 +328,8 @@ const groupEncInitialized = computed(() => !!selectedGroup.value?.encrypted_grou
 
 async function loadEncryptionState() {
   if (!selectedGroup.value || !isOrgAdmin.value) return
-  encError.value = ''
+  // Do NOT reset encError here — this is called from the watch (background fetch),
+  // not from a user action. User-triggered handlers reset encError themselves.
   try {
     const ids = await orgStore.fetchGroupKeyProvisionedMembers(props.orgID, selectedGroup.value.id)
     provisionedUserIDs.value = new Set(ids)
@@ -478,17 +479,37 @@ function openCreateModal() {
 async function handleCreate() {
   creating.value = true
   createError.value = ''
+  encError.value = ''
+  let setupErrors = []
   try {
     const group = await orgStore.createGroup(props.orgID, createForm.value.name, createForm.value.description)
+    // B1+B2: pass group.id so the folder gets group_id set at creation
     try {
-      const folder = await orgStore.createFolder(props.orgID, createForm.value.name, '/', '')
-      await orgStore.setGroupPermission(props.orgID, group.id, {
-        folder_path: folder.path,
-        level: 'manage',
-      })
-    } catch (_) { /* non-fatal: group created, base folder setup failed */ }
+      const folder = await orgStore.createFolder(props.orgID, createForm.value.name, '/', '', group.id)
+      try {
+        await orgStore.setGroupPermission(props.orgID, group.id, { folder_path: folder.path, level: 'manage' })
+      } catch (e) {
+        setupErrors.push(`Permission : ${e.response?.data?.error || e.message}`)
+      }
+    } catch (e) {
+      setupErrors.push(`Dossier : ${e.response?.data?.error || e.message}`)
+    }
+    // L3: auto-initialize group encryption after group creation
+    let updatedGroup = group
+    try {
+      await orgStore.initializeGroupKey(props.orgID, group.id)
+      const g = orgStore.groups.find(g => g.id === group.id)
+      if (g) {
+        g.encrypted_group_key = '__initialized__'
+        updatedGroup = g  // use the reactive store object so selectedGroup reflects init
+      }
+    } catch (e) {
+      setupErrors.push(`Chiffrement : ${e.response?.data?.error || e.message}`)
+    }
     showCreateModal.value = false
-    await selectGroup(group)
+    await selectGroup(updatedGroup)
+    // I1: surface any non-fatal setup errors in the encryption section
+    if (setupErrors.length) encError.value = setupErrors.join(' | ')
   } catch (e) {
     createError.value = e.response?.data?.error || e.message
   } finally {
@@ -511,6 +532,18 @@ async function handleAddMember() {
     const gm = await orgStore.addGroupMember(props.orgID, selectedGroup.value.id, selectedUserID.value, newMemberRole.value)
     groupMembers.value.push(gm)
     showAddMemberModal.value = false
+    // L1: auto-provision group key for the new member if encryption is active
+    if (selectedGroup.value?.encrypted_group_key) {
+      const member = orgStore.members.find(m => m.user_id === selectedUserID.value)
+      if (member?.public_key) {
+        try {
+          await orgStore.provisionGroupKeyForMember(props.orgID, selectedGroup.value.id, member)
+          provisionedUserIDs.value = new Set([...provisionedUserIDs.value, selectedUserID.value])
+        } catch (e) {
+          encError.value = `Provisionnement automatique échoué : ${e.response?.data?.error || e.message}`
+        }
+      }
+    }
   } catch (e) {
     addMemberError.value = e.response?.data?.error || e.message
   } finally {
@@ -535,8 +568,9 @@ async function openPermModal() {
   folderOptions.value = []
   showPermModal.value = true
   try {
-    const items = await orgStore.fetchItems(props.orgID, '/')
-    folderOptions.value = (items.folders || []).map(f => ({ name: f.name, path: f.path }))
+    // I2: fetch ALL org folders (all levels), not just root-level
+    const folders = await orgStore.getAllOrgFolders(props.orgID)
+    folderOptions.value = folders.map(f => ({ name: f.name, path: f.path }))
   } catch (_) { /* folder list unavailable — fall back to manual input */ }
 }
 

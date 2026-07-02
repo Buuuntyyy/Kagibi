@@ -258,6 +258,11 @@ func (h *OrgHandler) UpdateGroup(c *gin.Context) {
 }
 
 // DeleteGroup deletes a group and all its memberships and permission overrides.
+//
+// If the group has encrypted files (group_id set on org_files), the caller must supply
+// the file keys re-wrapped with the OrgKey in the request body, otherwise the files would
+// become permanently undecryptable (data loss).  The endpoint returns 409 with the file
+// count when this re-wrap payload is missing.
 func (h *OrgHandler) DeleteGroup(c *gin.Context) {
 	callerID := c.GetString("user_id")
 	orgID, err := strconv.ParseInt(c.Param("orgID"), 10, 64)
@@ -294,6 +299,33 @@ func (h *OrgHandler) DeleteGroup(c *gin.Context) {
 		return
 	}
 
+	// Optional body: re-wrapped file keys (required when the group has encrypted files).
+	var req struct {
+		FileKeys []struct {
+			FileID       int64  `json:"file_id"`
+			EncryptedKey string `json:"encrypted_key"`
+		} `json:"file_keys"`
+	}
+	// ShouldBindJSON may fail on a body-less DELETE — that is acceptable.
+	_ = c.ShouldBindJSON(&req)
+
+	// Count non-deleted files that are still encrypted with this group's key.
+	var groupFileCount int
+	if err := h.DB.NewSelect().TableExpr("org_files").
+		ColumnExpr("COUNT(*)").
+		Where("group_id = ? AND deleted_at IS NULL", groupID).
+		Scan(ctx, &groupFileCount); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count group files"})
+		return
+	}
+	if groupFileCount > 0 && len(req.FileKeys) == 0 {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":      "group has encrypted files; re-wrap their keys with the org key before deleting",
+			"file_count": groupFileCount,
+		})
+		return
+	}
+
 	// Cascade: remove members, permission overrides and the group itself in a single
 	// transaction so a partial failure never leaves orphaned rows behind.
 	tx, err := h.DB.BeginTx(ctx, nil)
@@ -302,6 +334,18 @@ func (h *OrgHandler) DeleteGroup(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback()
+
+	// Re-wrap file keys with the OrgKey before unlinking them from the group,
+	// so they remain decryptable after the GroupKey is gone.
+	for _, fk := range req.FileKeys {
+		if _, err := tx.NewUpdate().Model((*pkg.OrgFile)(nil)).
+			Set("encrypted_key = ?", fk.EncryptedKey).
+			Where("id = ? AND org_id = ? AND group_id = ?", fk.FileID, orgID, groupID).
+			Exec(ctx); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update file key"})
+			return
+		}
+	}
 
 	if _, err := tx.NewDelete().Model((*pkg.OrgGroupMember)(nil)).
 		Where("group_id = ?", groupID).Exec(ctx); err != nil {
@@ -314,7 +358,7 @@ func (h *OrgHandler) DeleteGroup(c *gin.Context) {
 		return
 	}
 	// org_group_keys has ON DELETE CASCADE from the group_id FK, so they are removed automatically.
-	// Nullify group_id on files/folders so they fall back to org-key decryption.
+	// Nullify group_id on files/folders — keys are now wrapped with OrgKey again.
 	if _, err := tx.NewUpdate().Model((*pkg.OrgFile)(nil)).
 		Set("group_id = NULL").
 		Where("group_id = ?", groupID).
@@ -527,14 +571,29 @@ func (h *OrgHandler) RemoveGroupMember(c *gin.Context) {
 	var group pkg.OrgGroup
 	h.DB.NewSelect().Model(&group).Where("id = ? AND org_id = ?", groupID, orgID).Scan(ctx)
 
-	if _, err := h.DB.NewDelete().Model(&gm).WherePK().Exec(ctx); err != nil {
+	// Remove the member and revoke their group key in a single transaction so
+	// a DB failure cannot leave the key entry behind (silent access leak — B5 fix).
+	tx, err := h.DB.BeginTx(ctx, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start transaction"})
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.NewDelete().Model(&gm).WherePK().Exec(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove group member"})
 		return
 	}
-	// Revoke the member's copy of the group key so they can no longer decrypt group files.
-	_, _ = h.DB.NewDelete().Model((*pkg.OrgGroupKey)(nil)).
+	if _, err := tx.NewDelete().Model((*pkg.OrgGroupKey)(nil)).
 		Where("group_id = ? AND user_id = ?", groupID, gm.UserID).
-		Exec(ctx)
+		Exec(ctx); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revoke group key"})
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit"})
+		return
+	}
 
 	h.logAudit(ctx, orgID, callerID, "group_member_removed", gm.UserID, "group", group.Name)
 	c.JSON(http.StatusOK, gin.H{"message": "member removed from group"})
