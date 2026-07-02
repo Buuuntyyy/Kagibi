@@ -10,10 +10,11 @@ _bmad-output/
 schema_dump_*.sql
 backend/.env
 frontend/.env
-
+docs/kagibi-presentation-template.html
 # Kubernetes secrets with real values
 k8s/security/secrets.yaml
 k8s/*
+.env
 
 *.exe
 
