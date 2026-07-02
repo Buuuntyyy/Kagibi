@@ -139,6 +139,16 @@ Within an organization, **groups** allow clustering members to assign permission
 - Group members inherit a role within the group: **admin** or **member**.
 - Folder-level permissions can be assigned to an entire group at once.
 
+#### Per-group encryption (GroupKey)
+
+Each group can have its own **dedicated encryption key** (GroupKey, AES-256-GCM), independent of the OrgKey. Files stored in a folder linked to the group are encrypted with this GroupKey — only group members with a provisioned key can decrypt them, even if other org members have access to the rest of the content.
+
+- **Initialisation**: an admin generates the GroupKey client-side, wraps it with the OrgKey (admin backup), and encrypts it with each group member's RSA public key.
+- **Provisioning a new member**: after adding a member to the group, an admin can provision their GroupKey with one click from the Groups tab.
+- **Rotation**: rotation replaces the GroupKey, re-wraps all group files with the new key, and re-provisions all members — atomic server-side operation.
+- **Revocation**: removing a member from the group immediately deletes their key entry; a rotation is recommended to ensure complete cryptographic separation.
+- **Backward compatibility**: files without a GroupKey (`group_id = NULL`) continue to use the OrgKey with no migration required.
+
 ### LDAP / Active Directory Sync
 
 Organizations can connect to a corporate **LDAP or Active Directory** server to automatically synchronize their members and groups, without managing invitations manually:
@@ -190,6 +200,15 @@ Admins and group admins can define per-folder permissions for individual users o
 | none | No access; folder is invisible |
 
 Permissions cascade: a user's effective access to a folder is the highest level granted either directly or via any group they belong to.
+
+#### Locked folders and access requests
+
+A folder whose effective access is `none` is displayed as **locked** (padlock icon) in the file browser. The member can click **Request access** to submit a request to the admin. Admins see all pending requests in the **Access Requests** tab of the management panel and can approve or deny them with a single click.
+
+#### Effective access
+
+- The **Profile** tab lets each member review their own effective access folder by folder.
+- In the **Members** tab, admins can expand any member's effective access inline, without leaving the list.
 
 ### Organization Share Links
 
@@ -528,10 +547,14 @@ WebRTC always attempts a **direct connection first** (LAN or NAT traversal via S
 | Organization name | Plaintext |
 | Member list and roles | Plaintext |
 | OrgKey per member | Encrypted (member's RSA public key) |
+| GroupKey per group (admin backup) | Encrypted (OrgKey, AES-256-GCM) |
+| GroupKey per group member | Encrypted (member's RSA public key) |
 | File and folder names within org | Encrypted (OrgKey, AES-256-GCM) |
-| File content within org | Encrypted (OrgKey-derived key, AES-256-GCM) |
+| File content (ungrouped files) | Encrypted (FileKey wrapped with OrgKey, AES-256-GCM) |
+| File content (group files) | Encrypted (FileKey wrapped with GroupKey, AES-256-GCM) |
 | Audit log entries | Plaintext actions; encrypted paths/names decrypted client-side |
 | Folder permissions | Plaintext (user/group IDs + access level) |
+| Access requests | Plaintext (member ID, folder ID, status, optional message) |
 
 ### Social and Sharing Data
 

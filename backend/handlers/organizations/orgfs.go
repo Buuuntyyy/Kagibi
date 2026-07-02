@@ -128,10 +128,24 @@ func (h *OrgHandler) ListOrgItems(c *gin.Context) {
 		}
 	}
 
+	// Resolve the group_id of the current folder (if any) so the client knows
+	// which key to use when encrypting new uploads into this path.
+	var currentGroupID *int64
+	if folderPath != "/" {
+		var curFolder pkg.OrgFolder
+		if err := h.DB.NewSelect().Model(&curFolder).
+			Column("group_id").
+			Where("org_id = ? AND path = ?", orgID, folderPath).
+			Scan(ctx); err == nil {
+			currentGroupID = curFolder.GroupID
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"folders":      folders,
-		"files":        files,
-		"current_path": folderPath,
+		"folders":          folders,
+		"files":            files,
+		"current_path":     folderPath,
+		"current_group_id": currentGroupID,
 	})
 }
 

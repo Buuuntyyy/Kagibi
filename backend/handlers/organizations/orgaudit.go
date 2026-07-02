@@ -245,11 +245,14 @@ func (h *OrgHandler) GetOrgAllFileKeys(c *gin.Context) {
 	type fileKeyEntry struct {
 		ID           int64  `json:"id"`
 		EncryptedKey string `json:"encrypted_key"`
+		// GroupID is non-nil when the file key is wrapped with a group key (not org key).
+		// The client must skip these files during org key rotation.
+		GroupID      *int64 `json:"group_id,omitempty"`
 	}
 
 	var files []pkg.OrgFile
 	if err := h.DB.NewSelect().Model(&files).
-		Column("id", "encrypted_key").
+		Column("id", "encrypted_key", "group_id").
 		Where("org_id = ? AND deleted_at IS NULL", orgID).
 		Scan(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch file keys"})
@@ -258,7 +261,7 @@ func (h *OrgHandler) GetOrgAllFileKeys(c *gin.Context) {
 
 	result := make([]fileKeyEntry, len(files))
 	for i, f := range files {
-		result[i] = fileKeyEntry{ID: f.ID, EncryptedKey: f.EncryptedKey}
+		result[i] = fileKeyEntry{ID: f.ID, EncryptedKey: f.EncryptedKey, GroupID: f.GroupID}
 	}
 	c.JSON(http.StatusOK, result)
 }

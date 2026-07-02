@@ -139,6 +139,16 @@ Au sein d'une organisation, les **groupes** permettent de regrouper des membres 
 - Les membres d'un groupe héritent d'un rôle au sein du groupe : **admin** ou **membre**.
 - Les permissions de dossier peuvent être assignées à un groupe entier en une seule opération.
 
+#### Chiffrement par groupe (GroupKey)
+
+Chaque groupe peut disposer d'une **clé de chiffrement dédiée** (GroupKey, AES-256-GCM), indépendante de l'OrgKey. Les fichiers stockés dans un dossier lié au groupe sont chiffrés avec cette GroupKey — seuls les membres du groupe (ayant reçu leur clé provisionnée) peuvent les déchiffrer, même si d'autres membres de l'organisation ont accès au reste du contenu.
+
+- **Initialisation** : un admin génère la GroupKey côté client, la wrappe avec l'OrgKey (backup admin) et la chiffre avec la clé publique RSA de chaque membre du groupe.
+- **Provisionnement d'un nouveau membre** : après l'ajout d'un membre au groupe, un admin peut lui provisionner la GroupKey en un clic depuis l'onglet Groupes.
+- **Rotation** : la rotation remplace la GroupKey, re-wrappe tous les fichiers du groupe avec la nouvelle clé, et reprovisionnne tous les membres — opération atomique côté serveur.
+- **Révocation** : retirer un membre du groupe supprime immédiatement son entrée de clé ; une rotation est recommandée pour garantir la rupture cryptographique complète.
+- **Rétrocompatibilité** : les fichiers sans GroupKey (`group_id = NULL`) continuent d'utiliser l'OrgKey sans migration nécessaire.
+
 ### Synchronisation LDAP / Active Directory
 
 Les organisations peuvent se connecter à un annuaire d'entreprise **LDAP ou Active Directory** pour synchroniser automatiquement leurs membres et groupes, sans avoir à gérer manuellement les invitations :
@@ -190,6 +200,15 @@ Les admins et les admins de groupe peuvent définir des permissions par dossier 
 | none | Aucun accès ; le dossier est invisible |
 
 Les permissions s'accumulent : le niveau d'accès effectif d'un utilisateur à un dossier est le niveau le plus élevé accordé directement ou via l'un des groupes auxquels il appartient.
+
+#### Dossiers verrouillés et demandes d'accès
+
+Un dossier dont l'accès effectif est `none` est affiché **verrouillé** (icône cadenas) dans le navigateur de fichiers. Le membre peut cliquer sur **Demander l'accès** pour soumettre une demande à l'admin. Les admins voient toutes les demandes en attente dans l'onglet **Demandes d'accès** du panneau de gestion et peuvent les approuver ou refuser d'un clic.
+
+#### Accès effectif
+
+- L'onglet **Profil** permet à chaque membre de consulter son propre accès effectif dossier par dossier.
+- Dans l'onglet **Membres**, les admins peuvent afficher l'accès effectif de n'importe quel membre en ligne, sans quitter la liste.
 
 ### Liens de partage d'organisation
 
@@ -528,10 +547,14 @@ WebRTC tente toujours une **connexion directe en premier** (LAN ou traversée NA
 | Nom de l'organisation | Clair |
 | Liste des membres et rôles | Clair |
 | OrgKey par membre | Chiffré (clé publique RSA du membre) |
+| GroupKey par groupe (backup admin) | Chiffré (OrgKey, AES-256-GCM) |
+| GroupKey par membre de groupe | Chiffré (clé publique RSA du membre) |
 | Noms de fichiers et dossiers de l'org | Chiffré (OrgKey, AES-256-GCM) |
-| Contenu des fichiers de l'org | Chiffré (clé dérivée de l'OrgKey, AES-256-GCM) |
+| Contenu des fichiers sans groupe | Chiffré (FileKey wrappée avec OrgKey, AES-256-GCM) |
+| Contenu des fichiers de groupe | Chiffré (FileKey wrappée avec GroupKey, AES-256-GCM) |
 | Entrées du journal d'audit | Actions en clair ; chemins/noms chiffrés déchiffrés côté client |
 | Permissions de dossier | Clair (IDs utilisateur/groupe + niveau d'accès) |
+| Demandes d'accès | Clair (ID membre, ID dossier, statut, message optionnel) |
 
 ### Données sociales et de partage
 

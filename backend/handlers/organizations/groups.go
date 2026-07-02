@@ -313,6 +313,22 @@ func (h *OrgHandler) DeleteGroup(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete group permissions"})
 		return
 	}
+	// org_group_keys has ON DELETE CASCADE from the group_id FK, so they are removed automatically.
+	// Nullify group_id on files/folders so they fall back to org-key decryption.
+	if _, err := tx.NewUpdate().Model((*pkg.OrgFile)(nil)).
+		Set("group_id = NULL").
+		Where("group_id = ?", groupID).
+		Exec(ctx); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to unlink group files"})
+		return
+	}
+	if _, err := tx.NewUpdate().Model((*pkg.OrgFolder)(nil)).
+		Set("group_id = NULL").
+		Where("group_id = ?", groupID).
+		Exec(ctx); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to unlink group folders"})
+		return
+	}
 	if _, err := tx.NewDelete().Model(&group).WherePK().Exec(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete group"})
 		return
@@ -515,6 +531,10 @@ func (h *OrgHandler) RemoveGroupMember(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove group member"})
 		return
 	}
+	// Revoke the member's copy of the group key so they can no longer decrypt group files.
+	_, _ = h.DB.NewDelete().Model((*pkg.OrgGroupKey)(nil)).
+		Where("group_id = ? AND user_id = ?", groupID, gm.UserID).
+		Exec(ctx)
 
 	h.logAudit(ctx, orgID, callerID, "group_member_removed", gm.UserID, "group", group.Name)
 	c.JSON(http.StatusOK, gin.H{"message": "member removed from group"})

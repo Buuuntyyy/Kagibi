@@ -77,6 +77,50 @@ func Migrate(db *bun.DB) error {
 	if err := migrateOrgAccessRequests(ctx, db); err != nil {
 		return err
 	}
+	if err := migrateOrgGroupKeys(ctx, db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func migrateOrgGroupKeys(ctx context.Context, db *bun.DB) error {
+	// org_group_keys: per-member group key storage (RSA-OAEP wrapped, one row per member per group)
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS org_group_keys (
+		id            BIGSERIAL    PRIMARY KEY,
+		group_id      BIGINT       NOT NULL REFERENCES org_groups(id) ON DELETE CASCADE,
+		user_id       TEXT         NOT NULL,
+		encrypted_key TEXT         NOT NULL,
+		created_at    TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE (group_id, user_id)
+	)`)
+	if err != nil {
+		return fmt.Errorf("migrateOrgGroupKeys create table: %w", err)
+	}
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_ogk_group_id ON org_group_keys (group_id)`)
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_ogk_user_id  ON org_group_keys (user_id)`)
+
+	// encrypted_group_key on org_groups: group key wrapped with org key (AES-GCM)
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE org_groups ADD COLUMN IF NOT EXISTS encrypted_group_key TEXT NOT NULL DEFAULT ''`,
+	); err != nil {
+		log.Printf("Warning: migrateOrgGroupKeys add encrypted_group_key: %v", err)
+	}
+
+	// group_id on org_files: non-nil → file key wrapped with group key, not org key
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE org_files ADD COLUMN IF NOT EXISTS group_id BIGINT REFERENCES org_groups(id) ON DELETE SET NULL`,
+	); err != nil {
+		log.Printf("Warning: migrateOrgGroupKeys add group_id to org_files: %v", err)
+	}
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_org_files_group_id ON org_files (group_id) WHERE group_id IS NOT NULL`)
+
+	// group_id on org_folders: defines the encryption scope for files uploaded here
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE org_folders ADD COLUMN IF NOT EXISTS group_id BIGINT REFERENCES org_groups(id) ON DELETE SET NULL`,
+	); err != nil {
+		log.Printf("Warning: migrateOrgGroupKeys add group_id to org_folders: %v", err)
+	}
 
 	return nil
 }

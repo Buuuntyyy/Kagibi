@@ -448,6 +448,14 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	orgsG.GET("/:orgID/my-access", h.GetMyEffectiveAccess)
 	orgsG.GET("/:orgID/members/:userID/effective-access", h.GetMemberEffectiveAccess)
 
+	// Group key management (E2E encryption per group)
+	orgsG.GET("/:orgID/groups/:groupID/key", h.GetGroupKey)
+	orgsG.POST("/:orgID/groups/:groupID/key/init", h.InitializeGroupKey)
+	orgsG.POST("/:orgID/groups/:groupID/key/rotate", h.RotateGroupKey)
+	orgsG.GET("/:orgID/groups/:groupID/key/files", h.GetGroupFileKeys)
+	orgsG.GET("/:orgID/groups/:groupID/key/members", h.GetGroupKeyProvisionedMembers)
+	orgsG.PUT("/:orgID/groups/:groupID/key/members/:userID", h.ProvisionGroupKeyForMember)
+
 	// Audit log (admin/owner only)
 	orgsG.GET("/:orgID/audit", h.ListAuditLog)
 	orgsG.GET("/:orgID/audit/summary", h.AuditSummary)
