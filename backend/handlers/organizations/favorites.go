@@ -92,10 +92,15 @@ func (h *OrgHandler) RemoveFavorite(c *gin.Context) {
 		return
 	}
 
-	if _, err := h.DB.NewDelete().Model((*pkg.OrgFavorite)(nil)).
+	res, err := h.DB.NewDelete().Model((*pkg.OrgFavorite)(nil)).
 		Where("org_id = ? AND user_id = ? AND item_id = ? AND item_type = ?", orgID, userID, itemID, itemType).
-		Exec(c.Request.Context()); err != nil {
+		Exec(c.Request.Context())
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "favorite not found"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})

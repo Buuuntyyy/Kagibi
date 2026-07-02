@@ -173,7 +173,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
                 headers: this.authHeaders(),
             });
 
-            const decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, file.MimeType || 'application/octet-stream');
+            const decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, file.MimeType || 'application/octet-stream', file.Compression || file.compression || '');
 
             const url = window.URL.createObjectURL(decryptedBlob);
             const link = document.createElement('a');
@@ -226,6 +226,7 @@ export const usePublicFileStore = defineStore('publicFiles', {
               response.data,
               fileKey,
               file.mime_type || 'application/octet-stream',
+              file.compression || '',
             );
             const buffer = await decryptedBlob.arrayBuffer();
             zipData[file.relative_path] = new Uint8Array(buffer);

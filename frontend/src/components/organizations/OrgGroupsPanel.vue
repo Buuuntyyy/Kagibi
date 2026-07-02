@@ -118,6 +118,65 @@
             </div>
           </div>
         </div>
+
+        <!-- Encryption section (admin only) -->
+        <div v-if="isOrgAdmin" class="detail-section">
+          <div class="section-header">
+            <span class="section-title">Chiffrement de groupe</span>
+            <div class="enc-actions">
+              <button
+                v-if="!groupEncInitialized"
+                class="btn-sm btn-enc-init"
+                :disabled="encLoading"
+                @click="handleInitGroupKey"
+              >
+                <span v-if="encLoading" class="spinner-sm dark"></span>
+                <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                Initialiser le chiffrement
+              </button>
+              <button
+                v-else
+                class="btn-sm"
+                :disabled="encLoading"
+                @click="handleRotateGroupKey"
+              >
+                <span v-if="encLoading" class="spinner-sm dark"></span>
+                <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"/></svg>
+                Faire pivoter la clé
+              </button>
+            </div>
+          </div>
+
+          <!-- Key status -->
+          <div class="enc-status-row">
+            <span v-if="groupEncInitialized" class="enc-status-badge initialized">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+              Chiffrement actif
+            </span>
+            <span v-else class="enc-status-badge not-initialized">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+              Non initialisé
+            </span>
+          </div>
+
+          <p v-if="encError" class="form-error" style="margin-top:6px;">{{ encError }}</p>
+
+          <!-- Per-member provisioning status (only visible when key is initialized) -->
+          <div v-if="groupEncInitialized && groupMembers.length" class="member-key-rows">
+            <div v-for="gm in groupMembers" :key="gm.id" class="member-key-row">
+              <div class="member-avatar-sm">{{ memberName(gm.user_id).charAt(0).toUpperCase() }}</div>
+              <span class="member-name">{{ memberName(gm.user_id) }}</span>
+              <span v-if="provisionedUserIDs.has(gm.user_id)" class="key-badge provisioned">Clé provisionnée</span>
+              <span v-else class="key-badge not-provisioned">Non provisionnée</span>
+              <button
+                v-if="!provisionedUserIDs.has(gm.user_id)"
+                class="btn-sm btn-provision"
+                :disabled="encLoading"
+                @click="handleProvisionMember(gm)"
+              >Provisionner</button>
+            </div>
+          </div>
+        </div>
       </div>
     </Transition>
 
@@ -255,11 +314,82 @@ const props = defineProps({
 const { t } = useI18n()
 const orgStore = useOrgStore()
 const uiStore = useUIStore()
-
 const loading = ref(false)
 const selectedGroup = ref(null)
 const groupMembers = ref([])
 const groupPermissions = ref([])
+
+// ── Group encryption ──────────────────────────────────────────────────────────
+const encLoading = ref(false)
+const encError = ref('')
+const provisionedUserIDs = ref(new Set())
+
+const groupEncInitialized = computed(() => !!selectedGroup.value?.encrypted_group_key)
+
+async function loadEncryptionState() {
+  if (!selectedGroup.value || !isOrgAdmin.value) return
+  // Do NOT reset encError here — this is called from the watch (background fetch),
+  // not from a user action. User-triggered handlers reset encError themselves.
+  try {
+    const ids = await orgStore.fetchGroupKeyProvisionedMembers(props.orgID, selectedGroup.value.id)
+    provisionedUserIDs.value = new Set(ids)
+  } catch (_) {
+    provisionedUserIDs.value = new Set()
+  }
+}
+
+async function handleInitGroupKey() {
+  encLoading.value = true
+  encError.value = ''
+  try {
+    await orgStore.initializeGroupKey(props.orgID, selectedGroup.value.id)
+    // Reflect the new state in the cached group object
+    const g = orgStore.groups.find(g => g.id === selectedGroup.value.id)
+    if (g) g.encrypted_group_key = '__initialized__'
+    selectedGroup.value = { ...selectedGroup.value, encrypted_group_key: '__initialized__' }
+    await loadEncryptionState()
+  } catch (e) {
+    encError.value = e.response?.data?.error || e.message
+  } finally {
+    encLoading.value = false
+  }
+}
+
+async function handleRotateGroupKey() {
+  if (!await uiStore.showConfirm({
+    title: 'Faire pivoter la clé de groupe',
+    message: 'Cette opération re-chiffre tous les fichiers du groupe avec une nouvelle clé. Continuer ?',
+    confirmLabel: 'Faire pivoter',
+  })) return
+  encLoading.value = true
+  encError.value = ''
+  try {
+    await orgStore.rotateGroupKey(props.orgID, selectedGroup.value.id)
+    await loadEncryptionState()
+  } catch (e) {
+    encError.value = e.response?.data?.error || e.message
+  } finally {
+    encLoading.value = false
+  }
+}
+
+async function handleProvisionMember(gm) {
+  const member = orgStore.members.find(m => m.user_id === gm.user_id)
+  if (!member?.public_key) {
+    encError.value = `Clé publique introuvable pour ${memberName(gm.user_id)}.`
+    return
+  }
+  encLoading.value = true
+  encError.value = ''
+  try {
+    await orgStore.provisionGroupKeyForMember(props.orgID, selectedGroup.value.id, member)
+    provisionedUserIDs.value = new Set([...provisionedUserIDs.value, gm.user_id])
+  } catch (e) {
+    encError.value = e.response?.data?.error || e.message
+  } finally {
+    encLoading.value = false
+  }
+}
 
 // ── Authorization ─────────────────────────────────────────────────────────────
 
@@ -314,9 +444,14 @@ onMounted(async () => {
 })
 
 watch(selectedGroup, async (group) => {
-  if (!group) return
+  if (!group) {
+    provisionedUserIDs.value = new Set()
+    encError.value = ''
+    return
+  }
   groupMembers.value = await orgStore.fetchGroupMembers(props.orgID, group.id)
   groupPermissions.value = await orgStore.fetchGroupPermissions(props.orgID, group.id)
+  await loadEncryptionState()
 })
 
 // Members not yet in the selected group
@@ -344,17 +479,37 @@ function openCreateModal() {
 async function handleCreate() {
   creating.value = true
   createError.value = ''
+  encError.value = ''
+  let setupErrors = []
   try {
     const group = await orgStore.createGroup(props.orgID, createForm.value.name, createForm.value.description)
+    // B1+B2: pass group.id so the folder gets group_id set at creation
     try {
-      const folder = await orgStore.createFolder(props.orgID, createForm.value.name, '/', '')
-      await orgStore.setGroupPermission(props.orgID, group.id, {
-        folder_path: folder.path,
-        level: 'manage',
-      })
-    } catch (_) { /* non-fatal: group created, base folder setup failed */ }
+      const folder = await orgStore.createFolder(props.orgID, createForm.value.name, '/', '', group.id)
+      try {
+        await orgStore.setGroupPermission(props.orgID, group.id, { folder_path: folder.path, level: 'manage' })
+      } catch (e) {
+        setupErrors.push(`Permission : ${e.response?.data?.error || e.message}`)
+      }
+    } catch (e) {
+      setupErrors.push(`Dossier : ${e.response?.data?.error || e.message}`)
+    }
+    // L3: auto-initialize group encryption after group creation
+    let updatedGroup = group
+    try {
+      await orgStore.initializeGroupKey(props.orgID, group.id)
+      const g = orgStore.groups.find(g => g.id === group.id)
+      if (g) {
+        g.encrypted_group_key = '__initialized__'
+        updatedGroup = g  // use the reactive store object so selectedGroup reflects init
+      }
+    } catch (e) {
+      setupErrors.push(`Chiffrement : ${e.response?.data?.error || e.message}`)
+    }
     showCreateModal.value = false
-    await selectGroup(group)
+    await selectGroup(updatedGroup)
+    // I1: surface any non-fatal setup errors in the encryption section
+    if (setupErrors.length) encError.value = setupErrors.join(' | ')
   } catch (e) {
     createError.value = e.response?.data?.error || e.message
   } finally {
@@ -377,6 +532,18 @@ async function handleAddMember() {
     const gm = await orgStore.addGroupMember(props.orgID, selectedGroup.value.id, selectedUserID.value, newMemberRole.value)
     groupMembers.value.push(gm)
     showAddMemberModal.value = false
+    // L1: auto-provision group key for the new member if encryption is active
+    if (selectedGroup.value?.encrypted_group_key) {
+      const member = orgStore.members.find(m => m.user_id === selectedUserID.value)
+      if (member?.public_key) {
+        try {
+          await orgStore.provisionGroupKeyForMember(props.orgID, selectedGroup.value.id, member)
+          provisionedUserIDs.value = new Set([...provisionedUserIDs.value, selectedUserID.value])
+        } catch (e) {
+          encError.value = `Provisionnement automatique échoué : ${e.response?.data?.error || e.message}`
+        }
+      }
+    }
   } catch (e) {
     addMemberError.value = e.response?.data?.error || e.message
   } finally {
@@ -401,8 +568,9 @@ async function openPermModal() {
   folderOptions.value = []
   showPermModal.value = true
   try {
-    const items = await orgStore.fetchItems(props.orgID, '/')
-    folderOptions.value = (items.folders || []).map(f => ({ name: f.name, path: f.path }))
+    // I2: fetch ALL org folders (all levels), not just root-level
+    const folders = await orgStore.getAllOrgFolders(props.orgID)
+    folderOptions.value = folders.map(f => ({ name: f.name, path: f.path }))
   } catch (_) { /* folder list unavailable — fall back to manual input */ }
 }
 
@@ -806,6 +974,72 @@ async function confirmDelete(group) {
   animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Encryption section */
+.enc-actions { display: flex; gap: 8px; }
+
+.btn-enc-init {
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+  font-weight: 600;
+}
+
+.enc-status-row { margin-bottom: 8px; }
+
+.enc-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 10px;
+}
+.enc-status-badge.initialized {
+  background: color-mix(in srgb, var(--success-color) 12%, transparent);
+  color: var(--success-color);
+}
+.enc-status-badge.not-initialized {
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  color: #f59e0b;
+}
+
+.member-key-rows { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+
+.member-key-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--hover-background-color);
+}
+
+.key-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 8px;
+}
+.key-badge.provisioned {
+  background: color-mix(in srgb, var(--success-color) 12%, transparent);
+  color: var(--success-color);
+}
+.key-badge.not-provisioned {
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  color: #f59e0b;
+}
+
+.btn-provision {
+  margin-left: auto;
+  color: var(--primary-color);
+  border-color: color-mix(in srgb, var(--primary-color) 40%, transparent);
+}
+
+.spinner-sm.dark {
+  border-color: color-mix(in srgb, var(--main-text-color) 20%, transparent);
+  border-top-color: var(--main-text-color);
+}
 
 /* Transitions */
 .slide-enter-active, .slide-leave-active { transition: opacity 0.2s, transform 0.2s; }

@@ -26,11 +26,12 @@ Kagibi est publié sous licence **AGPLv3** : le code est auditable, le déploiem
 
 - **Upload de fichiers** — glisser-déposer ou sélection classique, avec progression en temps réel (phase de chiffrement puis phase d'envoi).
 - **Upload de dossiers** — téléversez une arborescence entière en une fois. En cas de conflit de nom, trois options s'offrent à vous : renommer automatiquement, ignorer ou remplacer.
-- **Upload multipart** — les fichiers volumineux (> 10 Mo) sont découpés en fragments de 10 Mo, chiffrés individuellement et envoyés en parallèle.
+- **Upload multipart** — les fichiers volumineux sont découpés en fragments de 5 à 100 Mo, chiffrés individuellement avec AES-256-GCM dans le navigateur, puis envoyés **en parallèle** directement vers S3 via des URLs présignées (TTL 3 min). Le backend orchestre les URLs présignées et finalise l'opération multipart, mais ne touche jamais le contenu brut.
 - **Téléchargement** — déchiffrement en streaming côté client : le fichier n'est jamais reconstruit en clair en mémoire avant d'être écrit sur disque.
 - **Organisation** — création de dossiers, renommage, déplacement, suppression (simple ou récursive).
 - **Tags** — étiquetez vos dossiers pour les retrouver plus facilement via la recherche et les filtres.
 - **Prévisualisation** — aperçu des images et PDF directement dans le navigateur, sans téléchargement.
+- **Favoris** — marquez n'importe quel fichier ou dossier comme favori via le bouton ★ dans le tableau ou le menu contextuel. Les favoris apparaissent dans une section dédiée sur la page d'accueil et peuvent servir de critère de tri dans le navigateur de fichiers.
 
 ### Recherche et filtrage
 
@@ -82,6 +83,15 @@ Envoi direct d'un fichier d'un appareil à un autre, chiffré de bout en bout, s
 - **Navigation au clavier** : Ctrl+K pour la recherche, touches fléchées dans les listes.
 - **Design responsive** : navigation adaptée mobile avec barre inférieure et feuilles de bas de page.
 - **Quota de stockage** affiché en temps réel dans la barre latérale (mis à jour en moins de 2 secondes après chaque opération).
+- **Page FAQ** (`/faq`) — accessible publiquement, sans compte, depuis la landing page et le menu **Aide & Support** de la navbar du dashboard. Couvre les questions générales (souveraineté, sécurité, chiffrement), les fonctionnalités (P2P, partages, Organisations, Amis) et les valeurs de Kagibi.
+
+### Page d'accueil
+
+La page d'accueil (`/dashboard/home`) présente trois sections accordéon :
+
+1. **Fichiers favoris** — affiche tous les fichiers et dossiers marqués en favori, en grille 5 colonnes. La section n'apparaît que si au moins un favori existe. Cliquer sur une carte ouvre directement l'élément ; l'étoile dorée visible au survol retire l'élément des favoris.
+2. **Récemment ouverts** — les 10 derniers fichiers ou dossiers consultés, avec navigation rapide en un clic.
+3. **Partagés avec moi** — fichiers et dossiers partagés par d'autres utilisateurs.
 
 ---
 
@@ -129,6 +139,28 @@ Au sein d'une organisation, les **groupes** permettent de regrouper des membres 
 - Les membres d'un groupe héritent d'un rôle au sein du groupe : **admin** ou **membre**.
 - Les permissions de dossier peuvent être assignées à un groupe entier en une seule opération.
 
+#### Chiffrement par groupe (GroupKey)
+
+Chaque groupe peut disposer d'une **clé de chiffrement dédiée** (GroupKey, AES-256-GCM), indépendante de l'OrgKey. Les fichiers stockés dans un dossier lié au groupe sont chiffrés avec cette GroupKey — seuls les membres du groupe (ayant reçu leur clé provisionnée) peuvent les déchiffrer, même si d'autres membres de l'organisation ont accès au reste du contenu.
+
+- **Initialisation** : un admin génère la GroupKey côté client, la wrappe avec l'OrgKey (backup admin) et la chiffre avec la clé publique RSA de chaque membre du groupe.
+- **Provisionnement d'un nouveau membre** : après l'ajout d'un membre au groupe, un admin peut lui provisionner la GroupKey en un clic depuis l'onglet Groupes.
+- **Rotation** : la rotation remplace la GroupKey, re-wrappe tous les fichiers du groupe avec la nouvelle clé, et reprovisionnne tous les membres — opération atomique côté serveur.
+- **Révocation** : retirer un membre du groupe supprime immédiatement son entrée de clé ; une rotation est recommandée pour garantir la rupture cryptographique complète.
+- **Rétrocompatibilité** : les fichiers sans GroupKey (`group_id = NULL`) continuent d'utiliser l'OrgKey sans migration nécessaire.
+
+### Synchronisation LDAP / Active Directory
+
+Les organisations peuvent se connecter à un annuaire d'entreprise **LDAP ou Active Directory** pour synchroniser automatiquement leurs membres et groupes, sans avoir à gérer manuellement les invitations :
+
+- **Provisionnement automatique** — les nouveaux utilisateurs du LDAP reçoivent une invitation par e-mail et rejoignent l'organisation dès qu'ils l'acceptent.
+- **Synchronisation des groupes** — les groupes LDAP sont recréés comme groupes Kagibi et leurs membres mis à jour à chaque cycle.
+- **Déprovisionnement en deux phases** — un utilisateur qui quitte l'annuaire est d'abord suspendu, puis retiré automatiquement après un délai de grâce configurable (ou manuellement par un admin).
+- **Garde-fous** — la sync est annulée si le LDAP retourne un résultat vide ou si plus de 20 % des membres existants disparaissent d'un coup, protégeant contre les erreurs de filtre et les pannes réseau.
+- **Chiffrement du mot de passe Bind** — le mot de passe du compte de service est chiffré AES-256-GCM avant stockage.
+
+La configuration s'effectue dans l'onglet **Administration → LDAP / AD** de l'organisation (réservé aux admins et owners). Voir la [documentation complète LDAP](../desktop-app/DOCUMENTATION.md#10-annuaire-ldap--active-directory) pour tous les détails de configuration et de fonctionnement.
+
 ### Assistant d'initialisation (Onboarding Wizard)
 
 Quand un utilisateur crée sa première organisation, un assistant pas-à-pas le guide :
@@ -168,6 +200,15 @@ Les admins et les admins de groupe peuvent définir des permissions par dossier 
 | none | Aucun accès ; le dossier est invisible |
 
 Les permissions s'accumulent : le niveau d'accès effectif d'un utilisateur à un dossier est le niveau le plus élevé accordé directement ou via l'un des groupes auxquels il appartient.
+
+#### Dossiers verrouillés et demandes d'accès
+
+Un dossier dont l'accès effectif est `none` est affiché **verrouillé** (icône cadenas) dans le navigateur de fichiers. Le membre peut cliquer sur **Demander l'accès** pour soumettre une demande à l'admin. Les admins voient toutes les demandes en attente dans l'onglet **Demandes d'accès** du panneau de gestion et peuvent les approuver ou refuser d'un clic.
+
+#### Accès effectif
+
+- L'onglet **Profil** permet à chaque membre de consulter son propre accès effectif dossier par dossier.
+- Dans l'onglet **Membres**, les admins peuvent afficher l'accès effectif de n'importe quel membre en ligne, sans quitter la liste.
 
 ### Liens de partage d'organisation
 
@@ -439,9 +480,9 @@ La page "Partages" centralise tous vos partages actifs en deux sections repliabl
 
 ### 3. Transfert P2P (appareil à appareil)
 
-Le transfert P2P envoie des fichiers directement d'un appareil à un autre, chiffré de bout en bout, sans stockage serveur intermédiaire.
+Le transfert P2P envoie des fichiers directement d'un appareil à un autre, chiffré de bout en bout, sans stockage serveur intermédiaire. **Il n'y a pas de limite de taille de fichier.**
 
-Les réseaux modernes rendent parfois les connexions directes impossibles (NAT, pare-feu). Dans ce cas, Kagibi utilise un serveur TURN (relais) qui appartient à Kagibi. **Les données transitant par ce relais restent chiffrées en AES-GCM — le serveur ne voit que des flux opaques, pas le contenu.**
+WebRTC tente toujours une **connexion directe en premier** (LAN ou traversée NAT via STUN). Ce n'est que si aucun chemin direct ne peut être établi — à cause d'un NAT ou d'un pare-feu trop restrictif — que le transfert bascule sur un **relais TURN opéré par Kagibi**. Ce relais est un simple commutateur de flux : les données entrent et sortent en temps réel sans être écrites sur disque. **Le serveur TURN ne produit aucun log et ne peut pas accéder au contenu**, qui reste chiffré AES-256-GCM de bout en bout tout au long du transfert.
 
 #### Deux modes de transfert
 
@@ -506,10 +547,14 @@ Les réseaux modernes rendent parfois les connexions directes impossibles (NAT, 
 | Nom de l'organisation | Clair |
 | Liste des membres et rôles | Clair |
 | OrgKey par membre | Chiffré (clé publique RSA du membre) |
+| GroupKey par groupe (backup admin) | Chiffré (OrgKey, AES-256-GCM) |
+| GroupKey par membre de groupe | Chiffré (clé publique RSA du membre) |
 | Noms de fichiers et dossiers de l'org | Chiffré (OrgKey, AES-256-GCM) |
-| Contenu des fichiers de l'org | Chiffré (clé dérivée de l'OrgKey, AES-256-GCM) |
+| Contenu des fichiers sans groupe | Chiffré (FileKey wrappée avec OrgKey, AES-256-GCM) |
+| Contenu des fichiers de groupe | Chiffré (FileKey wrappée avec GroupKey, AES-256-GCM) |
 | Entrées du journal d'audit | Actions en clair ; chemins/noms chiffrés déchiffrés côté client |
 | Permissions de dossier | Clair (IDs utilisateur/groupe + niveau d'accès) |
+| Demandes d'accès | Clair (ID membre, ID dossier, statut, message optionnel) |
 
 ### Données sociales et de partage
 
@@ -519,12 +564,29 @@ Les réseaux modernes rendent parfois les connexions directes impossibles (NAT, 
 - Invitations P2P : token + nom du fichier + taille + date d'expiration (contenu non stocké)
 - Liens de partage d'organisation : token + clé chiffrée + hash de mot de passe optionnel + indicateur à usage unique
 
+### Journaux de connexion (conformité LCEN)
+
+Conformément à la loi française (LCEN article 6 II et décret 2021-1363), les données techniques suivantes sont conservées **1 an** :
+
+| Événement journalisé | Données enregistrées |
+|---|---|
+| Création / suppression de compte | ID utilisateur, IP complète, IP anonymisée, user-agent, horodatage |
+| Tentatives de connexion (succès / échec) | ID utilisateur, IP complète, IP anonymisée, horodatage |
+| Changement de mot de passe / révocation de token | ID utilisateur, IP complète, IP anonymisée, horodatage |
+| Accès aux fichiers | ID utilisateur, ID fichier, IP complète, IP anonymisée, horodatage |
+| Création / révocation d'un lien de partage public | ID utilisateur, ressource, token, IP complète, user-agent, horodatage |
+| Création d'un partage direct | ID propriétaire, ID destinataire, ressource, IP complète, user-agent, horodatage |
+| Requêtes HTTP | IP anonymisée uniquement (CNIL 2021-122), user-agent, statut, durée |
+
+**Politique IP** : l'IP complète est conservée uniquement dans les journaux d'événements de sécurité (cycle de vie du compte, auth, partages). Les journaux HTTP applicatifs contiennent uniquement l'IP anonymisée (dernier octet IPv4 / 80 bits IPv6 masqués), conformément à la délibération CNIL 2021-122. Les journaux sont centralisés dans Grafana Cloud Loki et conservés 1 an.
+
+Ces données peuvent être communiquées aux autorités judiciaires ou administratives sur réquisition légale. Elles sont soumises à contrôle d'accès et ne contiennent jamais de clé de déchiffrement.
+
 ### Ce qui n'est pas collecté
 
 - Contenu des fichiers (jamais en clair sur le serveur)
-- Historique de navigation ou de recherche
-- Adresses IP (sauf journalisation temporaire à des fins de sécurité/abus)
-- Informations sur l'appareil ou le navigateur
+- Historique de navigation ou de recherche dans vos fichiers
+- IP complète dans les logs HTTP standards (anonymisée uniquement — CNIL 2021-122)
 
 ---
 

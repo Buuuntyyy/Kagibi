@@ -10,6 +10,7 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"kagibi/backend/pkg"
@@ -17,7 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var validFolderName = regexp.MustCompile(`^[\p{L}\p{N}\s\-\._'\x{2018}\x{2019}]+$`)
+var forbiddenOrgFolderChars = regexp.MustCompile(`[/\\\x00-\x1f<>]`)
 
 // ListOrgItems returns files and folders at a given path within the org.
 func (h *OrgHandler) ListOrgItems(c *gin.Context) {
@@ -56,6 +57,33 @@ func (h *OrgHandler) ListOrgItems(c *gin.Context) {
 		Scan(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list folders"})
 		return
+	}
+
+	// For each sub-folder check whether the caller can read it. If not, mark it
+	// locked so the frontend can show it as inaccessible (with a request-access CTA)
+	// rather than hiding it entirely.
+	if len(folders) > 0 {
+		// Fetch caller's pending access requests in one query.
+		var pendingPaths []struct {
+			FolderPath string `bun:"folder_path"`
+		}
+		_ = h.DB.NewSelect().
+			TableExpr("org_access_requests").
+			ColumnExpr("folder_path").
+			Where("org_id = ? AND user_id = ? AND status = 'pending'", orgID, userID).
+			Scan(ctx, &pendingPaths)
+		pendingSet := make(map[string]bool, len(pendingPaths))
+		for _, p := range pendingPaths {
+			pendingSet[p.FolderPath] = true
+		}
+
+		for i := range folders {
+			subPerm, err := h.resolvePermission(ctx, orgID, userID, folders[i].Path)
+			if err == nil && subPerm < PermRead {
+				folders[i].Locked = true
+				folders[i].AccessRequestPending = pendingSet[folders[i].Path]
+			}
+		}
 	}
 
 	var files []pkg.OrgFile
@@ -100,10 +128,24 @@ func (h *OrgHandler) ListOrgItems(c *gin.Context) {
 		}
 	}
 
+	// Resolve the group_id of the current folder (if any) so the client knows
+	// which key to use when encrypting new uploads into this path.
+	var currentGroupID *int64
+	if folderPath != "/" {
+		var curFolder pkg.OrgFolder
+		if err := h.DB.NewSelect().Model(&curFolder).
+			Column("group_id").
+			Where("org_id = ? AND path = ?", orgID, folderPath).
+			Scan(ctx); err == nil {
+			currentGroupID = curFolder.GroupID
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"folders":      folders,
-		"files":        files,
-		"current_path": folderPath,
+		"folders":          folders,
+		"files":            files,
+		"current_path":     folderPath,
+		"current_group_id": currentGroupID,
 	})
 }
 
@@ -120,12 +162,14 @@ func (h *OrgHandler) CreateOrgFolder(c *gin.Context) {
 		Name         string `json:"name" binding:"required"`
 		ParentPath   string `json:"parent_path"`
 		EncryptedKey string `json:"encrypted_key"`
+		GroupID      *int64 `json:"group_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if !validFolderName.MatchString(req.Name) {
+	trimmedName := strings.TrimSpace(req.Name)
+	if trimmedName == "" || trimmedName == "." || trimmedName == ".." || forbiddenOrgFolderChars.MatchString(req.Name) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid folder name"})
 		return
 	}
@@ -158,6 +202,18 @@ func (h *OrgHandler) CreateOrgFolder(c *gin.Context) {
 		return
 	}
 
+	// If no group_id was provided, inherit it from the parent folder so sub-folders
+	// inside a group-encrypted folder automatically belong to the same group (B1+B2 fix).
+	if req.GroupID == nil && parentPath != "/" {
+		var parentFolder pkg.OrgFolder
+		if err := h.DB.NewSelect().Model(&parentFolder).
+			Column("group_id").
+			Where("org_id = ? AND path = ?", orgID, parentPath).
+			Scan(ctx); err == nil {
+			req.GroupID = parentFolder.GroupID
+		}
+	}
+
 	folder := &pkg.OrgFolder{
 		OrgID:        orgID,
 		Name:         req.Name,
@@ -165,6 +221,7 @@ func (h *OrgHandler) CreateOrgFolder(c *gin.Context) {
 		ParentPath:   parentPath,
 		CreatedBy:    userID,
 		EncryptedKey: req.EncryptedKey,
+		GroupID:      req.GroupID,
 		TagIDs:       []int64{},
 	}
 	if _, err := h.DB.NewInsert().Model(folder).Exec(ctx); err != nil {

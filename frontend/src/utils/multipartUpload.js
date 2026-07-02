@@ -10,6 +10,25 @@ const MAX_RETRIES = 3
 const INITIAL_RETRY_DELAY = 1000 // 1 second
 const PART_SIZE = 10 * 1024 * 1024 // 10MB per part (matches crypto CHUNK_SIZE)
 const PROGRESS_THROTTLE_MS = 250 // max 4 UI updates/sec — avoids saturating Vue reactivity
+// AES-GCM overhead per chunk: 12B nonce + 16B auth tag
+const ENCRYPTED_CHUNK_OVERHEAD = 28
+
+/**
+ * Returns the AES-GCM plaintext chunk size to use for a given file size.
+ *
+ * Constraint: S3 requires non-final multipart parts to be ≥ 5 MB.
+ * Files whose entire content fits in one chunk are the "last" (and only) part,
+ * so they have no minimum — we store them at their exact plaintext size.
+ * Files larger than PART_SIZE use PART_SIZE (10 MB) to satisfy S3's minimum
+ * and keep the number of S3 API calls reasonable for large files.
+ *
+ * Old files in the DB carry chunk_size = 10 MB (column DEFAULT), so they are
+ * decoded correctly by the download path without any migration of S3 objects.
+ */
+export function pickChunkSize(plainSize) {
+  if (plainSize <= 0 || plainSize > PART_SIZE) return PART_SIZE
+  return plainSize // single chunk at exact file size → no padding, minimal overhead
+}
 
 /**
  * Upload state enum
@@ -69,11 +88,18 @@ export class MultipartUploadManager {
   }
 
   /**
-   * Initialize multipart upload with the backend
+   * Initialize multipart upload with the backend.
+   * @param {number} [chunkSize=PART_SIZE] - AES-GCM plaintext chunk size used during encryption.
+   *   Stored on the manager and forwarded to /complete so the backend can persist it.
+   *   Determines the number of presigned URLs requested: one per encrypted chunk.
    */
-  async initiate(fileName, filePath, contentType, totalSize, encryptedKey) {
-    const totalParts = Math.ceil(totalSize / PART_SIZE)
-    
+  async initiate(fileName, filePath, contentType, totalSize, encryptedKey, chunkSize = PART_SIZE) {
+    this.chunkSize = chunkSize
+    // Number of presigned URLs = number of encrypted chunks.
+    // Formula: ceil(totalEncryptedSize / encryptedChunkSize) where each chunk adds 28B overhead.
+    const encryptedChunkSize = chunkSize + ENCRYPTED_CHUNK_OVERHEAD
+    const totalParts = Math.max(1, Math.ceil(totalSize / encryptedChunkSize))
+
     try {
       const response = await api.post('/files/multipart/initiate', {
         file_name: fileName,
@@ -155,11 +181,12 @@ export class MultipartUploadManager {
                 etag: etag
               })
               activeTasks.delete(part.partNumber)
-              
+
               // Update progress
               this.uploadedBytes += part.size
               this.updateProgress()
-              
+              part.data = null  // release encrypted blob immediately — critical for RAM
+
               // Process next or complete
               if (completedParts.length === this.parts.length) {
                 resolve(completedParts)
@@ -277,6 +304,7 @@ export class MultipartUploadManager {
           completedParts.push({ part_number: part.partNumber, etag })
           this.uploadedBytes += part.size
           this.updateProgress()
+          part.data = null  // release encrypted blob immediately — critical for RAM
         })
         .catch(err => {
           if (!firstError) {
@@ -407,7 +435,9 @@ export class MultipartUploadManager {
         share_keys: metadata.shareKeys || '',
         direct_share_keys: metadata.directShareKeys || '',
         preview_id: metadata.previewId || null,
-        is_preview: metadata.isPreview || false
+        is_preview: metadata.isPreview || false,
+        chunk_size: this.chunkSize || PART_SIZE,
+        compression: metadata.compression || ''
       })
 
       this.state = UploadState.COMPLETED
@@ -478,34 +508,35 @@ export async function uploadFileMultipart(
   })
 
   try {
-    // Calculate parts
-    const totalParts = Math.ceil(file.size / PART_SIZE)
-    
-    // Encrypt all chunks first
+    // Adaptive chunk size: single-chunk for small files avoids padding to 10 MB
+    const chunkSize = pickChunkSize(file.size)
+
+    // Encrypt all chunks
     onStateChange('encrypting')
     const encryptedChunks = []
     let offset = 0
     let chunkIndex = 0
-    
+
     while (offset < file.size) {
-      const chunkBlob = file.slice(offset, offset + PART_SIZE)
+      const chunkBlob = file.slice(offset, offset + chunkSize)
       const chunkArrayBuffer = await chunkBlob.arrayBuffer()
       const encryptedChunk = await encryptFunction(chunkArrayBuffer, fileKey, chunkIndex)
       encryptedChunks.push(encryptedChunk)
-      offset += PART_SIZE
+      offset += chunkSize
       chunkIndex++
     }
 
-    // Calculate total encrypted size
+    // Calculate total encrypted size from actual blobs (not estimated)
     const totalEncryptedSize = encryptedChunks.reduce((sum, chunk) => sum + chunk.size, 0)
 
     // Initiate multipart upload
     await manager.initiate(
       file.name,
       filePath,
-      'application/octet-stream', // Always octet-stream for encrypted data
+      'application/octet-stream',
       totalEncryptedSize,
-      encryptedFileKey
+      encryptedFileKey,
+      chunkSize
     )
 
     // Upload parts

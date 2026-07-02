@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/uptrace/bun"
 )
 
 // MemberStorageStat aggregates storage and file count for a single org member.
@@ -86,7 +87,8 @@ func (h *OrgHandler) GetOrgStats(c *gin.Context) {
 		stats.MembersNoKey = 0
 	}
 
-	// Storage breakdown by uploader, joined with profiles for display names.
+	// Storage breakdown by uploader — aggregate first, then resolve all profiles
+	// in a single batch query instead of one per uploader.
 	type uploaderRow struct {
 		UserID       string `bun:"uploaded_by"`
 		FileCount    int64  `bun:"file_count"`
@@ -100,23 +102,37 @@ func (h *OrgHandler) GetOrgStats(c *gin.Context) {
 		GroupExpr("uploaded_by").
 		OrderExpr("storage_bytes DESC").
 		Scan(ctx, &uploaderRows); err == nil {
+
+		type profileRow struct {
+			ID        string `bun:"id"`
+			Name      string `bun:"name"`
+			AvatarURL string `bun:"avatar_url"`
+		}
+		profileMap := make(map[string]profileRow, len(uploaderRows))
+		if len(uploaderRows) > 0 {
+			userIDs := make([]string, len(uploaderRows))
+			for i, r := range uploaderRows {
+				userIDs[i] = r.UserID
+			}
+			var profiles []profileRow
+			if err := h.DB.NewSelect().
+				TableExpr("profiles").
+				ColumnExpr("id, name, avatar_url").
+				Where("id IN (?)", bun.In(userIDs)).
+				Scan(ctx, &profiles); err == nil {
+				for _, p := range profiles {
+					profileMap[p.ID] = p
+				}
+			}
+		}
+
 		for _, row := range uploaderRows {
 			stat := MemberStorageStat{
 				UserID:       row.UserID,
 				FileCount:    row.FileCount,
 				StorageBytes: row.StorageBytes,
 			}
-			// Fetch display name and avatar from profiles.
-			type profileRow struct {
-				Name      string `bun:"name"`
-				AvatarURL string `bun:"avatar_url"`
-			}
-			var p profileRow
-			if err := h.DB.NewSelect().
-				TableExpr("profiles").
-				ColumnExpr("name, avatar_url").
-				Where("id = ?", row.UserID).
-				Scan(ctx, &p); err == nil {
+			if p, ok := profileMap[row.UserID]; ok {
 				stat.Name = p.Name
 				stat.AvatarURL = p.AvatarURL
 			}

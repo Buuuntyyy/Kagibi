@@ -349,20 +349,25 @@
               v-for="folder in sortedFolders"
               :key="'f-' + folder.id"
               class="item-row folder-row"
-              :class="{ selected: isSelected('folder', folder.id), 'drag-over': dragOverFolderID === folder.id, 'folder-active': activeFolderID === folder.id }"
-              :draggable="canWrite"
-              @dragstart="onItemDragStart($event, folder, 'folder')"
+              :class="{ selected: isSelected('folder', folder.id), 'drag-over': dragOverFolderID === folder.id, 'folder-active': activeFolderID === folder.id, 'folder-locked': folder.locked }"
+              :draggable="canWrite && !folder.locked"
+              @dragstart="!folder.locked && onItemDragStart($event, folder, 'folder')"
               @dragend="onItemDragEnd"
-              @dragover="onFolderDragOver($event, folder)"
+              @dragover="!folder.locked && onFolderDragOver($event, folder)"
               @dragleave="onFolderDragLeave(folder)"
-              @drop="onDropOnFolder($event, folder)"
-              @click.stop="renamingItem?.id !== folder.id && handleRowClick($event, 'folder', folder.id)"
-              @dblclick.stop="renamingItem?.id !== folder.id && navigateToPath(folder.path)"
+              @drop="!folder.locked && onDropOnFolder($event, folder)"
+              @click.stop="!folder.locked && renamingItem?.id !== folder.id && handleRowClick($event, 'folder', folder.id)"
+              @dblclick.stop="!folder.locked && renamingItem?.id !== folder.id && navigateToPath(folder.path)"
+              @contextmenu.prevent.stop="!folder.locked && handleContextMenu($event, folder, 'folder')"
             >
               <label class="checkbox-wrap" @click.stop>
-                <input type="checkbox" :checked="isSelected('folder', folder.id)" @change="e => toggleSelect(e, 'folder', folder.id)" class="item-checkbox" />
+                <input type="checkbox" :checked="isSelected('folder', folder.id)" @change="e => toggleSelect(e, 'folder', folder.id)" class="item-checkbox" :disabled="folder.locked" />
               </label>
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" class="item-icon folder-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+              <!-- Lock icon overlay for restricted folders -->
+              <span v-if="folder.locked" class="item-icon folder-icon locked-icon" title="Accès restreint">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+              </span>
+              <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="currentColor" class="item-icon folder-icon"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
               <input
                 v-if="renamingItem?.id === folder.id"
                 :id="`rename-input-${folder.id}`"
@@ -374,7 +379,7 @@
                 @blur="saveRename"
                 @click.stop
               />
-              <span v-else class="item-name">{{ folder.name }}</span>
+              <span v-else class="item-name" :class="{ 'item-name-locked': folder.locked }">{{ folder.name }}</span>
               <div v-if="renamingItem?.id !== folder.id && (folder.tag_ids || []).length > 0" class="item-tags">
                 <span
                   v-for="tagID in (folder.tag_ids || []).slice(0, 3)"
@@ -386,10 +391,33 @@
                 <span v-if="(folder.tag_ids || []).length > 3" class="item-tag-more">+{{ (folder.tag_ids || []).length - 3 }}</span>
               </div>
               <span v-if="renamingItem?.id !== folder.id" class="item-meta">
-                <span v-if="folder.total_size > 0">{{ formatSize(folder.total_size) }} · </span>
-                {{ formatDate(folder.created_at) }}
+                <span v-if="folder.locked" class="locked-label">Accès restreint</span>
+                <template v-else>
+                  <span v-if="folder.total_size > 0">{{ formatSize(folder.total_size) }} · </span>
+                  {{ formatDate(folder.created_at) }}
+                </template>
               </span>
-              <div class="item-actions">
+              <!-- Actions for locked folders: request access -->
+              <div v-if="folder.locked" class="item-actions">
+                <button
+                  v-if="folder.access_request_pending"
+                  class="btn-sm btn-access-pending"
+                  disabled
+                  :title="t('orgs.accessRequestPending')"
+                >
+                  {{ t('orgs.accessRequestPending') }}
+                </button>
+                <button
+                  v-else
+                  class="btn-sm btn-access-request"
+                  @click.stop="handleRequestAccess(folder)"
+                  :title="t('orgs.requestAccess')"
+                >
+                  {{ t('orgs.requestAccess') }}
+                </button>
+              </div>
+              <!-- Normal actions for accessible folders -->
+              <div v-else class="item-actions">
                 <button class="btn-icon" @click.stop="openTagPopover($event, folder.id, 'folder')" :title="t('orgs.addTag')">
                   <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
                 </button>
@@ -427,6 +455,7 @@
               @dragend="onItemDragEnd"
               @click.stop="handleRowClick($event, 'file', file.id)"
               @dblclick.stop="openPreview(file)"
+              @contextmenu.prevent.stop="handleContextMenu($event, file, 'file')"
             >
               <label class="checkbox-wrap" @click.stop>
                 <input type="checkbox" :checked="isSelected('file', file.id)" @change="e => toggleSelect(e, 'file', file.id)" class="item-checkbox" />
@@ -489,6 +518,64 @@
         <OrgGroupsPanel :orgID="orgID" />
       </div>
 
+      <!-- TAB: LDAP -->
+      <div v-if="activeTab === 'ldap'" class="tab-content">
+        <OrgLDAPPanel :orgID="orgID" />
+      </div>
+
+      <!-- TAB: ACCESS REQUESTS -->
+      <div v-if="activeTab === 'access-requests'" class="tab-content">
+        <div class="section-header">
+          <h3>{{ t('orgs.accessRequests') || 'Demandes d\'accès' }}</h3>
+          <div class="section-header-actions">
+            <select v-model="accessRequestsFilter" @change="loadAccessRequests" class="input-field input-sm">
+              <option value="pending">En attente</option>
+              <option value="approved">Approuvées</option>
+              <option value="denied">Refusées</option>
+              <option value="">Toutes</option>
+            </select>
+            <button class="btn-sm" @click="loadAccessRequests" :disabled="accessRequestsLoading">
+              {{ accessRequestsLoading ? '...' : t('orgs.refresh') || 'Actualiser' }}
+            </button>
+          </div>
+        </div>
+        <div v-if="accessRequestsLoading" class="empty-state">
+          <span class="spinner-sm"></span>
+        </div>
+        <div v-else-if="orgStore.accessRequests.length === 0" class="empty-state">
+          {{ t('orgs.noAccessRequests') || 'Aucune demande d\'accès.' }}
+        </div>
+        <table v-else class="data-table">
+          <thead>
+            <tr>
+              <th>Utilisateur</th>
+              <th>Dossier</th>
+              <th>Message</th>
+              <th>Date</th>
+              <th>Statut</th>
+              <th v-if="accessRequestsFilter === 'pending' || accessRequestsFilter === ''">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="req in orgStore.accessRequests" :key="req.id">
+              <td>{{ orgStore.members.find(m => m.user_id === req.user_id)?.name || req.user_id }}</td>
+              <td class="mono-sm">{{ req.folder_path }}</td>
+              <td>{{ req.message || '—' }}</td>
+              <td>{{ formatDate(req.created_at) }}</td>
+              <td>
+                <span class="status-badge" :class="'status-' + req.status">{{ req.status }}</span>
+              </td>
+              <td v-if="accessRequestsFilter === 'pending' || accessRequestsFilter === ''">
+                <template v-if="req.status === 'pending'">
+                  <button class="btn-sm btn-approve" @click="handleResolveAccessRequest(req, 'approved')">Approuver</button>
+                  <button class="btn-sm btn-deny" @click="handleResolveAccessRequest(req, 'denied')">Refuser</button>
+                </template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <!-- TAB: PROFILE -->
       <div v-if="activeTab === 'profile'" class="tab-content">
         <div class="section-header">
@@ -520,6 +607,34 @@
                 {{ t(`orgs.group${capitalize(g.my_role)}`) }}
               </span>
             </div>
+          </div>
+        </div>
+        <div class="profile-section">
+          <div class="profile-label" style="display:flex;align-items:center;justify-content:space-between;">
+            {{ t('orgs.myEffectiveAccess') || 'Mon accès effectif' }}
+            <button class="btn-sm" @click="loadMyEffectiveAccess" :disabled="myAccessLoading">
+              {{ myAccessLoading ? '...' : (myAccessEntries ? t('orgs.refresh') || 'Actualiser' : t('orgs.view') || 'Afficher') }}
+            </button>
+          </div>
+          <div v-if="myAccessLoading" class="loading-inline"><div class="spinner-sm-dark"></div></div>
+          <div v-else-if="myAccessEntries !== null">
+            <div v-if="myAccessEntries.length === 0" class="profile-empty">Aucun dossier dans cette organisation.</div>
+            <table v-else class="data-table" style="margin-top:8px;">
+              <thead>
+                <tr>
+                  <th>Dossier</th>
+                  <th>Accès</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="entry in myAccessEntries" :key="entry.folder_path">
+                  <td class="mono-sm">{{ entry.folder_path }}</td>
+                  <td>
+                    <span class="access-level-badge" :class="'access-' + entry.level">{{ entry.level }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -603,6 +718,14 @@
                 {{ t('orgs.transferOwnership') }}
               </button>
               <button
+                v-if="canManage"
+                class="btn-sm"
+                @click="toggleMemberAccess(m)"
+                :title="t('orgs.viewEffectiveAccess') || 'Voir accès effectif'"
+              >
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+              </button>
+              <button
                 v-if="(canManage && m.role !== 'owner' && m.user_id !== myUserID) || m.user_id === myUserID"
                 class="btn-icon-danger"
                 @click="handleRemoveMember(m)"
@@ -611,6 +734,20 @@
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
               </button>
             </div>
+          </div>
+          <!-- Effective access panel (expands inline under the member row) -->
+          <div v-if="expandedMemberAccessID === m.user_id" class="member-access-panel">
+            <div v-if="memberAccessLoading" class="loading-inline"><div class="spinner-sm-dark"></div></div>
+            <div v-else-if="!memberAccessEntries || memberAccessEntries.length === 0" class="profile-empty">Aucun dossier.</div>
+            <table v-else class="data-table">
+              <thead><tr><th>Dossier</th><th>Accès</th></tr></thead>
+              <tbody>
+                <tr v-for="entry in memberAccessEntries" :key="entry.folder_path">
+                  <td class="mono-sm">{{ entry.folder_path }}</td>
+                  <td><span class="access-level-badge" :class="'access-' + entry.level">{{ entry.level }}</span></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -1580,6 +1717,54 @@
         </div>
       </div>
     </Transition>
+
+    <!-- Right-click context menu -->
+    <ContextMenu
+      v-if="contextMenu.visible"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :item="contextMenu.item"
+      @close="contextMenu.visible = false"
+    >
+      <template #custom-actions>
+        <div class="menu-item" @click="handleContextAction('tag')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
+          {{ t('orgs.addTag') }}
+        </div>
+        <div v-if="contextMenu.type === 'folder' && (canManage || isGroupAdmin)" class="menu-item" @click="handleContextAction('access')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+          {{ t('orgs.manageAccess') }}
+        </div>
+        <div v-if="contextMenu.type === 'file'" class="menu-item" @click="handleContextAction('download')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          {{ t('file.download') }}
+        </div>
+        <div v-if="contextMenu.type === 'folder'" class="menu-item" @click="handleContextAction('download-zip')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          {{ t('orgs.downloadZip') }}
+        </div>
+        <div v-if="contextMenu.type === 'file'" class="menu-item" @click="handleContextAction('share')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
+          {{ t('orgs.shareFile') }}
+        </div>
+        <div v-if="canWrite" class="menu-item" @click="handleContextAction('move')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-2 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg>
+          {{ contextMenu.type === 'folder' ? t('orgs.moveFolder') : t('orgs.moveFile') }}
+        </div>
+        <div v-if="canWrite" class="menu-item" @click="handleContextAction('rename')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+          {{ contextMenu.type === 'folder' ? t('orgs.renameFolder') : t('orgs.renameFile') }}
+        </div>
+        <div class="menu-item" @click="handleContextAction('favorite')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>
+          {{ isFavorite(contextMenu.item?.id, contextMenu.type) ? t('orgs.unpinItem') : t('orgs.pinItem') }}
+        </div>
+        <div v-if="canWrite" class="menu-item delete" @click="handleContextAction('delete')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          {{ contextMenu.type === 'folder' ? t('orgs.deleteFolder') : t('orgs.deleteFile') }}
+        </div>
+      </template>
+    </ContextMenu>
   </div>
 </template>
 
@@ -1592,8 +1777,10 @@ import { useAuthStore } from '../stores/auth'
 import { useRealtimeStore } from '../stores/realtime'
 import { useUIStore } from '../stores/ui'
 import OrgGroupsPanel from '../components/organizations/OrgGroupsPanel.vue'
+import OrgLDAPPanel from '../components/organizations/OrgLDAPPanel.vue'
 import OrgFolderAccessDialog from '../components/organizations/OrgFolderAccessDialog.vue'
 import OrgOnboardingWizard from '../components/organizations/OrgOnboardingWizard.vue'
+import ContextMenu from '../components/file/ContextMenu.vue'
 import { generateOrgKey, decryptOrgKey, unwrapFileKey, wrapFileKey } from '../utils/orgCrypto.js'
 import api from '../api'
 
@@ -1613,6 +1800,7 @@ const toast = ref(null)
 
 const showAccessDialog = ref(false)
 const accessDialogFolder = ref(null)
+const contextMenu = ref({ visible: false, x: 0, y: 0, item: null, type: null })
 
 // ── Audit log pagination & cleanup ───────────────────────────────────────────
 
@@ -1659,6 +1847,8 @@ const tabMenuGroups = computed(() => {
     adminItems.push({ key: 'invitations', label: t('orgs.invitations'), icon: TabIcon(['M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z']) })
     adminItems.push({ key: 'permissions', label: t('orgs.permissions'), icon: TabIcon(['M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z']) })
     adminItems.push({ key: 'audit',       label: t('orgs.auditLog'),    icon: TabIcon(['M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z']) })
+    adminItems.push({ key: 'ldap',        label: 'LDAP / AD',           icon: TabIcon(['M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z', 'M11 7h2v2h-2zm0 4h2v6h-2z']) })
+    adminItems.push({ key: 'access-requests', label: t('orgs.accessRequests') || 'Demandes d\'accès', icon: TabIcon(['M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z']), count: orgStore.accessRequests.filter(r => r.status === 'pending').length || null })
     adminItems.push({ key: 'settings',    label: t('orgs.settings'),    icon: TabIcon(['M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z']) })
     groups.push({
       key: 'admin',
@@ -1887,6 +2077,7 @@ const switchTab = async (tab) => {
   else stopActivityRefresh()
   if (tab === 'trash') loadTrash()
   if (tab === 'shares') loadShares()
+  if (tab === 'access-requests') loadAccessRequests()
 }
 
 // ── Activity feed ─────────────────────────────────────────────────────────────
@@ -2008,7 +2199,10 @@ async function handleRestore(item) {
   try {
     await orgStore.restoreTrashItem(orgID.value, item.item_type, item.id)
     showToast(t('orgs.itemRestored'))
-  } catch (_) {}
+    await orgStore.fetchItems(orgID.value, currentPath.value)
+  } catch (e) {
+    showToast(e.response?.data?.error || e.message, 'error')
+  }
 }
 
 async function handlePermanentDelete(item) {
@@ -2026,6 +2220,75 @@ async function handleEmptyTrash() {
     await orgStore.emptyTrash(orgID.value)
     showToast(t('orgs.trashEmptied'))
   } catch (_) {}
+}
+
+// ── Access requests ──────────────────────────────────────────────────────────
+
+const accessRequestsLoading = ref(false)
+const accessRequestsFilter = ref('pending')
+
+async function loadAccessRequests() {
+  accessRequestsLoading.value = true
+  try { await orgStore.fetchAccessRequests(orgID.value, accessRequestsFilter.value) } catch (_) {}
+  accessRequestsLoading.value = false
+}
+
+async function handleRequestAccess(folder) {
+  try {
+    await orgStore.requestFolderAccess(orgID.value, folder.path)
+    // Optimistically mark the folder as pending so the button updates instantly.
+    folder.access_request_pending = true
+    showToast(t('orgs.accessRequestSent'))
+  } catch (err) {
+    const msg = err?.response?.data?.error
+    if (msg === 'you already have access to this folder') {
+      showToast(t('orgs.alreadyHaveAccess'))
+    } else {
+      showToast(t('orgs.accessRequestError'))
+    }
+  }
+}
+
+async function handleResolveAccessRequest(request, status) {
+  try {
+    await orgStore.resolveAccessRequest(orgID.value, request.id, status)
+    if (status === 'approved') {
+      // I3: approval signals intent — admin must also grant a filesystem permission on the folder.
+      showToast(`${t('orgs.accessRequestApproved')} — Pensez à accorder une permission sur "${request.folder_path}" pour cet utilisateur ou son groupe.`)
+    } else {
+      showToast(t('orgs.accessRequestDenied'))
+    }
+  } catch (_) {
+    showToast(t('orgs.accessRequestError'))
+  }
+}
+
+// ── Effective access ──────────────────────────────────────────────────────────
+
+const myAccessEntries = ref(null)  // null = not loaded yet
+const myAccessLoading = ref(false)
+
+async function loadMyEffectiveAccess() {
+  myAccessLoading.value = true
+  try { myAccessEntries.value = await orgStore.fetchMyEffectiveAccess(orgID.value) } catch (_) {}
+  myAccessLoading.value = false
+}
+
+const expandedMemberAccessID = ref(null)
+const memberAccessEntries = ref(null)
+const memberAccessLoading = ref(false)
+
+async function toggleMemberAccess(member) {
+  if (expandedMemberAccessID.value === member.user_id) {
+    expandedMemberAccessID.value = null
+    memberAccessEntries.value = null
+    return
+  }
+  expandedMemberAccessID.value = member.user_id
+  memberAccessEntries.value = null
+  memberAccessLoading.value = true
+  try { memberAccessEntries.value = await orgStore.fetchMemberEffectiveAccess(orgID.value, member.user_id) } catch (_) {}
+  memberAccessLoading.value = false
 }
 
 // ── Shares ───────────────────────────────────────────────────────────────────
@@ -2203,6 +2466,53 @@ const confirmDeleteFolder = async (folder) => {
     showToast(t('orgs.folderDeleted'))
   } catch (e) {
     showToast(e.response?.data?.error || e.message, 'error')
+  }
+}
+
+// ── Context menu ─────────────────────────────────────────────────────────────
+
+function handleContextMenu(event, item, type) {
+  contextMenu.value = { visible: true, x: event.clientX, y: event.clientY, item, type }
+}
+
+function handleContextAction(action) {
+  const { item, type, x, y } = contextMenu.value
+  contextMenu.value.visible = false
+  switch (action) {
+    case 'tag': {
+      const items = type === 'file' ? orgStore.currentItems.files : orgStore.currentItems.folders
+      const found = items.find(i => i.id === item.id)
+      tagPopoverStyle.value = { top: y + 'px', left: x + 'px' }
+      tagPopoverID.value = item.id
+      tagPopoverType.value = type
+      tagPopoverCurrentIDs.value = [...(found?.tag_ids || [])]
+      break
+    }
+    case 'access':
+      openAccessDialog(item)
+      break
+    case 'move':
+      openMoveDialog(item, type)
+      break
+    case 'rename':
+      startRename(item, type)
+      break
+    case 'download-zip':
+      handleFolderZipDownload(item)
+      break
+    case 'download':
+      handleDownload(item)
+      break
+    case 'share':
+      openShareModal(item)
+      break
+    case 'favorite':
+      toggleFavorite(item, type)
+      break
+    case 'delete':
+      if (type === 'folder') confirmDeleteFolder(item)
+      else confirmDeleteFile(item)
+      break
   }
 }
 
@@ -3935,6 +4245,72 @@ const formatDate = (dateStr) => {
   padding: 2px 6px;
   outline: none;
   min-width: 0;
+}
+
+/* Locked folder styles */
+.folder-locked { opacity: 0.65; }
+.folder-locked:hover .item-name { color: var(--main-text-color) !important; }
+.folder-locked .folder-icon { color: var(--secondary-text-color) !important; }
+.item-name-locked { color: var(--secondary-text-color) !important; }
+.lock-icon { color: var(--secondary-text-color); opacity: 0.7; }
+.locked-label {
+  font-size: 0.7rem;
+  color: var(--secondary-text-color);
+  font-style: italic;
+}
+
+/* Access request buttons */
+.btn-access-request {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  background: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-access-request:hover { opacity: 0.85; }
+.btn-access-pending {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  background: transparent;
+  color: var(--secondary-text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  cursor: default;
+  white-space: nowrap;
+}
+
+/* Access requests table */
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.data-table th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border-color); color: var(--secondary-text-color); font-weight: 600; }
+.data-table td { padding: 8px 10px; border-bottom: 1px solid var(--border-color); }
+.mono-sm { font-family: monospace; font-size: 0.8rem; }
+.status-badge { font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 600; text-transform: uppercase; }
+.status-pending  { background: rgba(255,180,0,0.15); color: #b87800; }
+.status-approved { background: rgba(0,180,80,0.12); color: #0a7a3a; }
+.status-denied   { background: rgba(200,0,0,0.1); color: #b00; }
+.btn-approve { background: var(--success-color, #16a34a); color: #fff; border: none; border-radius: 5px; padding: 3px 9px; font-size: 0.78rem; cursor: pointer; margin-right: 4px; }
+.btn-deny    { background: transparent; color: var(--danger-color, #dc2626); border: 1px solid var(--danger-color, #dc2626); border-radius: 5px; padding: 3px 9px; font-size: 0.78rem; cursor: pointer; }
+.btn-approve:hover { opacity: 0.85; }
+.btn-deny:hover { background: rgba(220,38,38,0.08); }
+.input-sm { font-size: 0.82rem; padding: 4px 8px; }
+.section-header-actions { display: flex; gap: 8px; align-items: center; }
+
+/* Effective access badges */
+.access-level-badge { font-size: 0.72rem; padding: 2px 7px; border-radius: 10px; font-weight: 600; text-transform: uppercase; }
+.access-none    { background: rgba(150,150,150,0.1); color: var(--secondary-text-color); }
+.access-read    { background: rgba(59,130,246,0.12); color: #1d4ed8; }
+.access-write   { background: rgba(16,185,129,0.12); color: #065f46; }
+.access-manage  { background: rgba(139,92,246,0.12); color: #5b21b6; }
+
+/* Inline member effective-access panel */
+.member-access-panel {
+  padding: 10px 12px 6px;
+  background: var(--background-secondary-color);
+  border-radius: 6px;
+  margin: 4px 0 8px;
 }
 
 .move-modal { max-width: 420px; width: 100%; }

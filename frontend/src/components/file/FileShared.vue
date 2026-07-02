@@ -162,7 +162,7 @@ const downloadSharedFile = async (item) => {
         const encryptedFileBytes = await response.data.arrayBuffer();
         const encryptedBlob = new Blob([encryptedFileBytes]);
         
-        const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, item.mime_type || 'application/octet-stream');
+        const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, item.mime_type || 'application/octet-stream', item.compression || '');
         
         // Trigger Download
         const url = window.URL.createObjectURL(decryptedBlob);

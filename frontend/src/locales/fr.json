@@ -56,6 +56,10 @@
     "columnSize": "Taille",
     "folderType": "Dossier",
     "fileType": "Fichier",
+    "addFavorite": "Ajouter aux favoris",
+    "removeFavorite": "Retirer des favoris",
+    "addedToFavorites": "Ajouté aux favoris",
+    "removedFromFavorites": "Retiré des favoris",
     "securityTipsTitle": "Conseils de sécurité",
     "securityTipWarningTitle": "Conseil :",
     "securityTipWarningBody": "Activez l'authentification à deux facteurs (MFA) pour sécuriser votre compte",
@@ -238,7 +242,7 @@
     "selectFile": "2. Sélectionnez un fichier",
     "selectFileDesc": "Glissez-déposez ou cliquez pour choisir",
     "send": "3. Lancez le transfert",
-    "sendDesc": "Le fichier sera envoyé directement",
+    "sendDesc": "Connexion directe tentée en premier. Si impossible, relais TURN chiffré (sans logs) utilisé en dernier recours.",
     "dropFile": "Glissez un fichier ici ou cliquez pour sélectionner",
     "changeFile": "Changer",
     "noOnlineFriends": "Aucun ami en ligne",
@@ -298,6 +302,7 @@
   },
   "home": {
     "welcome": "Bienvenue sur votre Stockage Sécurisé",
+    "favorites": "Fichiers favoris",
     "recentSuggestions": "Suggestions",
     "sharedItems": "Fichiers partagés avec moi"
   },
@@ -306,6 +311,8 @@
     "subtitle": "Gérez vos informations personnelles et vos préférences.",
     "currentPlan": "Votre plan actuel",
     "upgrade": "Mettre à niveau",
+    "subscriptionsComingSoonLabel": "Abonnements",
+    "subscriptionsComingSoonTitle": "Bientôt disponibles",
     "loading": "Chargement du profil...",
     "memberSince": "Membre depuis le",
     "profile": "Profil",
@@ -345,6 +352,9 @@
     "dataPortabilityDetails": "L'export inclut votre profil, l'arborescence de vos fichiers et dossiers, vos tags, vos liens de partage, vos contacts et votre activité récente.",
     "exportData": "Exporter mes données",
     "exportingData": "Export en cours...",
+    "importGDriveDesc": "Importez vos fichiers existants depuis Google Drive directement dans Kagibi.",
+    "importGDriveDetails": "Vos fichiers sont téléchargés et chiffrés dans votre navigateur avant tout envoi. Kagibi n'accède jamais à leur contenu.",
+    "importGDriveBtn": "Importer depuis Google Drive",
     "dangerZone": "Zone sensible",
     "deleteAccount": "Supprimer ce compte",
     "deleteAccountDesc": "Cette action est définitive et entraîne la suppression de toutes vos données.",
@@ -724,7 +734,7 @@
     "restrictToGroups": "Accès réservé aux membres du groupe",
     "restrictToGroupsHint": "Les membres qui n'appartiennent à aucun groupe autorisé n'auront pas accès à ce dossier.",
     "upgradeCta": "Passer à Pro",
-    "upgradeNote": "Inclus dans tous les abonnements payants · Accès illimité sur les instances auto-hébergées",
+    "upgradeNote": "Les abonnements seront prochainement accessibles · Accès illimité sur les instances auto-hébergées",
     "uploadLogo": "Changer le logo",
     "removeLogo": "Supprimer le logo",
     "removeLogoConfirm": "Supprimer le logo de l'organisation ?",
@@ -921,6 +931,8 @@
       "transfer": "Transfert P2P",
       "compare": "Comparatif",
       "security": "Zéro-knowledge",
+      "values": "Valeurs",
+      "faq": "FAQ",
       "login": "Connexion"
     },
     "home": {
@@ -946,8 +958,8 @@
       "featSubtitle": "Une plateforme complète, construite sur des fondations cryptographiques solides.",
       "feat1Title": "Zero-Knowledge garanti",
       "feat1Desc": "Chiffrement AES-256-GCM côté client. Vos clés ne quittent jamais votre appareil. Nos serveurs ne voient que du bruit chiffré — impossible autrement.",
-      "feat2Title": "Transfert P2P jusqu'à 10 Go",
-      "feat2Desc": "Envoyez de gros fichiers en direct, de navigateur à navigateur. Aucun stockage intermédiaire, vitesse maximale, aucune trace sur nos serveurs.",
+      "feat2Title": "Transfert P2P sans limite de taille",
+      "feat2Desc": "Envoyez des fichiers de toute taille en direct, de navigateur à navigateur. Connexion directe en priorité, relais TURN chiffré sans logs en dernier recours. Aucun stockage intermédiaire, vitesse maximale.",
       "feat3Title": "Souveraineté numérique",
       "feat3Desc": "Infrastructure 100% OVH France (Gravelines). Hors juridiction américaine. Conformité RGPD stricte. Vos données ne quittent jamais l'Europe.",
       "feat4Title": "100% vérifiable",
@@ -967,14 +979,14 @@
     },
     "transfer": {
       "heroTitle": "Transfert P2P Ultra-Rapide",
-      "heroSubtitle": "Envoyez jusqu'à 10 Go en direct, sans upload. Vitesse maximale, zéro trace.",
+      "heroSubtitle": "Envoyez des fichiers de toute taille en direct, sans upload. Connexion directe ou relais TURN chiffré sans logs. Vitesse maximale, zéro trace.",
       "howTitle": "Comment ça fonctionne ?",
       "step1Title": "Sélectionnez vos fichiers",
-      "step1Desc": "Choisissez les fichiers à envoyer (10 Go max)",
+      "step1Desc": "Choisissez les fichiers à envoyer (aucune limite de taille)",
       "step2Title": "Obtenez un lien unique",
       "step2Desc": "Un lien sécurisé est généré instantanément",
       "step3Title": "Partagez et transférez",
-      "step3Desc": "Connexion P2P directe via serveur TURN",
+      "step3Desc": "Connexion directe entre appareils. Si impossible, relais TURN Kagibi sans logs en secours.",
       "feat1Title": "Vitesse Maximale",
       "feat1Desc": "Pas d'upload serveur, transfert direct P2P à pleine bande passante",
       "feat2Title": "Chiffrement E2E",
@@ -991,7 +1003,7 @@
       "tech1Title": "WebRTC",
       "tech1Desc": "Protocole de communication peer-to-peer standardisé par le W3C. Permet une connexion directe entre navigateurs sans intermédiaire.",
       "tech2Title": "Serveur TURN",
-      "tech2Desc": "Infrastructure de relais pour les connexions impossibles en direct. Garantit un transfert réussi même derrière un NAT strict.",
+      "tech2Desc": "Relais de secours activé uniquement si une connexion directe est impossible (NAT strict, pare-feu). Le serveur TURN Kagibi commute le flux chiffré en temps réel, sans l'écrire sur disque et sans produire de logs. Le contenu reste AES-256-GCM chiffré de bout en bout.",
       "tech3Title": "Chiffrement AES",
       "tech3Desc": "Chiffrement côté client avant transfert. Les clés sont échangées via signaling sécurisé, jamais stockées."
     },
@@ -1269,6 +1281,282 @@
       "uploadTagSize": "16 octets",
       "uploadChunkProgress": "Chunk {n} / {total} —",
       "rfArgonSalt": "sel 16 octets (CSPRNG)"
+    },
+    "values": {
+      "eyebrow": "NOS VALEURS & ENGAGEMENTS",
+      "title1": "Ce qui guide",
+      "titleHighlight": "chacune de nos décisions",
+      "heroSub": "Kagibi n'est pas qu'un outil de stockage. C'est une promesse : celle que vos données vous appartiennent — pleinement, définitivement.",
+      "sec1Label": "FONDATIONS",
+      "sec1Title": "Quatre valeurs, aucun compromis",
+      "sec1Sub": "Ces valeurs ne sont pas des mots sur un site. Elles sont gravées dans chaque ligne de notre code.",
+      "v1": {
+        "title": "Confidentiel par conception",
+        "desc": "La confidentialité n'est pas une fonctionnalité ajoutée après coup. Elle est l'architecture fondamentale de Kagibi. Vos données ne sont lisibles que par vous."
+      },
+      "v2": {
+        "title": "Transparence",
+        "desc": "Notre code est open source et auditable par quiconque. Nous n'avons rien à cacher — et nous le prouvons en publiant chaque ligne sur GitHub. Nous nous engageons à ne jamais migrer vers une licence plus restrictive."
+      },
+      "v3": {
+        "title": "Souveraineté numérique",
+        "desc": "Vos données vous appartiennent. Pas à nous. Pas à des annonceurs. Pas à des gouvernements. Vous êtes le seul maître de vos fichiers."
+      },
+      "v4": {
+        "title": "Sécurité d'abord",
+        "desc": "Chaque fonctionnalité est conçue avec la sécurité en tête dès le départ — pas comme une couche ajoutée après. Zéro-knowledge par défaut, partout."
+      },
+      "sec2Label": "ENGAGEMENTS",
+      "sec2Title": "Ce que nous promettons, concrètement",
+      "sec2Sub": "Des engagements vérifiables, pas des déclarations marketing.",
+      "c1": {
+        "title": "Chiffrement de bout en bout",
+        "desc": "Vos fichiers sont chiffrés sur votre appareil avant de nous parvenir. AES-256-GCM. Personne — y compris nos équipes — ne peut déchiffrer vos données.",
+        "badge": "Vérifiable"
+      },
+      "c2": {
+        "title": "Hébergé en Europe",
+        "desc": "Nos serveurs sont chez OVHcloud, en France. Soumis au droit français et au RGPD. Vos données ne quittent jamais l'Union Européenne.",
+        "badge": "OVHcloud · France"
+      },
+      "c3": {
+        "title": "Open source, AGPL-3.0",
+        "desc": "L'intégralité de notre code est publique sur GitHub. Auditez-le, proposez des améliorations, ou hébergez votre propre instance.",
+        "badge": "AGPL-3.0"
+      },
+      "c4": {
+        "title": "Zéro publicité, zéro revente",
+        "desc": "Nous ne diffusons jamais de publicité. Nous ne vendons, ne partageons, ni ne monétisons jamais vos données personnelles ou vos fichiers.",
+        "badge": "Garanti"
+      },
+      "c5": {
+        "title": "Vos fichiers, pas notre carburant",
+        "desc": "Vos données ne sont jamais utilisées pour entraîner des modèles d'intelligence artificielle — ni les nôtres, ni ceux de tiers.",
+        "badge": "Promis"
+      },
+      "c6": {
+        "title": "Collecte de données minimale",
+        "desc": "Nous ne collectons que ce qui est strictement nécessaire au fonctionnement du service. Aucune télémétrie cachée, aucun pistage comportemental.",
+        "badge": "RGPD"
+      },
+      "sovLabel": "SOUVERAINETÉ",
+      "sovTitle": "La souveraineté selon Kagibi",
+      "sovSub": "La souveraineté numérique ne se réduit pas à un seul enjeu. Elle se joue sur trois niveaux distincts — et Kagibi les adresse tous les trois.",
+      "sov1": {
+        "tag": "Géographique",
+        "title": "Où vivent physiquement vos données",
+        "desc": "La souveraineté géographique désigne l'emplacement physique des serveurs. Héberger hors d'Europe, c'est exposer vos fichiers à des juridictions étrangères, indépendamment de la nationalité du prestataire.",
+        "b1": "OVHcloud · Roubaix & Gravelines, France",
+        "b2": "Infrastructure 100 % européenne",
+        "b3": "Aucune réplication hors Union Européenne"
+      },
+      "sov2": {
+        "tag": "Nationale & Juridique",
+        "title": "Sous quelle loi tombent vos données",
+        "desc": "Le Cloud Act américain (2018) contraint les entreprises technologiques US à fournir des données aux autorités américaines, où qu'elles soient stockées dans le monde. Kagibi est une entité européenne, soumise au seul droit français et au RGPD.",
+        "b1": "Immunisé au Cloud Act américain",
+        "b2": "RGPD et droit français uniquement",
+        "b3": "Aucune dépendance à des fournisseurs soumis à des lois étrangères"
+      },
+      "sov3": {
+        "tag": "Personnelle",
+        "title": "Qui détient réellement vos clés",
+        "desc": "C'est le niveau le plus fondamental : vous seul possédez les clés cryptographiques qui déchiffrent vos données. Même si Kagibi était contraint légalement de coopérer, nous ne pourrions rien fournir — nous n'avons jamais accès à vos clés.",
+        "b1": "Clés de chiffrement générées sur votre appareil",
+        "b2": "Votre mot de passe ne quitte jamais votre navigateur",
+        "b3": "Zéro-knowledge : mathématiquement impossible pour nous de déchiffrer"
+      },
+      "manifestoLabel": "MANIFESTE",
+      "manifestoTitle": "Pourquoi Kagibi existe",
+      "manifestoQuote": "Internet était censé nous libérer. Il nous a transformés en produit.",
+      "manifestoP1": "Kagibi est né d'une conviction simple : vos fichiers, vos conversations et vos données personnelles ne doivent jamais servir d'autre chose que ce pour quoi vous les avez créés. Pas de la publicité ciblée. Pas de l'entraînement de modèles d'IA. Pas de la surveillance.",
+      "manifestoP2": "Nous ne sommes pas une start-up qui cherche à valoriser vos habitudes numériques pour mieux les revendre. Nous sommes des développeurs qui pensent que la vie privée est un droit fondamental — pas un luxe réservé aux techniciens, pas une case à cocher dans les mentions légales.",
+      "manifestoP3": "C'est pourquoi Kagibi est open source, hébergé en Europe, et construit sur un principe unique : nous ne pouvons techniquement pas lire vos données. Ce n'est pas une promesse marketing. C'est l'architecture.",
+      "manifestoSig": "L'équipe Kagibi",
+      "ctaTitle": "Rejoignez Kagibi",
+      "ctaSub": "Prenez le contrôle de vos données. Commencez gratuitement, sans engagement.",
+      "ctaBtn1": "Créer un compte",
+      "ctaBtn2": "Notre architecture de sécurité →"
+    },
+    "faq": {
+      "eyebrow": "FOIRE AUX QUESTIONS",
+      "title1": "Tout ce que vous",
+      "titleHighlight": "voulez savoir sur Kagibi",
+      "heroSub": "Des réponses claires sur la souveraineté, la sécurité, les fonctionnalités et les engagements de Kagibi.",
+
+      "cat1Label": "GÉNÉRAL & SOUVERAINETÉ",
+      "cat1Title": "Questions générales sur le service",
+
+      "g1q": "Qu'est-ce que Kagibi ?",
+      "g1a": "Kagibi est un service de stockage cloud souverain et open source, fondé sur un principe de zéro connaissance (Zero-Knowledge). Vos fichiers sont chiffrés sur votre appareil avant d'être envoyés — Kagibi ne peut techniquement pas lire vos données.",
+
+      "g2q": "Où sont physiquement stockées mes données ?",
+      "g2a": "Toutes vos données sont hébergées exclusivement sur des serveurs OVHcloud situés en France (Roubaix et Gravelines). Aucune réplication hors de l'Union Européenne n'est réalisée.",
+
+      "g3q": "Kagibi est-il soumis au Cloud Act américain ?",
+      "g3a": "Non. Kagibi est une entité européenne hébergée en France, soumise uniquement au droit français et au RGPD. Le Cloud Act américain ne s'applique qu'aux entreprises de droit américain ou dont les serveurs se trouvent aux États-Unis — ce qui n'est pas notre cas.",
+
+      "g4q": "Kagibi est-il gratuit ? Comment est-il financé ?",
+      "g4a": "Kagibi propose un niveau gratuit. Le financement repose sur des abonnements payants offrant davantage d'espace de stockage. Aucune donnée personnelle n'est revendue ni monétisée à des fins publicitaires.",
+
+      "g5q": "Le code source est-il accessible ?",
+      "g5a": "Oui, intégralement. Kagibi est publié sous licence GNU AGPLv3 — la plus stricte des licences copyleft. Toute modification déployée en production doit être rendue publique. Le code est librement auditable sur GitHub.",
+
+      "cat2Label": "SÉCURITÉ & CHIFFREMENT",
+      "cat2Title": "Comment vos données sont-elles protégées ?",
+
+      "s1q": "Qu'est-ce que le chiffrement Zero-Knowledge ?",
+      "s1a": "Le Zero-Knowledge signifie que le chiffrement et le déchiffrement se produisent uniquement sur votre appareil. Votre mot de passe n'est jamais envoyé au serveur. Kagibi ne reçoit que des octets chiffrés — sans votre clé, il est mathématiquement incapable de lire quoi que ce soit.",
+
+      "s2q": "Kagibi peut-il lire mes fichiers ?",
+      "s2a": "Non. C'est une contrainte mathématique, pas une simple promesse. Les fichiers sont chiffrés avec AES-256-GCM avant de quitter votre navigateur. Kagibi ne détient jamais votre mot de passe ni vos clés de déchiffrement.",
+
+      "s3q": "Que se passe-t-il si j'oublie mon mot de passe ?",
+      "s3a": "Lors de l'inscription, un code de récupération à 24 mots vous est remis. Ce code — et uniquement lui — peut déverrouiller votre compte. Kagibi ne peut pas réinitialiser votre mot de passe à votre place : personne ne détient votre clé, y compris nous.",
+
+      "s4q": "Quels algorithmes cryptographiques sont utilisés ?",
+      "s4a": "Kagibi utilise AES-256-GCM pour le chiffrement des fichiers, Argon2id (64 Mo RAM, 4 passes) pour dériver la clé depuis votre mot de passe, et RSA-OAEP 4096 bits pour le partage de clés entre utilisateurs. Toutes les opérations s'appuient sur la WebCrypto API native du navigateur.",
+
+      "s5q": "Les noms de fichiers sont-ils également chiffrés ?",
+      "s5a": "Kagibi propose un chiffrement optionnel des noms de fichiers. Lorsqu'il est activé, même les métadonnées (noms) sont chiffrées et illisibles par le serveur. Par défaut, les noms peuvent être visibles en clair côté serveur pour faciliter certaines fonctionnalités.",
+
+      "cat3Label": "FONCTIONNALITÉS",
+      "cat3Title": "Ce que vous pouvez faire avec Kagibi",
+
+      "f1q": "Comment fonctionne le transfert P2P ?",
+      "f1a": "Le transfert P2P permet d'envoyer des fichiers de toute taille directement d'un appareil à un autre, sans stockage sur nos serveurs et sans limite de taille. WebRTC tente d'abord une connexion directe entre les appareils. Si le réseau l'en empêche (NAT strict, pare-feu), le flux bascule sur notre relais TURN — qui commute les données chiffrées en temps réel sans les stocker sur disque et sans produire de logs. Dans tous les cas, les fichiers restent chiffrés AES-256-GCM de bout en bout : ni le serveur de signalisation ni le relais TURN ne peuvent accéder au contenu.",
+
+      "f2q": "Comment fonctionne le partage public (lien) ?",
+      "f2a": "Vous pouvez générer un lien de partage pour tout fichier ou dossier. Le destinataire n'a pas besoin de compte Kagibi. La clé de déchiffrement est incluse dans le fragment d'URL (après le #), qui n'est jamais envoyé au serveur — seul votre navigateur peut déchiffrer le fichier.",
+
+      "f3q": "Qu'est-ce que le partage direct entre Amis ?",
+      "f3a": "La liste d'Amis vous permet d'ajouter des utilisateurs Kagibi de confiance. Un partage direct utilise la cryptographie asymétrique : la clé de fichier est chiffrée avec la clé publique RSA du destinataire, puis envoyée. Seul le destinataire peut déchiffrer, même Kagibi ne peut pas intercepter.",
+
+      "f4q": "Qu'est-ce qu'une Organisation ?",
+      "f4a": "Les Organisations permettent de créer des espaces de stockage collaboratifs pour une équipe ou une entreprise. Les membres d'une organisation peuvent partager des fichiers dans un espace commun chiffré, avec des droits granulaires par groupe. L'administrateur peut aussi synchroniser les membres via LDAP/Active Directory.",
+
+      "f5q": "Puis-je accéder à mes fichiers depuis plusieurs appareils ?",
+      "f5a": "Oui. Votre clé principale (Master Key) est chiffrée par votre mot de passe et stockée sur le serveur. À chaque connexion, elle est déchiffrée localement dans votre navigateur. Vous pouvez ainsi vous connecter depuis n'importe quel appareil et retrouver tous vos fichiers.",
+
+      "cat4Label": "VALEURS & ENGAGEMENTS",
+      "cat4Title": "Ce en quoi Kagibi croit",
+
+      "v1q": "Kagibi utilise-t-il mes données à des fins publicitaires ou commerciales ?",
+      "v1a": "Jamais. Kagibi ne vend pas, ne loue pas et n'analyse pas vos données à des fins commerciales ou publicitaires. Notre modèle économique repose uniquement sur les abonnements payants. Vos fichiers nous sont cryptographiquement inaccessibles de toute façon.",
+
+      "v2q": "Puis-je auto-héberger Kagibi sur ma propre infrastructure ?",
+      "v2a": "Oui. Kagibi est conçu pour être auto-hébergeable. Le code source complet est disponible sous AGPLv3. Vous pouvez déployer votre propre instance sur n'importe quelle infrastructure compatible, en gardant un contrôle total sur vos données.",
+
+      "v3q": "Kagibi peut-il devenir propriétaire ou changer de licence ?",
+      "v3a": "Non, et c'est une garantie structurelle. La licence AGPLv3 est irrévocable sur les versions déjà publiées. Toute version future reste couverte par cette même licence copyleft, qui interdit de créer des forks propriétaires fermés. Kagibi s'engage formellement à ne jamais basculer vers une licence plus restrictive.",
+
+      "v4q": "Comment Kagibi s'engage-t-il durablement pour la vie privée ?",
+      "v4a": "La vie privée est l'architecture de Kagibi, pas une option. En pratique : chiffrement côté client par défaut, code open source intégralement auditable, infrastructure en Europe, aucune réutilisation des données, MFA disponible pour tous les utilisateurs, et un code de récupération qui garantit que même en cas de contrainte légale sur Kagibi, vos fichiers restent illisibles.",
+
+      "ctaTitle": "Encore des questions ?",
+      "ctaSub": "Créez un compte gratuitement et explorez par vous-même — ou consultez notre architecture de sécurité pour aller plus loin.",
+      "ctaBtn1": "Créer mon compte",
+      "ctaBtn2": "Architecture de sécurité"
+    }
+  },
+  "gdImport": {
+    "title": "Importer depuis Google Drive",
+    "connectIntro": "Connectez votre compte Google Drive pour importer vos fichiers dans Kagibi. La connexion est strictement en lecture seule.",
+    "infoE2E": "Chaque fichier est chiffré dans votre navigateur avant d'être envoyé à Kagibi (zéro connaissance).",
+    "infoReadOnly": "L'accès demandé est en lecture seule — Kagibi ne peut rien modifier ni supprimer dans votre Drive.",
+    "infoTokenNotStored": "Votre jeton d'accès Google n'est jamais envoyé ni stocké sur les serveurs Kagibi.",
+    "infoWorkspace": "Les documents Google (Docs, Sheets, Slides) sont convertis en format Office (.docx / .xlsx / .pptx).",
+    "connectBtn": "Se connecter à Google Drive",
+    "connecting": "Connexion en cours…",
+    "statusAuth": "Authentification Google…",
+    "statusListing": "Récupération de la liste des fichiers…",
+    "statusBuilding": "Analyse de l'arborescence…",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "fileCount": "{n} fichier(s) trouvé(s)",
+    "selectAll": "Tout sélectionner",
+    "deselectAll": "Tout désélectionner",
+    "selectedSummary": "{n} fichier(s) sélectionné(s) · {size}",
+    "importBtn": "Importer {n} fichier(s)",
+    "progressTitle": "{done} / {total} fichiers",
+    "abort": "Arrêter",
+    "importing": "Import en cours…",
+    "doneSuccess": "{n} fichier(s) importé(s) avec succès.",
+    "donePartial": "{ok} fichier(s) importé(s), {errors} erreur(s).",
+    "errorNotConfigured": "L'import Google Drive n'est pas activé sur cette instance.",
+    "loadMore": "+ {n} fichier(s) non affichés — charger la suite",
+    "errorConnect": "Impossible de se connecter à Google Drive. Vérifiez que vous avez autorisé l'accès.",
+    "fatalError": "Erreur critique de l'import",
+    "driveRoot": "Mon Drive (fichiers racine)",
+    "back": "← Retour",
+    "dedicatedFolder": "Importer dans un dossier dédié à la racine de Kagibi",
+    "dedicatedFolderPlaceholder": "Nom du dossier",
+    "destinationHint": "Destination Kagibi",
+    "foldersIntro": "Choisissez les dossiers racine à importer depuis Google Drive. Les sous-dossiers et fichiers qu'ils contiennent seront automatiquement inclus.",
+    "rootFolderCount": "{n} dossier(s) racine trouvé(s)",
+    "foldersConfirm": "Continuer avec {n} dossier(s)",
+    "conflictTitle": "Dossier déjà existant",
+    "conflictDesc": "Le dossier « {name} » existe déjà à cet emplacement.",
+    "conflictMerge": "Fusionner",
+    "conflictSkip": "Ignorer",
+    "conflictApplyAll": "Appliquer ce choix à tous les conflits",
+    "fileSkipped": "Ignoré",
+    "doneWithSkips": "{ok} fichier(s) importé(s), {skips} ignoré(s).",
+    "donePartialWithSkips": "{ok} fichier(s) importé(s), {skips} ignoré(s), {errors} erreur(s).",
+    "transferred": "transférés",
+    "creatingFolders": "Création des dossiers ({done}/{total})"
+  },
+  "tour": {
+    "skip": "Passer",
+    "next": "Suivant",
+    "finish": "Terminer",
+    "startUsing": "Commencer",
+    "step1": {
+      "title": "Bienvenue sur SaferCloud",
+      "desc": "Voici un aperçu rapide des fonctionnalités qui vous attendent. Explorez-les à votre rythme.",
+      "feat1": "Stockage chiffré",
+      "feat2": "Organisations",
+      "feat3": "Échange P2P",
+      "feat4": "Partages de fichiers",
+      "feat5": "Authentification à deux facteurs (MFA)"
+    },
+    "step2": {
+      "title": "Stockage chiffré de bout en bout",
+      "desc": "Tous vos fichiers sont chiffrés sur votre appareil avant d'être envoyés. Même nous ne pouvons pas lire vos données.",
+      "pill1": "Chiffrement E2E",
+      "pill2": "Zéro connaissance",
+      "pill3": "Import Google Drive"
+    },
+    "step3": {
+      "title": "Collaborez en équipe",
+      "desc": "Créez ou rejoignez des organisations pour partager des dossiers chiffrés avec vos collègues ou proches.",
+      "pill1": "Dossiers partagés",
+      "pill2": "Rôles & permissions",
+      "pill3": "Invitations sécurisées"
+    },
+    "step4": {
+      "title": "Échange P2P en temps réel",
+      "desc": "Transférez des fichiers directement à un ami en temps réel, sans passer par nos serveurs. Rapide et sécurisé.",
+      "pill1": "Transfert direct",
+      "pill2": "Chiffré de bout en bout",
+      "pill3": "Via votre liste d'amis"
+    },
+    "step5": {
+      "title": "Partagez vos fichiers",
+      "desc": "Générez un lien de partage sécurisé pour n'importe quel fichier ou dossier. Protégez-le par un mot de passe ou une date d'expiration.",
+      "pill1": "Liens sécurisés",
+      "pill2": "Protection par mot de passe",
+      "pill3": "Date d'expiration"
+    },
+    "step6": {
+      "title": "Protégez votre compte",
+      "desc": "Activez l'authentification à deux facteurs (MFA) depuis vos paramètres de sécurité pour une protection renforcée.",
+      "pill1": "Application TOTP",
+      "pill2": "Protection renforcée"
+    },
+    "done": {
+      "title": "Vous êtes prêt !",
+      "desc": "Découvrez toutes les fonctionnalités de SaferCloud et gardez vos fichiers en sécurité."
     }
   }
 }

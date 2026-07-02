@@ -210,5 +210,5 @@ func (h *OrgHandler) GetOrgFileKey(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"encrypted_key": file.EncryptedKey})
+	c.JSON(http.StatusOK, gin.H{"encrypted_key": file.EncryptedKey, "group_id": file.GroupID})
 }

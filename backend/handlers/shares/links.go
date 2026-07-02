@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"time"
 
+	"kagibi/backend/middleware"
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/monitoring"
 	"kagibi/backend/pkg/s3storage"
@@ -114,6 +115,7 @@ func CreateShareLinkHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	monitoring.RecordShareCreated()
+	middleware.LogShareCreated(c.Request.Context(), userID, req.ResourceType, req.ResourceID, shareLink.Token, c.ClientIP(), c.Request.UserAgent())
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Link created",
 		"token":   shareLink.Token,

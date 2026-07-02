@@ -6,9 +6,10 @@ package middleware
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"log"
+	"log/slog"
 	"time"
 
+	"kagibi/backend/pkg/logger"
 	"kagibi/backend/pkg/monitoring"
 
 	"github.com/gin-gonic/gin"
@@ -20,8 +21,10 @@ func generateRequestID() string {
 	return hex.EncodeToString(b)
 }
 
-// MetricsMiddleware est un middleware Gin qui enregistre automatiquement
-// les métriques pour chaque requête HTTP et logue les erreurs 5xx
+// MetricsMiddleware enregistre les métriques Prometheus et logue chaque requête
+// HTTP avec slog (JSON structuré). Toutes les requêtes sont loguées ; les 5xx
+// sont loguées au niveau Error, les 4xx au niveau Warn, le reste en Info.
+// L'adresse IP est anonymisée conformément à la délibération CNIL 2021-122.
 func MetricsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requestID := generateRequestID()
@@ -43,21 +46,29 @@ func MetricsMiddleware() gin.HandlerFunc {
 
 		if status >= 500 {
 			monitoring.InternalErrorsTotal.WithLabelValues(method, endpoint).Inc()
-
-			userID := c.GetString("user_id")
-			if userID == "" {
-				userID = "unauthenticated"
-			}
-
-			log.Printf("[ERROR_500] request_id=%s method=%s endpoint=%s status=%d duration=%s user_id=%s ip=%s",
-				requestID,
-				method,
-				endpoint,
-				status,
-				duration.Round(time.Millisecond),
-				userID,
-				c.ClientIP(),
-			)
 		}
+
+		userID := c.GetString("user_id")
+		if userID == "" {
+			userID = "unauthenticated"
+		}
+
+		level := slog.LevelInfo
+		if status >= 500 {
+			level = slog.LevelError
+		} else if status >= 400 {
+			level = slog.LevelWarn
+		}
+
+		slog.Log(c.Request.Context(), level, "http_request",
+			"request_id", requestID,
+			"method", method,
+			"path", endpoint,
+			"status", status,
+			"duration_ms", duration.Milliseconds(),
+			"user_id", userID,
+			"ip_anon", logger.AnonymiseIP(c.ClientIP()),
+			"user_agent", c.Request.UserAgent(),
+		)
 	}
 }

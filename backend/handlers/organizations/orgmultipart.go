@@ -54,6 +54,8 @@ type OrgCompleteRequest struct {
 	TotalSize    int64     `json:"total_size" binding:"required"`
 	ContentType  string    `json:"content_type"`
 	EncryptedKey string    `json:"encrypted_key" binding:"required"`
+	// GroupID is non-nil when the file key was wrapped with a group key instead of the org key.
+	GroupID *int64 `json:"group_id,omitempty"`
 }
 
 type orgPart struct {
@@ -238,6 +240,18 @@ func (h *OrgHandler) CompleteOrgMultipart(c *gin.Context) {
 		contentType = "application/octet-stream"
 	}
 
+	// If a group_id is provided, verify the caller is a member of that group.
+	if req.GroupID != nil {
+		var count int
+		if err := h.DB.NewSelect().TableExpr("org_group_members").
+			ColumnExpr("COUNT(*)").
+			Where("group_id = ? AND user_id = ?", *req.GroupID, userID).
+			Scan(ctx, &count); err != nil || count == 0 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "you are not a member of the specified group"})
+			return
+		}
+	}
+
 	file := &pkg.OrgFile{
 		OrgID:        orgID,
 		Name:         req.FileName,
@@ -247,11 +261,12 @@ func (h *OrgHandler) CompleteOrgMultipart(c *gin.Context) {
 		MimeType:     contentType,
 		UploadedBy:   userID,
 		EncryptedKey: req.EncryptedKey,
+		GroupID:      req.GroupID,
 		TagIDs:       []int64{},
 	}
 	if _, err := h.DB.NewInsert().Model(file).
 		On("CONFLICT (org_id, path) WHERE deleted_at IS NULL DO UPDATE").
-		Set("size = EXCLUDED.size, mime_type = EXCLUDED.mime_type, encrypted_key = EXCLUDED.encrypted_key, uploaded_by = EXCLUDED.uploaded_by, updated_at = NOW(), deleted_at = NULL").
+		Set("size = EXCLUDED.size, mime_type = EXCLUDED.mime_type, encrypted_key = EXCLUDED.encrypted_key, group_id = EXCLUDED.group_id, uploaded_by = EXCLUDED.uploaded_by, updated_at = NOW(), deleted_at = NULL").
 		Exec(ctx); err != nil {
 		log.Printf("[OrgMultipart] DB insert error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record file"})

@@ -10,6 +10,8 @@
  *   - Runtime (Docker/K8s): window.__APP_CONFIG__.apiUrl
  */
 
+import sodium from 'libsodium-wrappers-sumo'
+
 export const AUTH_PROVIDER = 'local'
 export const IS_LOCAL      = true
 export const IS_POCKETBASE = false
@@ -82,6 +84,51 @@ async function _localFetch(path, body, token = null) {
   return data
 }
 
+// ── Solution A1 : secret d'authentification dérivé ─────────────────────────────
+// Le mot de passe BRUT n'est jamais envoyé au backend. On envoie à la place
+// authPassword = Argon2id(motDePasse, sel d'app fixe). À sens unique : le serveur ne voit
+// jamais le mot de passe en clair. La dérivation du KEK de CHIFFREMENT (côté stores/auth.js)
+// reste, elle, basée sur le mot de passe brut local — inchangée.
+//
+// ⚠️ DOIT rester strictement identique au desktop (Go crypto.DeriveAuthPassword) :
+// mêmes paramètres Argon2id, même sel, même encodage base64. Vérifié par vecteurs de test.
+async function _deriveAuthPassword(password) {
+  await sodium.ready
+  const authSalt = sodium.crypto_hash_sha256(sodium.from_string('kagibi-auth-pepper-v1')).slice(0, 16)
+  const key = sodium.crypto_pwhash(
+    32, password, authSalt,
+    4,                 // OPSLIMIT (= Argon2 time)
+    64 * 1024 * 1024,  // MEMLIMIT (= 64 MB)
+    sodium.crypto_pwhash_ALG_ARGON2ID13,
+  )
+  return sodium.to_base64(key, sodium.base64_variants.ORIGINAL)
+}
+
+// _loginWithMigration se connecte avec le secret d'auth dérivé. Si le compte n'a pas encore
+// été migré (hash backend = bcrypt(mot de passe brut)), il bascule de façon transparente
+// le hash vers bcrypt(authPassword) puis renvoie une session fraîche. En cas d'échec de
+// bascule, conserve la session legacy (aucune régression).
+async function _loginWithMigration(email, password) {
+  const authPwd = await _deriveAuthPassword(password)
+  try {
+    return await _localFetch('/auth/login', { email, password: authPwd })
+  } catch (authErr) {
+    let legacy
+    try {
+      legacy = await _localFetch('/auth/login', { email, password })
+    } catch {
+      throw authErr // vrai mauvais mot de passe
+    }
+    try {
+      await _localFetch('/auth/update-password',
+        { old_password: password, new_password: authPwd }, legacy.access_token)
+    } catch {
+      return legacy // bascule impossible → session legacy
+    }
+    return await _localFetch('/auth/login', { email, password: authPwd })
+  }
+}
+
 // ── MFA helpers ───────────────────────────────────────────────────────────────
 
 async function _mfaFetch(method, path, body = null) {
@@ -138,7 +185,7 @@ export const authClient = {
   isMFASupported: true,
 
   async signIn(email, password) {
-    const data = await _localFetch('/auth/login', { email, password })
+    const data = await _loginWithMigration(email, password)
     _localSaveToken(data.access_token)
     const user = _localDecodeUser(data.access_token) || data.user
     return {
@@ -153,7 +200,8 @@ export const authClient = {
   },
 
   async signUp(email, password) {
-    const data = await _localFetch('/auth/signup', { email, password })
+    const authPwd = await _deriveAuthPassword(password)
+    const data = await _localFetch('/auth/signup', { email, password: authPwd })
     _localSaveToken(data.access_token)
     const user = _localDecodeUser(data.access_token) || data.user
     return {
@@ -206,10 +254,20 @@ export const authClient = {
   async updateUser(updates) {
     if (updates.password) {
       const token = _localGetToken()
-      return _localFetch('/auth/update-password', {
-        old_password: updates.oldPassword,
-        new_password: updates.password,
-      }, token)
+      const newAuth = await _deriveAuthPassword(updates.password)
+      try {
+        // Compte migré : ancien hash = bcrypt(authPwd(currentPassword)).
+        return await _localFetch('/auth/update-password', {
+          old_password: await _deriveAuthPassword(updates.oldPassword),
+          new_password: newAuth,
+        }, token)
+      } catch {
+        // Compte legacy : ancien hash = bcrypt(mot de passe brut) → repli.
+        return await _localFetch('/auth/update-password', {
+          old_password: updates.oldPassword,
+          new_password: newAuth,
+        }, token)
+      }
     }
     // Name/metadata updates are handled by the backend /users/profile endpoint
     return {}
@@ -217,15 +275,25 @@ export const authClient = {
 
   async updateEmail(newEmail, password) {
     const token = _localGetToken()
-    const headers = { 'Content-Type': 'application/json' }
-    if (token) headers['Authorization'] = `Bearer ${token}`
-    const res = await fetch(`${_apiBase}/auth/update-email`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify({ new_email: newEmail, password }),
-    })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+    const authPwd = await _deriveAuthPassword(password)
+    const putEmail = async (pwd) => {
+      const headers = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`${_apiBase}/auth/update-email`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ new_email: newEmail, password: pwd }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+      return data
+    }
+    let data
+    try {
+      data = await putEmail(authPwd)           // compte migré
+    } catch {
+      data = await putEmail(password)          // compte legacy : repli mot de passe brut
+    }
     if (data.access_token) _localSaveToken(data.access_token)
     return data
   },

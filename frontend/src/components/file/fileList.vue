@@ -192,6 +192,7 @@
       :columns="columns"
       :sortKey="currentSortKey"
       :sortDirection="currentSortDirection"
+      :commentType="'file'"
       @sort-change="handleSortChange"
       @select-item="selectItem"
       @toggle-select="toggleItemSelection"
@@ -205,7 +206,9 @@
       @folder-drag-leave="onFolderDragLeave"
       @manage-share="openManageShareDialog"
       @remove-tag="removeTag"
+      @open-comments="openComments"
     />
+    <CommentPanel />
 
 
   <div
@@ -237,6 +240,10 @@
         </div>
         <div class="menu-item" @click.stop="handleContextAction('tags')" v-if="fileStore.viewMode !== 'shared'">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M17.63 5.84C17.27 5.33 16.67 5 16 5L5 5.01C3.9 5.01 3 5.9 3 7v10c0 1.1.9 1.99 2 1.99L16 19c.67 0 1.27-.33 1.63-.84L22 12l-4.37-6.16zM16 17H5V7h11l3.55 5L16 17z"/></svg></span> {{ t('file.tags') }}
+        </div>
+        <div class="menu-item" @click.stop="handleContextAction('toggle-favorite')" v-if="fileStore.viewMode !== 'shared'">
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg></span>
+          {{ fileStore.isUserFavorite(contextMenu.item.ID || contextMenu.item.id, contextMenu.item.type) ? t('file.removeFavorite') : t('file.addFavorite') }}
         </div>
         <div class="menu-item delete" @click.stop="handleContextAction('delete')"
           v-if="fileStore.viewMode !== 'shared' || fileStore.sharedPermissions.delete">
@@ -349,6 +356,8 @@ import MoveDialog from '../MoveDialog.vue';
 import ManageShareDialog from '../ManageShareDialog.vue';
 import FileTable from './FileTable.vue';
 import MFAChallengeModal from '../MFAChallengeModal.vue';
+import CommentPanel from './CommentPanel.vue';
+import { useCommentStore } from '../../stores/comments';
 import { formatSpeed, formatSize } from '../../utils/format'
 
 const router = useRouter()
@@ -356,6 +365,7 @@ const { t } = useI18n()
 const authStore = useAuthStore()
 const uiStore = useUIStore()
 const fileStore = useFileStore()
+const commentStore = useCommentStore()
 const preferenceStore = usePreferencesStore()
 const tagStore = useTagStore()
 const uploadStore = useUploadStore()
@@ -495,7 +505,7 @@ const handleSortChange = (key) => {
   }
 };
 
-const sortItems = (items) => {
+const sortItems = (items, itemType = 'file') => {
   return [...items].sort((a, b) => {
     let valA, valB;
 
@@ -515,6 +525,10 @@ const sortItems = (items) => {
       case 'updated':
         valA = new Date(a.UpdatedAt).getTime();
         valB = new Date(b.UpdatedAt).getTime();
+        break;
+      case 'favorite':
+        valA = fileStore.isUserFavorite(a.ID, itemType) ? 1 : 0;
+        valB = fileStore.isUserFavorite(b.ID, itemType) ? 1 : 0;
         break;
       default:
         return 0;
@@ -543,6 +557,7 @@ const columns = computed(() => {
 
   cols.push(
     { key: 'tags', label: t('file.tags'), headerClass: 'col-tags', cellClass: 'col-tags' },
+    { key: 'favorite', label: '★', headerClass: 'col-favorite', cellClass: 'col-favorite' },
     { key: 'created', label: t('file.columnCreated'), headerClass: 'col-created', cellClass: 'col-created' },
     { key: 'updated', label: t('file.columnUpdated'), headerClass: 'col-updated', cellClass: 'col-updated' },
     { key: 'size', label: t('file.columnSize'), headerClass: 'col-size', cellClass: 'col-size' }
@@ -571,7 +586,7 @@ const filteredFolders = computed(() => {
       })
     }
   }
-  return sortItems(folders);
+  return sortItems(folders, 'folder');
 })
 
 const filteredFiles = computed(() => {
@@ -612,7 +627,7 @@ const filteredFiles = computed(() => {
       })
     }
   }
-  return sortItems(files);
+  return sortItems(files, 'file');
 })
 
 const allItems = computed(() => {
@@ -1075,6 +1090,15 @@ const handleContextAction = (action) => {
       break
     case 'tags':
       updateTags()
+      break
+    case 'toggle-favorite':
+      if (fileStore.isUserFavorite(item.ID, item.type)) {
+        fileStore.removeUserFavorite({ ...item })
+        uiStore.showToast(t('file.removedFromFavorites'), 'success')
+      } else {
+        fileStore.addUserFavorite({ ...item })
+        uiStore.showToast(t('file.addedToFavorites'), 'success')
+      }
       break
     case 'delete':
       deleteSelectedItems()
@@ -1730,6 +1754,44 @@ const onMFACancelled = () => {
   showMFAChallenge.value = false
   pendingDownload.value = null
 }
+
+const openComments = (file, type) => {
+  commentStore.openPanel(file, type)
+}
+
+// Refresh comment counts and consume any pending notification navigation.
+watch(
+  () => fileStore.files,
+  (files) => {
+    if (!files || !files.length) return
+    const ids = files.map(f => f.ID).filter(Boolean)
+    if (ids.length) commentStore.fetchCounts(ids, [])
+
+    // Pending nav: a notification click asked us to open the comment panel for a file.
+    const nav = commentStore.pendingNav
+    if (nav && nav.type === 'file') {
+      const target = files.find(f => (f.ID ?? f.id) === nav.fileID)
+      if (target) {
+        commentStore.clearPendingNav()
+        commentStore.openPanel(target, 'file')
+      }
+    }
+  },
+  { immediate: true }
+)
+
+// When mounting with a pending nav, navigate to the right folder first.
+watch(
+  () => commentStore.pendingNav,
+  async (nav) => {
+    if (!nav || nav.type !== 'file') return
+    // Navigate to the folder if we're not already there
+    if (nav.folderPath && fileStore.currentPath !== nav.folderPath) {
+      await fileStore.fetchItems(nav.folderPath)
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>
