@@ -159,9 +159,10 @@ func (h *OrgHandler) CreateOrgFolder(c *gin.Context) {
 	}
 
 	var req struct {
-		Name         string `json:"name" binding:"required"`
-		ParentPath   string `json:"parent_path"`
-		EncryptedKey string `json:"encrypted_key"`
+		Name         string  `json:"name" binding:"required"`
+		ParentPath   string  `json:"parent_path"`
+		EncryptedKey string  `json:"encrypted_key"`
+		GroupID      *int64  `json:"group_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -201,6 +202,18 @@ func (h *OrgHandler) CreateOrgFolder(c *gin.Context) {
 		return
 	}
 
+	// If no group_id was provided, inherit it from the parent folder so sub-folders
+	// inside a group-encrypted folder automatically belong to the same group (B1+B2 fix).
+	if req.GroupID == nil && parentPath != "/" {
+		var parentFolder pkg.OrgFolder
+		if err := h.DB.NewSelect().Model(&parentFolder).
+			Column("group_id").
+			Where("org_id = ? AND path = ?", orgID, parentPath).
+			Scan(ctx); err == nil {
+			req.GroupID = parentFolder.GroupID
+		}
+	}
+
 	folder := &pkg.OrgFolder{
 		OrgID:        orgID,
 		Name:         req.Name,
@@ -208,6 +221,7 @@ func (h *OrgHandler) CreateOrgFolder(c *gin.Context) {
 		ParentPath:   parentPath,
 		CreatedBy:    userID,
 		EncryptedKey: req.EncryptedKey,
+		GroupID:      req.GroupID,
 		TagIDs:       []int64{},
 	}
 	if _, err := h.DB.NewInsert().Model(folder).Exec(ctx); err != nil {

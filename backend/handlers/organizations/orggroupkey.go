@@ -245,7 +245,7 @@ func (h *OrgHandler) RotateGroupKey(c *gin.Context) {
 		} `json:"member_keys" binding:"required"`
 		FileKeys []struct {
 			FileID       int64  `json:"file_id"       binding:"required"`
-			EncryptedKey string `json:"encrypted_key" binding:"required"`
+			EncryptedKey string `json:"encrypted_key"` // may be empty for files without a key; no binding:"required"
 		} `json:"file_keys"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -344,6 +344,16 @@ func (h *OrgHandler) GetGroupKeyProvisionedMembers(c *gin.Context) {
 	role, err := h.memberRole(ctx, orgID, callerID)
 	if err != nil || !canManage(role) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "admin access required"})
+		return
+	}
+
+	// Verify the group belongs to this org before exposing member data.
+	var groupOrgID int64
+	if err := h.DB.NewSelect().TableExpr("org_groups").
+		ColumnExpr("org_id").
+		Where("id = ?", groupID).
+		Scan(ctx, &groupOrgID); err != nil || groupOrgID != orgID {
+		c.JSON(http.StatusNotFound, gin.H{"error": "group not found"})
 		return
 	}
 

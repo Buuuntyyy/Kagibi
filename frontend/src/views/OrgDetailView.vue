@@ -2252,7 +2252,12 @@ async function handleRequestAccess(folder) {
 async function handleResolveAccessRequest(request, status) {
   try {
     await orgStore.resolveAccessRequest(orgID.value, request.id, status)
-    showToast(status === 'approved' ? t('orgs.accessRequestApproved') : t('orgs.accessRequestDenied'))
+    if (status === 'approved') {
+      // I3: approval signals intent — admin must also grant a filesystem permission on the folder.
+      showToast(`${t('orgs.accessRequestApproved')} — Pensez à accorder une permission sur "${request.folder_path}" pour cet utilisateur ou son groupe.`)
+    } else {
+      showToast(t('orgs.accessRequestDenied'))
+    }
   } catch (_) {
     showToast(t('orgs.accessRequestError'))
   }
