@@ -80,7 +80,7 @@ func StartDBMonitor(db *bun.DB) {
 				TotalUsersGauge.Set(float64(count))
 			}
 
-			// Stockage total utilisé
+			// Stockage total utilisé (personnel)
 			var total struct{ Sum int64 }
 			err = db.NewSelect().
 				TableExpr("user_plans").
@@ -90,6 +90,83 @@ func StartDBMonitor(db *bun.DB) {
 				log.Printf("[Monitoring] Failed to sum storage: %v", err)
 			} else {
 				TotalStorageUsedBytes.Set(float64(total.Sum))
+			}
+
+			// Nombre total d'organisations actives
+			orgCount, err := db.NewSelect().TableExpr("organizations").
+				Where("deleted_at IS NULL").Count(ctx)
+			if err != nil {
+				log.Printf("[Monitoring] Failed to count orgs: %v", err)
+			} else {
+				OrgsTotal.Set(float64(orgCount))
+			}
+
+			// Nombre total d'appartenances org
+			memberCount, err := db.NewSelect().TableExpr("org_members").Count(ctx)
+			if err != nil {
+				log.Printf("[Monitoring] Failed to count org members: %v", err)
+			} else {
+				OrgMembersTotal.Set(float64(memberCount))
+			}
+
+			// Stockage total utilisé par les organisations
+			var orgStorage struct{ Sum int64 }
+			if err := db.NewSelect().TableExpr("organizations").
+				ColumnExpr("COALESCE(SUM(storage_used_bytes), 0) AS sum").
+				Where("deleted_at IS NULL").
+				Scan(ctx, &orgStorage); err != nil {
+				log.Printf("[Monitoring] Failed to sum org storage: %v", err)
+			} else {
+				OrgStorageUsedBytes.Set(float64(orgStorage.Sum))
+			}
+
+			// Nombre de fichiers dans les organisations
+			orgFileCount, err := db.NewSelect().TableExpr("org_files").
+				Where("deleted_at IS NULL").Count(ctx)
+			if err != nil {
+				log.Printf("[Monitoring] Failed to count org files: %v", err)
+			} else {
+				OrgFilesTotal.Set(float64(orgFileCount))
+			}
+
+			// Nombre de dossiers dans les organisations
+			orgFolderCount, err := db.NewSelect().TableExpr("org_folders").
+				Where("deleted_at IS NULL").Count(ctx)
+			if err != nil {
+				log.Printf("[Monitoring] Failed to count org folders: %v", err)
+			} else {
+				OrgFoldersTotal.Set(float64(orgFolderCount))
+			}
+
+			// Invitations en attente
+			invCount, err := db.NewSelect().TableExpr("org_invitations").
+				Where("status = 'active'").Count(ctx)
+			if err != nil {
+				log.Printf("[Monitoring] Failed to count org invitations: %v", err)
+			} else {
+				OrgInvitationsPendingTotal.Set(float64(invCount))
+			}
+
+			// Médiane du nombre de membres par organisation
+			var medPerOrg struct{ Median float64 }
+			if err := db.NewRaw(`
+				SELECT COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY cnt), 0) AS median
+				FROM (SELECT org_id, COUNT(*) AS cnt FROM org_members GROUP BY org_id) sub
+			`).Scan(ctx, &medPerOrg); err != nil {
+				log.Printf("[Monitoring] Failed to compute median members per org: %v", err)
+			} else {
+				OrgMembersPerOrgMedian.Set(medPerOrg.Median)
+			}
+
+			// Médiane du nombre d'organisations par membre
+			var medPerMember struct{ Median float64 }
+			if err := db.NewRaw(`
+				SELECT COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY cnt), 0) AS median
+				FROM (SELECT user_id, COUNT(*) AS cnt FROM org_members GROUP BY user_id) sub
+			`).Scan(ctx, &medPerMember); err != nil {
+				log.Printf("[Monitoring] Failed to compute median orgs per member: %v", err)
+			} else {
+				OrgOrgsPerMemberMedian.Set(medPerMember.Median)
 			}
 		}
 

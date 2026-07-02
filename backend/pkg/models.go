@@ -39,10 +39,11 @@ type User struct {
 	EncryptedMasterKeyRecovery string     `bun:"encrypted_master_key_recovery,notnull" json:"encrypted_master_key_recovery"`
 	RecoveryHash               string     `bun:"recovery_hash,notnull" json:"recovery_hash"`
 	RecoverySalt               string     `bun:"recovery_salt,notnull" json:"recovery_salt"`
-	FriendCode                 string     `bun:"friend_code,unique,notnull" json:"friend_code"`                    // Short unique code for friends
-	PublicKey                  string     `bun:"public_key" json:"public_key"`                                     // RSA Public Key (Standard PEM format)
-	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"`               // RSA Private Key (Encrypted with MasterKey)
-	EncryptFilenames           bool       `bun:"encrypt_filenames,notnull,default:false" json:"encrypt_filenames"` // Client-side filename encryption opt-in
+	FriendCode                 string     `bun:"friend_code,unique,notnull" json:"friend_code"`                      // Short unique code for friends
+	PublicKey                  string     `bun:"public_key" json:"public_key"`                                       // RSA Public Key (Standard PEM format)
+	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"`                 // RSA Private Key (Encrypted with MasterKey)
+	EncryptFilenames           bool       `bun:"encrypt_filenames,notnull,default:false" json:"encrypt_filenames"`   // Client-side filename encryption opt-in
+	VersioningEnabled          bool       `bun:"versioning_enabled,notnull,default:false" json:"versioning_enabled"` // File version history opt-in
 	CreatedAt                  time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt                  time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 	DeletedAt                  *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"` // RGPD Article 17 - Soft delete
@@ -57,30 +58,33 @@ type Friendship struct {
 }
 
 type UserPlan struct {
-	bun.BaseModel    `bun:"table:user_plans,alias:up"`
-	UserID           string    `bun:"user_id,pk" json:"user_id"`
-	Plan             string    `bun:"plan,notnull,default:'free'" json:"plan"`
-	StorageLimit     int64     `bun:"storage_limit,notnull,default:21474836480" json:"storage_limit"`
-	StorageUsed      int64     `bun:"storage_used,notnull,default:0" json:"storage_used"`
-	P2PMaxExchanges  int       `bun:"p2p_max_exchanges,notnull,default:-1" json:"p2p_max_exchanges"`
-	P2PExchangesUsed int       `bun:"p2p_exchanges_used,notnull,default:0" json:"p2p_exchanges_used"`
-	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt        time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	bun.BaseModel       `bun:"table:user_plans,alias:up"`
+	UserID              string    `bun:"user_id,pk" json:"user_id"`
+	Plan                string    `bun:"plan,notnull,default:'free'" json:"plan"`
+	StorageLimit        int64     `bun:"storage_limit,notnull,default:21474836480" json:"storage_limit"`
+	StorageUsed         int64     `bun:"storage_used,notnull,default:0" json:"storage_used"`
+	VersionStorageBytes int64     `bun:"version_storage_bytes,notnull,default:0" json:"version_storage_bytes"`
+	P2PMaxExchanges     int       `bun:"p2p_max_exchanges,notnull,default:-1" json:"p2p_max_exchanges"`
+	P2PExchangesUsed    int       `bun:"p2p_exchanges_used,notnull,default:0" json:"p2p_exchanges_used"`
+	CreatedAt           time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt           time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 }
 
 type File struct {
 	ID           int64     `bun:"id,pk,autoincrement"`
 	Name         string    `bun:"name,notnull"`
-	Path         string    `bun:"path,notnull"`                                     // Chemin relatif (ex: "/dossier1/fichier.txt")
-	Size         int64     `bun:"size,notnull"`                                     // Taille en octets
-	MimeType     string    `bun:"mime_type,notnull"`                                // Ex: "application/pdf"
-	UserID       string    `bun:"user_id,notnull"`                                  // Propriétaire du fichier
-	EncryptedKey string    `bun:"encrypted_key"`                                    // Clé du fichier chiffrée avec la MasterKey (pour les nouveaux fichiers)
-	Tags         []string  `bun:"tags,array"`                                       // Tags
-	PreviewID    *int64    `bun:"preview_id" json:"preview_id"`                     // ID du fichier de prévisualisation (miniature/compressé)
-	Preview      *File     `bun:"rel:belongs-to,join:preview_id=id" json:"preview"` // Metadata du fichier preview
-	IsPreview    bool      `bun:"is_preview,default:false" json:"is_preview"`       // Indique si c'est un fichier de prévisualisation (masqué par défaut)
-	Synced       bool      `bun:"synced,default:false" json:"synced"`               // true si uploadé via la sync desktop
+	Path         string    `bun:"path,notnull"`                                          // Chemin relatif (ex: "/dossier1/fichier.txt")
+	Size         int64     `bun:"size,notnull"`                                          // Taille en octets
+	MimeType     string    `bun:"mime_type,notnull"`                                     // Ex: "application/pdf"
+	UserID       string    `bun:"user_id,notnull"`                                       // Propriétaire du fichier
+	EncryptedKey string    `bun:"encrypted_key"`                                         // Clé du fichier chiffrée avec la MasterKey (pour les nouveaux fichiers)
+	ChunkSize    int64     `bun:"chunk_size,notnull,default:10485760" json:"chunk_size"` // Taille du chunk AES-GCM en octets (DEFAULT = 10 MB pour rétrocompat)
+	Compression  string    `bun:"compression,notnull,default:''" json:"compression"`     // Compression avant chiffrement : "" ou "gzip"
+	Tags         []string  `bun:"tags,array"`                                            // Tags
+	PreviewID    *int64    `bun:"preview_id" json:"preview_id"`                          // ID du fichier de prévisualisation (miniature/compressé)
+	Preview      *File     `bun:"rel:belongs-to,join:preview_id=id" json:"preview"`      // Metadata du fichier preview
+	IsPreview    bool      `bun:"is_preview,default:false" json:"is_preview"`            // Indique si c'est un fichier de prévisualisation (masqué par défaut)
+	Synced       bool      `bun:"synced,default:false" json:"synced"`                    // true si uploadé via la sync desktop
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt    time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 }
@@ -154,8 +158,9 @@ type Folder struct {
 	Name         string    `bun:"name,notnull"`
 	Path         string    `bun:"path,notnull"` // Chemin relatif (ex: "/dossier1")
 	UserID       string    `bun:"user_id,notnull"`
-	EncryptedKey string    `bun:"encrypted_key"` // FolderKey encrypted with MasterKey
-	Tags         []string  `bun:"tags,array"`    // Tags
+	EncryptedKey string    `bun:"encrypted_key"`                      // FolderKey encrypted with MasterKey
+	Tags         []string  `bun:"tags,array"`                         // Tags
+	Synced       bool      `bun:"synced,default:false" json:"synced"` // true si créé/géré par la sync desktop
 	SizeBytes    int64     `bun:"size_bytes,scanonly" json:"size_bytes,omitempty"`
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt    time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
@@ -233,6 +238,16 @@ type RecentActivity struct {
 	AccessedAt time.Time `bun:"accessed_at,nullzero,notnull,default:current_timestamp"`
 }
 
+type UserFavorite struct {
+	ID        int64     `bun:"id,pk,autoincrement"`
+	UserID    string    `bun:"user_id,notnull"`
+	FileID    *int64    `bun:"file_id"`
+	FolderID  *int64    `bun:"folder_id"`
+	File      *File     `bun:"rel:belongs-to,join:file_id=id"`
+	Folder    *Folder   `bun:"rel:belongs-to,join:folder_id=id"`
+	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+}
+
 // RealtimeEvent represents an event for Supabase Realtime
 type RealtimeEvent struct {
 	bun.BaseModel `bun:"table:realtime_events"`
@@ -302,13 +317,58 @@ type Organization struct {
 type OrgMember struct {
 	bun.BaseModel `bun:"table:org_members,alias:om"`
 
-	ID              int64     `bun:"id,pk,autoincrement" json:"id"`
-	OrgID           int64     `bun:"org_id,notnull" json:"org_id"`
-	UserID          string    `bun:"user_id,notnull" json:"user_id"`
-	Role            string    `bun:"role,notnull,default:'member'" json:"role"`            // owner | admin | member | viewer
-	EncryptedOrgKey string    `bun:"encrypted_org_key" json:"encrypted_org_key,omitempty"` // org key encrypted with this member's RSA public key
-	QuotaBytes      int64     `bun:"quota_bytes,default:0" json:"quota_bytes"`             // 0 = use org-level default
-	JoinedAt        time.Time `bun:"joined_at,nullzero,notnull,default:current_timestamp" json:"joined_at"`
+	ID              int64      `bun:"id,pk,autoincrement" json:"id"`
+	OrgID           int64      `bun:"org_id,notnull" json:"org_id"`
+	UserID          string     `bun:"user_id,notnull" json:"user_id"`
+	Role            string     `bun:"role,notnull,default:'member'" json:"role"`            // owner | admin | member | viewer
+	EncryptedOrgKey string     `bun:"encrypted_org_key" json:"encrypted_org_key,omitempty"` // org key encrypted with this member's RSA public key
+	QuotaBytes      int64      `bun:"quota_bytes,default:0" json:"quota_bytes"`             // 0 = use org-level default
+	Source          string     `bun:"source,notnull,default:'internal'" json:"source"`      // "internal" | "ldap"
+	LdapUID         string     `bun:"ldap_uid,notnull,default:''" json:"ldap_uid,omitempty"`
+	SuspendedAt     *time.Time `bun:"suspended_at" json:"suspended_at,omitempty"`
+	JoinedAt        time.Time  `bun:"joined_at,nullzero,notnull,default:current_timestamp" json:"joined_at"`
+}
+
+// OrgLDAPConfig stores the LDAP/AD directory settings for an organization.
+// Bind password is stored encrypted (AES-256-GCM via emailcrypto).
+type OrgLDAPConfig struct {
+	bun.BaseModel `bun:"table:org_ldap_configs,alias:olc"`
+
+	ID                  int64          `bun:"id,pk,autoincrement" json:"id"`
+	OrgID               int64          `bun:"org_id,notnull,unique" json:"org_id"`
+	Enabled             bool           `bun:"enabled,notnull,default:false" json:"enabled"`
+	URL                 string         `bun:"url,notnull,default:''" json:"url"`
+	BindDN              string         `bun:"bind_dn,notnull,default:''" json:"bind_dn"`
+	BindPasswordEnc     string         `bun:"bind_password_enc,notnull,default:''" json:"-"`
+	UserBaseDN          string         `bun:"user_base_dn,notnull,default:''" json:"user_base_dn"`
+	UserFilter          string         `bun:"user_filter,notnull,default:'(objectClass=person)'" json:"user_filter"`
+	GroupBaseDN         string         `bun:"group_base_dn,notnull,default:''" json:"group_base_dn"`
+	GroupFilter         string         `bun:"group_filter,notnull,default:'(objectClass=groupOfNames)'" json:"group_filter"`
+	AttrEmail           string         `bun:"attr_email,notnull,default:'mail'" json:"attr_email"`
+	AttrDisplayName     string         `bun:"attr_display_name,notnull,default:'cn'" json:"attr_display_name"`
+	AttrUID             string         `bun:"attr_uid,notnull,default:'uid'" json:"attr_uid"`
+	TLSSkipVerify       bool           `bun:"tls_skip_verify,notnull,default:false" json:"tls_skip_verify"`
+	SyncIntervalMinutes int            `bun:"sync_interval_minutes,notnull,default:60" json:"sync_interval_minutes"`
+	AutoDeprovisionDays int            `bun:"auto_deprovision_days,notnull,default:30" json:"auto_deprovision_days"` // 0 = manual only
+	MinExpectedUsers    int            `bun:"min_expected_users,notnull,default:1" json:"min_expected_users"`
+	LastSyncAt          *time.Time     `bun:"last_sync_at" json:"last_sync_at,omitempty"`
+	LastSyncError       string         `bun:"last_sync_error,notnull,default:''" json:"last_sync_error,omitempty"`
+	LastSyncStats       *LDAPSyncStats `bun:"last_sync_stats,type:jsonb" json:"last_sync_stats,omitempty"`
+	CreatedAt           time.Time      `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt           time.Time      `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
+// LDAPSyncStats is stored as JSONB in OrgLDAPConfig.LastSyncStats.
+type LDAPSyncStats struct {
+	UsersFound     int `json:"users_found"`
+	UsersInvited   int `json:"users_invited"`
+	UsersSkipped   int `json:"users_skipped"`
+	UsersSuspended int `json:"users_suspended"`
+	UsersDeleted   int `json:"users_deleted"`
+	GroupsFound    int `json:"groups_found"`
+	GroupsCreated  int `json:"groups_created"`
+	GroupsUpdated  int `json:"groups_updated"`
+	DurationMs     int `json:"duration_ms"`
 }
 
 // OrgInvitation is a token-based or direct invite to join an organization.
@@ -357,41 +417,50 @@ type OrgFavorite struct {
 type OrgFolder struct {
 	bun.BaseModel `bun:"table:org_folders,alias:of"`
 
-	ID           int64      `bun:"id,pk,autoincrement" json:"id"`
-	OrgID        int64      `bun:"org_id,notnull" json:"org_id"`
-	Name         string     `bun:"name,notnull" json:"name"`
-	Path         string     `bun:"path,notnull" json:"path"`                           // full virtual path, e.g. "/documents/contracts"
-	ParentPath   string     `bun:"parent_path,notnull,default:'/'" json:"parent_path"` // path.Dir(path)
-	CreatedBy    string     `bun:"created_by,notnull" json:"created_by"`               // user_id
-	EncryptedKey string     `bun:"encrypted_key" json:"encrypted_key,omitempty"`       // folder key encrypted with org_key
-	TagIDs       []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
-	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt    time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
-	DeletedAt    *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
-	DeletedBy    string     `bun:"deleted_by,notnull,default:''" json:"deleted_by,omitempty"`
-	DeleteRoot   bool       `bun:"delete_root,notnull,default:false" json:"-"`
-	TotalSize    int64      `bun:"-" json:"total_size,omitempty"` // computed on list, not stored
+	ID           int64  `bun:"id,pk,autoincrement" json:"id"`
+	OrgID        int64  `bun:"org_id,notnull" json:"org_id"`
+	Name         string `bun:"name,notnull" json:"name"`
+	Path         string `bun:"path,notnull" json:"path"`                           // full virtual path, e.g. "/documents/contracts"
+	ParentPath   string `bun:"parent_path,notnull,default:'/'" json:"parent_path"` // path.Dir(path)
+	CreatedBy    string `bun:"created_by,notnull" json:"created_by"`               // user_id
+	EncryptedKey string `bun:"encrypted_key" json:"encrypted_key,omitempty"`       // folder key encrypted with org_key
+	// GroupID links this folder to a group's encryption scope.
+	// When set, new files uploaded here have their keys wrapped with the group key.
+	GroupID              *int64     `bun:"group_id" json:"group_id,omitempty"`
+	TagIDs               []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
+	CreatedAt            time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt            time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	DeletedAt            *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
+	DeletedBy            string     `bun:"deleted_by,notnull,default:''" json:"deleted_by,omitempty"`
+	DeleteRoot           bool       `bun:"delete_root,notnull,default:false" json:"-"`
+	TotalSize            int64      `bun:"-" json:"total_size,omitempty"`             // computed on list, not stored
+	Locked               bool       `bun:"-" json:"locked,omitempty"`                 // caller has no read access to this folder
+	AccessRequestPending bool       `bun:"-" json:"access_request_pending,omitempty"` // caller already submitted a pending request
 }
 
 // OrgFile is a file inside an organization's shared storage.
 type OrgFile struct {
 	bun.BaseModel `bun:"table:org_files,alias:ofile"`
 
-	ID           int64      `bun:"id,pk,autoincrement" json:"id"`
-	OrgID        int64      `bun:"org_id,notnull" json:"org_id"`
-	Name         string     `bun:"name,notnull" json:"name"`
-	Path         string     `bun:"path,notnull" json:"path"`                           // full path including name, e.g. "/documents/report.pdf"
-	FolderPath   string     `bun:"folder_path,notnull,default:'/'" json:"folder_path"` // path.Dir(path)
-	Size         int64      `bun:"size,notnull,default:0" json:"size"`
-	MimeType     string     `bun:"mime_type,notnull,default:''" json:"mime_type"`
-	UploadedBy   string     `bun:"uploaded_by,notnull" json:"uploaded_by"` // user_id
-	EncryptedKey string     `bun:"encrypted_key" json:"encrypted_key,omitempty"`
-	TagIDs       []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
-	CreatedAt    time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt    time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
-	DeletedAt    *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
-	DeletedBy    string     `bun:"deleted_by,notnull,default:''" json:"deleted_by,omitempty"`
-	DeleteRoot   bool       `bun:"delete_root,notnull,default:false" json:"-"`
+	ID           int64  `bun:"id,pk,autoincrement" json:"id"`
+	OrgID        int64  `bun:"org_id,notnull" json:"org_id"`
+	Name         string `bun:"name,notnull" json:"name"`
+	Path         string `bun:"path,notnull" json:"path"`                           // full path including name, e.g. "/documents/report.pdf"
+	FolderPath   string `bun:"folder_path,notnull,default:'/'" json:"folder_path"` // path.Dir(path)
+	Size         int64  `bun:"size,notnull,default:0" json:"size"`
+	MimeType     string `bun:"mime_type,notnull,default:''" json:"mime_type"`
+	UploadedBy   string `bun:"uploaded_by,notnull" json:"uploaded_by"` // user_id
+	EncryptedKey string `bun:"encrypted_key" json:"encrypted_key,omitempty"`
+	// GroupID, when non-nil, means the file key is wrapped with the group key (not the org key).
+	// Null = wrapped with org key (backward compatible).
+	GroupID     *int64     `bun:"group_id" json:"group_id,omitempty"`
+	Compression string     `bun:"compression,notnull,default:''" json:"compression"`
+	TagIDs      []int64    `bun:"tag_ids,array,nullzero,default:'{}'" json:"tag_ids"`
+	CreatedAt   time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt   time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	DeletedAt   *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
+	DeletedBy   string     `bun:"deleted_by,notnull,default:''" json:"deleted_by,omitempty"`
+	DeleteRoot  bool       `bun:"delete_root,notnull,default:false" json:"-"`
 }
 
 // OrgFolderPermission stores per-user access overrides for a folder path within an org.
@@ -423,6 +492,12 @@ type OrgGroup struct {
 	Description string `bun:"description" json:"description"`
 	CreatedBy   string `bun:"created_by,notnull" json:"created_by"`
 
+	// EncryptedGroupKey is the group key wrapped with the org key (AES-GCM key-wrap).
+	// Empty string means no group key has been initialized yet.
+	// Admins use this to provision the group key for new members without needing their
+	// own entry in org_group_keys.
+	EncryptedGroupKey string `bun:"encrypted_group_key,notnull,default:''" json:"encrypted_group_key,omitempty"`
+
 	// LDAP fields — populated only when source = "ldap"
 	Source       string     `bun:"source,notnull,default:'internal'" json:"source"` // "internal" | "ldap"
 	LdapDN       string     `bun:"ldap_dn" json:"ldap_dn,omitempty"`
@@ -431,6 +506,19 @@ type OrgGroup struct {
 
 	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
+// OrgGroupKey stores the group key encrypted for a specific group member.
+// The key is wrapped with the member's RSA-4096 public key (RSA-OAEP SHA-256),
+// mirroring how OrgMember.encrypted_org_key stores the org key per member.
+type OrgGroupKey struct {
+	bun.BaseModel `bun:"table:org_group_keys,alias:ogk"`
+
+	ID           int64     `bun:"id,pk,autoincrement" json:"id"`
+	GroupID      int64     `bun:"group_id,notnull" json:"group_id"`
+	UserID       string    `bun:"user_id,notnull" json:"user_id"`
+	EncryptedKey string    `bun:"encrypted_key,notnull" json:"encrypted_key"`
+	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 // OrgGroupMember records a user's membership in an org group.
@@ -468,6 +556,22 @@ type OrgGroupPermission struct {
 	CreatedAt        time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
+// OrgAccessRequest is a member's request to gain access to a restricted folder.
+// status: pending | approved | denied
+type OrgAccessRequest struct {
+	bun.BaseModel `bun:"table:org_access_requests,alias:oar"`
+
+	ID         int64      `bun:"id,pk,autoincrement" json:"id"`
+	OrgID      int64      `bun:"org_id,notnull" json:"org_id"`
+	UserID     string     `bun:"user_id,notnull" json:"user_id"`
+	FolderPath string     `bun:"folder_path,notnull" json:"folder_path"`
+	Message    string     `bun:"message,notnull,default:''" json:"message"`
+	Status     string     `bun:"status,notnull,default:'pending'" json:"status"`
+	ResolvedBy string     `bun:"resolved_by,notnull,default:''" json:"resolved_by,omitempty"`
+	ResolvedAt *time.Time `bun:"resolved_at,nullzero" json:"resolved_at,omitempty"`
+	CreatedAt  time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
 // OrgAuditLog records security-relevant events within an organization.
 // The log is append-only — records are never updated or deleted.
 type OrgAuditLog struct {
@@ -481,6 +585,70 @@ type OrgAuditLog struct {
 	TargetType string    `bun:"target_type,notnull,default:''" json:"target_type,omitempty"`
 	Detail     string    `bun:"detail,notnull,default:''" json:"detail,omitempty"`
 	CreatedAt  time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// FileComment stores a text comment on a personal file or an org file.
+// Exactly one of FileID or OrgFileID must be set.
+type FileComment struct {
+	bun.BaseModel `bun:"table:file_comments,alias:fc"`
+
+	ID         int64     `bun:"id,pk,autoincrement" json:"id"`
+	FileID     *int64    `bun:"file_id" json:"file_id,omitempty"`
+	OrgFileID  *int64    `bun:"org_file_id" json:"org_file_id,omitempty"`
+	OrgID      *int64    `bun:"org_id" json:"org_id,omitempty"`
+	AuthorID   string    `bun:"author_id,notnull" json:"author_id"`
+	AuthorName string    `bun:"-" json:"author_name,omitempty"` // populated from join, not stored
+	Content    string    `bun:"content,notnull" json:"content"`
+	IsResolved bool      `bun:"is_resolved,notnull,default:false" json:"is_resolved"`
+	ParentID   *int64    `bun:"parent_id" json:"parent_id,omitempty"`
+	CreatedAt  time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt  time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+}
+
+// FileCommentRead tracks which comments a given user has acknowledged (to compute unread counts).
+type FileCommentRead struct {
+	bun.BaseModel `bun:"table:file_comment_reads,alias:fcr"`
+
+	CommentID int64     `bun:"comment_id,pk" json:"comment_id"`
+	UserID    string    `bun:"user_id,pk" json:"user_id"`
+	ReadAt    time.Time `bun:"read_at,nullzero,notnull,default:current_timestamp" json:"read_at"`
+}
+
+// FileVersion stores a historical snapshot of a personal file (E2E encrypted).
+// Created automatically when a file is overwritten and versioning_enabled=true in profiles.
+// The S3Key field is internal and never sent to clients.
+type FileVersion struct {
+	bun.BaseModel `bun:"table:file_versions,alias:fv"`
+
+	ID            int64     `bun:"id,pk,autoincrement" json:"id"`
+	FileID        int64     `bun:"file_id,notnull" json:"file_id"`
+	UserID        string    `bun:"user_id,notnull" json:"-"`
+	VersionNumber int       `bun:"version_number,notnull" json:"version_number"`
+	S3Key         string    `bun:"s3_key,notnull" json:"-"`
+	EncryptedKey  string    `bun:"encrypted_key,notnull" json:"encrypted_key"`
+	Size          int64     `bun:"size,notnull,default:0" json:"size"`
+	ChunkSize     int64     `bun:"chunk_size,notnull,default:10485760" json:"chunk_size"`
+	MimeType      string    `bun:"mime_type,notnull,default:''" json:"mime_type"`
+	CreatedAt     time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// Notification is a persistent in-app notification stored per recipient.
+type Notification struct {
+	bun.BaseModel `bun:"table:notifications,alias:notif"`
+
+	ID           int64     `bun:"id,pk,autoincrement" json:"id"`
+	UserID       string    `bun:"user_id,notnull" json:"user_id"`
+	ActorID      string    `bun:"actor_id,notnull" json:"actor_id"`
+	ActorName    string    `bun:"actor_name,notnull" json:"actor_name"`
+	Type         string    `bun:"type,notnull" json:"type"` // "comment_added" | "reply_added"
+	ResourceID   int64     `bun:"resource_id,notnull" json:"resource_id"`
+	ResourceType string    `bun:"resource_type,notnull" json:"resource_type"` // "file" | "org_file"
+	ResourceName string    `bun:"resource_name,notnull" json:"resource_name"`
+	ResourcePath string    `bun:"resource_path,notnull,default:''" json:"resource_path"` // folder path for navigation
+	OrgID        *int64    `bun:"org_id" json:"org_id,omitempty"`                        // set for org_file notifications
+	CommentID    *int64    `bun:"comment_id" json:"comment_id,omitempty"`
+	IsRead       bool      `bun:"is_read,notnull,default:false" json:"is_read"`
+	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
 // EmitRealtimeEvent inserts an event into the realtime_events table and

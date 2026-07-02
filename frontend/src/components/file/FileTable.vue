@@ -83,6 +83,18 @@
               </span>
             </template>
 
+            <!-- Favorite (Folder) -->
+            <template v-else-if="col.key === 'favorite'">
+              <button
+                class="fav-btn"
+                :class="{ active: fileStore.isUserFavorite(folder.ID, 'folder') }"
+                @click.stop="fileStore.isUserFavorite(folder.ID, 'folder') ? fileStore.removeUserFavorite({ ...folder, type: 'folder' }) : fileStore.addUserFavorite({ ...folder, type: 'folder' })"
+                :title="fileStore.isUserFavorite(folder.ID, 'folder') ? '★' : '☆'"
+              >
+                {{ fileStore.isUserFavorite(folder.ID, 'folder') ? '★' : '☆' }}
+              </button>
+            </template>
+
             <!-- Created At -->
             <template v-else-if="col.key === 'created'">
               {{ formatDate(folder.CreatedAt) }}
@@ -175,6 +187,18 @@
                 <span v-if="file.shared" class="shared-icon" title="Fichier partagé" @click.stop="$emit('manage-share', file, 'file')" @mouseover="onShareIconHover(true, $event)" @mouseleave="onShareIconHover(false, $event)">
                   <svg xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 0 24 24" width="18px" fill="#5f6368"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
                 </span>
+                <!-- Comment icon with unread badge -->
+                <span
+                  class="comment-icon-btn"
+                  :class="{ 'has-comments': commentStore.getCount(file.ID, commentType) > 0 }"
+                  title="Commentaires"
+                  @click.stop="$emit('open-comments', file, commentType)"
+                >
+                  <MessageSquare :size="15" />
+                  <span v-if="commentStore.getCount(file.ID, commentType) > 0" class="comment-count-badge">
+                    {{ commentStore.getCount(file.ID, commentType) }}
+                  </span>
+                </span>
               </div>
             </template>
 
@@ -193,6 +217,18 @@
                   </span>
                 </span>
               </span>
+            </template>
+
+            <!-- Favorite (File) -->
+            <template v-else-if="col.key === 'favorite'">
+              <button
+                class="fav-btn"
+                :class="{ active: fileStore.isUserFavorite(file.ID, 'file') }"
+                @click.stop="fileStore.isUserFavorite(file.ID, 'file') ? fileStore.removeUserFavorite({ ...file, type: 'file' }) : fileStore.addUserFavorite({ ...file, type: 'file' })"
+                :title="fileStore.isUserFavorite(file.ID, 'file') ? '★' : '☆'"
+              >
+                {{ fileStore.isUserFavorite(file.ID, 'file') ? '★' : '☆' }}
+              </button>
             </template>
 
             <!-- Created At -->
@@ -226,7 +262,12 @@
 <script setup>
 import { computed } from 'vue'
 import { useTagStore } from '../../stores/tags'
+import { useCommentStore } from '../../stores/comments'
+import { useFileStore } from '../../stores/files'
 import { formatDate, formatSize } from '../../utils/format'
+import { MessageSquare } from 'lucide-vue-next'
+
+const fileStore = useFileStore()
 
 const props = defineProps({
   folders: {
@@ -244,6 +285,10 @@ const props = defineProps({
   showFolderSizes: {
     type: Boolean,
     default: false
+  },
+  commentType: {
+    type: String,
+    default: 'file'   // 'file' for personal files, 'org_file' for org files
   },
   columns: {
     type: Array,
@@ -279,13 +324,15 @@ const emit = defineEmits([
   'remove-tag',
   'sort-change',
   'toggle-select-all',
-  'toggle-select'
+  'toggle-select',
+  'open-comments'
 ])
 
 const tagStore = useTagStore()
+const commentStore = useCommentStore()
 
 const isSortable = (key) => {
-  return ['name', 'size', 'created', 'updated'].includes(key);
+  return ['name', 'size', 'created', 'updated', 'favorite'].includes(key);
 }
 
 const handleSort = (key) => {
@@ -518,6 +565,49 @@ const onShareIconHover = (isHovering, event) => {
   opacity: 0.85;
 }
 
+.comment-icon-btn {
+  position: relative;
+  margin-left: 0.4rem;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.25;
+  cursor: pointer;
+  color: var(--secondary-text-color);
+  transition: opacity 0.15s;
+}
+.comment-icon-btn:hover,
+.comment-icon-btn.has-comments {
+  opacity: 1;
+  color: var(--primary-color);
+}
+
+.list-item:hover .comment-icon-btn {
+  opacity: 0.6;
+}
+.list-item:hover .comment-icon-btn.has-comments {
+  opacity: 1;
+}
+
+.comment-count-badge {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.55rem;
+  font-weight: 700;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 99px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px;
+  line-height: 1;
+  pointer-events: none;
+}
+
 .list-item.no-hover:hover {
   background-color: transparent;
 }
@@ -612,5 +702,30 @@ input[type="checkbox"]:hover {
     width: 16px;
     height: 16px;
   }
+}
+
+.fav-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--secondary-text-color);
+  padding: 2px 4px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.fav-btn.active {
+  color: #f4b400;
+}
+
+.fav-btn:hover {
+  color: #f4b400;
+}
+
+.col-favorite {
+  width: 36px;
+  text-align: center;
 }
 </style>

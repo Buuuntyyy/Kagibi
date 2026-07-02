@@ -43,6 +43,8 @@ type BatchPresignItem struct {
 	FileSize     int64  `json:"file_size"`
 	MimeType     string `json:"mime_type"`
 	EncryptedKey string `json:"encrypted_key"`
+	ChunkSize    int64  `json:"chunk_size"`
+	Compression  string `json:"compression"`
 	Error        string `json:"error,omitempty"`
 }
 
@@ -174,6 +176,10 @@ func presignOneFile(ctx context.Context, db *bun.DB, presigner *s3.PresignClient
 		return BatchPresignItem{FileID: fID, Error: "Failed to generate URL"}, 0
 	}
 
+	chunkSize := file.ChunkSize
+	if chunkSize <= 0 {
+		chunkSize = 10 * 1024 * 1024
+	}
 	return BatchPresignItem{
 		FileID:       fID,
 		URL:          presignReq.URL,
@@ -182,6 +188,8 @@ func presignOneFile(ctx context.Context, db *bun.DB, presigner *s3.PresignClient
 		FileSize:     file.Size,
 		MimeType:     file.MimeType,
 		EncryptedKey: file.EncryptedKey,
+		ChunkSize:    chunkSize,
+		Compression:  file.Compression,
 	}, file.Size
 }
 

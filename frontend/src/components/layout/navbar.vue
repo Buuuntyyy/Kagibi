@@ -46,23 +46,7 @@
         </svg>
       </button>
       <router-link v-if="!authStore.isAuthenticated" to="/login">{{ t('nav.login') }}</router-link>
-      <template v-else>
-        <router-link to="/account" class="user-avatar-link" :title="authStore.user?.name || t('nav.myAccount')">
-          <div class="user-avatar">
-            <img
-              v-if="authStore.user?.avatar_url"
-              :src="authStore.user.avatar_url"
-              :alt="authStore.user?.name"
-              class="avatar-image"
-              @error="handleImageError"
-            />
-            <div class="avatar-fallback" :style="{ display: authStore.user?.avatar_url ? 'none' : 'flex' }">
-              {{ getInitials(authStore.user?.name) }}
-            </div>
-          </div>
-        </router-link>
-        <a @click.prevent="logout" href="#" class="logout-link">{{ t('nav.logout') }}</a>
-      </template>
+      <ProfileMenu v-else />
       <!-- Search icon for mobile (only shown when not in search mode) -->
       <button v-if="authStore.isAuthenticated" class="mobile-search-btn" @click="mobileSearchOpen = true" aria-label="Rechercher">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
@@ -78,43 +62,25 @@
 import { computed, ref } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useThemeStore } from '../../stores/theme'
-import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import SearchBar from '../bar/searchBar.vue'
 import LanguageSwitcher from '../LanguageSwitcher.vue'
 import HelpDialog from '../HelpDialog.vue'
+import ProfileMenu from '../notifications/ProfileMenu.vue'
 import { HelpCircle } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
-const router = useRouter()
 
 const showHelpDialog = ref(false)
 const mobileSearchOpen = ref(false)
 
-const ACoffeeUrl = computed(() => {
+const buyMeACoffeeUrl = computed(() => {
   const runtimeUrl = typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : ''
   return runtimeUrl || import.meta.env.VITE_BUY_ME_A_COFFEE_URL || ''
 })
-
-const logout = async () => {
-  await authStore.logout()
-  router.push({ name: 'Login' })
-}
-
-const getInitials = (name) => {
-  if (!name) return '?'
-  return name.substring(0, 2).toUpperCase()
-}
-
-const handleImageError = (event) => {
-  // Hide the broken image and show fallback initials
-  event.target.style.display = 'none'
-  const fallback = event.target.nextElementSibling
-  if (fallback) fallback.style.display = 'flex'
-}
 </script>
 
 <style scoped>

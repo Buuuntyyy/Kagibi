@@ -254,6 +254,8 @@ export const useFileStore = defineStore('files', {
     shareUpdateTrigger: 0,
     recentFolders: [],
     recentFiles: [],
+    favoriteFolders: [],
+    favoriteFiles: [],
     // Used to coordinate navigation from Suggestions
     pendingNavigatePath: null,
     pendingHighlight: null,     // { id, type } — item to select after navigation
@@ -279,6 +281,59 @@ export const useFileStore = defineStore('files', {
         } catch (err) {
             console.error("Failed to fetch recent history", err)
         }
+    },
+
+    async fetchUserFavorites() {
+        try {
+            const res = await api.get('/users/favorites')
+            const items = res.data
+            this.favoriteFiles = items
+                .filter(i => i.type === 'file')
+                .map(i => ({ ...i.file, type: 'file', displayName: i.file.Name }))
+            this.favoriteFolders = items
+                .filter(i => i.type === 'folder')
+                .map(i => ({ ...i.folder, type: 'folder', displayName: i.folder.Name, path: i.folder.Path }))
+        } catch (err) {
+            console.error('Failed to fetch user favorites', err)
+        }
+    },
+
+    isUserFavorite(id, type) {
+        const numId = typeof id === 'string' ? parseInt(id, 10) : id
+        if (type === 'folder') {
+            return this.favoriteFolders.some(f => (f.ID || f.id) === numId)
+        }
+        return this.favoriteFiles.some(f => (f.ID || f.id) === numId)
+    },
+
+    async addUserFavorite(item) {
+        const itemId = item.ID || item.id
+        const numId = typeof itemId === 'string' ? parseInt(itemId, 10) : itemId
+        if (!numId) return
+        const type = item.type === 'folder' ? 'folder' : 'file'
+        if (type === 'folder') {
+            this.favoriteFolders.unshift({ ...item, type: 'folder', displayName: item.displayName || item.Name || item.name })
+        } else {
+            this.favoriteFiles.unshift({ ...item, type: 'file', displayName: item.displayName || item.Name || item.name })
+        }
+        await api.post('/users/favorites', { id: numId, type }).catch(err => {
+            console.error('Failed to add favorite', err)
+            if (type === 'folder') this.favoriteFolders = this.favoriteFolders.filter(f => (f.ID || f.id) !== numId)
+            else this.favoriteFiles = this.favoriteFiles.filter(f => (f.ID || f.id) !== numId)
+        })
+    },
+
+    async removeUserFavorite(item) {
+        const itemId = item.ID || item.id
+        const numId = typeof itemId === 'string' ? parseInt(itemId, 10) : itemId
+        if (!numId) return
+        const type = item.type === 'folder' ? 'folder' : 'file'
+        if (type === 'folder') {
+            this.favoriteFolders = this.favoriteFolders.filter(f => (f.ID || f.id) !== numId)
+        } else {
+            this.favoriteFiles = this.favoriteFiles.filter(f => (f.ID || f.id) !== numId)
+        }
+        await api.delete(`/users/favorites/${type}/${numId}`).catch(err => console.error('Failed to remove favorite', err))
     },
 
     addToHistory(item) {
@@ -553,6 +608,7 @@ export const useFileStore = defineStore('files', {
                 Name: f.Name || f.name,
                 ID: f.ID || f.id,
                 Size: f.Size || f.size,
+                MimeType: f.MimeType || f.mime_type,
                 file_id: f.ID || f.id // Ensure we have something component might look for
             }));
 
@@ -770,7 +826,7 @@ export const useFileStore = defineStore('files', {
                     const fileKeyCrypto = await decryptFileKeyWithFolderKey(file.encrypted_key, this.sharedKey);
                     const resp = await fetch(url);
                     const encryptedBlob = await resp.blob();
-                    const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, file.mime_type || 'application/octet-stream');
+                    const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, file.mime_type || 'application/octet-stream', file.compression || '');
                     const relativePath = (file.path.startsWith(rootPath) ? file.path.slice(rootPath.length) : file.path).replace(/^\//, '');
                     zipData[folderName + '/' + relativePath] = new Uint8Array(await decryptedBlob.arrayBuffer());
                 } catch (e) {
@@ -842,7 +898,7 @@ export const useFileStore = defineStore('files', {
         const response = await api.get(`/files/download/${fileId}`, { responseType: 'blob' });
         if (preview) this.preview.status = 'Déchiffrement (Client-Side)...';
         const encryptedBlob = new Blob([await response.data.arrayBuffer()]);
-        const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, mimeType);
+        const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, mimeType, file.compression || '');
         const url = window.URL.createObjectURL(decryptedBlob);
         if (preview) {
           this.preview = { show: true, url, type: mimeType, name: fileName, loading: false, status: '' };
@@ -938,7 +994,7 @@ export const useFileStore = defineStore('files', {
         const response = await api.get(endpoint, { responseType: 'blob' });
 
         if (preview) this.preview.status = 'Déchiffrement local...';
-        let decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, finalMimeType);
+        let decryptedBlob = await decryptChunkedFileWorker(response.data, fileKey, finalMimeType, file?.compression || '');
 
         if (preview && finalMimeType.startsWith('image/') && !finalMimeType.includes('svg')) {
           this.preview.status = 'Optimisation pour affichage...';

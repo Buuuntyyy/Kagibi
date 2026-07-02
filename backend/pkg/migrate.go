@@ -54,7 +54,94 @@ func Migrate(db *bun.DB) error {
 		return err
 	}
 	migrateEnsurePartialOrgIndexes(ctx, db)
+	if err := migrateFilesUniqueIndex(ctx, db); err != nil {
+		return err
+	}
+	migrateChunkSizeColumns(ctx, db)
+	migrateFolderSyncedColumn(ctx, db)
 
+	if err := migrateComments(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateNotifications(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateVersioning(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateOrgLDAP(ctx, db); err != nil {
+		return err
+	}
+	migrateCompressionColumn(ctx, db)
+
+	if err := migrateOrgAccessRequests(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateOrgGroupKeys(ctx, db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func migrateOrgGroupKeys(ctx context.Context, db *bun.DB) error {
+	// org_group_keys: per-member group key storage (RSA-OAEP wrapped, one row per member per group)
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS org_group_keys (
+		id            BIGSERIAL    PRIMARY KEY,
+		group_id      BIGINT       NOT NULL REFERENCES org_groups(id) ON DELETE CASCADE,
+		user_id       TEXT         NOT NULL,
+		encrypted_key TEXT         NOT NULL,
+		created_at    TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE (group_id, user_id)
+	)`)
+	if err != nil {
+		return fmt.Errorf("migrateOrgGroupKeys create table: %w", err)
+	}
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_ogk_group_id ON org_group_keys (group_id)`)
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_ogk_user_id  ON org_group_keys (user_id)`)
+
+	// encrypted_group_key on org_groups: group key wrapped with org key (AES-GCM)
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE org_groups ADD COLUMN IF NOT EXISTS encrypted_group_key TEXT NOT NULL DEFAULT ''`,
+	); err != nil {
+		log.Printf("Warning: migrateOrgGroupKeys add encrypted_group_key: %v", err)
+	}
+
+	// group_id on org_files: non-nil → file key wrapped with group key, not org key
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE org_files ADD COLUMN IF NOT EXISTS group_id BIGINT REFERENCES org_groups(id) ON DELETE SET NULL`,
+	); err != nil {
+		log.Printf("Warning: migrateOrgGroupKeys add group_id to org_files: %v", err)
+	}
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_org_files_group_id ON org_files (group_id) WHERE group_id IS NOT NULL`)
+
+	// group_id on org_folders: defines the encryption scope for files uploaded here
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE org_folders ADD COLUMN IF NOT EXISTS group_id BIGINT REFERENCES org_groups(id) ON DELETE SET NULL`,
+	); err != nil {
+		log.Printf("Warning: migrateOrgGroupKeys add group_id to org_folders: %v", err)
+	}
+
+	return nil
+}
+
+func migrateOrgAccessRequests(ctx context.Context, db *bun.DB) error {
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS org_access_requests (
+		id           BIGSERIAL PRIMARY KEY,
+		org_id       BIGINT      NOT NULL,
+		user_id      TEXT        NOT NULL,
+		folder_path  TEXT        NOT NULL DEFAULT '/',
+		message      TEXT        NOT NULL DEFAULT '',
+		status       TEXT        NOT NULL DEFAULT 'pending',
+		resolved_by  TEXT        NOT NULL DEFAULT '',
+		resolved_at  TIMESTAMPTZ,
+		created_at   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE (org_id, user_id, folder_path)
+	)`)
+	if err != nil {
+		return fmt.Errorf("migrateOrgAccessRequests: %w", err)
+	}
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_oar_org_status ON org_access_requests (org_id, status)`)
 	return nil
 }
 
@@ -109,6 +196,7 @@ func migrateCoreModels(ctx context.Context, db *bun.DB) error {
 		(*FolderFileKey)(nil),
 		(*FolderFolderKey)(nil),
 		(*RecentActivity)(nil),
+		(*UserFavorite)(nil),
 		(*P2PSignal)(nil),
 		(*P2PInvite)(nil),
 		(*RealtimeEvent)(nil),
@@ -828,7 +916,7 @@ func migrateEnsurePartialOrgIndexes(ctx context.Context, db *bun.DB) {
 		// Check if the index is already a partial index; if so, skip.
 		var isPartial bool
 		_ = db.QueryRowContext(ctx,
-			`SELECT indpred IS NOT NULL FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = $1`, name,
+			`SELECT indpred IS NOT NULL FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = ?`, name,
 		).Scan(&isPartial)
 		if isPartial {
 			continue
@@ -842,6 +930,181 @@ func migrateEnsurePartialOrgIndexes(ctx context.Context, db *bun.DB) {
 			log.Printf("Warning: migrateEnsurePartialOrgIndexes create %s: %v", name, err)
 		}
 	}
+}
+
+// migrateChunkSizeColumns adds the chunk_size column to files (and org_files) with a
+// DEFAULT of 10 485 760 (10 MB). PostgreSQL fills existing rows with the default value
+// at query time without rewriting the table, so old files transparently keep 10 MB
+// semantics and new files store their actual encryption chunk size.
+func migrateChunkSizeColumns(ctx context.Context, db *bun.DB) {
+	for _, stmt := range []string{
+		`ALTER TABLE "files"     ADD COLUMN IF NOT EXISTS "chunk_size" BIGINT NOT NULL DEFAULT 10485760`,
+		`ALTER TABLE "org_files" ADD COLUMN IF NOT EXISTS "chunk_size" BIGINT NOT NULL DEFAULT 10485760`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateChunkSizeColumns: %v", err)
+		}
+	}
+}
+
+// migrateFilesUniqueIndex deduplicates any duplicate (user_id, path) rows in the
+// files table created by the pre-fix non-atomic upsert, then adds a UNIQUE index
+// so the new ON CONFLICT DO UPDATE upsert can operate safely.
+func migrateFilesUniqueIndex(ctx context.Context, db *bun.DB) error {
+	// Remove duplicate rows keeping the newest (highest id) for each (user_id, path).
+	if _, err := db.ExecContext(ctx, `
+		DELETE FROM files a
+		USING files b
+		WHERE a.id < b.id
+		  AND a.user_id = b.user_id
+		  AND a.path = b.path
+	`); err != nil {
+		log.Printf("Warning: migrateFilesUniqueIndex dedup: %v", err)
+	}
+
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_files_user_path ON files (user_id, path)`,
+	); err != nil {
+		return fmt.Errorf("migrateFilesUniqueIndex: %w", err)
+	}
+	return nil
+}
+
+// migrateFolderSyncedColumn ajoute la colonne synced à la table folders.
+// Les dossiers créés par la sync desktop ont synced=true — permet d'afficher
+// l'icône de synchronisation côté cloud exactement comme pour les fichiers.
+func migrateFolderSyncedColumn(ctx context.Context, db *bun.DB) {
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "folders" ADD COLUMN IF NOT EXISTS "synced" BOOLEAN NOT NULL DEFAULT false`,
+	); err != nil {
+		log.Printf("Warning: migrateFolderSyncedColumn: %v", err)
+	}
+}
+
+func migrateComments(ctx context.Context, db *bun.DB) error {
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS file_comments (
+			id          BIGSERIAL PRIMARY KEY,
+			file_id     BIGINT REFERENCES files(id) ON DELETE CASCADE,
+			org_file_id BIGINT REFERENCES org_files(id) ON DELETE CASCADE,
+			org_id      BIGINT REFERENCES organizations(id) ON DELETE CASCADE,
+			author_id   TEXT NOT NULL,
+			content     TEXT NOT NULL,
+			is_resolved BOOLEAN NOT NULL DEFAULT false,
+			parent_id   BIGINT REFERENCES file_comments(id) ON DELETE CASCADE,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create file_comments table: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS file_comment_reads (
+			comment_id BIGINT NOT NULL REFERENCES file_comments(id) ON DELETE CASCADE,
+			user_id    TEXT NOT NULL,
+			read_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (comment_id, user_id)
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create file_comment_reads table: %w", err)
+	}
+	for _, idx := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_file_comments_file_id     ON file_comments (file_id)     WHERE file_id IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_file_comments_org_file_id ON file_comments (org_file_id) WHERE org_file_id IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_file_comments_author_id   ON file_comments (author_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_comment_reads_user   ON file_comment_reads (user_id)`,
+	} {
+		if _, err := db.ExecContext(ctx, idx); err != nil {
+			log.Printf("Warning: failed to create file_comments index: %v", err)
+		}
+	}
+	return nil
+}
+
+func migrateNotifications(ctx context.Context, db *bun.DB) error {
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS notifications (
+			id            BIGSERIAL PRIMARY KEY,
+			user_id       TEXT NOT NULL,
+			actor_id      TEXT NOT NULL,
+			actor_name    TEXT NOT NULL,
+			type          TEXT NOT NULL,
+			resource_id   BIGINT NOT NULL,
+			resource_type TEXT NOT NULL,
+			resource_name TEXT NOT NULL,
+			resource_path TEXT NOT NULL DEFAULT '',
+			org_id        BIGINT,
+			comment_id    BIGINT REFERENCES file_comments(id) ON DELETE SET NULL,
+			is_read       BOOLEAN NOT NULL DEFAULT false,
+			created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)
+	`); err != nil {
+		return fmt.Errorf("failed to create notifications table: %w", err)
+	}
+	// Idempotent column additions for instances that created the table before these fields.
+	for _, stmt := range []string{
+		`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS resource_path TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS org_id        BIGINT`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: failed to alter notifications table: %v", err)
+		}
+	}
+	for _, idx := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_notifications_user_read  ON notifications (user_id, is_read, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_notifications_comment_id ON notifications (comment_id) WHERE comment_id IS NOT NULL`,
+	} {
+		if _, err := db.ExecContext(ctx, idx); err != nil {
+			log.Printf("Warning: failed to create notifications index: %v", err)
+		}
+	}
+	return nil
+}
+
+func migrateVersioning(ctx context.Context, db *bun.DB) error {
+	// versioning_enabled flag on user profiles (opt-in, default off)
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "versioning_enabled" BOOLEAN NOT NULL DEFAULT false`,
+	); err != nil {
+		log.Printf("Warning: migrateVersioning add versioning_enabled: %v", err)
+	}
+
+	// version_storage_bytes tracks how much quota old versions consume
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "user_plans" ADD COLUMN IF NOT EXISTS "version_storage_bytes" BIGINT NOT NULL DEFAULT 0`,
+	); err != nil {
+		log.Printf("Warning: migrateVersioning add version_storage_bytes: %v", err)
+	}
+
+	// file_versions table — one row per historical version of a personal file
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS file_versions (
+			id             BIGSERIAL PRIMARY KEY,
+			file_id        BIGINT NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+			user_id        TEXT NOT NULL,
+			version_number INT NOT NULL,
+			s3_key         TEXT NOT NULL,
+			encrypted_key  TEXT NOT NULL,
+			size           BIGINT NOT NULL DEFAULT 0,
+			chunk_size     BIGINT NOT NULL DEFAULT 10485760,
+			mime_type      TEXT NOT NULL DEFAULT '',
+			created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(file_id, version_number)
+		)
+	`); err != nil {
+		return fmt.Errorf("migrateVersioning create file_versions: %w", err)
+	}
+
+	for _, idx := range []string{
+		`CREATE INDEX IF NOT EXISTS idx_file_versions_file_id   ON file_versions (file_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_versions_user_id   ON file_versions (user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_versions_file_ver  ON file_versions (file_id, version_number DESC)`,
+	} {
+		if _, err := db.ExecContext(ctx, idx); err != nil {
+			log.Printf("Warning: migrateVersioning index: %v", err)
+		}
+	}
+	return nil
 }
 
 func migrateP2PInviteEmails(ctx context.Context, db *bun.DB) {
@@ -871,6 +1134,60 @@ func migrateP2PInviteEmails(ctx context.Context, db *bun.DB) {
 			`UPDATE "p2p_invites" SET recipient_email_encrypted = ? WHERE id = ?`, enc, r.ID,
 		); err != nil {
 			log.Printf("Warning: migrateP2PInviteEmails update id=%d: %v", r.ID, err)
+		}
+	}
+}
+
+func migrateOrgLDAP(ctx context.Context, db *bun.DB) error {
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "org_ldap_configs" (
+		"id"                    BIGSERIAL PRIMARY KEY,
+		"org_id"                BIGINT NOT NULL UNIQUE REFERENCES "organizations"("id") ON DELETE CASCADE,
+		"enabled"               BOOLEAN NOT NULL DEFAULT false,
+		"url"                   TEXT NOT NULL DEFAULT '',
+		"bind_dn"               TEXT NOT NULL DEFAULT '',
+		"bind_password_enc"     TEXT NOT NULL DEFAULT '',
+		"user_base_dn"          TEXT NOT NULL DEFAULT '',
+		"user_filter"           TEXT NOT NULL DEFAULT '(objectClass=person)',
+		"group_base_dn"         TEXT NOT NULL DEFAULT '',
+		"group_filter"          TEXT NOT NULL DEFAULT '(objectClass=groupOfNames)',
+		"attr_email"            TEXT NOT NULL DEFAULT 'mail',
+		"attr_display_name"     TEXT NOT NULL DEFAULT 'cn',
+		"attr_uid"              TEXT NOT NULL DEFAULT 'uid',
+		"tls_skip_verify"       BOOLEAN NOT NULL DEFAULT false,
+		"sync_interval_minutes" INTEGER NOT NULL DEFAULT 60,
+		"auto_deprovision_days" INTEGER NOT NULL DEFAULT 30,
+		"min_expected_users"    INTEGER NOT NULL DEFAULT 1,
+		"last_sync_at"          TIMESTAMPTZ,
+		"last_sync_error"       TEXT NOT NULL DEFAULT '',
+		"last_sync_stats"       JSONB,
+		"created_at"            TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		"updated_at"            TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("failed to create org_ldap_configs table: %w", err)
+	}
+
+	for _, col := range []string{
+		`ALTER TABLE "org_members" ADD COLUMN IF NOT EXISTS "source"       TEXT NOT NULL DEFAULT 'internal'`,
+		`ALTER TABLE "org_members" ADD COLUMN IF NOT EXISTS "ldap_uid"     TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE "org_members" ADD COLUMN IF NOT EXISTS "suspended_at" TIMESTAMPTZ`,
+	} {
+		if _, err := db.ExecContext(ctx, col); err != nil {
+			log.Printf("Warning: migrateOrgLDAP column: %v", err)
+		}
+	}
+	return nil
+}
+
+// migrateCompressionColumn adds the compression column to files and org_files.
+// Empty string means no compression (legacy); "gzip" means plaintext was compressed before encryption.
+func migrateCompressionColumn(ctx context.Context, db *bun.DB) {
+	for _, stmt := range []string{
+		`ALTER TABLE "files"     ADD COLUMN IF NOT EXISTS "compression" VARCHAR(20) NOT NULL DEFAULT ''`,
+		`ALTER TABLE "org_files" ADD COLUMN IF NOT EXISTS "compression" VARCHAR(20) NOT NULL DEFAULT ''`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateCompressionColumn: %v", err)
 		}
 	}
 }

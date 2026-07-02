@@ -49,29 +49,22 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	// 2. Supprimer de S3
 	s3Key := fmt.Sprintf(s3UserPathFormat, userID, file.Path)
-	log.Printf("Attempting to delete S3 object. Bucket: %s, Key: %s", s3storage.BucketName, s3Key)
 
-	_, err = s3storage.Client.DeleteObject(c.Request.Context(), &s3.DeleteObjectInput{
-		Bucket: aws.String(s3storage.BucketName),
-		Key:    aws.String(s3Key),
-	})
-
-	if err != nil {
-		log.Printf("Error deleting file from S3: %v", err)
-	} else {
-		log.Printf("Successfully deleted S3 object: %s", s3Key)
-	}
-
-	// 3. Mettre à jour la taille des dossiers (sauf preview)
+	// 2. Mettre à jour la taille des dossiers (sauf preview)
 	if !file.IsPreview {
 		if err := pkg.UpdateFolderSizesForFile(c.Request.Context(), db, userID, file.Path, -file.Size); err != nil {
 			log.Printf("Failed to update folder sizes on delete: %v", err)
 		}
 	}
 
-	// 4. Supprimer de la BDD et décrémenter le quota dans une transaction
+	// 3. Collect versions before deletion so we can free version_storage_bytes and
+	// delete their S3 objects after commit (file_versions rows cascade-delete with files).
+	go deleteAllVersionsForFile(c.Request.Context(), db, fileID, userID)
+
+	// 4. Supprimer de la BDD et décrémenter le quota dans une transaction.
+	// S3 est supprimé APRÈS le commit pour éviter l'état fantôme (objet S3 absent
+	// mais enregistrement DB présent) si la transaction échoue.
 	tx, err := db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur de transaction"})
@@ -95,6 +88,15 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la validation de la suppression"})
 		return
+	}
+
+	// 4. Supprimer de S3 après le commit réussi (best effort, erreurs non bloquantes).
+	log.Printf("Deleting S3 object after DB commit. Bucket: %s, Key: %s", s3storage.BucketName, s3Key)
+	if _, err = s3storage.Client.DeleteObject(c.Request.Context(), &s3.DeleteObjectInput{
+		Bucket: aws.String(s3storage.BucketName),
+		Key:    aws.String(s3Key),
+	}); err != nil {
+		log.Printf("Error deleting file from S3 (DB already clean): %v", err)
 	}
 
 	monitoring.RecordFileDeleted()
@@ -209,8 +211,11 @@ func deleteFolderFoldersInTx(ctx context.Context, db *bun.DB, tx bun.Tx, userID,
 		Where("resource_type = ? AND resource_id IN (?)", "folder", bun.In(allFolderIDs)).Exec(ctx)
 	_, _ = tx.NewDelete().Model((*pkg.FolderShare)(nil)).Where(queryFolderIDIn, bun.In(allFolderIDs)).Exec(ctx)
 	_, _ = tx.NewDelete().Model((*pkg.FolderFileKey)(nil)).Where(queryFolderIDIn, bun.In(allFolderIDs)).Exec(ctx)
+	// Deux requêtes séparées pour éviter le double bun.In sur le même slice
 	_, _ = tx.NewDelete().Model((*pkg.FolderFolderKey)(nil)).
-		Where("parent_folder_id IN (?) OR sub_folder_id IN (?)", bun.In(allFolderIDs), bun.In(allFolderIDs)).Exec(ctx)
+		Where("parent_folder_id IN (?)", bun.In(allFolderIDs)).Exec(ctx)
+	_, _ = tx.NewDelete().Model((*pkg.FolderFolderKey)(nil)).
+		Where("sub_folder_id IN (?)", bun.In(allFolderIDs)).Exec(ctx)
 	_, _ = tx.NewDelete().Model((*pkg.FolderSize)(nil)).Where(queryFolderIDIn, bun.In(allFolderIDs)).Exec(ctx)
 	if _, err := tx.NewDelete().Model((*pkg.Folder)(nil)).
 		Where("id IN (?)", bun.In(allFolderIDs)).Where(queryUserIDEq, userID).Exec(ctx); err != nil {
@@ -227,12 +232,9 @@ func deleteFolderRecursive(c *gin.Context, db *bun.DB, userID, folderPath string
 		return fmt.Errorf("Erreur lors de la récupération du contenu du dossier")
 	}
 
-	go func() {
-		s3Ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-		defer cancel()
-		deleteFolderS3Objects(s3Ctx, userID, folderPath, files)
-	}()
-
+	// Supprimer les enregistrements DB en premier dans une transaction atomique.
+	// La suppression S3 se fait APRÈS le commit pour éviter l'état fantôme :
+	// si la transaction échoue, les objets S3 restent cohérents avec la DB.
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("Erreur de transaction")
@@ -260,7 +262,15 @@ func deleteFolderRecursive(c *gin.Context, db *bun.DB, userID, folderPath string
 		return fmt.Errorf("Erreur lors de la validation de la suppression")
 	}
 
-	// Remove local filesystem folder (best effort)
+	// Supprimer les objets S3 seulement après le commit DB réussi.
+	// Les erreurs S3 sont non-bloquantes (les métadonnées sont déjà propres).
+	go func() {
+		s3Ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		deleteFolderS3Objects(s3Ctx, userID, folderPath, files)
+	}()
+
+	// Supprimer le dossier local filesystem (best effort)
 	userRoot := filepath.Join("uploads", userID)
 	logicalPath := strings.TrimPrefix(folderPath, "/")
 	diskPath, err := utils.SecureJoin(userRoot, logicalPath)

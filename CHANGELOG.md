@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.19.0 — 2026-06-30
+
+### Nouvelles fonctionnalités
+
+- **Favoris personnels** : tout fichier ou dossier du drive personnel peut être mis en favori. Un bouton étoile (★) est disponible directement dans le tableau de fichiers et via le menu contextuel (clic droit). Les favoris sont persistés en base (`user_favorites`) et synchronisés entre sessions.
+- **Section "Fichiers favoris" sur la page d'accueil** : une nouvelle section accordéon s'affiche au-dessus de la section "Récent", présentant les éléments favoris en grille 5 colonnes. Elle n'apparaît que si au moins un favori existe. Cliquer sur un élément l'ouvre directement ; l'étoile dorée visible au survol permet de le retirer instantanément.
+- **Tri par favoris** : le navigateur de fichiers propose un nouveau critère de tri (colonne ★) qui remonte les éléments favoris en tête de liste.
+
+### API
+
+- `GET /api/v1/users/favorites` — liste les favoris de l'utilisateur courant (fichiers et dossiers).
+- `POST /api/v1/users/favorites` — ajoute un élément aux favoris (`{ id, type: "file"|"folder" }`).
+- `DELETE /api/v1/users/favorites/:type/:id` — retire un élément des favoris.
+
+---
+
 ## v2.18.0 — 2026-05-21
 
 ### Nouvelles fonctionnalités

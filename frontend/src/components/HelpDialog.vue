@@ -27,6 +27,14 @@
                 <span class="btn-desc">Vous avez une idée d'amélioration ?</span>
             </div>
           </a>
+
+          <router-link to="/faq" class="action-btn faq-btn" @click="close">
+            <BookOpen class="btn-icon" :size="32" :stroke-width="2" />
+            <div class="btn-text">
+                <span class="btn-title">FAQ</span>
+                <span class="btn-desc">Questions fréquentes sur Kagibi, la sécurité et les fonctionnalités.</span>
+            </div>
+          </router-link>
         </div>
       </div>
     </div>
@@ -34,7 +42,7 @@
 </template>
 
 <script setup>
-import { Bug, Lightbulb } from 'lucide-vue-next'
+import { Bug, Lightbulb, BookOpen } from 'lucide-vue-next'
 
 const props = defineProps({
   isOpen: Boolean
@@ -158,6 +166,14 @@ h3 {
 
 .feature-btn:hover .btn-icon {
   color: #3498db;
+}
+
+.faq-btn:hover {
+  border-color: var(--primary-color);
+}
+
+.faq-btn:hover .btn-icon {
+  color: var(--primary-color);
 }
 
 .btn-icon {

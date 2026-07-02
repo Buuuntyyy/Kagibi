@@ -107,6 +107,7 @@ const loading = ref(false);
 const error = ref(null);
 
 const currentFolder = ref(null);
+const currentFolderKey = ref(null); // CryptoKey AES-GCM si on est à l'intérieur d'un dossier partagé
 
 watch(() => fileStore.shareUpdateTrigger, () => {
     if (currentFolder.value) {
@@ -396,8 +397,8 @@ const downloadSharedFile = async (item) => {
         const encryptedFileBytes = await response.data.arrayBuffer(); // This is the encrypted file
         const encryptedBlob = new Blob([encryptedFileBytes]);
         
-        const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, item.mime_type || 'application/octet-stream');
-        
+        const decryptedBlob = await decryptChunkedFileWorker(encryptedBlob, fileKeyCrypto, item.mime_type || 'application/octet-stream', item.compression || '');
+
         // 3. Trigger Download
         const url = window.URL.createObjectURL(decryptedBlob);
         const a = document.createElement('a');
@@ -476,7 +477,8 @@ const downloadFolderAsZip = async (folder) => {
                 const decryptedBlob = await decryptChunkedFileWorker(
                     response.data,
                     fileKey,
-                    file.mime_type || 'application/octet-stream'
+                    file.mime_type || 'application/octet-stream',
+                    file.compression || ''
                 );
                 const buffer = await decryptedBlob.arrayBuffer();
                 zipData[file.relative_path] = new Uint8Array(buffer);

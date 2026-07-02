@@ -12,7 +12,6 @@ import { unwrapMasterKey, CHUNK_SIZE } from './crypto'
 const IV_LENGTH = 12
 const TAG_LENGTH = 16
 const ENCRYPTED_CHUNK_OVERHEAD = IV_LENGTH + TAG_LENGTH
-const ENCRYPTED_CHUNK_SIZE = CHUNK_SIZE + ENCRYPTED_CHUNK_OVERHEAD
 
 /**
  * Download state enum
@@ -29,10 +28,16 @@ export const DownloadState = {
 }
 
 /**
- * Creates a TransformStream that decrypts AES-GCM chunks on the fly
- * Handles backpressure automatically via Web Streams API
+ * Creates a TransformStream that decrypts AES-GCM chunks on the fly.
+ *
+ * @param {CryptoKey} cryptoKey - AES-GCM file key
+ * @param {number} chunkSize - Plaintext chunk size used during encryption (bytes).
+ *   Encrypted chunk size = chunkSize + IV_LENGTH + TAG_LENGTH.
+ *   Old files always used CHUNK_SIZE (10 MB); read from the presigned-download response.
+ * @param {Function} [onProgress] - Called with total decrypted bytes after each chunk.
  */
-function createDecryptionTransform(cryptoKey, onProgress) {
+function createDecryptionTransform(cryptoKey, chunkSize, onProgress) {
+  const encryptedChunkSize = chunkSize + ENCRYPTED_CHUNK_OVERHEAD
   let buffer = new Uint8Array(0)
   let chunkIndex = 0
   let totalDecrypted = 0
@@ -46,9 +51,9 @@ function createDecryptionTransform(cryptoKey, onProgress) {
       buffer = newBuffer
 
       // Process complete encrypted chunks
-      while (buffer.length >= ENCRYPTED_CHUNK_SIZE) {
-        const encryptedChunk = buffer.slice(0, ENCRYPTED_CHUNK_SIZE)
-        buffer = buffer.slice(ENCRYPTED_CHUNK_SIZE)
+      while (buffer.length >= encryptedChunkSize) {
+        const encryptedChunk = buffer.slice(0, encryptedChunkSize)
+        buffer = buffer.slice(encryptedChunkSize)
 
         try {
           const decrypted = await decryptChunk(encryptedChunk, cryptoKey, chunkIndex)
@@ -64,7 +69,7 @@ function createDecryptionTransform(cryptoKey, onProgress) {
     },
 
     async flush(controller) {
-      // Handle final partial chunk
+      // Handle final partial chunk (always present when file size is not a multiple of chunkSize)
       if (buffer.length > 0) {
         if (buffer.length < IV_LENGTH + TAG_LENGTH) {
           controller.error(new Error('Corrupted final chunk: insufficient data'))
@@ -215,7 +220,10 @@ export async function downloadAndDecryptStream(fileId, masterKey, options = {}) 
       file_name: fileName,
       file_size: fileSize,
       mime_type: mimeType,
-      encrypted_key: encryptedKey
+      encrypted_key: encryptedKey,
+      // chunk_size is the AES-GCM plaintext chunk size stored in the DB.
+      // Falls back to CHUNK_SIZE (10 MB) for files uploaded before this feature.
+      chunk_size: chunkSize = CHUNK_SIZE
     } = metaResponse.data
 
     // 2. Decrypt the file key using master key
@@ -251,7 +259,7 @@ export async function downloadAndDecryptStream(fileId, masterKey, options = {}) 
     let downloadedBytes = 0
     let decryptedBytes = 0
 
-    const decryptTransform = createDecryptionTransform(fileKey, (bytes) => {
+    const decryptTransform = createDecryptionTransform(fileKey, chunkSize, (bytes) => {
       decryptedBytes = bytes
       onProgress({
         downloadedBytes,

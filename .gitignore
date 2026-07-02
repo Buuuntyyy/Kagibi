@@ -11,6 +11,9 @@ schema_dump_*.sql
 backend/.env
 frontend/.env
 docs/kagibi-presentation-template.html
+.env
+
+
 # Kubernetes secrets with real values
 k8s/security/secrets.yaml
 k8s/*
@@ -40,6 +43,8 @@ backend/node_modules/
 # Build outputs
 frontend/dist/
 backend/bin/
+
+docs/
 
 scripts/s3-cors-config.json
 

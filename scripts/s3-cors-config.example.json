@@ -3,7 +3,8 @@
     {
       "ID": "Kagibi-Multipart-Upload",
       "AllowedOrigins": [
-        "https:://domain.com"
+        "https://dev.kagibi.cloud",
+        "https://kagibi.cloud"
       ],
       "AllowedMethods": [
         "PUT",

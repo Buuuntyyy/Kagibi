@@ -27,6 +27,9 @@ import {
 // This module-level Map is the canonical cache for decrypted org keys.
 const orgKeyCache = new Map() // orgID (number) -> CryptoKey (AES-256-GCM)
 
+// Group key cache — keyed by "${orgID}:${groupID}" string to avoid collisions.
+const groupKeyCache = new Map() // "orgID:groupID" -> CryptoKey (AES-256-GCM)
+
 export const useOrgStore = defineStore('organizations', () => {
   const orgs = ref([])
   const currentOrg = ref(null)
@@ -103,6 +106,131 @@ export const useOrgStore = defineStore('organizations', () => {
     return orgKey
   }
 
+  /**
+   * Retrieve the decrypted group key for a specific group.
+   * Cache-first. Two unwrapping strategies:
+   *   1. If the API returns `encrypted_key` — RSA-OAEP (member entry), same path as org key.
+   *   2. If admin and the API returns `encrypted_group_key` — AES-GCM unwrap via org key.
+   */
+  async function getGroupKey(orgID, groupID) {
+    const cacheKey = `${orgID}:${groupID}`
+    if (groupKeyCache.has(cacheKey)) return groupKeyCache.get(cacheKey)
+
+    const { data } = await api.get(`/orgs/${orgID}/groups/${groupID}/key`)
+    const authStore = useAuthStore()
+
+    let groupKey
+    if (data.encrypted_key) {
+      // Member path: RSA-OAEP wrapped key
+      if (!authStore.privateKey) throw new Error('Clé privée introuvable. Reconnectez-vous.')
+      groupKey = await decryptOrgKey(data.encrypted_key, authStore.privateKey)
+    } else if (data.encrypted_group_key) {
+      // Admin fallback: group key wrapped with org key (AES-GCM)
+      const orgKey = await getOrgKey(orgID)
+      groupKey = await unwrapFileKey(data.encrypted_group_key, orgKey)
+    } else {
+      throw new Error('Clé de groupe indisponible.')
+    }
+
+    groupKeyCache.set(cacheKey, groupKey)
+    return groupKey
+  }
+
+  /**
+   * Initialize group encryption: generate a group key and provision it to all
+   * current group members who have a public key.
+   */
+  async function initializeGroupKey(orgID, groupID) {
+    const orgKey = await getOrgKey(orgID)
+    if (!members.value.length) await fetchMembers(orgID)
+
+    // Fetch group members to know who to provision
+    const { data: groupMembers } = await api.get(`/orgs/${orgID}/groups/${groupID}/members`)
+
+    const groupKey = await generateOrgKey()
+
+    // Wrap group key with org key (AES-GCM) for admin recovery
+    const encryptedGroupKey = await wrapFileKey(groupKey, orgKey)
+
+    // Wrap group key for each member who has a public key
+    const memberKeys = []
+    for (const gm of groupMembers) {
+      const m = members.value.find(mem => mem.user_id === gm.user_id)
+      if (m?.public_key) {
+        memberKeys.push({
+          user_id: gm.user_id,
+          encrypted_key: await encryptOrgKeyForUser(groupKey, m.public_key),
+        })
+      }
+    }
+
+    await api.post(`/orgs/${orgID}/groups/${groupID}/key/init`, {
+      encrypted_group_key: encryptedGroupKey,
+      member_keys: memberKeys,
+    })
+
+    const cacheKey = `${orgID}:${groupID}`
+    groupKeyCache.set(cacheKey, groupKey)
+  }
+
+  /**
+   * Provision the group key for a specific member (after they were added to the group).
+   */
+  async function provisionGroupKeyForMember(orgID, groupID, member) {
+    if (!member.public_key) throw new Error('Clé publique du membre introuvable.')
+    const groupKey = await getGroupKey(orgID, groupID)
+    const encryptedKey = await encryptOrgKeyForUser(groupKey, member.public_key)
+    await api.put(`/orgs/${orgID}/groups/${groupID}/key/members/${member.user_id}`, { encrypted_key: encryptedKey })
+  }
+
+  /**
+   * Rotate the group key: re-wrap all group files and re-provision all members.
+   */
+  async function rotateGroupKey(orgID, groupID) {
+    const oldGroupKey = await getGroupKey(orgID, groupID)
+    const orgKey = await getOrgKey(orgID)
+    if (!members.value.length) await fetchMembers(orgID)
+
+    const newGroupKey = await generateOrgKey()
+    const encryptedGroupKey = await wrapFileKey(newGroupKey, orgKey)
+
+    // Fetch all file keys for this group
+    const { data: fileKeyRows } = await api.get(`/orgs/${orgID}/groups/${groupID}/key/files`)
+    const newFileKeys = await Promise.all(fileKeyRows.map(async (fk) => {
+      if (!fk.encrypted_key) return { file_id: fk.id, encrypted_key: '' }
+      const fileKey = await unwrapFileKey(fk.encrypted_key, oldGroupKey)
+      return { file_id: fk.id, encrypted_key: await wrapFileKey(fileKey, newGroupKey) }
+    }))
+
+    // Fetch group members and re-provision
+    const { data: groupMembers } = await api.get(`/orgs/${orgID}/groups/${groupID}/members`)
+    const memberKeys = []
+    for (const gm of groupMembers) {
+      const m = members.value.find(mem => mem.user_id === gm.user_id)
+      if (m?.public_key) {
+        memberKeys.push({
+          user_id: gm.user_id,
+          encrypted_key: await encryptOrgKeyForUser(newGroupKey, m.public_key),
+        })
+      }
+    }
+
+    await api.post(`/orgs/${orgID}/groups/${groupID}/key/rotate`, {
+      encrypted_group_key: encryptedGroupKey,
+      member_keys: memberKeys,
+      file_keys: newFileKeys,
+    })
+
+    const cacheKey = `${orgID}:${groupID}`
+    groupKeyCache.delete(cacheKey)
+    groupKeyCache.set(cacheKey, newGroupKey)
+  }
+
+  async function fetchGroupKeyProvisionedMembers(orgID, groupID) {
+    const { data } = await api.get(`/orgs/${orgID}/groups/${groupID}/key/members`)
+    return data.provisioned_user_ids || []
+  }
+
   // ── Orgs ──────────────────────────────────────────────────────────────────
 
   async function fetchOrgs() {
@@ -171,11 +299,16 @@ export const useOrgStore = defineStore('organizations', () => {
   }
 
   async function updateOrg(orgID, payload) {
-    const { data } = await api.patch(`/orgs/${orgID}`, payload)
-    currentOrg.value = { ...currentOrg.value, ...data }
-    const idx = orgs.value.findIndex(o => o.id === orgID)
-    if (idx !== -1) orgs.value[idx] = { ...orgs.value[idx], ...data }
-    return data
+    try {
+      const { data } = await api.patch(`/orgs/${orgID}`, payload)
+      currentOrg.value = { ...currentOrg.value, ...data }
+      const idx = orgs.value.findIndex(o => o.id === orgID)
+      if (idx !== -1) orgs.value[idx] = { ...orgs.value[idx], ...data }
+      return data
+    } catch (err) {
+      error.value = err?.response?.data?.error || err.message
+      throw err
+    }
   }
 
   async function uploadOrgLogo(orgID, file) {
@@ -198,10 +331,15 @@ export const useOrgStore = defineStore('organizations', () => {
   }
 
   async function deleteOrg(orgID) {
-    await api.delete(`/orgs/${orgID}`)
-    orgKeyCache.delete(orgID)
-    orgs.value = orgs.value.filter(o => o.id !== orgID)
-    if (currentOrg.value?.id === orgID) currentOrg.value = null
+    try {
+      await api.delete(`/orgs/${orgID}`)
+      orgKeyCache.delete(orgID)
+      orgs.value = orgs.value.filter(o => o.id !== orgID)
+      if (currentOrg.value?.id === orgID) currentOrg.value = null
+    } catch (err) {
+      error.value = err?.response?.data?.error || err.message
+      throw err
+    }
   }
 
   // ── Members ───────────────────────────────────────────────────────────────
@@ -359,7 +497,7 @@ export const useOrgStore = defineStore('organizations', () => {
     }
   }
 
-  async function createFolder(orgID, name, parentPath, encryptedKey = '') {
+  async function createFolder(orgID, name, parentPath, encryptedKey = '', groupID = null) {
     let apiName = name
     try {
       const orgKey = await getOrgKey(orgID)
@@ -367,11 +505,14 @@ export const useOrgStore = defineStore('organizations', () => {
       folderNameCache.value[apiName] = name
     } catch (_) { /* key unavailable — fall back to plaintext */ }
 
-    const { data } = await api.post(`/orgs/${orgID}/fs/folder`, {
+    const body = {
       name: apiName,
       parent_path: parentPath,
       encrypted_key: encryptedKey,
-    })
+    }
+    if (groupID != null) body.group_id = groupID
+
+    const { data } = await api.post(`/orgs/${orgID}/fs/folder`, body)
     // Server echoes back the encrypted name; replace with plaintext for immediate display.
     data.name = name
     currentItems.value.folders = [...(currentItems.value.folders || []), data]
@@ -430,15 +571,17 @@ export const useOrgStore = defineStore('organizations', () => {
     }
 
     const orgKey = await getOrgKey(orgID)
+    const currentGroupID = currentItems.value.current_group_id ?? null
+    const wrappingKey = currentGroupID ? await getGroupKey(orgID, currentGroupID) : orgKey
 
     let encryptedFileName = file.name
     try {
       encryptedFileName = await encryptOrgName(file.name, orgKey)
     } catch (_) { /* fall back to plaintext */ }
 
-    // Generate a per-file key and wrap it with the org key.
+    // Generate a per-file key and wrap it with the appropriate key (org or group).
     const fileKey = await generateOrgKey()
-    const encryptedFileKey = await wrapFileKey(fileKey, orgKey)
+    const encryptedFileKey = await wrapFileKey(fileKey, wrappingKey)
     const baseNonce = generateBaseNonce()
 
     // Compute total encrypted size deterministically before touching S3.
@@ -452,6 +595,7 @@ export const useOrgStore = defineStore('organizations', () => {
       total_size: totalEncryptedSize,
       total_parts: numChunks,
       encrypted_key: encryptedFileKey,
+      group_id: currentGroupID,
     })
 
     // Encrypt one chunk → upload → move on.  Peak memory ≈ 1 chunk (≈ 10 MB).
@@ -479,6 +623,7 @@ export const useOrgStore = defineStore('organizations', () => {
       total_size: totalEncryptedSize,
       content_type: 'application/octet-stream',
       encrypted_key: encryptedFileKey,
+      group_id: currentGroupID,
     })
 
     if (result.file) {
@@ -505,9 +650,18 @@ export const useOrgStore = defineStore('organizations', () => {
   async function downloadFile(orgID, fileID, fileName, mimeType = '') {
     // Prefer key from listing cache to avoid an extra round-trip
     const cachedFile = currentItems.value.files.find(f => f.id === fileID)
-    const encryptedFileKey = cachedFile?.encrypted_key || (await getFileKey(orgID, fileID))
+    let encryptedFileKey = cachedFile?.encrypted_key
+    let groupID = cachedFile?.group_id ?? null
 
-    const orgKey = await getOrgKey(orgID)
+    if (!encryptedFileKey) {
+      const keyData = await getFileKey(orgID, fileID)
+      encryptedFileKey = keyData.encrypted_key
+      groupID = keyData.group_id
+    }
+
+    const wrappingKey = groupID
+      ? await getGroupKey(orgID, groupID)
+      : await getOrgKey(orgID)
 
     const response = await api.get(`/orgs/${orgID}/fs/file/${fileID}/download`, {
       responseType: 'blob',
@@ -516,7 +670,7 @@ export const useOrgStore = defineStore('organizations', () => {
     const decryptedBlob = await decryptFileFromOrg(
       response.data,
       encryptedFileKey,
-      orgKey,
+      wrappingKey,
       mimeType || cachedFile?.mime_type || 'application/octet-stream',
     )
 
@@ -543,18 +697,29 @@ export const useOrgStore = defineStore('organizations', () => {
 
   async function getFileKey(orgID, fileID) {
     const { data } = await api.get(`/orgs/${orgID}/fs/file/${fileID}/key`)
-    return data.encrypted_key
+    return { encrypted_key: data.encrypted_key, group_id: data.group_id ?? null }
   }
 
   async function getFileBlob(orgID, fileID, mimeType) {
     const cachedFile = currentItems.value.files.find(f => f.id === fileID)
-    const encryptedFileKey = cachedFile?.encrypted_key || (await getFileKey(orgID, fileID))
-    const orgKey = await getOrgKey(orgID)
+    let encryptedFileKey = cachedFile?.encrypted_key
+    let groupID = cachedFile?.group_id ?? null
+
+    if (!encryptedFileKey) {
+      const keyData = await getFileKey(orgID, fileID)
+      encryptedFileKey = keyData.encrypted_key
+      groupID = keyData.group_id
+    }
+
+    const wrappingKey = groupID
+      ? await getGroupKey(orgID, groupID)
+      : await getOrgKey(orgID)
+
     const response = await api.get(`/orgs/${orgID}/fs/file/${fileID}/download`, { responseType: 'blob' })
     return decryptFileFromOrg(
       response.data,
       encryptedFileKey,
-      orgKey,
+      wrappingKey,
       mimeType || cachedFile?.mime_type || 'application/octet-stream',
     )
   }
@@ -655,8 +820,25 @@ export const useOrgStore = defineStore('organizations', () => {
   }
 
   async function deleteGroup(orgID, groupID) {
-    await api.delete(`/orgs/${orgID}/groups/${groupID}`)
+    // If the group has encrypted files, re-wrap their keys with the OrgKey before
+    // deleting so they remain decryptable after the GroupKey is gone (B3 fix).
+    const grp = groups.value.find(g => g.id === groupID)
+    let fileKeys = []
+    if (grp?.encrypted_group_key) {
+      const { data: groupFileRows } = await api.get(`/orgs/${orgID}/groups/${groupID}/key/files`)
+      if (groupFileRows?.length) {
+        const orgKey = await getOrgKey(orgID)
+        const groupKey = await getGroupKey(orgID, groupID)
+        fileKeys = await Promise.all(groupFileRows.map(async (fk) => {
+          if (!fk.encrypted_key) return { file_id: fk.id, encrypted_key: '' }
+          const fileKey = await unwrapFileKey(fk.encrypted_key, groupKey)
+          return { file_id: fk.id, encrypted_key: await wrapFileKey(fileKey, orgKey) }
+        }))
+      }
+    }
+    await api.delete(`/orgs/${orgID}/groups/${groupID}`, { data: { file_keys: fileKeys } })
     groups.value = groups.value.filter(g => g.id !== groupID)
+    groupKeyCache.delete(`${orgID}:${groupID}`)
   }
 
   async function addGroupMember(orgID, groupID, userID, role = 'member') {
@@ -1001,7 +1183,7 @@ export const useOrgStore = defineStore('organizations', () => {
 
   async function restoreTrashItem(orgID, itemType, itemID) {
     await api.post(`/orgs/${orgID}/trash/${itemType}/${itemID}/restore`)
-    trash.value = trash.value.filter(i => !(i.id === itemID && i.item_type === itemType))
+    trash.value = trash.value.filter(i => !(String(i.id) === String(itemID) && i.item_type === itemType))
     searchCache.value = null
   }
 
@@ -1013,6 +1195,28 @@ export const useOrgStore = defineStore('organizations', () => {
   async function emptyTrash(orgID) {
     await api.delete(`/orgs/${orgID}/trash`)
     trash.value = []
+  }
+
+  // ── Access requests ────────────────────────────────────────────────────────
+
+  const accessRequests = ref([])
+
+  async function fetchAccessRequests(orgID, status = '') {
+    const params = status ? { status } : {}
+    const { data } = await api.get(`/orgs/${orgID}/access-requests`, { params })
+    accessRequests.value = data || []
+    return accessRequests.value
+  }
+
+  async function requestFolderAccess(orgID, folderPath, message = '') {
+    const { data } = await api.post(`/orgs/${orgID}/access-requests`, { folder_path: folderPath, message })
+    return data
+  }
+
+  async function resolveAccessRequest(orgID, requestID, status) {
+    const { data } = await api.patch(`/orgs/${orgID}/access-requests/${requestID}`, { status })
+    accessRequests.value = accessRequests.value.map(r => r.id === requestID ? data : r)
+    return data
   }
 
   async function fetchOrgShares(orgID) {
@@ -1080,20 +1284,33 @@ export const useOrgStore = defineStore('organizations', () => {
     if (zipList.length === 0) return {}
 
     const allKeys = await fetchAllFileKeys(orgID)
+    // B4: store { encrypted_key, group_id } so group-encrypted files use the correct wrapping key
     const keyMap = {}
-    for (const k of allKeys) if (k.encrypted_key) keyMap[k.id] = k.encrypted_key
+    for (const k of allKeys) if (k.encrypted_key) keyMap[k.id] = { encrypted_key: k.encrypted_key, group_id: k.group_id ?? null }
 
     const orgKey = await getOrgKey(orgID)
     const entries = {}
+    let completed = 0
+    let nextIdx = 0
 
-    for (let i = 0; i < zipList.length; i++) {
-      const { id, mime_type, zipPath } = zipList[i]
-      const encKey = keyMap[id] || (await getFileKey(orgID, id))
-      const res = await api.get(`/orgs/${orgID}/fs/file/${id}/download`, { responseType: 'blob' })
-      const blob = await decryptFileFromOrg(res.data, encKey, orgKey, mime_type || 'application/octet-stream')
-      entries[zipPath] = new Uint8Array(await blob.arrayBuffer())
-      if (onProgress) onProgress(i + 1, zipList.length)
+    // Worker pool bounded to 4 concurrent downloads: enough to hide network
+    // latency without saturating the server or the browser's crypto engine.
+    // nextIdx++ is safe — JS is single-threaded, no await between read and increment.
+    async function processNext() {
+      while (nextIdx < zipList.length) {
+        const i = nextIdx++
+        const { id, mime_type, zipPath } = zipList[i]
+        const keyEntry = keyMap[id] ?? (await getFileKey(orgID, id))
+        const wrappingKey = keyEntry.group_id ? await getGroupKey(orgID, keyEntry.group_id) : orgKey
+        const res = await api.get(`/orgs/${orgID}/fs/file/${id}/download`, { responseType: 'blob' })
+        const blob = await decryptFileFromOrg(res.data, keyEntry.encrypted_key, wrappingKey, mime_type || 'application/octet-stream')
+        entries[zipPath] = new Uint8Array(await blob.arrayBuffer())
+        completed++
+        if (onProgress) onProgress(completed, zipList.length)
+      }
     }
+
+    await Promise.all(Array.from({ length: Math.min(4, zipList.length) }, processNext))
 
     return entries
   }
@@ -1206,9 +1423,10 @@ export const useOrgStore = defineStore('organizations', () => {
     // Members must be fetched first (includes public_key for admin callers)
     if (!members.value.length) await fetchMembers(orgID)
 
-    // Re-wrap all file keys
+    // Re-wrap only files encrypted with the org key (group files have their own key rotation)
     const fileKeys = await fetchAllFileKeys(orgID)
-    const newFileKeys = await Promise.all(fileKeys.map(async (fk) => {
+    const orgFileKeys = fileKeys.filter(fk => !fk.group_id)
+    const newFileKeys = await Promise.all(orgFileKeys.map(async (fk) => {
       if (!fk.encrypted_key) return { file_id: fk.id, encrypted_key: '' }
       const fileKey = await unwrapFileKey(fk.encrypted_key, oldOrgKey)
       return { file_id: fk.id, encrypted_key: await wrapFileKey(fileKey, newOrgKey) }
@@ -1240,6 +1458,29 @@ export const useOrgStore = defineStore('organizations', () => {
       const myNewKey = await encryptOrgKeyForUser(newOrgKey, myRsaKey)
       currentOrg.value = { ...currentOrg.value, my_encrypted_org_key: myNewKey }
     }
+  }
+
+  async function transferOwnership(orgID, targetMemberID) {
+    const orgKey = await getOrgKey(orgID)
+    if (!members.value.length) await fetchMembers(orgID)
+    const target = members.value.find(m => m.id === targetMemberID)
+    if (!target?.public_key) throw new Error('Clé publique du membre introuvable.')
+
+    const encryptedOrgKey = await encryptOrgKeyForUser(orgKey, target.public_key)
+    await api.post(`/orgs/${orgID}/transfer-ownership`, {
+      target_member_id: targetMemberID,
+      encrypted_org_key: encryptedOrgKey,
+    })
+
+    const authStore = useAuthStore()
+    const myID = authStore.user?.id || authStore.user?.user_id
+    if (currentOrg.value) currentOrg.value = { ...currentOrg.value, my_role: 'admin' }
+    const idx = orgs.value.findIndex(o => o.id === orgID)
+    if (idx !== -1) orgs.value[idx] = { ...orgs.value[idx], my_role: 'admin' }
+    const callerMember = members.value.find(m => m.user_id === myID)
+    if (callerMember) callerMember.role = 'admin'
+    const targetMember = members.value.find(m => m.id === targetMemberID)
+    if (targetMember) targetMember.role = 'owner'
   }
 
   /**
@@ -1277,6 +1518,16 @@ export const useOrgStore = defineStore('organizations', () => {
     if (myMember) myMember.encrypted_org_key = encryptedOrgKey
   }
 
+  async function fetchMyEffectiveAccess(orgID) {
+    const res = await api.get(`/orgs/${orgID}/my-access`)
+    return res.data
+  }
+
+  async function fetchMemberEffectiveAccess(orgID, userID) {
+    const res = await api.get(`/orgs/${orgID}/members/${userID}/effective-access`)
+    return res.data
+  }
+
   function $reset() {
     orgs.value = []
     currentOrg.value = null
@@ -1295,6 +1546,7 @@ export const useOrgStore = defineStore('organizations', () => {
     favorites.value = []
     trash.value = []
     orgShares.value = []
+    accessRequests.value = []
     loading.value = false
     error.value = null
     orgKeyCache.clear()
@@ -1320,10 +1572,14 @@ export const useOrgStore = defineStore('organizations', () => {
     fetchGroups, fetchMyGroups, createGroup, updateGroup, deleteGroup,
     addGroupMember, removeGroupMember, updateGroupMemberRole, fetchGroupMembers,
     setGroupPermission, deleteGroupPermission, fetchGroupPermissions,
-    fetchAuditLog, fetchAuditSummary, deleteAuditLog, exportAuditLog, fetchAllFileKeys, rotateOrgKey, initializeOrgKey,
+    fetchAuditLog, fetchAuditSummary, deleteAuditLog, exportAuditLog, fetchAllFileKeys, rotateOrgKey, initializeOrgKey, transferOwnership,
     fetchOrgStats, createOrgFileShare,
     orgConflictState, resolveOrgConflict,
     pinnedOrgIDs, togglePin, isPinned,
+    accessRequests, fetchAccessRequests, requestFolderAccess, resolveAccessRequest,
+    fetchMyEffectiveAccess, fetchMemberEffectiveAccess,
+    getGroupKey, initializeGroupKey, provisionGroupKeyForMember, rotateGroupKey,
+    fetchGroupKeyProvisionedMembers,
     $reset,
   }
 })

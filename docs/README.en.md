@@ -26,11 +26,12 @@ Kagibi is released under the **AGPLv3** license: the code is auditable, and self
 
 - **File upload** — drag-and-drop or file picker, with real-time progress (encryption phase then upload phase).
 - **Folder upload** — upload an entire directory tree in one operation. When a name conflict arises, three options are available: auto-rename, skip, or replace.
-- **Multipart upload** — large files (> 10 MB) are split into 10 MB chunks, individually encrypted and uploaded in parallel.
+- **Multipart upload** — large files are split into parts (5 to 100 MB each), individually encrypted with AES-256-GCM in the browser, then uploaded **in parallel** directly to S3 via pre-signed URLs (TTL 3 min). The backend never handles the raw content — it only orchestrates presigned URLs and finalises the multipart operation.
 - **Download** — client-side streaming decryption: the file is never fully reconstructed in plaintext in memory before being written to disk.
 - **Organization** — create folders, rename, move, delete (single file or recursive folder).
 - **Tags** — label your folders to find them quickly via search and filters.
 - **Preview** — view images and PDFs directly in the browser, without downloading.
+- **Favorites** — mark any file or folder as a favorite via the ★ button in the file table or the right-click context menu. Favorites are persisted server-side and appear in a dedicated section on the home page; they can also be used as a sort criterion in the file browser.
 
 ### Search and Filtering
 
@@ -82,6 +83,15 @@ Send a file directly from one device to another, end-to-end encrypted, without i
 - **Keyboard navigation**: Ctrl+K for search, arrow keys in lists.
 - **Responsive design**: mobile-adapted navigation with a bottom bar and bottom sheets.
 - **Storage quota** displayed in real time in the sidebar (updated within 2 seconds of each operation).
+- **FAQ page** (`/faq`) — publicly accessible, covering general questions (sovereignty, security, encryption), features (P2P, sharing, Organisations, Friends), and Kagibi's values. Also accessible from the **Help & Support** menu in the dashboard navbar.
+
+### Home Page
+
+The home page (`/dashboard/home`) displays three accordion sections:
+
+1. **Favorite files** — shows all files and folders marked as favorites, in a 5-column grid. The section is only visible when at least one favorite exists. Clicking a card opens the item directly; the golden star visible on hover removes it from favorites.
+2. **Recently opened** — the 10 most recently accessed files or folders, with one-click navigation.
+3. **Shared with me** — files and folders shared by other users.
 
 ---
 
@@ -129,6 +139,28 @@ Within an organization, **groups** allow clustering members to assign permission
 - Group members inherit a role within the group: **admin** or **member**.
 - Folder-level permissions can be assigned to an entire group at once.
 
+#### Per-group encryption (GroupKey)
+
+Each group can have its own **dedicated encryption key** (GroupKey, AES-256-GCM), independent of the OrgKey. Files stored in a folder linked to the group are encrypted with this GroupKey — only group members with a provisioned key can decrypt them, even if other org members have access to the rest of the content.
+
+- **Initialisation**: an admin generates the GroupKey client-side, wraps it with the OrgKey (admin backup), and encrypts it with each group member's RSA public key.
+- **Provisioning a new member**: after adding a member to the group, an admin can provision their GroupKey with one click from the Groups tab.
+- **Rotation**: rotation replaces the GroupKey, re-wraps all group files with the new key, and re-provisions all members — atomic server-side operation.
+- **Revocation**: removing a member from the group immediately deletes their key entry; a rotation is recommended to ensure complete cryptographic separation.
+- **Backward compatibility**: files without a GroupKey (`group_id = NULL`) continue to use the OrgKey with no migration required.
+
+### LDAP / Active Directory Sync
+
+Organizations can connect to a corporate **LDAP or Active Directory** server to automatically synchronize their members and groups, without managing invitations manually:
+
+- **Automatic provisioning** — new LDAP users receive an invitation email and join the organization as soon as they accept it.
+- **Group synchronization** — LDAP groups are recreated as Kagibi groups and their membership is updated at every sync cycle.
+- **Two-phase deprovisioning** — a user who leaves the directory is first suspended, then automatically removed after a configurable grace period (or manually by an admin).
+- **Safeguards** — the sync is aborted if LDAP returns an empty result or if more than 20% of existing members disappear in one cycle, protecting against filter errors and network failures.
+- **Bind password encryption** — the service account password is stored AES-256-GCM encrypted.
+
+Configuration is done in the **Administration → LDAP / AD** tab of the organization (restricted to admins and owners). See the [full LDAP documentation](../desktop-app/DOCUMENTATION_EN.md#10-ldap--active-directory-integration) for complete configuration and operational details.
+
 ### Onboarding Wizard
 
 When a user creates their first organization, a step-by-step wizard guides them through:
@@ -168,6 +200,15 @@ Admins and group admins can define per-folder permissions for individual users o
 | none | No access; folder is invisible |
 
 Permissions cascade: a user's effective access to a folder is the highest level granted either directly or via any group they belong to.
+
+#### Locked folders and access requests
+
+A folder whose effective access is `none` is displayed as **locked** (padlock icon) in the file browser. The member can click **Request access** to submit a request to the admin. Admins see all pending requests in the **Access Requests** tab of the management panel and can approve or deny them with a single click.
+
+#### Effective access
+
+- The **Profile** tab lets each member review their own effective access folder by folder.
+- In the **Members** tab, admins can expand any member's effective access inline, without leaving the list.
 
 ### Organization Share Links
 
@@ -439,9 +480,9 @@ The "Shares" page centralises all your active shares in two collapsible sections
 
 ### 3. P2P Transfer (device-to-device)
 
-P2P transfer sends files directly from one device to another, end-to-end encrypted, without intermediate storage on our servers.
+P2P transfer sends files directly from one device to another, end-to-end encrypted, without intermediate storage on our servers. **There is no file size limit.**
 
-Modern networks sometimes make direct connections impossible (NAT, firewalls). In those cases, Kagibi uses a TURN relay server owned by Kagibi. **Data passing through this relay remains AES-GCM encrypted — the server sees only opaque streams, not the content.**
+WebRTC always attempts a **direct connection first** (LAN or NAT traversal via STUN). Only if a direct path cannot be established — due to a restrictive NAT or firewall — does the transfer fall back to a **Kagibi-operated TURN relay**. This relay is a pure traffic switcher: data enters and exits in real time without being written to disk. **The TURN server produces no logs and cannot access the content**, which remains AES-256-GCM encrypted end-to-end throughout.
 
 #### Two transfer modes
 
@@ -506,10 +547,14 @@ Modern networks sometimes make direct connections impossible (NAT, firewalls). I
 | Organization name | Plaintext |
 | Member list and roles | Plaintext |
 | OrgKey per member | Encrypted (member's RSA public key) |
+| GroupKey per group (admin backup) | Encrypted (OrgKey, AES-256-GCM) |
+| GroupKey per group member | Encrypted (member's RSA public key) |
 | File and folder names within org | Encrypted (OrgKey, AES-256-GCM) |
-| File content within org | Encrypted (OrgKey-derived key, AES-256-GCM) |
+| File content (ungrouped files) | Encrypted (FileKey wrapped with OrgKey, AES-256-GCM) |
+| File content (group files) | Encrypted (FileKey wrapped with GroupKey, AES-256-GCM) |
 | Audit log entries | Plaintext actions; encrypted paths/names decrypted client-side |
 | Folder permissions | Plaintext (user/group IDs + access level) |
+| Access requests | Plaintext (member ID, folder ID, status, optional message) |
 
 ### Social and Sharing Data
 
@@ -519,12 +564,29 @@ Modern networks sometimes make direct connections impossible (NAT, firewalls). I
 - P2P invitations: token + file name + size + expiration date (content never stored)
 - Organization share links: token + encrypted key + optional password hash + single-use flag
 
+### Connection Logs (LCEN compliance)
+
+In accordance with French law (LCEN Article 6 II and Decree 2021-1363), the following technical data is retained for **1 year**:
+
+| Event logged | Data recorded |
+|---|---|
+| Account creation / deletion | User ID, full IP, anonymised IP, user-agent, timestamp |
+| Login attempts (success / failure) | User ID, full IP, anonymised IP, timestamp |
+| Password / token changes | User ID, full IP, anonymised IP, timestamp |
+| File access | User ID, file ID, full IP, anonymised IP, timestamp |
+| Public share link creation / revocation | User ID, resource, token, full IP, user-agent, timestamp |
+| Direct share creation | Owner ID, recipient ID, resource, full IP, user-agent, timestamp |
+| HTTP requests | Anonymised IP only (CNIL 2021-122), user-agent, status, duration |
+
+**IP address policy**: full IP is stored only in security event logs (account lifecycle, auth, shares). Standard HTTP request logs contain only the anonymised IP (last IPv4 octet / last 80 IPv6 bits masked), in accordance with CNIL deliberation 2021-122. Logs are shipped to Grafana Cloud Loki and retained for 1 year.
+
+All log data may be disclosed to judicial or administrative authorities upon a valid legal request. These logs are access-controlled and never contain decryption keys.
+
 ### What Is Not Collected
 
 - File content (never in plaintext on the server)
-- Browsing or search history
-- IP addresses (except temporary logging for security/abuse purposes)
-- Device or browser information
+- Browsing or search history within your files
+- Full IP in standard HTTP logs (anonymised only — CNIL 2021-122)
 
 ---
 

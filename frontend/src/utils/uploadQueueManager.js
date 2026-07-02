@@ -16,6 +16,7 @@ import { MultipartUploadManager, PART_SIZE, UploadState } from './multipartUploa
 import { encryptChunkWorker, generateBaseNonce, NONCE_LENGTH, TAG_LENGTH_BYTES } from './crypto'
 import { generateMasterKey, wrapMasterKey, deriveKeyFromToken } from './crypto'
 import { generatePreview } from './previewGenerator'
+import { shouldCompress, compressBlob } from './compress'
 import api from '../api'
 
 const MB = 1024 * 1024
@@ -249,10 +250,26 @@ class UploadQueueManager {
       const encryptedFileKey = await wrapMasterKey(fileKey, authStore.masterKey)
       const shareKeysMap = await this.buildShareKeysMap(fileKey, targetPath)
 
+      // Compression optionnelle avant chiffrement
+      let uploadFile = file
+      let compression = ''
+      if (shouldCompress(file.type, file.name)) {
+        try {
+          const compressed = await compressBlob(file)
+          if (compressed.size < file.size) {
+            uploadFile = new File([compressed], file.name, { type: 'application/octet-stream' })
+            compression = 'gzip'
+          }
+        } catch (e) {
+          console.warn('Compression failed, uploading uncompressed:', e)
+        }
+      }
+
       // Pre-calculate encrypted size: AES-GCM adds exactly (nonce + tag) per chunk.
       // Empty files produce 1 chunk of 28 bytes (nonce + auth tag, zero ciphertext).
-      const totalParts = file.size === 0 ? 1 : Math.ceil(file.size / PART_SIZE)
-      const totalEncryptedSize = file.size + totalParts * (NONCE_LENGTH + TAG_LENGTH_BYTES)
+      const uploadSize = uploadFile.size
+      const totalParts = uploadSize === 0 ? 1 : Math.ceil(uploadSize / PART_SIZE)
+      const totalEncryptedSize = uploadSize + totalParts * (NONCE_LENGTH + TAG_LENGTH_BYTES)
       uploadStore.updateUpload(id, { encryptedSize: totalEncryptedSize, totalBytes: totalEncryptedSize })
 
       uploadStore.setStatus(id, UploadStatus.UPLOADING)
@@ -260,10 +277,10 @@ class UploadQueueManager {
       uploadStore.updateUpload(id, { manager })
 
       // Initiate multipart upload (gets all presigned URLs upfront, no backend change needed)
-      await manager.initiate(file.name, targetPath, 'application/octet-stream', totalEncryptedSize, encryptedFileKey)
+      await manager.initiate(uploadFile.name, targetPath, 'application/octet-stream', totalEncryptedSize, encryptedFileKey)
 
       // Pipeline: encrypt chunk N and upload it immediately, without waiting for the rest
-      const chunkGen = this._encryptChunksGen(file, fileKey, uploadStore, id)
+      const chunkGen = this._encryptChunksGen(uploadFile, fileKey, uploadStore, id)
       const completedParts = await manager.uploadPartsStreamed(chunkGen)
 
       uploadStore.setStatus(id, UploadStatus.COMPLETING)
@@ -277,7 +294,8 @@ class UploadQueueManager {
         encryptedKey: encryptedFileKey,
         shareKeys: Object.keys(shareKeysMap).length > 0 ? JSON.stringify(shareKeysMap) : '',
         previewId: previewID,
-        isPreview: false
+        isPreview: false,
+        compression
       })
 
       uploadStore.setCompleted(id, result)

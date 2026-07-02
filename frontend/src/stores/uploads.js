@@ -178,11 +178,12 @@ export const useUploadStore = defineStore('uploads', {
      * Mark upload as failed
      */
     setFailed(id, error) {
-      this.updateUpload(id, { 
-        status: UploadStatus.FAILED, 
+      this.updateUpload(id, {
+        status: UploadStatus.FAILED,
         error: error?.message || error || 'Unknown error',
         endTime: Date.now()
       })
+      this.showManager = true
     },
     
     /**

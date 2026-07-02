@@ -1,110 +1,200 @@
 // Copyright (C) 2025-2026  Buuuntyyy
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+// Package middleware — security_logger.go expose des helpers de log de
+// sécurité structurés via slog. Les événements sont émis avec l'attribut
+// component="security" pour faciliter le filtrage dans Loki / Grafana.
+//
+// Exemples de requêtes LogQL :
+//
+//	{service="kagibi-backend"} | json | component="security"
+//	{service="kagibi-backend"} | json | event_type="auth.failed"
 package middleware
 
 import (
-	"log"
-	"os"
-	"time"
+	"context"
+	"log/slog"
+
+	"kagibi/backend/pkg/logger"
 )
 
-// SecurityLogger provides structured security logging
-type SecurityLogger struct {
-	enabled bool
-	logger  *log.Logger
-	file    *os.File
+// seclog retourne toujours le logger par défaut courant avec l'attribut
+// component="security". On ne le cache pas en var globale pour éviter de
+// capturer le logger avant que applogger.Init() l'ait configuré.
+func seclog() *slog.Logger { return slog.Default().With("component", "security") }
+
+// LogAuthAttempt enregistre une tentative d'authentification.
+func LogAuthAttempt(ctx context.Context, userID, ip string, success bool, reason string) {
+	level := slog.LevelInfo
+	if !success {
+		level = slog.LevelWarn
+	}
+	seclog().Log(ctx, level, "auth.attempt",
+		"event_type", "auth.attempt",
+		"user_id", userID,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+		"success", success,
+		"reason", reason,
+	)
 }
 
-// NewSecurityLogger creates a new security logger with file output
-func NewSecurityLogger() *SecurityLogger {
-	// Create logs directory if not exists
-	os.MkdirAll("logs", 0755)
-
-	// Open security log file
-	file, err := os.OpenFile("logs/security.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Printf("WARNING: Failed to open security log file: %v. Logging to stdout only.", err)
-		return &SecurityLogger{
-			enabled: true,
-			logger:  log.New(os.Stdout, "[SECURITY] ", log.LstdFlags),
-			file:    nil,
-		}
-	}
-
-	return &SecurityLogger{
-		enabled: true,
-		logger:  log.New(file, "[SECURITY] ", log.LstdFlags),
-		file:    file,
-	}
+// LogPasswordChange enregistre un changement de mot de passe.
+func LogPasswordChange(ctx context.Context, userID, ip string) {
+	seclog().Log(ctx, slog.LevelInfo, "auth.password_changed",
+		"event_type", "auth.password_changed",
+		"user_id", userID,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+	)
 }
 
-// Close closes the log file
-func (sl *SecurityLogger) Close() {
-	if sl.file != nil {
-		sl.file.Close()
-	}
+// LogUnauthorizedAccess enregistre un accès refusé.
+func LogUnauthorizedAccess(ctx context.Context, userID, resource, ip string) {
+	seclog().Log(ctx, slog.LevelWarn, "access.denied",
+		"event_type", "access.denied",
+		"user_id", userID,
+		"resource", resource,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+	)
 }
 
-// LogAuthAttempt logs authentication attempts
-func (sl *SecurityLogger) LogAuthAttempt(userID, ip string, success bool) {
-	if !sl.enabled {
-		return
-	}
-	sl.log("AUTH_ATTEMPT", userID, ip, success, "")
+// LogSuspiciousActivity enregistre une activité suspecte.
+func LogSuspiciousActivity(ctx context.Context, userID, activity, ip string) {
+	seclog().Log(ctx, slog.LevelWarn, "security.suspicious",
+		"event_type", "security.suspicious",
+		"user_id", userID,
+		"activity", activity,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+	)
 }
 
-// LogPasswordChange logs password change events
-func (sl *SecurityLogger) LogPasswordChange(userID, ip string) {
-	if !sl.enabled {
-		return
+// LogFileAccess enregistre un accès à un fichier.
+// Le niveau est Info (succès) ou Warn (échec) — jamais Debug, pour satisfaire
+// l'obligation de conservation des logs d'accès (LCEN, 1 an).
+func LogFileAccess(ctx context.Context, userID, fileID, ip string, success bool) {
+	level := slog.LevelInfo
+	if !success {
+		level = slog.LevelWarn
 	}
-	sl.log("PASSWORD_CHANGE", userID, ip, true, "")
+	seclog().Log(ctx, level, "file.access",
+		"event_type", "file.access",
+		"user_id", userID,
+		"file_id", fileID,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+		"success", success,
+	)
 }
 
-// LogUnauthorizedAccess logs unauthorized access attempts
-func (sl *SecurityLogger) LogUnauthorizedAccess(userID, resource, ip string) {
-	if !sl.enabled {
-		return
-	}
-	sl.log("UNAUTHORIZED_ACCESS", userID, ip, false, "Resource: "+resource)
+// LogProfileUpdate enregistre une mise à jour de profil.
+func LogProfileUpdate(ctx context.Context, userID, ip string) {
+	seclog().Log(ctx, slog.LevelInfo, "user.profile_updated",
+		"event_type", "user.profile_updated",
+		"user_id", userID,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+	)
 }
 
-// LogSuspiciousActivity logs suspicious activity
-func (sl *SecurityLogger) LogSuspiciousActivity(userID, activity, ip string) {
-	if !sl.enabled {
-		return
-	}
-	sl.log("SUSPICIOUS_ACTIVITY", userID, ip, false, "Activity: "+activity)
+// LogRateLimitExceeded enregistre un dépassement de limite de débit.
+func LogRateLimitExceeded(ctx context.Context, ip, endpoint string) {
+	seclog().Log(ctx, slog.LevelWarn, "ratelimit.exceeded",
+		"event_type", "ratelimit.exceeded",
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+		"endpoint", endpoint,
+	)
 }
 
-// LogFileAccess logs file access events
-func (sl *SecurityLogger) LogFileAccess(userID, fileID, ip string, success bool) {
-	if !sl.enabled {
-		return
+// LogLDAPSync enregistre le résultat d'une synchronisation LDAP.
+func LogLDAPSync(ctx context.Context, orgID int64, usersFound, added, suspended, removed int, syncErr string) {
+	level := slog.LevelInfo
+	if syncErr != "" {
+		level = slog.LevelError
 	}
-	sl.log("FILE_ACCESS", userID, ip, success, "FileID: "+fileID)
+	seclog().Log(ctx, level, "ldap.sync",
+		"event_type", "ldap.sync",
+		"org_id", orgID,
+		"users_found", usersFound,
+		"users_added", added,
+		"users_suspended", suspended,
+		"users_removed", removed,
+		"error", syncErr,
+	)
 }
 
-// LogProfileUpdate logs profile update events
-func (sl *SecurityLogger) LogProfileUpdate(userID, ip string) {
-	if !sl.enabled {
-		return
-	}
-	sl.log("PROFILE_UPDATE", userID, ip, true, "")
+// LogTokenRevoked enregistre la révocation d'un token (déconnexion, MFA unenroll…).
+func LogTokenRevoked(ctx context.Context, userID, reason, ip string) {
+	seclog().Log(ctx, slog.LevelInfo, "auth.token_revoked",
+		"event_type", "auth.token_revoked",
+		"user_id", userID,
+		"reason", reason,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+	)
 }
 
-// LogRateLimitExceeded logs rate limit violations
-func (sl *SecurityLogger) LogRateLimitExceeded(ip, endpoint string) {
-	if !sl.enabled {
-		return
-	}
-	sl.log("RATE_LIMIT_EXCEEDED", "", ip, false, "Endpoint: "+endpoint)
+// LogAccountCreated enregistre la création d'un compte utilisateur.
+func LogAccountCreated(ctx context.Context, userID, ip, userAgent string) {
+	seclog().Log(ctx, slog.LevelInfo, "account.created",
+		"event_type", "account.created",
+		"user_id", userID,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+		"user_agent", userAgent,
+	)
 }
 
-// log is the internal logging function
-func (sl *SecurityLogger) log(eventType, userID, ip string, success bool, details string) {
-	timestamp := time.Now().Format(time.RFC3339)
-	sl.logger.Printf("%s - Event: %s, UserID: %s, IP: %s, Success: %t, Details: %s",
-		timestamp, eventType, userID, ip, success, details)
+// LogAccountDeleted enregistre la suppression définitive d'un compte (RGPD art. 17).
+func LogAccountDeleted(ctx context.Context, userID, ip, userAgent string) {
+	seclog().Log(ctx, slog.LevelInfo, "account.deleted",
+		"event_type", "account.deleted",
+		"user_id", userID,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+		"user_agent", userAgent,
+	)
+}
+
+// LogShareCreated enregistre la création d'un lien de partage public.
+func LogShareCreated(ctx context.Context, userID, resourceType string, resourceID int64, token, ip, userAgent string) {
+	seclog().Log(ctx, slog.LevelInfo, "share.created",
+		"event_type", "share.created",
+		"user_id", userID,
+		"resource_type", resourceType,
+		"resource_id", resourceID,
+		"token", token,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+		"user_agent", userAgent,
+	)
+}
+
+// LogShareRevoked enregistre la suppression d'un lien de partage public.
+func LogShareRevoked(ctx context.Context, userID, shareID, ip, userAgent string) {
+	seclog().Log(ctx, slog.LevelInfo, "share.revoked",
+		"event_type", "share.revoked",
+		"user_id", userID,
+		"share_id", shareID,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+		"user_agent", userAgent,
+	)
+}
+
+// LogDirectShareCreated enregistre la création d'un partage direct entre utilisateurs.
+func LogDirectShareCreated(ctx context.Context, ownerID, recipientID, resourceType string, resourceID int64, ip, userAgent string) {
+	seclog().Log(ctx, slog.LevelInfo, "share.direct_created",
+		"event_type", "share.direct_created",
+		"owner_id", ownerID,
+		"recipient_id", recipientID,
+		"resource_type", resourceType,
+		"resource_id", resourceID,
+		"ip", ip,
+		"ip_anon", logger.AnonymiseIP(ip),
+		"user_agent", userAgent,
+	)
 }

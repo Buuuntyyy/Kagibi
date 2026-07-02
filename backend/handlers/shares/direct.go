@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"kagibi/backend/middleware"
 	"kagibi/backend/pkg"
 	"log"
 	"net/http"
@@ -66,6 +67,8 @@ func CreateDirectShareHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	ownerID := c.GetString("user_id")
+	middleware.LogDirectShareCreated(c.Request.Context(), ownerID, req.FriendID, req.ResourceType, req.ResourceID, c.ClientIP(), c.Request.UserAgent())
 	sendShareNotifications(c, db, req.FriendID)
 	c.JSON(http.StatusCreated, gin.H{"message": "Resource shared successfully"})
 }

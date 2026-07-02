@@ -299,13 +299,21 @@ export const useAuthStore = defineStore('auth', {
       await sodium.ready
 
       try {
-        // Update password in the auth provider
+        // Step 1 — Update auth password (revokes the current token immediately via Redis)
         await authClient.updateUser({
           password: newPassword,
-          oldPassword: currentPassword, // Required by PocketBase; ignored by Supabase
+          oldPassword: currentPassword,
         })
 
-        // Update the encrypted master key on the backend (crypto key depends on password)
+        // Step 2 — Re-authenticate with the new password to obtain a fresh (non-revoked) token.
+        // The old token was revoked by the password change above; all subsequent protected
+        // API calls would fail with 401 without this re-login.
+        const userEmail = this.user?.email
+        if (!userEmail) throw new Error('User email not available for re-authentication.')
+        const { error: reAuthError } = await authClient.signIn(userEmail, newPassword)
+        if (reAuthError) throw new Error('Re-authentication failed after password change.')
+
+        // Step 3 — Re-wrap the master key under the new KEK (uses the fresh token)
         const newSalt = generateSalt()
         const newSaltHex = sodium.to_hex(newSalt)
         const newKek = await deriveKeyFromPassword(newPassword, newSalt)

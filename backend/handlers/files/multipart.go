@@ -74,6 +74,12 @@ type CompleteMultipartRequest struct {
 	PreviewID       *int64         `json:"preview_id"`
 	IsPreview       bool           `json:"is_preview"`
 	Synced          bool           `json:"synced"`
+	// ChunkSize is the AES-GCM plaintext chunk size used during encryption.
+	// 0 or absent means the client did not specify — defaults to 10 MB (legacy behaviour).
+	ChunkSize int64 `json:"chunk_size"`
+	// Compression is the algorithm applied to the plaintext before encryption.
+	// "" (empty) means no compression; "gzip" means gzip was applied.
+	Compression string `json:"compression"`
 }
 
 // CompletePart represents a completed part with ETag
@@ -86,6 +92,16 @@ type CompletePart struct {
 type AbortMultipartRequest struct {
 	UploadID string `json:"upload_id" binding:"required"`
 	Key      string `json:"key" binding:"required"`
+}
+
+// isVersioningEnabled returns true if the user has opted into file versioning.
+func isVersioningEnabled(ctx context.Context, db *bun.DB, userID string) bool {
+	var enabled bool
+	_ = db.NewSelect().TableExpr("profiles").
+		ColumnExpr("versioning_enabled").
+		Where("id = ?", userID).
+		Scan(ctx, &enabled)
+	return enabled
 }
 
 // ensureUserPlan returns the user's plan, creating a free plan if one does not exist.
@@ -253,7 +269,7 @@ func buildCompletedParts(parts []CompletePart) []types.CompletedPart {
 
 // CompleteMultipartHandler assembles parts and creates DB record
 func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 300*time.Second)
 	defer cancel()
 
 	userID := c.GetString("user_id")
@@ -304,6 +320,20 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	// Verify actual S3 object size: client-provided TotalSize may diverge from the bytes
+	// S3 actually assembled (e.g. GDrive import where Drive metadata != real download size).
+	// Storing the wrong size causes NS_ERROR_NET_PARTIAL_TRANSFER on download.
+	actualSize := req.TotalSize
+	headOut, headErr := s3storage.Client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(s3storage.BucketName),
+		Key:    aws.String(req.Key),
+	})
+	if headErr == nil && headOut.ContentLength != nil {
+		actualSize = *headOut.ContentLength
+	} else if headErr != nil {
+		log.Printf("HeadObject after CompleteMultipartUpload failed, using client-provided size: %v", headErr)
+	}
+
 	// Validate path
 	filePath := req.FilePath
 	if filePath == "" {
@@ -321,6 +351,48 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		fullPathDB = "/" + fullPathDB
 	}
 
+	// Versioning: if the user has versioning enabled and this file already exists,
+	// copy the current S3 object to a versioned key BEFORE CompleteMultipartUpload
+	// overwrites it. This must happen before the S3 call below.
+	type priorVersionInfo struct {
+		encryptedKey string
+		size         int64
+		chunkSize    int64
+		mimeType     string
+		s3Key        string
+	}
+	var savedVersion *priorVersionInfo
+
+	if isVersioningEnabled(ctx, db, userID) {
+		var existingFile pkg.File
+		if err := db.NewSelect().Model(&existingFile).
+			Where("user_id = ? AND path = ?", userID, fullPathDB).
+			Scan(ctx); err == nil && existingFile.ID > 0 {
+			mainS3Key := fmt.Sprintf("users/%s%s", userID, fullPathDB)
+			versionS3Key := fmt.Sprintf("users/%s%s~v%d", userID, fullPathDB, time.Now().UnixMilli())
+			_, copyErr := s3storage.Client.CopyObject(ctx, &s3.CopyObjectInput{
+				Bucket:     aws.String(s3storage.BucketName),
+				Key:        aws.String(versionS3Key),
+				CopySource: aws.String(s3storage.BucketName + "/" + mainS3Key),
+			})
+			if copyErr == nil {
+				cs := existingFile.ChunkSize
+				if cs <= 0 {
+					cs = 10 * 1024 * 1024
+				}
+				savedVersion = &priorVersionInfo{
+					encryptedKey: existingFile.EncryptedKey,
+					size:         existingFile.Size,
+					chunkSize:    cs,
+					mimeType:     existingFile.MimeType,
+					s3Key:        versionS3Key,
+				}
+			} else {
+				log.Printf("[Versioning] S3 copy failed, skipping version: %v", copyErr)
+			}
+		}
+	}
+
 	// Database transaction
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -335,19 +407,26 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		contentType = "application/octet-stream"
 	}
 
+	chunkSize := req.ChunkSize
+	if chunkSize <= 0 {
+		chunkSize = 10 * 1024 * 1024 // legacy default: 10 MB
+	}
+
 	fileRecord := &pkg.File{
 		Name:         req.FileName,
 		Path:         fullPathDB,
-		Size:         req.TotalSize,
+		Size:         actualSize,
 		MimeType:     contentType,
 		UserID:       userID,
 		EncryptedKey: req.EncryptedKey,
+		ChunkSize:    chunkSize,
+		Compression:  req.Compression,
 		PreviewID:    req.PreviewID,
 		IsPreview:    req.IsPreview,
 		Synced:       req.Synced,
 	}
 
-	delta, err := upsertFileInDB(ctx, tx, fileRecord, req.TotalSize)
+	delta, err := upsertFileInDB(ctx, tx, fileRecord, actualSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file record"})
 		return
@@ -363,9 +442,42 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		log.Printf("Error processing direct share keys: %v", err)
 	}
 
+	// Save version record if a prior version was captured above
+	if savedVersion != nil {
+		var maxVer int
+		_ = tx.NewSelect().TableExpr("file_versions").
+			ColumnExpr("COALESCE(MAX(version_number), 0)").
+			Where("file_id = ?", fileRecord.ID).
+			Scan(ctx, &maxVer)
+
+		fv := &pkg.FileVersion{
+			FileID:        fileRecord.ID,
+			UserID:        userID,
+			VersionNumber: maxVer + 1,
+			S3Key:         savedVersion.s3Key,
+			EncryptedKey:  savedVersion.encryptedKey,
+			Size:          savedVersion.size,
+			ChunkSize:     savedVersion.chunkSize,
+			MimeType:      savedVersion.mimeType,
+		}
+		if _, err := tx.NewInsert().Model(fv).Exec(ctx); err != nil {
+			log.Printf("[Versioning] Failed to insert version record: %v", err)
+		} else {
+			_, _ = tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
+				Set("version_storage_bytes = version_storage_bytes + ?", savedVersion.size).
+				Where("user_id = ?", userID).Exec(ctx)
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Transaction commit failed"})
 		return
+	}
+
+	// Enforce plan version limits and update folder sizes asynchronously
+	if savedVersion != nil {
+		planState := ensureUserPlan(db, userID)
+		go enforceVersionLimitForFile(context.Background(), db, fileRecord.ID, userID, planState.Plan)
 	}
 
 	// Update folder sizes (non-blocking)
@@ -493,6 +605,13 @@ func GetPresignedDownloadHandler(c *gin.Context, db *bun.DB) {
 	log.Printf("Presigned streaming download URL generated - UserID: %s, FileID: %d, Size: %d", userID, fileID, file.Size)
 	monitoring.FileDownloadsTotal.Inc()
 
+	// Resolve chunk size: files uploaded before this migration have chunk_size=0 in DB
+	// (column didn't exist yet), so fall back to the legacy 10 MB default.
+	chunkSize := file.ChunkSize
+	if chunkSize <= 0 {
+		chunkSize = 10 * 1024 * 1024
+	}
+
 	// Return URL with decryption metadata
 	c.JSON(http.StatusOK, gin.H{
 		"url":            presignReq.URL,
@@ -502,9 +621,10 @@ func GetPresignedDownloadHandler(c *gin.Context, db *bun.DB) {
 		"mime_type":      file.MimeType,
 		"encrypted_key":  file.EncryptedKey,
 		"encryption_alg": "AES-GCM-256",
-		"chunk_size":     10 * 1024 * 1024, // 10MB - must match frontend CHUNK_SIZE
+		"chunk_size":     chunkSize,
 		"iv_length":      12,
 		"tag_length":     16,
+		"compression":    file.Compression,
 	})
 }
 

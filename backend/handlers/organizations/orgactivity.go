@@ -28,11 +28,14 @@ func (h *OrgHandler) GetOrgActivity(c *gin.Context) {
 	}
 
 	var entries []pkg.OrgAuditLog
-	if err := h.DB.NewSelect().Model(&entries).
+	q := h.DB.NewSelect().Model(&entries).
 		Where("oal.org_id = ?", orgID).
 		OrderExpr("oal.created_at DESC").
-		Limit(50).
-		Scan(c.Request.Context()); err != nil {
+		Limit(50)
+	if !isAdminOrOwner(role) {
+		q = q.Where("oal.actor_id = ?", userID)
+	}
+	if err := q.Scan(c.Request.Context()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

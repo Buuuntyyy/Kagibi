@@ -8,10 +8,13 @@ import (
 	"encoding/json"
 	"kagibi/backend/handlers/auth"
 	billinghandlers "kagibi/backend/handlers/billing"
+	commenthandlers "kagibi/backend/handlers/comments"
 	"kagibi/backend/handlers/files"
 	"kagibi/backend/handlers/folders"
 	"kagibi/backend/handlers/friends"
+	"kagibi/backend/handlers/gdimport"
 	"kagibi/backend/handlers/keys"
+	notifhandlers "kagibi/backend/handlers/notifications"
 	orghandlers "kagibi/backend/handlers/organizations"
 	p2phandlers "kagibi/backend/handlers/p2p"
 	"kagibi/backend/handlers/security"
@@ -19,20 +22,22 @@ import (
 	"kagibi/backend/handlers/tags"
 	"kagibi/backend/handlers/users"
 	wshandler "kagibi/backend/handlers/ws"
+	ldapscheduler "kagibi/backend/internal/ldap"
 	"kagibi/backend/middleware"
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
 	"kagibi/backend/pkg/emailcrypto"
+	applogger "kagibi/backend/pkg/logger"
 	"kagibi/backend/pkg/monitoring"
 	"kagibi/backend/pkg/s3storage"
 	"kagibi/backend/pkg/workers"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
-
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -44,6 +49,7 @@ import (
 
 func main() {
 	loadEnv()
+	applogger.Init()
 	emailcrypto.Init()
 
 	// DB must be initialized before auth so LocalProvider can access auth_users
@@ -66,6 +72,7 @@ func main() {
 	workers.StartWorker(redisClient)
 	workers.StartCleanupWorker(db)
 	workers.StartAccountCleanupWorker(db) // RGPD Article 17
+	ldapscheduler.Start(db)
 
 	friendHandler := friends.NewFriendHandler(db, wshandler.GlobalHub.IsConnected)
 	orgHandler := orghandlers.NewOrgHandler(db, redisClient)
@@ -101,9 +108,10 @@ func initS3() {
 
 func migrateDB(db *bun.DB) {
 	if err := pkg.Migrate(db); err != nil {
-		log.Printf("Failed to migrate: %v", err)
+		slog.Error("migration_failed", "err", err)
+		os.Exit(1)
 	}
-	log.Println("Migrations executed successfully!")
+	slog.Info("migrations_ok")
 }
 
 func initRedis() *redis.Client {
@@ -223,12 +231,15 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	registerFriendRoutes(protected, friendHandler)
 	registerShareRoutes(protected, db)
 	registerSecurityRoutes(protected)
-	registerOrganizationRoutes(api, protected, orgHandler)
+	registerOrganizationRoutes(api, protected, orgHandler, db)
 	registerBillingRoutes(api, protected, authMW, db)
 	registerP2PRoutes(protected, db)
 	registerP2PGuestRoutes(api, db, authMW)
 	registerPublicP2PRoutes(api, db, provider)
 	registerEventRoutes(protected, db)
+	registerImportRoutes(protected)
+	registerCommentRoutes(protected, db)
+	registerNotificationRoutes(protected, db)
 
 	// WebSocket endpoint — authenticated via Authorization header or Sec-WebSocket-Protocol trick.
 	wsAllowedOrigins := strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",")
@@ -261,10 +272,15 @@ func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	usersG.PUT("/avatar", func(c *gin.Context) { users.UpdateAvatarHandler(c, db) })
 	usersG.POST("/recent", func(c *gin.Context) { users.AddRecentActivityHandler(c, db) })
 	usersG.GET("/recent", func(c *gin.Context) { users.GetRecentActivityHandler(c, db) })
+	usersG.GET("/favorites", func(c *gin.Context) { users.ListUserFavoritesHandler(c, db) })
+	usersG.POST("/favorites", func(c *gin.Context) { users.AddUserFavoriteHandler(c, db) })
+	usersG.DELETE("/favorites/:type/:id", func(c *gin.Context) { users.RemoveUserFavoriteHandler(c, db) })
 	usersG.POST("/keys", func(c *gin.Context) { keys.UpdateKeysHandler(c, db) })
 	usersG.GET("/export", func(c *gin.Context) { users.ExportUserDataHandler(c, db) })
 	usersG.GET("/security-settings", func(c *gin.Context) { users.GetSecuritySettingsHandler(c, db) })
 	usersG.PUT("/security-settings", func(c *gin.Context) { users.UpdateSecuritySettingsHandler(c, db) })
+	usersG.GET("/versioning", func(c *gin.Context) { users.GetVersioningHandler(c, db) })
+	usersG.PUT("/versioning", func(c *gin.Context) { users.UpdateVersioningHandler(c, db) })
 }
 
 func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Client) {
@@ -289,6 +305,11 @@ func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	filesG.POST("/batch-presign", func(c *gin.Context) { files.BatchPresignDownloadHandler(c, db) })
 	filesG.POST("/selection-tree", func(c *gin.Context) { files.GetSelectionTreeHandler(c, db) })
 	filesG.GET("/:id/folder-key", func(c *gin.Context) { files.GetFileFolderKeyHandler(c, db) })
+	// Version history routes (use :id to match /:id/folder-key param name at same level)
+	filesG.GET("/:id/versions", func(c *gin.Context) { files.ListVersionsHandler(c, db) })
+	filesG.POST("/:id/versions/:versionID/restore", func(c *gin.Context) { files.RestoreVersionHandler(c, db) })
+	filesG.DELETE("/:id/versions/:versionID", func(c *gin.Context) { files.DeleteVersionHandler(c, db) })
+	filesG.GET("/:id/versions/:versionID/presigned", func(c *gin.Context) { files.GetVersionPresignedDownloadHandler(c, db) })
 }
 
 func registerFolderRoutes(g *gin.RouterGroup, db *bun.DB) {
@@ -354,7 +375,7 @@ func registerSecurityRoutes(g *gin.RouterGroup) {
 	securityG.GET("/events", func(c *gin.Context) { security.GetSecurityEvents(c) })
 }
 
-func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHandler) {
+func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHandler, db *bun.DB) {
 	orgsG := g.Group("/orgs")
 
 	// Organization CRUD
@@ -417,6 +438,23 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	orgsG.PUT("/:orgID/groups/:groupID/permissions", h.SetGroupPermission)
 	orgsG.DELETE("/:orgID/groups/:groupID/permissions", h.DeleteGroupPermission)
 
+	// Access requests
+	orgsG.POST("/:orgID/access-requests", h.RequestFolderAccess)
+	orgsG.GET("/:orgID/access-requests", h.ListAccessRequests)
+	orgsG.PATCH("/:orgID/access-requests/:requestID", h.ResolveAccessRequest)
+
+	// Effective access views
+	orgsG.GET("/:orgID/my-access", h.GetMyEffectiveAccess)
+	orgsG.GET("/:orgID/members/:userID/effective-access", h.GetMemberEffectiveAccess)
+
+	// Group key management (E2E encryption per group)
+	orgsG.GET("/:orgID/groups/:groupID/key", h.GetGroupKey)
+	orgsG.POST("/:orgID/groups/:groupID/key/init", h.InitializeGroupKey)
+	orgsG.POST("/:orgID/groups/:groupID/key/rotate", h.RotateGroupKey)
+	orgsG.GET("/:orgID/groups/:groupID/key/files", h.GetGroupFileKeys)
+	orgsG.GET("/:orgID/groups/:groupID/key/members", h.GetGroupKeyProvisionedMembers)
+	orgsG.PUT("/:orgID/groups/:groupID/key/members/:userID", h.ProvisionGroupKeyForMember)
+
 	// Audit log (admin/owner only)
 	orgsG.GET("/:orgID/audit", h.ListAuditLog)
 	orgsG.GET("/:orgID/audit/summary", h.AuditSummary)
@@ -430,6 +468,14 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	// Key management
 	orgsG.GET("/:orgID/fs/all-keys", h.GetOrgAllFileKeys)
 	orgsG.POST("/:orgID/rotate-key", h.RotateOrgKey)
+	orgsG.POST("/:orgID/transfer-ownership", h.TransferOwnership)
+
+	// LDAP / directory sync (admin/owner only)
+	orgsG.GET("/:orgID/ldap", h.GetLDAPConfig)
+	orgsG.PUT("/:orgID/ldap", h.SaveLDAPConfig)
+	orgsG.POST("/:orgID/ldap/test", h.TestLDAPConnection)
+	orgsG.POST("/:orgID/ldap/sync", h.TriggerLDAPSync)
+	orgsG.GET("/:orgID/ldap/suspended", h.ListSuspendedLDAPMembers)
 
 	// Dashboard stats
 	orgsG.GET("/:orgID/stats", h.GetOrgStats)
@@ -462,6 +508,10 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 
 	// Client-side search index (encrypted names, client decrypts + filters)
 	orgsG.GET("/:orgID/fs/all-items", h.GetAllOrgItems)
+
+	// File comments (org context)
+	orgsG.GET("/:orgID/fs/file/:fileID/comments", func(c *gin.Context) { commenthandlers.ListOrgFileComments(c, db) })
+	orgsG.POST("/:orgID/fs/file/:fileID/comments", func(c *gin.Context) { commenthandlers.AddOrgFileComment(c, db) })
 
 	// Token-based join routes — GET is public (unauthenticated preview), POST requires auth
 	public.GET("/org-invitations/:token", h.GetInvitation)
@@ -618,6 +668,40 @@ func registerEventRoutes(g *gin.RouterGroup, db *bun.DB) {
 func registerBillingRoutes(api *gin.RouterGroup, protected *gin.RouterGroup, authMW gin.HandlerFunc, db *bun.DB) {
 	billinghandlers.RegisterWebhookRoute(api, db)
 	billinghandlers.RegisterRoutes(protected, authMW, db)
+}
+
+func registerImportRoutes(g *gin.RouterGroup) {
+	importG := g.Group("/import")
+	importG.GET("/google/config", gdimport.GetGoogleConfig)
+	// Échange du code PKCE contre un access_token côté serveur (client_secret sécurisé)
+	importG.POST("/google/desktop-token", gdimport.ExchangeDesktopToken)
+}
+
+func registerCommentRoutes(g *gin.RouterGroup, db *bun.DB) {
+	commentsG := g.Group("/comments")
+
+	// Personal file comments — under /comments/file/:fileID to avoid wildcard
+	// conflicts with the existing /files/:id/folder-key route.
+	commentsG.GET("/file/:fileID", func(c *gin.Context) { commenthandlers.ListFileComments(c, db) })
+	commentsG.POST("/file/:fileID", func(c *gin.Context) { commenthandlers.AddFileComment(c, db) })
+
+	// Batch counts (must be before /:id to avoid false matches)
+	commentsG.POST("/batch-counts", func(c *gin.Context) { commenthandlers.BatchCommentCounts(c, db) })
+
+	// Per-comment operations
+	commentsG.PUT("/:id", func(c *gin.Context) { commenthandlers.EditComment(c, db) })
+	commentsG.DELETE("/:id", func(c *gin.Context) { commenthandlers.DeleteComment(c, db) })
+	commentsG.POST("/:id/read", func(c *gin.Context) { commenthandlers.MarkCommentRead(c, db) })
+	commentsG.PATCH("/:id/resolve", func(c *gin.Context) { commenthandlers.ResolveComment(c, db) })
+}
+
+func registerNotificationRoutes(g *gin.RouterGroup, db *bun.DB) {
+	notifsG := g.Group("/notifications")
+	notifsG.GET("", func(c *gin.Context) { notifhandlers.ListNotifications(c, db) })
+	notifsG.GET("/unread-count", func(c *gin.Context) { notifhandlers.GetUnreadCount(c, db) })
+	notifsG.POST("/read-all", func(c *gin.Context) { notifhandlers.MarkAllRead(c, db) })
+	notifsG.POST("/:id/read", func(c *gin.Context) { notifhandlers.MarkNotificationRead(c, db) })
+	notifsG.DELETE("/:id", func(c *gin.Context) { notifhandlers.DeleteNotification(c, db) })
 }
 
 // setupPresenceHooks wires WebSocket connect/disconnect events to broadcast
