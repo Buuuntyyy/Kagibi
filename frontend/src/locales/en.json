@@ -139,7 +139,8 @@
     "accept": "Accept",
     "state": "State",
     "type": "Type",
-    "optional": "optional"
+    "optional": "optional",
+    "back": "Back"
   },
   "share": {
     "shareWith": "Share with",
@@ -358,7 +359,8 @@
     "dangerZone": "Danger zone",
     "deleteAccount": "Delete this account",
     "deleteAccountDesc": "This action is final and will delete all your data.",
-    "close": "Close"
+    "close": "Close",
+    "seePlans": "See plans"
   },
   "friends": {
     "addFriend": "Add friend",
@@ -1505,6 +1507,46 @@
     "donePartialWithSkips": "{ok} file(s) imported, {skips} skipped, {errors} error(s).",
     "transferred": "transferred",
     "creatingFolders": "Creating folders ({done}/{total})"
+  },
+  "upgrade": {
+    "title": "Choose a plan",
+    "subtitle": "Upgrade to unlock more storage and advanced features.",
+    "comingSoonTitle": "Subscriptions coming soon",
+    "comingSoonDesc": "The payment system is being deployed. Plans will be available very soon.",
+    "supportUs": "Support the project",
+    "currentPlan": "Current plan",
+    "popular": "Most popular",
+    "month": "month",
+    "currentLabel": "Your plan",
+    "comingSoonBtn": "Coming soon",
+    "planFree": "Free",
+    "planPersonal": "Personal",
+    "planExpert": "Expert",
+    "planBusiness": "Business",
+    "featureStorage": "{n} encrypted storage",
+    "featureP2P": "Unlimited P2P transfers",
+    "featureE2E": "E2E encryption (AES-256)",
+    "featureShareLink": "Secure link sharing",
+    "featureHistory": "{n}-day activity history",
+    "featurePrioritySupport": "Priority support",
+    "featureHistoryUnlimited": "Unlimited history",
+    "featureOrgs": "Organizations (collaborative spaces)",
+    "featureAdvancedSharing": "Advanced sharing",
+    "featureSupport247": "24/7 support",
+    "featureMultiUser": "Multi-user accounts",
+    "featureAdminPanel": "Centralized administration",
+    "featureSLA": "99.9% SLA",
+    "featureDedicatedSupport": "Dedicated support",
+    "selfHostedNote": "You are using a self-hosted instance — unlimited access to all features with no subscription required.",
+    "faqTitle": "Frequently asked questions",
+    "faq1q": "Can I change my plan at any time?",
+    "faq1a": "Yes, you will be able to upgrade or downgrade your plan at any time once subscriptions open. Changes will be applied immediately.",
+    "faq2q": "What happens if I exceed my quota?",
+    "faq2a": "You will be notified and can upgrade to a higher plan. Your existing files remain accessible.",
+    "faq3q": "Are P2P transfers really unlimited?",
+    "faq3a": "Yes, on all plans. No size or count limits — use your full bandwidth.",
+    "faq4q": "Can I self-host Kagibi for free?",
+    "faq4a": "Yes. Kagibi is open source (AGPLv3) and freely self-hostable. All features are available without a subscription on a self-hosted instance."
   },
   "changelog": {
     "title": "What's new",

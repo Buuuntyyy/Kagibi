@@ -139,7 +139,8 @@
     "accept": "Accepter",
     "state": "Etat",
     "type": "Type",
-    "optional": "optionnel"
+    "optional": "optionnel",
+    "back": "Retour"
   },
   "share": {
     "shareWith": "Partager avec",
@@ -358,7 +359,8 @@
     "dangerZone": "Zone sensible",
     "deleteAccount": "Supprimer ce compte",
     "deleteAccountDesc": "Cette action est définitive et entraîne la suppression de toutes vos données.",
-    "close": "Fermer"
+    "close": "Fermer",
+    "seePlans": "Voir les offres"
   },
   "friends": {
     "addFriend": "Ajouter un ami",
@@ -1505,6 +1507,46 @@
     "donePartialWithSkips": "{ok} fichier(s) importé(s), {skips} ignoré(s), {errors} erreur(s).",
     "transferred": "transférés",
     "creatingFolders": "Création des dossiers ({done}/{total})"
+  },
+  "upgrade": {
+    "title": "Choisir un abonnement",
+    "subtitle": "Passez à un plan supérieur pour débloquer plus de stockage et les fonctionnalités avancées.",
+    "comingSoonTitle": "Abonnements bientôt disponibles",
+    "comingSoonDesc": "Le système de paiement est en cours de déploiement. Les plans seront disponibles très prochainement.",
+    "supportUs": "Soutenir le projet",
+    "currentPlan": "Plan actuel",
+    "popular": "Le plus populaire",
+    "month": "mois",
+    "currentLabel": "Votre plan",
+    "comingSoonBtn": "Bientôt disponible",
+    "planFree": "Gratuit",
+    "planPersonal": "Personnel",
+    "planExpert": "Expert",
+    "planBusiness": "Business",
+    "featureStorage": "{n} de stockage chiffré",
+    "featureP2P": "Transferts P2P illimités",
+    "featureE2E": "Chiffrement E2E (AES-256)",
+    "featureShareLink": "Partage sécurisé par lien",
+    "featureHistory": "Historique d'activité {n} jours",
+    "featurePrioritySupport": "Support prioritaire",
+    "featureHistoryUnlimited": "Historique illimité",
+    "featureOrgs": "Organisations (espaces collaboratifs)",
+    "featureAdvancedSharing": "Partages avancés",
+    "featureSupport247": "Support 24/7",
+    "featureMultiUser": "Comptes multi-utilisateurs",
+    "featureAdminPanel": "Administration centralisée",
+    "featureSLA": "SLA 99.9%",
+    "featureDedicatedSupport": "Support dédié",
+    "selfHostedNote": "Vous utilisez une instance auto-hébergée — accès illimité à toutes les fonctionnalités sans abonnement.",
+    "faqTitle": "Questions fréquentes",
+    "faq1q": "Puis-je changer de plan à tout moment ?",
+    "faq1a": "Oui, vous pourrez upgrader ou downgrader votre plan à tout moment dès l'ouverture des abonnements. Les changements seront appliqués immédiatement.",
+    "faq2q": "Que se passe-t-il si je dépasse mon quota ?",
+    "faq2a": "Vous serez notifié et pourrez passer à un plan supérieur. Vos fichiers existants restent accessibles.",
+    "faq3q": "Les transferts P2P sont-ils vraiment illimités ?",
+    "faq3a": "Oui, sur tous les plans. Aucune limite de taille ou de nombre de transferts — utilisez toute votre bande passante.",
+    "faq4q": "Puis-je auto-héberger Kagibi gratuitement ?",
+    "faq4a": "Oui. Kagibi est open source (AGPLv3) et librement auto-hébergeable. Toutes les fonctionnalités sont disponibles sans abonnement sur une instance auto-hébergée."
   },
   "changelog": {
     "title": "Nouveautés",

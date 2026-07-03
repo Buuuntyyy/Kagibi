@@ -78,8 +78,10 @@ const showHelpDialog = ref(false)
 const mobileSearchOpen = ref(false)
 
 const buyMeACoffeeUrl = computed(() => {
-  const runtimeUrl = typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : ''
-  return runtimeUrl || import.meta.env.VITE_BUY_ME_A_COFFEE_URL || ''
+  const raw = (typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : '')
+    || import.meta.env.VITE_BUY_ME_A_COFFEE_URL || ''
+  if (!raw) return ''
+  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
 })
 </script>
 
