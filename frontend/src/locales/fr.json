@@ -1506,6 +1506,10 @@
     "transferred": "transférés",
     "creatingFolders": "Création des dossiers ({done}/{total})"
   },
+  "changelog": {
+    "title": "Nouveautés",
+    "confirm": "C'est noté !"
+  },
   "tour": {
     "skip": "Passer",
     "next": "Suivant",

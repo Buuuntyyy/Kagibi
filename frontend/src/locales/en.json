@@ -1506,6 +1506,10 @@
     "transferred": "transferred",
     "creatingFolders": "Creating folders ({done}/{total})"
   },
+  "changelog": {
+    "title": "What's new",
+    "confirm": "Got it!"
+  },
   "tour": {
     "skip": "Skip",
     "next": "Next",

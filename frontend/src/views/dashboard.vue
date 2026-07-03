@@ -20,6 +20,9 @@
 
     <!-- Mobile Bottom Navigation -->
     <MobileBottomNav />
+
+    <!-- Changelog popup -->
+    <ChangelogModal />
   </div>
 </template>
 
@@ -27,6 +30,7 @@
 import LeftBar from '../components/bar/leftBar.vue'
 import MobileBottomNav from '../components/bar/MobileBottomNav.vue'
 import FilePreview from '../components/file/FilePreview.vue'
+import ChangelogModal from '../components/ChangelogModal.vue'
 import { useFileStore } from '../stores/files'
 
 const fileStore = useFileStore()

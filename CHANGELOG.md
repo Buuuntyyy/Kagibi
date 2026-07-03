@@ -1,5 +1,86 @@
 # Changelog
 
+## v2.26.0 — 2026-07-02
+
+### Nouvelles fonctionnalités
+
+- **Demandes d'accès** : les membres peuvent désormais demander l'accès à un dossier d'organisation. Les admins reçoivent ces demandes et peuvent les accepter ou les refuser depuis le panneau d'administration.
+- **Vue d'accès effectif** : nouvelle vue synthétique affichant les permissions réelles d'un utilisateur sur un dossier, en tenant compte des droits directs et des groupes auxquels il appartient.
+- **Gestion du chiffrement par groupe** : les admins d'organisation peuvent gérer la clé chiffrée par groupe — attribution de l'accès chiffré aux membres d'un groupe et révocation sécurisée.
+- **Héritage des permissions de dossier** : les permissions définies pour un groupe sur un dossier s'héritent désormais correctement dans tous les sous-dossiers.
+
+---
+
+## v2.25.0 — 2026-07-01
+
+### Nouvelles fonctionnalités
+
+- **Modal de mot de passe faible** : lors de l'inscription, les critères de sécurité du mot de passe sont affichés en temps réel pour guider l'utilisateur.
+- **Gestion de la corbeille améliorée** : permissions de restauration par utilisateur, optimisations des requêtes de listage et de restauration.
+- **Menu contextuel dans les organisations** : actions sur fichiers et dossiers (renommer, déplacer, supprimer, etc.) accessibles via clic-droit dans la vue de détail d'une organisation.
+- **Système de favoris** : les fichiers et dossiers peuvent être mis en favori depuis le drive personnel avec synchronisation entre sessions.
+
+---
+
+## v2.24.0 — 2026-06-29
+
+### Améliorations
+
+- **Journalisation enrichie** : les opérations de compte et de partage enregistrent désormais le user-agent et l'adresse IP pour un audit plus complet.
+- **Documentation de l'upload multipart** : documentation détaillée du processus d'upload et de la conformité des logs.
+- **Politique de confidentialité et CGU** : mise à jour des dates de révision et précisions sur la gestion des logs.
+- **Transfert P2P** : mise à jour des descriptions pour clarifier l'absence de limite de taille et le recours au relais TURN.
+
+---
+
+## v2.23.0 — 2026-06-28
+
+### Nouvelles fonctionnalités
+
+- **Page FAQ** : nouvelle page de questions fréquentes accessible depuis la navigation principale et le HelpDialog.
+- **Compression des fichiers** : support de la compression lors de l'upload et du téléchargement pour réduire l'utilisation du stockage.
+- **Logging structuré** : migration vers `slog` avec intégration d'un handler Loki pour la gestion centralisée et structurée des logs.
+
+---
+
+## v2.22.0 — 2026-06-23
+
+### Nouvelles fonctionnalités
+
+- **Panneau de versionnage de fichiers** : historique des versions d'un fichier accessible depuis l'interface d'administration.
+- **Configuration LDAP** : nouveau panneau d'administration pour l'intégration LDAP/Active Directory.
+- **Synchronisation desktop** : nouvelle colonne `synced` sur les dossiers pour le suivi de la synchronisation avec l'application desktop.
+
+### Améliorations
+
+- **Sécurité de l'authentification** : dérivation de mot de passe renforcée avec migration pour les comptes existants.
+- **Gestion du type MIME** : détection et stockage du type MIME lors de l'upload, avec affichage du gestionnaire de fichiers en cas d'erreur.
+
+---
+
+## v2.21.0 — 2026-06-02
+
+### Nouvelles fonctionnalités
+
+- **Page "Valeurs"** : nouvelle page présentant les engagements et valeurs du projet Kagibi, accessible depuis la navigation publique.
+- **Import Google Drive amélioré** : expérience utilisateur revue avec meilleure gestion des dossiers, des conflits et des erreurs d'import.
+- **Commentaires et notifications** : système de commentaires sur les fichiers avec notifications en temps réel pour les réponses.
+- **Tour de bienvenue** : guide interactif d'onboarding pour les nouveaux utilisateurs, avec localisation complète FR/EN.
+
+---
+
+## v2.20.0 — 2026-05-26
+
+### Nouvelles fonctionnalités
+
+- **Import Google Drive (zero-knowledge)** : importez vos fichiers depuis Google Drive directement dans Kagibi. Les fichiers sont téléchargés et chiffrés dans votre navigateur avant tout envoi — Kagibi n'accède jamais à leur contenu.
+- **Transfert de propriété d'organisation** : les propriétaires peuvent transférer la propriété de leur organisation à un autre membre depuis les paramètres.
+- **MFA obligatoire pour les organisations** : les admins peuvent désormais exiger le MFA sur toutes les opérations de fichiers et dossiers d'organisation.
+- **Métriques de monitoring** : nouvelles statistiques sur les organisations actives, le stockage utilisé et les membres.
+- **Bannière abonnements** : intégration d'une bannière "Bientôt disponible" pour les fonctionnalités d'abonnement à venir.
+
+---
+
 ## v2.19.0 — 2026-06-30
 
 ### Nouvelles fonctionnalités
