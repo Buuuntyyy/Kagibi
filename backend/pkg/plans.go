@@ -17,14 +17,6 @@ const (
 	StorageBusiness int64 = 200 * 1024 * 1024 * 1024 // 200 GB
 )
 
-// P2P share limits (max simultaneous active shares)
-// -1 means unlimited
-const (
-	P2PLimitFree     = -1
-	P2PLimitPro      = -1
-	P2PLimitBusiness = -1
-)
-
 // Pricing in euro cents
 const (
 	PriceProMonthly      = 500   // 5,00 €/month
@@ -64,14 +56,3 @@ func GetMaxVersions(plan string) int {
 	}
 }
 
-// GetP2PLimit returns the maximum number of active P2P shares for a plan.
-func GetP2PLimit(plan string) int {
-	switch plan {
-	case PlanPro:
-		return P2PLimitPro
-	case PlanBusiness:
-		return P2PLimitBusiness
-	default:
-		return P2PLimitFree
-	}
-}

@@ -80,6 +80,9 @@ func Migrate(db *bun.DB) error {
 	if err := migrateOrgGroupKeys(ctx, db); err != nil {
 		return err
 	}
+	if err := migrateSubscriptionPlans(ctx, db); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -120,6 +123,77 @@ func migrateOrgGroupKeys(ctx context.Context, db *bun.DB) error {
 		`ALTER TABLE org_folders ADD COLUMN IF NOT EXISTS group_id BIGINT REFERENCES org_groups(id) ON DELETE SET NULL`,
 	); err != nil {
 		log.Printf("Warning: migrateOrgGroupKeys add group_id to org_folders: %v", err)
+	}
+
+	return nil
+}
+
+func migrateSubscriptionPlans(ctx context.Context, db *bun.DB) error {
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS subscription_plans (
+		code             VARCHAR     PRIMARY KEY,
+		name             VARCHAR     NOT NULL,
+		price_ttc_cents  INTEGER     NOT NULL DEFAULT 0,
+		currency         VARCHAR(3)  NOT NULL DEFAULT 'EUR',
+		storage_bytes    BIGINT      NOT NULL DEFAULT 0,
+		billing_model    VARCHAR     NOT NULL DEFAULT 'flat',
+		features         JSONB       NOT NULL DEFAULT '[]',
+		is_active        BOOLEAN     NOT NULL DEFAULT true,
+		sort_order       INTEGER     NOT NULL DEFAULT 0,
+		created_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	if err != nil {
+		return fmt.Errorf("migrateSubscriptionPlans create table: %w", err)
+	}
+
+	// Add billing_model for existing installs that predate this column
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS billing_model VARCHAR NOT NULL DEFAULT 'flat'`,
+	); err != nil {
+		log.Printf("Warning: migrateSubscriptionPlans add billing_model: %v", err)
+	}
+
+	// Seed / update plans — DO UPDATE so re-runs refresh the catalogue.
+	_, err = db.ExecContext(ctx, `INSERT INTO subscription_plans
+		(code, name, price_ttc_cents, currency, storage_bytes, billing_model, features, is_active, sort_order)
+	VALUES
+		('free',
+		 'Gratuit',
+		 0, 'EUR', 21474836480, 'flat',
+		 '["20 Go de stockage","Partage de fichiers","Chiffrement de bout en bout","P2P illimité"]',
+		 true, 0),
+		('personal',
+		 'Personnel',
+		 400, 'EUR', 214748364800, 'flat',
+		 '["200 Go de stockage","Partage de fichiers","Chiffrement de bout en bout","Versionning de fichiers","P2P illimité"]',
+		 true, 1),
+		('business',
+		 'Business',
+		 1400, 'EUR', 1099511627776, 'flat',
+		 '["1 To de stockage","Partage de fichiers","Chiffrement de bout en bout","Versionning de fichiers","Organisations (quota inclus)","Support prioritaire"]',
+		 true, 2),
+		('payg',
+		 'Pay as you go',
+		 1500, 'EUR', -1, 'payg',
+		 '["Stockage à la demande (15 €/To/mois)","Facturation au Go par heure","Partage de fichiers","Chiffrement de bout en bout","Versionning de fichiers","Organisations (facturation au Go par heure)"]',
+		 true, 3)
+	ON CONFLICT (code) DO UPDATE SET
+		name             = EXCLUDED.name,
+		price_ttc_cents  = EXCLUDED.price_ttc_cents,
+		storage_bytes    = EXCLUDED.storage_bytes,
+		billing_model    = EXCLUDED.billing_model,
+		features         = EXCLUDED.features,
+		sort_order       = EXCLUDED.sort_order,
+		updated_at       = CURRENT_TIMESTAMP`)
+	if err != nil {
+		log.Printf("Warning: migrateSubscriptionPlans seed: %v", err)
+	}
+
+	// Remove plans that no longer exist in the catalogue
+	_, err = db.ExecContext(ctx,
+		`DELETE FROM subscription_plans WHERE code NOT IN ('free','personal','business','payg')`)
+	if err != nil {
+		log.Printf("Warning: migrateSubscriptionPlans cleanup: %v", err)
 	}
 
 	return nil
@@ -574,17 +648,24 @@ func migrateUserSettings(ctx context.Context, db *bun.DB) error {
 
 	// --- USER PLANS ---
 	_, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "user_plans" (
-		"user_id"             VARCHAR PRIMARY KEY,
-		"plan"                VARCHAR NOT NULL DEFAULT 'free',
-		"storage_limit"       BIGINT NOT NULL DEFAULT 21474836480,
-		"storage_used"        BIGINT NOT NULL DEFAULT 0,
-		"p2p_max_exchanges"   INTEGER NOT NULL DEFAULT 5,
-		"p2p_exchanges_used"  INTEGER NOT NULL DEFAULT 0,
-		"created_at"          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		"updated_at"          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		"user_id"      VARCHAR PRIMARY KEY,
+		"plan"         VARCHAR NOT NULL DEFAULT 'free',
+		"storage_limit" BIGINT NOT NULL DEFAULT 21474836480,
+		"storage_used"  BIGINT NOT NULL DEFAULT 0,
+		"created_at"   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		"updated_at"   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);`)
 	if err != nil {
 		log.Printf("Warning: failed to create user_plans table: %v", err)
+	}
+
+	// Drop legacy P2P quota columns (no longer used — P2P is unlimited for all plans)
+	for _, col := range []string{"p2p_max_exchanges", "p2p_exchanges_used"} {
+		if _, err := db.ExecContext(ctx,
+			`ALTER TABLE user_plans DROP COLUMN IF EXISTS "`+col+`"`,
+		); err != nil {
+			log.Printf("Warning: failed to drop %s from user_plans: %v", col, err)
+		}
 	}
 
 	_, err = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_user_plans_plan ON user_plans (plan);`)
@@ -592,9 +673,9 @@ func migrateUserSettings(ctx context.Context, db *bun.DB) error {
 		log.Printf("Warning: failed to create idx_user_plans_plan: %v", err)
 	}
 
-	// Backfill missing user_plans rows from profiles (best-effort; profiles may not have legacy plan columns)
-	_, err = db.ExecContext(ctx, `INSERT INTO user_plans (user_id, plan, storage_limit, storage_used, p2p_max_exchanges, p2p_exchanges_used)
-		SELECT p.id, 'free', 21474836480, 0, 5, 0
+	// Backfill missing user_plans rows from profiles
+	_, err = db.ExecContext(ctx, `INSERT INTO user_plans (user_id, plan, storage_limit, storage_used)
+		SELECT p.id, 'free', 21474836480, 0
 		FROM profiles p
 		ON CONFLICT (user_id) DO NOTHING;`)
 	if err != nil {

@@ -110,11 +110,10 @@ func ensureUserPlan(db *bun.DB, userID string) *pkg.UserPlan {
 	if err != nil || planState == nil {
 		log.Printf("[Multipart] user_plans row missing for %s, creating free plan", userID)
 		planState = &pkg.UserPlan{
-			UserID:          userID,
-			Plan:            pkg.PlanFree,
-			StorageLimit:    pkg.StorageFree,
-			StorageUsed:     0,
-			P2PMaxExchanges: pkg.P2PLimitFree,
+			UserID:       userID,
+			Plan:         pkg.PlanFree,
+			StorageLimit: pkg.StorageFree,
+			StorageUsed:  0,
 		}
 		_ = pkg.UpsertUserPlan(db, planState)
 	}

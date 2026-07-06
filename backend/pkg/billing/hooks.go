@@ -243,38 +243,6 @@ func CancelUserSubscription(ctx context.Context, userID, idempotencyKey string) 
 
 // === Quota Checks supplémentaires ===
 
-// CheckP2PAllowed vérifie si l'utilisateur peut effectuer un transfert P2P
-func CheckP2PAllowed(ctx context.Context, userID string, fileSize int64) (bool, string) {
-	provider := GetProvider()
-	if provider == nil {
-		return true, ""
-	}
-
-	plan, err := provider.GetUserPlan(ctx, userID)
-	if err != nil {
-		return true, "" // fail-open
-	}
-
-	p2pLimitGB, ok := plan.Features["p2p_limit_gb"]
-	if !ok {
-		return true, ""
-	}
-
-	limitGB, _ := p2pLimitGB.(float64)
-	if limitGB < 0 {
-		return true, "" // -1 = illimité
-	}
-
-	// Vérification basique sur la taille du fichier individuel
-	// La vérification détaillée du cumul mensuel est faite par le service billing privé
-	limitBytes := int64(limitGB * 1024 * 1024 * 1024)
-	if fileSize > limitBytes {
-		return false, fmt.Sprintf("Fichier trop volumineux pour le transfert P2P. Limite: %.0f Go", limitGB)
-	}
-
-	return true, ""
-}
-
 // CheckFileSizeAllowed vérifie la taille max par fichier selon le plan
 func CheckFileSizeAllowed(ctx context.Context, userID string, fileSize int64) (bool, string) {
 	provider := GetProvider()

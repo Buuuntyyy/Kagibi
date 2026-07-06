@@ -6,6 +6,7 @@ package pkg
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -64,8 +65,6 @@ type UserPlan struct {
 	StorageLimit        int64     `bun:"storage_limit,notnull,default:21474836480" json:"storage_limit"`
 	StorageUsed         int64     `bun:"storage_used,notnull,default:0" json:"storage_used"`
 	VersionStorageBytes int64     `bun:"version_storage_bytes,notnull,default:0" json:"version_storage_bytes"`
-	P2PMaxExchanges     int       `bun:"p2p_max_exchanges,notnull,default:-1" json:"p2p_max_exchanges"`
-	P2PExchangesUsed    int       `bun:"p2p_exchanges_used,notnull,default:0" json:"p2p_exchanges_used"`
 	CreatedAt           time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt           time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 }
@@ -649,6 +648,23 @@ type Notification struct {
 	CommentID    *int64    `bun:"comment_id" json:"comment_id,omitempty"`
 	IsRead       bool      `bun:"is_read,notnull,default:false" json:"is_read"`
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// SubscriptionPlan is the plan catalogue entry. StorageBytes == -1 means unbounded (PAYG).
+// BillingModel is "flat" (fixed monthly) or "payg" (per-Go per hour, PriceTTCCents = rate/To/month).
+type SubscriptionPlan struct {
+	bun.BaseModel   `bun:"table:subscription_plans,alias:sp"`
+	Code            string          `bun:"code,pk" json:"code"`
+	Name            string          `bun:"name,notnull" json:"name"`
+	PriceTTCCents   int             `bun:"price_ttc_cents,notnull,default:0" json:"price_ttc_cents"`
+	Currency        string          `bun:"currency,notnull,default:'EUR'" json:"currency"`
+	StorageBytes    int64           `bun:"storage_bytes,notnull,default:0" json:"storage_bytes"`
+	BillingModel    string          `bun:"billing_model,notnull,default:'flat'" json:"billing_model"`
+	Features        json.RawMessage `bun:"features,type:jsonb,notnull,default:'[]'" json:"features"`
+	IsActive        bool            `bun:"is_active,notnull,default:true" json:"is_active"`
+	SortOrder       int             `bun:"sort_order,notnull,default:0" json:"sort_order"`
+	CreatedAt       time.Time       `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt       time.Time       `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 }
 
 // EmitRealtimeEvent inserts an event into the realtime_events table and

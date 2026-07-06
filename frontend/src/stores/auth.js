@@ -23,8 +23,6 @@ const localDevBypassUser = {
   storage_used: 0,
   storage_limit: 20 * 1024 * 1024 * 1024,
   plan: 'free',
-  p2p_max_exchanges: -1,
-  p2p_exchanges_used: 0,
 }
 
 export const useAuthStore = defineStore('auth', {
