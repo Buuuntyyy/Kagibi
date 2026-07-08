@@ -1558,7 +1558,7 @@
     "finish": "Finish",
     "startUsing": "Get started",
     "step1": {
-      "title": "Welcome to SaferCloud",
+      "title": "Welcome to Kagibi",
       "desc": "Here's a quick overview of what awaits you. Explore at your own pace.",
       "feat1": "Encrypted storage",
       "feat2": "Organizations",
@@ -1602,7 +1602,7 @@
     },
     "done": {
       "title": "You're all set!",
-      "desc": "Discover all SaferCloud features and keep your files safe."
+      "desc": "Discover all Kagibi features and keep your files safe."
     }
   }
 }
