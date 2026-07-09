@@ -40,76 +40,33 @@
 
     <!-- Plans grid -->
     <div class="plans-grid">
-
-      <!-- Gratuit -->
-      <div class="plan-card" :class="{ current: currentPlanCode === 'free' }">
-        <div v-if="currentPlanCode === 'free'" class="plan-current-tag">{{ t('upgrade.currentPlan') }}</div>
-        <h3 class="plan-name">{{ t('upgrade.planFree') }}</h3>
+      <div
+        v-for="plan in billingStore.plans"
+        :key="plan.code"
+        class="plan-card"
+        :class="{ current: currentPlanCode === plan.code, featured: plan.code === 'business' }"
+      >
+        <div v-if="plan.code === 'business'" class="plan-popular-badge">{{ t('upgrade.popular') }}</div>
+        <div v-if="currentPlanCode === plan.code" class="plan-current-tag">{{ t('upgrade.currentPlan') }}</div>
+        <h3 class="plan-name">{{ plan.name }}</h3>
         <div class="plan-price">
-          <span class="price-amount">0€</span>
-          <span class="price-period">/{{ t('upgrade.month') }}</span>
+          <span class="price-amount">{{ formatPlanPrice(plan) }}</span>
+          <span class="price-period">{{ formatPlanPeriod(plan) }}</span>
         </div>
         <ul class="plan-features">
-          <li v-for="f in planFreeFeatures" :key="f">
+          <li v-for="f in (plan.features || [])" :key="f">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
             {{ f }}
           </li>
         </ul>
-        <button class="btn-plan btn-plan-outline" disabled>{{ t('upgrade.currentLabel') }}</button>
+        <button
+          class="btn-plan"
+          :class="plan.code === 'business' ? 'btn-plan-primary' : 'btn-plan-outline'"
+          disabled
+        >
+          {{ currentPlanCode === plan.code ? t('upgrade.currentLabel') : t('upgrade.comingSoonBtn') }}
+        </button>
       </div>
-
-      <!-- Personnel -->
-      <div class="plan-card" :class="{ current: currentPlanCode === 'personal' }">
-        <div v-if="currentPlanCode === 'personal'" class="plan-current-tag">{{ t('upgrade.currentPlan') }}</div>
-        <h3 class="plan-name">{{ t('upgrade.planPersonal') }}</h3>
-        <div class="plan-price">
-          <span class="price-amount">5€</span>
-          <span class="price-period">/{{ t('upgrade.month') }}</span>
-        </div>
-        <ul class="plan-features">
-          <li v-for="f in planPersonalFeatures" :key="f">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
-            {{ f }}
-          </li>
-        </ul>
-        <button class="btn-plan btn-plan-outline" disabled>{{ t('upgrade.comingSoonBtn') }}</button>
-      </div>
-
-      <!-- Expert (featured) -->
-      <div class="plan-card featured" :class="{ current: currentPlanCode === 'expert' }">
-        <div class="plan-popular-badge">{{ t('upgrade.popular') }}</div>
-        <div v-if="currentPlanCode === 'expert'" class="plan-current-tag">{{ t('upgrade.currentPlan') }}</div>
-        <h3 class="plan-name">{{ t('upgrade.planExpert') }}</h3>
-        <div class="plan-price">
-          <span class="price-amount">15€</span>
-          <span class="price-period">/{{ t('upgrade.month') }}</span>
-        </div>
-        <ul class="plan-features">
-          <li v-for="f in planExpertFeatures" :key="f">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
-            {{ f }}
-          </li>
-        </ul>
-        <button class="btn-plan btn-plan-primary" disabled>{{ t('upgrade.comingSoonBtn') }}</button>
-      </div>
-
-      <!-- Business -->
-      <div class="plan-card" :class="{ current: currentPlanCode === 'business' }">
-        <div v-if="currentPlanCode === 'business'" class="plan-current-tag">{{ t('upgrade.currentPlan') }}</div>
-        <h3 class="plan-name">{{ t('upgrade.planBusiness') }}</h3>
-        <div class="plan-price">
-          <span class="price-amount">49€</span>
-          <span class="price-period">/{{ t('upgrade.month') }}</span>
-        </div>
-        <ul class="plan-features">
-          <li v-for="f in planBusinessFeatures" :key="f">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
-            {{ f }}
-          </li>
-        </ul>
-        <button class="btn-plan btn-plan-outline" disabled>{{ t('upgrade.comingSoonBtn') }}</button>
-      </div>
-
     </div>
 
     <!-- Self-hosted note -->
@@ -149,36 +106,21 @@ const buyMeACoffeeUrl = computed(() => {
   return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
 })
 
-const planFreeFeatures = computed(() => [
-  t('upgrade.featureStorage', { n: '20 Go' }),
-  t('upgrade.featureP2P'),
-  t('upgrade.featureE2E'),
-  t('upgrade.featureShareLink'),
-])
+const CURRENCY_SYMBOLS = { EUR: '€', USD: '$', GBP: '£' }
 
-const planPersonalFeatures = computed(() => [
-  t('upgrade.featureStorage', { n: '100 Go' }),
-  t('upgrade.featureP2P'),
-  t('upgrade.featureHistory', { n: '90' }),
-  t('upgrade.featurePrioritySupport'),
-])
+const formatPlanPrice = (plan) => {
+  const symbol = CURRENCY_SYMBOLS[plan.currency] || plan.currency
+  const amount = (plan.price_ttc_cents / 100).toLocaleString(locale.value, {
+    minimumFractionDigits: plan.price_ttc_cents % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  })
+  return `${amount}${symbol}`
+}
 
-const planExpertFeatures = computed(() => [
-  t('upgrade.featureStorage', { n: '1 To' }),
-  t('upgrade.featureP2P'),
-  t('upgrade.featureHistoryUnlimited'),
-  t('upgrade.featureOrgs'),
-  t('upgrade.featureAdvancedSharing'),
-  t('upgrade.featureSupport247'),
-])
-
-const planBusinessFeatures = computed(() => [
-  t('upgrade.featureStorage', { n: '3 To' }),
-  t('upgrade.featureMultiUser'),
-  t('upgrade.featureAdminPanel'),
-  t('upgrade.featureSLA'),
-  t('upgrade.featureDedicatedSupport'),
-])
+const formatPlanPeriod = (plan) => {
+  if (plan.billing_model === 'payg') return `/To/${t('upgrade.month')}`
+  return `/${t('upgrade.month')}`
+}
 
 const faqs = computed(() => [
   { q: t('upgrade.faq1q'), a: t('upgrade.faq1a') },
@@ -188,9 +130,10 @@ const faqs = computed(() => [
 ])
 
 onMounted(async () => {
-  if (!billingStore.currentPlan) {
-    await billingStore.fetchCurrentPlan()
-  }
+  await Promise.all([
+    billingStore.currentPlan ? Promise.resolve() : billingStore.fetchCurrentPlan(),
+    billingStore.fetchPlans(),
+  ])
 })
 </script>
 
@@ -229,20 +172,20 @@ onMounted(async () => {
   transition: color 0.15s, background 0.15s;
 }
 .btn-back:hover {
-  color: var(--text-color, #fff);
-  background: rgba(255,255,255,0.06);
+  color: var(--main-text-color);
+  background: var(--hover-background-color);
 }
 
 h1 {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--text-color, #fff);
+  color: var(--main-text-color);
 }
 
 .subtitle {
   margin: 0;
-  color: var(--secondary-text-color, #aaa);
+  color: var(--secondary-text-color);
   font-size: 0.9rem;
 }
 
@@ -251,15 +194,15 @@ h1 {
   display: flex;
   align-items: center;
   gap: 0.875rem;
-  background: rgba(102, 126, 234, 0.08);
-  border: 1px solid rgba(102, 126, 234, 0.25);
+  background: var(--hover-background-color);
+  border: 1px solid var(--primary-color);
   border-radius: 10px;
   padding: 0.875rem 1.125rem;
   margin-bottom: 1.5rem;
 }
 
 .cs-icon {
-  color: var(--primary-color, #667eea);
+  color: var(--primary-color);
   flex-shrink: 0;
   display: flex;
 }
@@ -273,28 +216,29 @@ h1 {
 
 .cs-text strong {
   font-size: 0.875rem;
-  color: var(--text-color, #fff);
+  color: var(--main-text-color);
 }
 
 .cs-text span {
   font-size: 0.8rem;
-  color: var(--secondary-text-color, #aaa);
+  color: var(--secondary-text-color);
 }
 
 .btn-coffee {
   flex-shrink: 0;
   padding: 0.45rem 1rem;
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid var(--border-color, #333);
-  color: var(--text-color, #fff);
+  background: var(--card-color);
+  border: 1px solid var(--primary-color);
+  color: var(--main-text-color);
   font-size: 0.8rem;
   font-weight: 500;
   text-decoration: none;
-  transition: background 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 .btn-coffee:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--primary-color);
+  color: #fff;
 }
 
 /* Current plan row */
@@ -307,17 +251,17 @@ h1 {
 }
 
 .current-plan-label {
-  color: var(--secondary-text-color, #aaa);
+  color: var(--secondary-text-color);
 }
 
 .current-plan-badge {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--border-color, #333);
+  background: var(--hover-background-color);
+  border: 1px solid var(--border-color);
   border-radius: 20px;
   padding: 0.2rem 0.7rem;
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--text-color, #fff);
+  color: var(--main-text-color);
 }
 
 /* Plans grid */
@@ -330,8 +274,8 @@ h1 {
 
 .plan-card {
   position: relative;
-  background: var(--card-color, #1e1e1e);
-  border: 1.5px solid var(--border-color, #333);
+  background: var(--card-color);
+  border: 1.5px solid var(--border-color);
   border-radius: 12px;
   padding: 1.5rem;
   display: flex;
@@ -341,12 +285,12 @@ h1 {
 }
 
 .plan-card.featured {
-  border-color: var(--primary-color, #667eea);
-  box-shadow: 0 0 0 1px var(--primary-color, #667eea), 0 8px 24px rgba(102, 126, 234, 0.12);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px var(--primary-color), 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 .plan-card.current {
-  border-color: rgba(255, 255, 255, 0.25);
+  border-color: var(--primary-color);
 }
 
 .plan-popular-badge {
@@ -354,7 +298,7 @@ h1 {
   top: -12px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--primary-color, #667eea);
+  background: var(--primary-color);
   color: #fff;
   font-size: 0.7rem;
   font-weight: 700;
@@ -371,8 +315,8 @@ h1 {
   right: 0.75rem;
   font-size: 0.7rem;
   font-weight: 600;
-  color: var(--secondary-text-color, #aaa);
-  background: rgba(255,255,255,0.05);
+  color: var(--secondary-text-color);
+  background: var(--hover-background-color);
   border-radius: 4px;
   padding: 0.15rem 0.45rem;
 }
@@ -381,7 +325,7 @@ h1 {
   margin: 0;
   font-size: 1rem;
   font-weight: 700;
-  color: var(--text-color, #fff);
+  color: var(--main-text-color);
 }
 
 .plan-price {
@@ -393,7 +337,7 @@ h1 {
 .price-amount {
   font-size: 2rem;
   font-weight: 800;
-  color: var(--text-color, #fff);
+  color: var(--main-text-color);
   line-height: 1;
 }
 
@@ -445,7 +389,7 @@ h1 {
 }
 
 .btn-plan-primary {
-  background: var(--primary-color, #667eea);
+  background: var(--primary-color);
   border: none;
   color: #fff;
 }
@@ -454,26 +398,26 @@ h1 {
 .selfhosted-note {
   text-align: center;
   font-size: 0.8rem;
-  color: var(--secondary-text-color, #aaa);
+  color: var(--secondary-text-color);
   margin-bottom: 2rem;
   padding: 0.75rem;
-  background: rgba(255,255,255,0.03);
+  background: var(--hover-background-color);
   border-radius: 8px;
-  border: 1px solid var(--border-color, #333);
+  border: 1px solid var(--border-color);
 }
 
 /* FAQ */
 .faq-section {
   margin-top: 2rem;
   padding-top: 2rem;
-  border-top: 1px solid var(--border-color, #333);
+  border-top: 1px solid var(--border-color);
 }
 
 .faq-section h2 {
   margin: 0 0 1.25rem 0;
   font-size: 1.1rem;
   font-weight: 700;
-  color: var(--text-color, #fff);
+  color: var(--main-text-color);
 }
 
 .faq-grid {
@@ -483,8 +427,8 @@ h1 {
 }
 
 .faq-item {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border-color, #333);
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 1rem 1.125rem;
 }
@@ -493,7 +437,7 @@ h1 {
   margin: 0 0 0.4rem 0;
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--text-color, #fff);
+  color: var(--main-text-color);
 }
 
 .faq-item p {

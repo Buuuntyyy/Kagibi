@@ -14,6 +14,9 @@ export const useBillingStore = defineStore('billing', {
     currentPlan: null,
     currentUsage: null,
 
+    // Full plan catalogue (for the upgrade/pricing page)
+    plans: [],
+
     // States
     loading: false,
     error: null,
@@ -100,6 +103,17 @@ export const useBillingStore = defineStore('billing', {
       }
     },
 
+    // Fetch the plan catalogue (name/price/storage/features) from the database
+    async fetchPlans() {
+      try {
+        const response = await api.get('/billing/plans')
+        this.plans = response.data || []
+      } catch (err) {
+        console.error('[BillingStore] Failed to fetch plans:', err)
+        this.plans = []
+      }
+    },
+
     // Fetch current usage
     async fetchUsage() {
       try {
@@ -148,6 +162,7 @@ export const useBillingStore = defineStore('billing', {
       }
       this.currentPlan = null
       this.currentUsage = null
+      this.plans = []
       this.loading = false
       this.error = null
     }

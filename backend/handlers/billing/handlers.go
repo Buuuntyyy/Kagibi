@@ -120,21 +120,21 @@ func GetSubscriptionHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, subscription)
 }
 
-// GetPlansHandler retourne la liste des plans disponibles
+// GetPlansHandler retourne la liste des plans disponibles depuis le catalogue en base
 // GET /api/billing/plans
-func GetPlansHandler(c *gin.Context) {
-	provider := billingpkg.GetProvider()
-	if provider == nil {
-		// Billing not configured — return empty list
-		c.JSON(http.StatusOK, []interface{}{})
-		return
+func GetPlansHandler(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var plans []pkg.SubscriptionPlan
+		err := db.NewSelect().Model(&plans).
+			Where("is_active = ?", true).
+			OrderExpr("sort_order ASC").
+			Scan(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusOK, []interface{}{})
+			return
+		}
+		c.JSON(http.StatusOK, plans)
 	}
-	plans, err := provider.ListPlans(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusOK, []interface{}{})
-		return
-	}
-	c.JSON(http.StatusOK, plans)
 }
 
 // GetUsageHandler retourne l'utilisation actuelle depuis la DB
@@ -303,7 +303,7 @@ func RegisterRoutes(router *gin.RouterGroup, authMiddleware gin.HandlerFunc, db 
 	billing := router.Group("/billing")
 	{
 		billing.GET("/status", GetBillingStatusHandler)
-		billing.GET("/plans", GetPlansHandler)
+		billing.GET("/plans", GetPlansHandler(db))
 
 		authenticated := billing.Group("")
 		authenticated.Use(authMiddleware)
