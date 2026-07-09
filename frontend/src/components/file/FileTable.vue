@@ -434,7 +434,7 @@ const onShareIconHover = (isHovering, event) => {
   /* border-bottom: 1px solid var(--border-color); Removed full width border */
   border-bottom: none;
   color: var(--main-text-color);
-  font-size: 1rem; /* Slightly reduced font size */
+  font-size: 0.85rem; /* Slightly reduced font size */
 }
 
 /* Add custom separator lines that don't touch edges */
