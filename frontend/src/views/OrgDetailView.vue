@@ -2360,16 +2360,22 @@ const navigateToSearchResult = (item) => {
   }
 }
 
+const escapeHtml = (s) =>
+  String(s ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
 const highlightMatch = (text, query) => {
-  if (!query) return text
-  const idx = text.toLowerCase().indexOf(query.toLowerCase())
-  if (idx === -1) return text
+  const t = String(text ?? '')
+  if (!query) return escapeHtml(t)
+  const idx = t.toLowerCase().indexOf(String(query).toLowerCase())
+  if (idx === -1) return escapeHtml(t)
+  const end = idx + String(query).length
   return (
-    text.slice(0, idx) +
+    escapeHtml(t.slice(0, idx)) +
     '<mark class="search-highlight">' +
-    text.slice(idx, idx + query.length) +
+    escapeHtml(t.slice(idx, end)) +
     '</mark>' +
-    text.slice(idx + query.length)
+    escapeHtml(t.slice(end))
   )
 }
 

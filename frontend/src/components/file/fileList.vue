@@ -397,6 +397,12 @@ const folderProgressPercent = computed(() =>
     : Math.round((folderProgress.value.foldersCreated / folderProgress.value.foldersTotal) * 100)
 )
 
+// Les lignes de folderAlertModal sont rendues via v-html (pour le markup <strong>/<code>).
+// Toute valeur d'origine utilisateur (noms de dossiers) DOIT être échappée avant insertion.
+const escapeHtml = (s) =>
+  String(s ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+
 const showFolderAlert = (title, lines) => {
   folderAlertModal.value = { isOpen: true, title, lines }
 }
@@ -1543,7 +1549,7 @@ const handleFolderUpload = async (event) => {
   if (invalidNames.length > 0) {
     const lines = [
       'Les dossiers suivants contiennent des caractères interdits :',
-      ...invalidNames.map(e => `<strong>${e.relPath}</strong> → caractère(s) interdit(s) : ${e.bad}`),
+      ...invalidNames.map(e => `<strong>${escapeHtml(e.relPath)}</strong> → caractère(s) interdit(s) : ${escapeHtml(e.bad)}`),
       'Caractères autorisés : lettres, chiffres, espaces, <code>-</code> <code>.</code> <code>_</code>'
     ]
     showFolderAlert('Noms de dossiers invalides', lines)
@@ -1557,7 +1563,7 @@ const handleFolderUpload = async (event) => {
     showFolderAlert(
       t('file.folderConflictTitle'),
       [
-        t('file.folderConflictMsg', { name: rootName }),
+        t('file.folderConflictMsg', { name: escapeHtml(rootName) }),
         t('file.folderConflictHint')
       ]
     )
@@ -1613,7 +1619,7 @@ const handleFolderUpload = async (event) => {
     fileStore.fetchItems(fileStore.currentPath)
   } catch (error) {
     console.error('Folder upload failed:', error)
-    showFolderAlert('Erreur lors de l\'upload', [error.response?.data?.error || error.message])
+    showFolderAlert('Erreur lors de l\'upload', [escapeHtml(error.response?.data?.error || error.message)])
   } finally {
     folderProgress.value.isOpen = false
   }

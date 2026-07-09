@@ -154,6 +154,19 @@ func initAuth(db *bun.DB) authprovider.AuthProvider {
 
 func setupRouter(redisClient *redis.Client) *gin.Engine {
 	router := gin.Default()
+
+	// SÉCURITÉ : par défaut Gin fait confiance à tous les proxies et lit X-Forwarded-For
+	// tel quel, ce qui permet d'usurper l'IP cliente et de contourner le rate-limiting.
+	// Ne faire confiance qu'aux proxies déclarés (CIDR séparés par des virgules) ;
+	// sinon, ClientIP() se base sur RemoteAddr.
+	if tp := os.Getenv("TRUSTED_PROXIES"); tp != "" {
+		if err := router.SetTrustedProxies(strings.Split(tp, ",")); err != nil {
+			log.Fatalf("invalid TRUSTED_PROXIES: %v", err)
+		}
+	} else if err := router.SetTrustedProxies(nil); err != nil {
+		log.Fatalf("failed to disable trusted proxies: %v", err)
+	}
+
 	config := cors.DefaultConfig()
 
 	allowedOriginsEnv := os.Getenv("ALLOWED_ORIGINS")
