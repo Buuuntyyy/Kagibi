@@ -97,7 +97,7 @@
 
             <!-- Created At -->
             <template v-else-if="col.key === 'created'">
-              {{ formatDate(folder.CreatedAt) }}
+              {{ formatDateOnly(folder.CreatedAt) }}
             </template>
 
             <!-- Updated At (Folder) -->
@@ -233,12 +233,12 @@
 
             <!-- Created At -->
             <template v-else-if="col.key === 'created'">
-              {{ formatDate(file.CreatedAt) }}
+              {{ formatDateOnly(file.CreatedAt) }}
             </template>
 
             <!-- Updated At (File) -->
             <template v-else-if="col.key === 'updated'">
-              {{ formatDate(file.UpdatedAt) }}
+              {{ formatDateOnly(file.UpdatedAt) }}
             </template>
 
             <!-- Size (File) -->
@@ -264,7 +264,7 @@ import { computed } from 'vue'
 import { useTagStore } from '../../stores/tags'
 import { useCommentStore } from '../../stores/comments'
 import { useFileStore } from '../../stores/files'
-import { formatDate, formatSize } from '../../utils/format'
+import { formatDateOnly, formatSize } from '../../utils/format'
 import { MessageSquare } from 'lucide-vue-next'
 
 const fileStore = useFileStore()
@@ -520,12 +520,13 @@ const onShareIconHover = (isHovering, event) => {
 }
 
 .name-cell {
-  width: auto; /* Takes all remaining space; content truncates via .name ellipsis */
+  /* 75% of the space left after the other fixed-width columns (604px total) — a 25% cut from the previous fill-all-remaining-space behavior */
+  width: calc(75% - 453px);
   overflow: hidden;
 }
 
 .col-path {
-  width: 160px;
+  width: 130px;
   overflow: hidden;
 }
 
@@ -537,17 +538,26 @@ const onShareIconHover = (isHovering, event) => {
 }
 
 .col-tags {
-  width: 160px;
+  width: 130px;
   overflow: hidden;
 }
 
 .col-created,
 .col-updated {
-  width: 110px;
+  width: 128px;
+  white-space: nowrap;
+}
+
+td.col-created,
+td.col-updated {
+  font-size: 0.85em;
 }
 
 .col-size {
-  width: 90px;
+  width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .selection-cell {
