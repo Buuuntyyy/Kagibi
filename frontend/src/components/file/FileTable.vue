@@ -425,6 +425,7 @@ const onShareIconHover = (isHovering, event) => {
   width: 100%;
   border-collapse: collapse; /* Keep collapse for alignment, but we remove borders */
   min-width: 800px;
+  table-layout: fixed; /* Fixed column widths so long names get truncated instead of stretching the table */
 }
 
 .files-table th, .files-table td {
@@ -516,6 +517,37 @@ const onShareIconHover = (isHovering, event) => {
   width: 50px;
   text-align: center;
   padding-left: 10px;
+}
+
+.name-cell {
+  width: auto; /* Takes all remaining space; content truncates via .name ellipsis */
+  overflow: hidden;
+}
+
+.col-path {
+  width: 160px;
+  overflow: hidden;
+}
+
+.col-path .path-column {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.col-tags {
+  width: 160px;
+  overflow: hidden;
+}
+
+.col-created,
+.col-updated {
+  width: 110px;
+}
+
+.col-size {
+  width: 90px;
 }
 
 .selection-cell {
