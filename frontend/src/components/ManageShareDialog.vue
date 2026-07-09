@@ -1001,7 +1001,8 @@ const close = () => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  max-height: 90vh;
+  overflow: hidden; /* le corps (.modal-body) gère le scroll ; en-tête/pied restent fixes */
 }
 
 /* Side panel */
@@ -1034,6 +1035,7 @@ const close = () => {
   align-items: center;
   padding: 12px 20px;
   border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .modal-header h3 {
@@ -1055,10 +1057,11 @@ const close = () => {
 
 .modal-body {
   padding: 14px 20px;
-  min-height: 100px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  flex: 1 1 auto;
+  min-height: 0; /* autorise le corps à rétrécir et à scroller au lieu de déborder */
+  overflow-y: auto;
 }
 
 .loading-state {
@@ -1141,6 +1144,7 @@ const close = () => {
   justify-content: flex-end;
   gap: 12px;
   background-color: var(--background-color);
+  flex-shrink: 0;
 }
 
 button {

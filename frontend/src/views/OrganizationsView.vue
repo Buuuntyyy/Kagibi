@@ -350,7 +350,10 @@ const pinnedOrgs = computed(() =>
   padding: 32px 32px 48px;
   max-width: 1280px;
   margin: 0 auto;
-  min-height: 100%;
+  /* Le conteneur parent (.main-content) est en overflow:hidden : la page doit gérer
+     son propre défilement, sinon le contenu haut (ex. paywall-card) est rogné en bas. */
+  height: 100%;
+  overflow-y: auto;
   box-sizing: border-box;
 }
 
@@ -736,7 +739,7 @@ const pinnedOrgs = computed(() =>
 .paywall-wrapper {
   display: flex;
   justify-content: center;
-  padding: 40px 16px;
+  padding: 24px 16px;
 }
 
 .paywall-card {
