@@ -85,6 +85,12 @@ func MoveHandler(c *gin.Context, db *bun.DB, redisClient *redis.Client) {
 
 	enqueueS3MoveTask(redisClient, userID, oldPath, newPath, req.Type == "folder")
 
+	eventType := "file_moved"
+	if req.Type == "folder" {
+		eventType = "folder_moved"
+	}
+	notifyMoveEvent(c.Request.Context(), db, userID, eventType, req.ID, oldPath, newPath)
+
 	c.JSON(http.StatusOK, gin.H{"message": "Item moved successfully", "newPath": newPath})
 }
 

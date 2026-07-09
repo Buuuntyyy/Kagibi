@@ -473,6 +473,8 @@ func CompleteMultipartHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	notifyFileEvent(ctx, db, userID, "file_updated", fileRecord.ID, fileRecord.Path)
+
 	// Enforce plan version limits and update folder sizes asynchronously
 	if savedVersion != nil {
 		planState := ensureUserPlan(db, userID)

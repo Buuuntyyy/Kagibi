@@ -103,6 +103,7 @@ func DeleteFileHandler(c *gin.Context, db *bun.DB) {
 
 	// Notify via Supabase Realtime about storage update
 	notifyStorageUpdate(c.Request.Context(), db, userID)
+	notifyFileEvent(c.Request.Context(), db, userID, "file_deleted", fileID, file.Path)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Fichier supprimé avec succès"})
 }
@@ -135,12 +136,14 @@ func DeleteFolderHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	if err := deleteFolderRecursive(c, db, userID, folder.Path); err != nil {
+		log.Printf("DeleteFolderHandler failed for folder %d (%s), user %s: %v", folder.ID, folder.Path, userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	// Notify via Supabase Realtime about storage update
 	notifyStorageUpdate(c.Request.Context(), db, userID)
+	notifyFileEvent(c.Request.Context(), db, userID, "folder_deleted", folder.ID, folder.Path)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Dossier supprimé avec succès"})
 }
@@ -189,6 +192,7 @@ func deleteFolderFilesInTx(ctx context.Context, tx bun.Tx, userID string, files 
 		Where("file_id IN (?)", bun.In(fileIDs)).Exec(ctx)
 	if _, err := tx.NewDelete().Model((*pkg.File)(nil)).
 		Where("id IN (?)", bun.In(fileIDs)).Where(queryUserIDEq, userID).Exec(ctx); err != nil {
+		log.Printf("deleteFolderFilesInTx: failed to delete %d file(s) for user %s: %v", len(fileIDs), userID, err)
 		return 0, fmt.Errorf("Erreur lors de la suppression des fichiers")
 	}
 	return totalSize, nil
@@ -219,6 +223,7 @@ func deleteFolderFoldersInTx(ctx context.Context, db *bun.DB, tx bun.Tx, userID,
 	_, _ = tx.NewDelete().Model((*pkg.FolderSize)(nil)).Where(queryFolderIDIn, bun.In(allFolderIDs)).Exec(ctx)
 	if _, err := tx.NewDelete().Model((*pkg.Folder)(nil)).
 		Where("id IN (?)", bun.In(allFolderIDs)).Where(queryUserIDEq, userID).Exec(ctx); err != nil {
+		log.Printf("deleteFolderFoldersInTx: failed to delete %d folder(s) for user %s: %v", len(allFolderIDs), userID, err)
 		return fmt.Errorf("Erreur lors de la suppression des dossiers")
 	}
 	return nil
@@ -229,6 +234,7 @@ func deleteFolderRecursive(c *gin.Context, db *bun.DB, userID, folderPath string
 
 	files, folders, err := pkg.GetFolderContentRecursive(db, userID, folderPath)
 	if err != nil {
+		log.Printf("deleteFolderRecursive: failed to list content of %q for user %s: %v", folderPath, userID, err)
 		return fmt.Errorf("Erreur lors de la récupération du contenu du dossier")
 	}
 
@@ -237,6 +243,7 @@ func deleteFolderRecursive(c *gin.Context, db *bun.DB, userID, folderPath string
 	// si la transaction échoue, les objets S3 restent cohérents avec la DB.
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
+		log.Printf("deleteFolderRecursive: failed to begin tx for user %s: %v", userID, err)
 		return fmt.Errorf("Erreur de transaction")
 	}
 	defer tx.Rollback()
@@ -254,11 +261,13 @@ func deleteFolderRecursive(c *gin.Context, db *bun.DB, userID, folderPath string
 		if _, err = tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
 			Set("storage_used = GREATEST(storage_used - ?, 0)", totalSize).
 			Where(queryUserIDEq, userID).Exec(ctx); err != nil {
+			log.Printf("deleteFolderRecursive: failed to update storage_used for user %s: %v", userID, err)
 			return fmt.Errorf("Erreur lors de la mise à jour du quota de stockage")
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
+		log.Printf("deleteFolderRecursive: failed to commit tx for user %s, folder %q: %v", userID, folderPath, err)
 		return fmt.Errorf("Erreur lors de la validation de la suppression")
 	}
 

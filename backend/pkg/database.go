@@ -41,6 +41,11 @@ func NewDB() *bun.DB {
 		pgdriver.WithDSN(dsn),
 		// Force l'utilisation de l'IPv4 pour éviter les problèmes de timeout IPv6 avec Supabase
 		pgdriver.WithNetwork("tcp4"),
+		// Le ReadTimeout par défaut de pgdriver (10s) est trop court pour les opérations
+		// récursives sur de gros dossiers (ex: suppression d'un dossier synchronisé
+		// contenant des milliers de fichiers) : la lecture socket expire avant que
+		// Postgres ait fini de répondre, ce qui remonte en 500.
+		pgdriver.WithReadTimeout(60 * time.Second),
 	}
 
 	// Si on est en local (ou si explicitement demandé), on peut désactiver SSL au niveau du driver

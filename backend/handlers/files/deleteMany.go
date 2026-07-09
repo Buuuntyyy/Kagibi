@@ -116,5 +116,8 @@ func BulkDeleteHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	notifyStorageUpdate(c.Request.Context(), db, userID)
+	for _, file := range filesToDelete {
+		notifyFileEvent(c.Request.Context(), db, userID, "file_deleted", file.ID, file.Path)
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Fichiers supprimés avec succès"})
 }

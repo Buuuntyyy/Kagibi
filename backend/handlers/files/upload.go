@@ -302,8 +302,32 @@ func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, 
 
 	// 7. Notify Storage Update via Supabase Realtime
 	notifyStorageUpdate(ctx, db, req.UserID)
+	notifyFileEvent(ctx, db, req.UserID, "file_updated", fileRecord.ID, fileRecord.Path)
 
 	return fileRecord, nil
+}
+
+// notifyFileEvent emits a granular realtime event for a file/folder change (create,
+// update, delete, move) so that desktop sync clients can trigger a fast reconciliation
+// instead of waiting for their periodic poll (cf. section 0.2 du plan de sync).
+func notifyFileEvent(ctx context.Context, db *bun.DB, userID, eventType string, resourceID int64, path string) {
+	if err := pkg.EmitRealtimeEvent(ctx, db, userID, eventType, map[string]any{
+		"id":   resourceID,
+		"path": path,
+	}); err != nil {
+		log.Printf("Failed to emit %s event: %v", eventType, err)
+	}
+}
+
+// notifyMoveEvent emits a granular realtime event for a move/rename (old_path -> new_path).
+func notifyMoveEvent(ctx context.Context, db *bun.DB, userID, eventType string, resourceID int64, oldPath, newPath string) {
+	if err := pkg.EmitRealtimeEvent(ctx, db, userID, eventType, map[string]any{
+		"id":       resourceID,
+		"old_path": oldPath,
+		"new_path": newPath,
+	}); err != nil {
+		log.Printf("Failed to emit %s event: %v", eventType, err)
+	}
 }
 
 func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) (int64, error) {
@@ -327,6 +351,7 @@ func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) 
 		Set("preview_id = EXCLUDED.preview_id").
 		Set("is_preview = EXCLUDED.is_preview").
 		Set("synced = EXCLUDED.synced").
+		Set("updated_at = current_timestamp").
 		Exec(ctx)
 	if err != nil {
 		log.Printf("[UpsertFile] ERROR upserting file: %v", err)
