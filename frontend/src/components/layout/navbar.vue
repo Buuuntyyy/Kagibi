@@ -4,7 +4,7 @@
 <template>
   <nav :class="{ 'mobile-search-open': mobileSearchOpen }">
     <router-link v-show="!mobileSearchOpen" :to="authStore.isAuthenticated ? '/dashboard' : '/'" class="brand">
-      <img src="/Logo.png" alt="Kagibi Logo" class="brand-logo"/>
+      <img src="/Logo.png" alt="Kagibi Logo" class="brand-logo" width="36" height="36" decoding="async"/>
       <span>Kagibi</span>
     </router-link>
     <div class="search-wrap">

@@ -22,7 +22,7 @@
                 <th class="feature-col">{{ t('landing.compare.tableFeature') }}</th>
                 <th class="kagibi-col">
                   <div class="th-brand kagibi">
-                    <img src="/Logo.png" alt="Kagibi" width="24" />
+                    <img src="/Logo.png" alt="Kagibi" width="24" height="24" decoding="async" />
                     Kagibi
                   </div>
                 </th>
@@ -84,7 +84,7 @@
 
           <div class="tech-card kagibi-card">
             <div class="tech-card-header">
-              <img src="/Logo.png" alt="Kagibi" width="22" />
+              <img src="/Logo.png" alt="Kagibi" width="22" height="22" decoding="async" />
               <span>Kagibi</span>
             </div>
             <ul class="tech-list">
