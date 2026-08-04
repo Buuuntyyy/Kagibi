@@ -106,7 +106,7 @@ func RegisterHandler(c *gin.Context, db *bun.DB, provider authprovider.AuthProvi
 		Salt:                       req.Salt,
 		EncryptedMasterKey:         req.EncryptedMasterKey,
 		EncryptedMasterKeyRecovery: req.EncryptedMasterKeyRecovery,
-		RecoveryHash:               req.RecoveryHash,
+		RecoveryHash:               hashRecoveryVerifier(req.RecoveryHash),
 		RecoverySalt:               req.RecoverySalt,
 		FriendCode:                 generateFriendCode(),
 		PublicKey:                  req.PublicKey,

@@ -3,11 +3,12 @@ import { useRealtimeStore } from './realtime'
 import { useAuthStore } from './auth'
 import { useUIStore } from './ui'
 import sodium from 'libsodium-wrappers-sumo'
-import { 
-    generateMasterKey, 
-    encryptKeyWithPublicKey, 
+import {
+    generateMasterKey,
+    encryptKeyWithPublicKey,
     decryptKeyWithPrivateKey,
-    importKeyFromPEM
+    importKeyFromPEM,
+    publicKeyFingerprint
 } from '../utils/crypto'
 import axios from 'axios'
 import { API_BASE_URL } from '../api'
@@ -316,6 +317,11 @@ export const useP2PStore = defineStore('p2p', {
          const publicKey = await importKeyFromPEM(friend.public_key);
          const keyEncryptedBase64 = await encryptKeyWithPublicKey(fileKeyRaw, publicKey);
 
+         // Fingerprint of the recipient key the file key was encrypted to. Exposed
+         // on the transfer so the two peers can compare it out-of-band and detect a
+         // substituted key. Informational only — does not alter the transfer.
+         const peerKeyFingerprint = await publicKeyFingerprint(friend.public_key);
+
          // Fetch ICE Config from backend
          const rtcConfig = await fetchICEConfig();
          //console.log("Using RTC Config:", rtcConfig);
@@ -358,6 +364,7 @@ export const useP2PStore = defineStore('p2p', {
              transferStartedAt: null,
              file: file,       // kept for resume
              fileKey: fileKey, // kept for resume
+             peerKeyFingerprint: peerKeyFingerprint,
              resumeAttempts: 0,
              sendGeneration: 0, // incremented on each resume to stop stale send loops
              connectionInfo: {
@@ -447,6 +454,11 @@ export const useP2PStore = defineStore('p2p', {
         // Let's attach the same ID.
         const transferId = offerData.transferId;
 
+        // Fingerprint of our own public key — the key the sender should have used to
+        // encrypt the file key. Comparing it out-of-band with the sender's displayed
+        // fingerprint reveals a substituted key. Informational only.
+        const peerKeyFingerprint = await publicKeyFingerprint(authStore.user?.public_key || '');
+
         pc.oniceconnectionstatechange = this._makeIceStateHandler(pc, transferId);
 
         pc.onicecandidate = e => {
@@ -468,6 +480,7 @@ export const useP2PStore = defineStore('p2p', {
              fileSize: offerData.size,
              fileType: offerData.type,
              fileKey: fileKey,
+             peerKeyFingerprint: peerKeyFingerprint,
              buffer: [],
              receivedSize: 0,
              transferId: transferId,

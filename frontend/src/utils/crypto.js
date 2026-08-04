@@ -412,6 +412,37 @@ export async function deriveKeyFromToken(token) {
     );
 }
 
+/**
+ * Computes a short, human-comparable fingerprint of a public key (PEM/SPKI).
+ * SHA-256 of the DER bytes, rendered as space-grouped uppercase hex (first 8 bytes).
+ *
+ * Purpose: during P2P key exchange the recipient's public key travels through the
+ * server-mediated signalling channel. Two peers can read this fingerprint aloud
+ * (out-of-band) to detect a substituted key — a MITM by a malicious server or
+ * signal injector. Purely informational: no ciphertext or control flow depends on it.
+ *
+ * @param {string} pem - PEM-encoded public key
+ * @returns {Promise<string>} e.g. "A1B2 C3D4 E5F6 7890" (empty string on any error)
+ */
+export async function publicKeyFingerprint(pem) {
+    if (!pem) return '';
+    try {
+        const b64 = pem.replaceAll(/-----BEGIN [A-Z ]+-----/g, '')
+                       .replaceAll(/-----END [A-Z ]+-----/g, '')
+                       .replaceAll(/\s/g, '');
+        const der = atob(b64);
+        const bytes = new Uint8Array(der.length);
+        for (let i = 0; i < der.length; i++) bytes[i] = der.codePointAt(i);
+        const digest = await window.crypto.subtle.digest('SHA-256', bytes);
+        const hex = Array.from(new Uint8Array(digest).slice(0, 8))
+            .map(b => b.toString(16).padStart(2, '0').toUpperCase())
+            .join('');
+        return hex.replace(/(.{4})(?=.)/g, '$1 ');
+    } catch {
+        return '';
+    }
+}
+
 // --- Asymmetric Encryption (RSA-OAEP) Implementation ---
 
 /**

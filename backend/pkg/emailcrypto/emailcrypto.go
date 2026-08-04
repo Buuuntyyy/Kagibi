@@ -33,6 +33,7 @@ import (
 
 var hashKey []byte
 var encKey []byte
+var decoyKey []byte
 
 // Init reads EMAIL_ENCRYPTION_KEY from the environment and derives two subkeys.
 // Must be called once at startup, before any Hash/Encrypt/Decrypt call.
@@ -47,6 +48,7 @@ func Init() {
 	}
 	hashKey = deriveSubkey(keyBytes, "email-hash-v1")
 	encKey = deriveSubkey(keyBytes, "email-enc-v1")
+	decoyKey = deriveSubkey(keyBytes, "decoy-v1")
 }
 
 func deriveSubkey(master []byte, context string) []byte {
@@ -61,6 +63,27 @@ func Hash(email string) string {
 	mac := hmac.New(sha256.New, hashKey)
 	mac.Write([]byte(strings.ToLower(strings.TrimSpace(email))))
 	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// Decoy returns n deterministic, secret-keyed pseudo-random bytes derived from the
+// email and a label. The output is stable for a given (email, label) pair but
+// unpredictable without the server secret. It is used to build decoy responses
+// (e.g. account-recovery blobs for non-existent accounts) that are byte-for-byte
+// indistinguishable from real ones, defeating account enumeration.
+func Decoy(email, label string, n int) []byte {
+	normalized := strings.ToLower(strings.TrimSpace(email))
+	seed := hmac.New(sha256.New, decoyKey)
+	seed.Write([]byte(label + ":" + normalized))
+	base := seed.Sum(nil)
+
+	out := make([]byte, 0, n)
+	for counter := 0; len(out) < n; counter++ {
+		block := hmac.New(sha256.New, decoyKey)
+		block.Write(base)
+		block.Write([]byte{byte(counter), byte(counter >> 8)})
+		out = append(out, block.Sum(nil)...)
+	}
+	return out[:n]
 }
 
 // Encrypt encrypts the email with AES-256-GCM using a fresh random 12-byte nonce.

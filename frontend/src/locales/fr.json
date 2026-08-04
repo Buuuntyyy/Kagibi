@@ -253,6 +253,8 @@
     "transferRejected": "Transfert refusé par votre ami",
     "transferTimedOut": "Aucune réponse — le transfert a expiré.",
     "keepWindowActive": "Gardez cette fenêtre active pendant le transfert, ne rafraîchissez pas et ne fermez pas l'onglet.",
+    "keyFingerprint": "Empreinte de clé",
+    "keyFingerprintHint": "Comparez cette empreinte de vive voix avec votre correspondant : si elle diffère, la clé a pu être interceptée.",
     "pingNotify": "Re-notifier",
     "pingLimitReached": "Limite atteinte",
     "pingsLeft": "{count} ping(s) restant(s)",

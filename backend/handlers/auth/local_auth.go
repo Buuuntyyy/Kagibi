@@ -22,7 +22,14 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/uptrace/bun"
+	"golang.org/x/crypto/bcrypt"
 )
+
+// dummyPasswordHash is a valid bcrypt hash (cost 12, matching the auth provider)
+// compared against when the supplied email does not exist. Running bcrypt on the
+// non-existent-user path equalises response time with the existing-user path,
+// preventing account enumeration via a timing side-channel at login.
+var dummyPasswordHash, _ = bcrypt.GenerateFromPassword([]byte("kagibi-login-timing-guard"), 12)
 
 type loginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
@@ -77,6 +84,9 @@ func LocalLoginHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 
 		au, err := lp.FindAuthUserByEmail(req.Email)
 		if err != nil {
+			// Perform a dummy bcrypt comparison so the response time matches the
+			// existing-user path and the email cannot be enumerated by timing.
+			_ = bcrypt.CompareHashAndPassword(dummyPasswordHash, []byte(req.Password))
 			monitoring.RecordUserLogin(false)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Identifiants invalides"})
 			return

@@ -532,6 +532,30 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	g.POST("/org-invitations/:token/accept", h.AcceptInvitation)
 }
 
+// canSignalTarget reports whether senderID is allowed to send a P2P signal to
+// targetID. A signal is authorised only when the two parties share an accepted
+// friendship or an active (non-expired) P2P invite in either direction. This
+// prevents any authenticated user — including ephemeral guests — from injecting
+// arbitrary signals (spoofed offers, substitute public keys, ping spam) toward
+// unrelated users.
+func canSignalTarget(ctx context.Context, db *bun.DB, senderID, targetID string) bool {
+	if senderID == "" || targetID == "" || senderID == targetID {
+		return false
+	}
+	friendCount, err := db.NewSelect().Model((*pkg.Friendship)(nil)).
+		Where("status = 'accepted' AND ((user_id_1 = ? AND user_id_2 = ?) OR (user_id_1 = ? AND user_id_2 = ?))",
+			senderID, targetID, targetID, senderID).
+		Count(ctx)
+	if err == nil && friendCount > 0 {
+		return true
+	}
+	inviteCount, err := db.NewSelect().Model((*pkg.P2PInvite)(nil)).
+		Where("expires_at > NOW() AND ((sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?))",
+			senderID, targetID, targetID, senderID).
+		Count(ctx)
+	return err == nil && inviteCount > 0
+}
+
 func p2pSignalHandler(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, _ := c.Get("user_id")
@@ -542,6 +566,10 @@ func p2pSignalHandler(db *bun.DB) gin.HandlerFunc {
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		if !canSignalTarget(c.Request.Context(), db, userID.(string), req.TargetUserID) {
+			c.JSON(403, gin.H{"error": "Not authorized to signal this user"})
 			return
 		}
 		signal := &pkg.P2PSignal{

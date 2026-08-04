@@ -40,6 +40,13 @@ func DeleteFolderFromSharedFolderHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	// Enforce the share password gate on destructive operations, consistent with
+	// browse/download/upload. Without this, a caller holding the token but not the
+	// password could delete folders from a password-protected share.
+	if !checkSharePassword(c, &shareLink) {
+		return
+	}
+
 	if !shareLink.PermDelete {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Delete not permitted on this share"})
 		return

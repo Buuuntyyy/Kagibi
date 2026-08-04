@@ -253,6 +253,8 @@
     "transferRejected": "Transfer declined by your friend",
     "transferTimedOut": "No response — the transfer request has expired.",
     "keepWindowActive": "Keep this window active during the transfer, don't refresh or close the tab.",
+    "keyFingerprint": "Key fingerprint",
+    "keyFingerprintHint": "Read this fingerprint aloud to your peer: if it differs, the key may have been intercepted.",
     "pingNotify": "Re-notify",
     "pingLimitReached": "Limit reached",
     "pingsLeft": "{count} ping(s) left",
