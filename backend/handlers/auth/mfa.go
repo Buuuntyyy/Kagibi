@@ -213,7 +213,9 @@ func MFAVerifyHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 			return
 		}
 
-		token, err := lp.GenerateTokenWithAAL(userID, au.Email, "aal2")
+		// aal2 + mfa=enabled (so per-action gates keep enforcing once the elevation
+		// goes stale) + mfa_at=now (step-up freshness anchor).
+		token, err := lp.GenerateTokenWithClaims(userID, au.Email, "aal2", true, time.Now().Unix())
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 			return

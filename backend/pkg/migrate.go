@@ -243,6 +243,7 @@ func migrateAuthUsers(ctx context.Context, db *bun.DB) error {
 		`ALTER TABLE "auth_users" ADD COLUMN IF NOT EXISTS "totp_friendly_name"   VARCHAR`,
 		`ALTER TABLE "auth_users" ADD COLUMN IF NOT EXISTS "totp_last_code"       VARCHAR`,
 		`ALTER TABLE "auth_users" ADD COLUMN IF NOT EXISTS "totp_last_code_at"    TIMESTAMPTZ`,
+		`ALTER TABLE "auth_users" ADD COLUMN IF NOT EXISTS "totp_last_step"       BIGINT NOT NULL DEFAULT 0`,
 		`ALTER TABLE "auth_users" ADD COLUMN IF NOT EXISTS "totp_failed_attempts" INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE "auth_users" ADD COLUMN IF NOT EXISTS "totp_locked_until"    TIMESTAMPTZ`,
 	} {

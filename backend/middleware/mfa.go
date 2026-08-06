@@ -5,10 +5,18 @@ package middleware
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
+
+// mfaActionFreshness is how recently a session must have completed TOTP verification
+// for a per-action MFA gate (downloads / destructive / email change) to be satisfied.
+// A stale aal2 session is asked to step up again. Login-level enforcement
+// (EnforceMFAOnLogin) is not subject to this window — being MFA-authenticated for the
+// login session is a one-time requirement, not a per-action one.
+const mfaActionFreshness = 10 * time.Minute
 
 // mfaGates holds a user's MFA enforcement preferences for the current request.
 type mfaGates struct {
@@ -78,6 +86,20 @@ func mfaEnrolled(c *gin.Context) bool {
 	return c.GetString("mfa") == "enabled"
 }
 
+// mfaFresh reports whether the session completed TOTP verification within
+// mfaActionFreshness, based on the signed "mfa_at" claim.
+func mfaFresh(c *gin.Context) bool {
+	v, ok := c.Get("mfa_at")
+	if !ok {
+		return false
+	}
+	at, ok := v.(int64)
+	if !ok || at <= 0 {
+		return false
+	}
+	return time.Since(time.Unix(at, 0)) < mfaActionFreshness
+}
+
 // EnforceMFAOnLogin blocks an aal1 session from protected resources when the user
 // has MFA enabled and require_mfa_on_login is set; the session must first step up to
 // aal2 via /auth/mfa/verify. It is a no-op (no DB lookup) for sessions already at
@@ -103,13 +125,19 @@ func EnforceMFAOnLogin(db *bun.DB) gin.HandlerFunc {
 }
 
 // RequireMFAForAction enforces a per-action MFA requirement for a specific route
-// (action is "download", "destructive" or "email_change"). aal2 sessions and users
-// without an enrolled factor pass without a DB lookup; otherwise the matching
-// preference is consulted and a 403 {"error":"mfa_required"} is returned when set,
-// prompting the client to step up and retry.
+// (action is "download", "destructive" or "email_change"). Users without an enrolled
+// factor pass without a DB lookup, as do sessions that completed a *recent* TOTP
+// verification (aal2 within mfaActionFreshness). Otherwise the matching preference is
+// consulted and a 403 {"error":"mfa_required"} is returned when set, prompting the
+// client to step up and retry — so the requirement is genuinely per-action rather than
+// once-per-7-day-session.
 func RequireMFAForAction(db *bun.DB, action string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if c.GetString("aal") == "aal2" || !mfaEnrolled(c) {
+		if !mfaEnrolled(c) {
+			c.Next()
+			return
+		}
+		if c.GetString("aal") == "aal2" && mfaFresh(c) {
 			c.Next()
 			return
 		}

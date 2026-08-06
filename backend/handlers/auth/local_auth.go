@@ -100,7 +100,8 @@ func LocalLoginHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 
 		// Embed the "mfa" claim when the account has a verified TOTP factor so
 		// step-up middleware can enforce aal2 without a DB lookup on every request.
-		token, err := lp.GenerateTokenWithClaims(au.ID, au.Email, "aal1", au.TOTPEnabled)
+		// No "mfa_at" — login has not performed a TOTP verification yet.
+		token, err := lp.GenerateTokenWithClaims(au.ID, au.Email, "aal1", au.TOTPEnabled, 0)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la génération du token"})
 			return
@@ -247,9 +248,10 @@ func LocalRefreshHandler(provider authprovider.AuthProvider, redisClient *redis.
 		if aal == "" {
 			aal = "aal1"
 		}
-		// Preserve the signed "mfa" claim across refresh so step-up enforcement
-		// remains intact for the lifetime of the session.
+		// Preserve the signed "mfa" and "mfa_at" claims across refresh so both step-up
+		// enforcement and per-action freshness remain intact for the session's lifetime.
 		mfaEnabled := claims["mfa"] == "enabled"
+		mfaAt, _ := claims["mfa_at"].(float64)
 
 		// Reject refresh if the token was issued before a password change or MFA disable.
 		if isTokenRevoked(redisClient, userID, claims) {
@@ -257,7 +259,7 @@ func LocalRefreshHandler(provider authprovider.AuthProvider, redisClient *redis.
 			return
 		}
 
-		newToken, err := lp.GenerateTokenWithClaims(userID, email, aal, mfaEnabled)
+		newToken, err := lp.GenerateTokenWithClaims(userID, email, aal, mfaEnabled, int64(mfaAt))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors du renouvellement du token"})
 			return
@@ -388,17 +390,24 @@ func LocalUpdateEmailHandler(provider authprovider.AuthProvider, db *bun.DB, red
 			}()
 		}
 
-		// Fetch the current AAL from the old token claims so we preserve MFA state
+		// Preserve MFA state (aal, mfa, mfa_at) from the current token so changing the
+		// email neither drops MFA enforcement nor resets step-up freshness.
 		aal := "aal1"
+		mfaEnabled := false
+		var mfaAt int64
 		if authHeader := c.GetHeader("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
 			if claims, err := parseLocalToken(lp, strings.TrimPrefix(authHeader, "Bearer ")); err == nil {
 				if v, ok2 := claims["aal"].(string); ok2 && v != "" {
 					aal = v
 				}
+				mfaEnabled = claims["mfa"] == "enabled"
+				if at, ok2 := claims["mfa_at"].(float64); ok2 {
+					mfaAt = int64(at)
+				}
 			}
 		}
 
-		newToken, err := lp.GenerateTokenWithAAL(userID, newEmail, aal)
+		newToken, err := lp.GenerateTokenWithClaims(userID, newEmail, aal, mfaEnabled, mfaAt)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la génération du token"})
 			return

@@ -134,6 +134,11 @@ func AuthMiddleware(provider authprovider.AuthProvider, redisClient *redis.Clien
 		if mfaClaim, ok := claims["mfa"].(string); ok {
 			c.Set("mfa", mfaClaim)
 		}
+		// Propagate the "mfa_at" claim (unix seconds of last TOTP verification) so
+		// per-action gates can enforce step-up freshness.
+		if mfaAt, ok := claims["mfa_at"].(float64); ok {
+			c.Set("mfa_at", int64(mfaAt))
+		}
 
 		trackActiveSession(redisClient, userID)
 
