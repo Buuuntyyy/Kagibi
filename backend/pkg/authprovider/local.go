@@ -254,9 +254,17 @@ func (p *LocalProvider) StartTOTPEnrollment(userID, email, friendlyName string) 
 	factorID = fmt.Sprintf("%x-%x-%x-%x-%x",
 		idBytes[0:4], idBytes[4:6], idBytes[6:8], idBytes[8:10], idBytes[10:16])
 
+	// Encrypt the shared secret at rest so a read-only DB leak cannot be used to
+	// generate valid TOTP codes. The plaintext is only returned to the enrolling
+	// client (for the QR code), never persisted in the clear.
+	encSecret, err := emailcrypto.EncryptSecret(key.Secret())
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to encrypt TOTP secret: %w", err)
+	}
+
 	_, err = p.db.NewUpdate().Model((*authUser)(nil)).
 		Set("totp_secret = ?, totp_factor_id = ?, totp_friendly_name = ?, totp_enabled = false",
-			key.Secret(), factorID, friendlyName).
+			encSecret, factorID, friendlyName).
 		Where(queryIDEq, userID).
 		Exec(context.Background())
 	if err != nil {
@@ -264,6 +272,23 @@ func (p *LocalProvider) StartTOTPEnrollment(userID, email, friendlyName string) 
 	}
 
 	return factorID, key.URL(), key.Secret(), nil
+}
+
+// decryptTOTPSecret returns the plaintext TOTP secret from its stored form,
+// transparently handling legacy rows that predate at-rest encryption. legacy is
+// true when the stored value was plaintext and should be upgraded.
+func (p *LocalProvider) decryptTOTPSecret(stored string) (secret string, legacy bool) {
+	if pt, err := emailcrypto.DecryptSecret(stored); err == nil {
+		return pt, false
+	}
+	return stored, true
+}
+
+// DecryptTOTPSecret returns the plaintext TOTP secret for re-displaying a pending
+// enrollment's QR code. Accepts both encrypted and legacy-plaintext stored values.
+func (p *LocalProvider) DecryptTOTPSecret(stored string) string {
+	secret, _ := p.decryptTOTPSecret(stored)
+	return secret
 }
 
 // ValidateTOTPCode checks a 6-digit code against the user's stored TOTP secret.
@@ -287,7 +312,9 @@ func (p *LocalProvider) ValidateTOTPCode(userID, code string) error {
 		return fmt.Errorf("TOTP code already used")
 	}
 
-	if !totp.Validate(code, au.TOTPSecret) {
+	secret, legacy := p.decryptTOTPSecret(au.TOTPSecret)
+
+	if !totp.Validate(code, secret) {
 		newAttempts := au.TOTPFailedAttempts + 1
 		upd := p.db.NewUpdate().Model((*authUser)(nil)).Where(queryIDEq, userID)
 		if newAttempts >= 5 {
@@ -300,12 +327,19 @@ func (p *LocalProvider) ValidateTOTPCode(userID, code string) error {
 		return fmt.Errorf("invalid TOTP code")
 	}
 
-	// Valid — reset counters and record the used code to prevent replay
+	// Valid — reset counters and record the used code to prevent replay.
 	now := time.Now()
-	_, _ = p.db.NewUpdate().Model((*authUser)(nil)).
+	upd := p.db.NewUpdate().Model((*authUser)(nil)).
 		Set("totp_failed_attempts = 0, totp_locked_until = NULL, totp_last_code = ?, totp_last_code_at = ?", code, now).
-		Where(queryIDEq, userID).
-		Exec(context.Background())
+		Where(queryIDEq, userID)
+	// Opportunistically upgrade a legacy plaintext secret to the encrypted form now
+	// that we have verified it (and thus hold the plaintext).
+	if legacy {
+		if enc, encErr := emailcrypto.EncryptSecret(secret); encErr == nil {
+			upd = upd.Set("totp_secret = ?", enc)
+		}
+	}
+	_, _ = upd.Exec(context.Background())
 	return nil
 }
 

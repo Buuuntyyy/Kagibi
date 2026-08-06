@@ -34,6 +34,7 @@ import (
 var hashKey []byte
 var encKey []byte
 var decoyKey []byte
+var secretKey []byte
 
 // Init reads EMAIL_ENCRYPTION_KEY from the environment and derives two subkeys.
 // Must be called once at startup, before any Hash/Encrypt/Decrypt call.
@@ -49,6 +50,7 @@ func Init() {
 	hashKey = deriveSubkey(keyBytes, "email-hash-v1")
 	encKey = deriveSubkey(keyBytes, "email-enc-v1")
 	decoyKey = deriveSubkey(keyBytes, "decoy-v1")
+	secretKey = deriveSubkey(keyBytes, "secret-enc-v1")
 }
 
 func deriveSubkey(master []byte, context string) []byte {
@@ -90,7 +92,27 @@ func Decoy(email, label string, n int) []byte {
 // The returned string is base64(nonce || ciphertext || auth_tag).
 // Each call produces a different ciphertext even for the same input.
 func Encrypt(email string) (string, error) {
-	block, err := aes.NewCipher(encKey)
+	return encryptWith(encKey, email)
+}
+
+// Decrypt decrypts a ciphertext previously produced by Encrypt.
+func Decrypt(ciphertext string) (string, error) {
+	return decryptWith(encKey, ciphertext)
+}
+
+// EncryptSecret encrypts a non-email secret (e.g. a TOTP shared secret) at rest under
+// a dedicated subkey, so its protection is independent from the email ciphertexts.
+func EncryptSecret(plaintext string) (string, error) {
+	return encryptWith(secretKey, plaintext)
+}
+
+// DecryptSecret reverses EncryptSecret.
+func DecryptSecret(ciphertext string) (string, error) {
+	return decryptWith(secretKey, ciphertext)
+}
+
+func encryptWith(key []byte, plaintext string) (string, error) {
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", fmt.Errorf("emailcrypto: create cipher: %w", err)
 	}
@@ -102,17 +124,16 @@ func Encrypt(email string) (string, error) {
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", fmt.Errorf("emailcrypto: generate nonce: %w", err)
 	}
-	ct := gcm.Seal(nonce, nonce, []byte(email), nil)
+	ct := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
 	return base64.StdEncoding.EncodeToString(ct), nil
 }
 
-// Decrypt decrypts a ciphertext previously produced by Encrypt.
-func Decrypt(ciphertext string) (string, error) {
+func decryptWith(key []byte, ciphertext string) (string, error) {
 	data, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
 		return "", fmt.Errorf("emailcrypto: base64 decode: %w", err)
 	}
-	block, err := aes.NewCipher(encKey)
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", fmt.Errorf("emailcrypto: create cipher: %w", err)
 	}

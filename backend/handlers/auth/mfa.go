@@ -93,13 +93,14 @@ func MFAEnrollHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 			return
 		}
 
-		// Idempotency: return existing pending factor instead of silently overwriting it
+		// Idempotency: return existing pending factor instead of silently overwriting it.
+		// The stored secret is encrypted at rest, so decrypt it for the QR re-display.
 		if au.TOTPFactorID != "" {
 			log.Printf("[MFA] enroll_idempotent user=%s factor=%s", userID, au.TOTPFactorID)
 			c.JSON(http.StatusOK, gin.H{
 				"id": au.TOTPFactorID,
 				"totp": gin.H{
-					"secret": au.TOTPSecret,
+					"secret": lp.DecryptTOTPSecret(au.TOTPSecret),
 				},
 			})
 			return
