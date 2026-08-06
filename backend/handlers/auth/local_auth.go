@@ -98,7 +98,9 @@ func LocalLoginHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 			return
 		}
 
-		token, err := lp.GenerateToken(au.ID, au.Email)
+		// Embed the "mfa" claim when the account has a verified TOTP factor so
+		// step-up middleware can enforce aal2 without a DB lookup on every request.
+		token, err := lp.GenerateTokenWithClaims(au.ID, au.Email, "aal1", au.TOTPEnabled)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors de la génération du token"})
 			return
@@ -245,6 +247,9 @@ func LocalRefreshHandler(provider authprovider.AuthProvider, redisClient *redis.
 		if aal == "" {
 			aal = "aal1"
 		}
+		// Preserve the signed "mfa" claim across refresh so step-up enforcement
+		// remains intact for the lifetime of the session.
+		mfaEnabled := claims["mfa"] == "enabled"
 
 		// Reject refresh if the token was issued before a password change or MFA disable.
 		if isTokenRevoked(redisClient, userID, claims) {
@@ -252,7 +257,7 @@ func LocalRefreshHandler(provider authprovider.AuthProvider, redisClient *redis.
 			return
 		}
 
-		newToken, err := lp.GenerateTokenWithAAL(userID, email, aal)
+		newToken, err := lp.GenerateTokenWithClaims(userID, email, aal, mfaEnabled)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erreur lors du renouvellement du token"})
 			return

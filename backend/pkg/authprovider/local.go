@@ -63,19 +63,31 @@ func (p *LocalProvider) GetJWTSecret() []byte   { return p.secret }
 
 // GenerateToken creates a signed HS256 JWT valid for 7 days with aal1.
 func (p *LocalProvider) GenerateToken(userID, email string) (string, error) {
-	return p.GenerateTokenWithAAL(userID, email, "aal1")
+	return p.GenerateTokenWithClaims(userID, email, "aal1", false)
 }
 
 // GenerateTokenWithAAL creates a signed HS256 JWT with an explicit AAL claim.
 // aal should be "aal1" (password only) or "aal2" (password + TOTP verified).
 func (p *LocalProvider) GenerateTokenWithAAL(userID, email, aal string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	return p.GenerateTokenWithClaims(userID, email, aal, false)
+}
+
+// GenerateTokenWithClaims creates a signed HS256 JWT. When mfaEnabled is true an
+// "mfa":"enabled" claim is embedded so step-up middleware can require aal2 for
+// MFA-enrolled users without a per-request database lookup. The claim is signed,
+// so it cannot be forged or stripped by a client.
+func (p *LocalProvider) GenerateTokenWithClaims(userID, email, aal string, mfaEnabled bool) (string, error) {
+	claims := jwt.MapClaims{
 		"sub":   userID,
 		"email": email,
 		"aal":   aal,
 		"exp":   time.Now().Add(7 * 24 * time.Hour).Unix(),
 		"iat":   time.Now().Unix(),
-	})
+	}
+	if mfaEnabled {
+		claims["mfa"] = "enabled"
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(p.secret)
 }
 

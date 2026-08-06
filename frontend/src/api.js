@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { authClient } from './auth-client'
+import { requestStepUp } from './utils/mfaStepUp'
 
 // Use runtime configuration from window.__APP_CONFIG__
 // which is injected by nginx from Kubernetes environment variables
@@ -40,6 +41,29 @@ api.interceptors.response.use(
         return api(original)
       }
     }
+
+    // The account requires MFA for this action and the session is still aal1.
+    // Prompt for step-up once, then replay the original request with the new
+    // aal2 token. If the user cancels, the original error propagates unchanged.
+    if (
+      error.response?.status === 403 &&
+      error.response?.data?.error === 'mfa_required' &&
+      original &&
+      !original._mfaRetried
+    ) {
+      original._mfaRetried = true
+      try {
+        await requestStepUp()
+      } catch {
+        throw error
+      }
+      const token = await authClient.getToken()
+      if (token) {
+        original.headers.Authorization = `Bearer ${token}`
+      }
+      return api(original)
+    }
+
     throw error
   }
 )

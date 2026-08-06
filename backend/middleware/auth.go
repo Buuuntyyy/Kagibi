@@ -129,6 +129,12 @@ func AuthMiddleware(provider authprovider.AuthProvider, redisClient *redis.Clien
 		c.Set("aal", aal)
 		c.Set("is_guest", aal == "guest")
 
+		// Propagate the signed "mfa" claim so step-up middleware can tell, without a
+		// DB lookup, whether the user has an MFA factor enrolled.
+		if mfaClaim, ok := claims["mfa"].(string); ok {
+			c.Set("mfa", mfaClaim)
+		}
+
 		trackActiveSession(redisClient, userID)
 
 		c.Next()

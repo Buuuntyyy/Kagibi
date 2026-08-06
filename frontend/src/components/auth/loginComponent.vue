@@ -34,20 +34,13 @@
     <p v-if="error" class="error-message">{{ error }}</p>
   </form>
 
-  <!-- MFA Challenge Modal -->
-  <MFAChallengeModal
-    v-model="showMFAChallenge"
-    context="login"
-    @verified="onMFAVerified"
-    @cancelled="onMFACancelled"
-  />
 </template>
 
 <script setup>
 import { ref } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter, useRoute } from 'vue-router'
-import MFAChallengeModal from '../MFAChallengeModal.vue'
+import { requestStepUp } from '../../utils/mfaStepUp'
 import { isP2PSubdomain } from '../../composables/useSubdomain'
 
 const route = useRoute()
@@ -60,7 +53,6 @@ const password = ref('')
 const error = ref('')
 const loading = ref(false)
 const showPassword = ref(false)
-const showMFAChallenge = ref(false)
 const authStore = useAuthStore()
 const router = useRouter()
 
@@ -71,8 +63,18 @@ const login = async () => {
     const result = await authStore.login({email: email.value, password: password.value})
 
     if (result === 'mfa_required') {
-      // Show MFA challenge modal
-      showMFAChallenge.value = true
+      // Drive the single global MFA modal (shared with the 403 step-up path so the
+      // user never sees two dialogs). Resolve → session is aal2 → proceed.
+      try {
+        await requestStepUp('login')
+        authStore.pendingMFAVerification = false
+        router.push(postLoginRoute)
+      } catch {
+        // User cancelled the challenge — end the half-authenticated session.
+        authStore.pendingMFAVerification = false
+        authStore.logout()
+        error.value = 'Authentification MFA annulée'
+      }
     } else if (result) {
       // Login successful without MFA
       router.push(postLoginRoute)
@@ -90,20 +92,6 @@ const login = async () => {
   } finally {
     loading.value = false
   }
-}
-
-const onMFAVerified = () => {
-  // MFA verified successfully, redirect to Home
-  authStore.pendingMFAVerification = false
-  router.push(postLoginRoute)
-}
-
-const onMFACancelled = () => {
-  // User cancelled MFA, logout
-  showMFAChallenge.value = false
-  authStore.pendingMFAVerification = false
-  authStore.logout()
-  error.value = 'Authentification MFA annulée'
 }
 </script>
 
