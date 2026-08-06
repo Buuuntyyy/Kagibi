@@ -227,8 +227,8 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	mfaGroup.Use(middleware.AuthMiddleware(provider, redisClient))
 	mfaGroup.GET("/factors", auth.MFAListFactorsHandler(provider))
 	mfaGroup.POST("/enroll", auth.MFAEnrollHandler(provider))
-	mfaGroup.POST("/challenge", auth.MFAChallengeHandler(provider))
-	mfaGroup.POST("/verify", auth.MFAVerifyHandler(provider))
+	mfaGroup.POST("/challenge", auth.MFAChallengeHandler(provider, redisClient))
+	mfaGroup.POST("/verify", auth.MFAVerifyHandler(provider, redisClient))
 	mfaGroup.DELETE("/unenroll", auth.MFAUnenrollHandler(provider, redisClient))
 
 	// Protected routes (JWT required, guest tokens rejected)
