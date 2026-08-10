@@ -19,6 +19,7 @@ func StartCleanupWorker(db *bun.DB) {
 	go func() {
 		log.Println("Running initial cleanup...")
 		cleanupExpiredShares(db)
+		cleanupExpiredRecoveryRotationChallenges(db)
 	}()
 
 	go func() {
@@ -30,6 +31,7 @@ func StartCleanupWorker(db *bun.DB) {
 			select {
 			case <-ticker.C:
 				cleanupExpiredShares(db)
+				cleanupExpiredRecoveryRotationChallenges(db)
 			}
 		}
 	}()
@@ -53,5 +55,22 @@ func cleanupExpiredShares(db *bun.DB) {
 	count, _ := res.RowsAffected()
 	if count > 0 {
 		log.Printf("Cleanup: Removed %d expired share links", count)
+	}
+}
+
+// cleanupExpiredRecoveryRotationChallenges purge les codes de confirmation email de
+// rotation de code de récupération expirés (cf. handlers/auth/recovery_kit.go). Requête
+// SQL brute plutôt qu'un modèle bun : le type reste privé au package auth, ce nettoyage
+// n'a besoin de connaître que le nom de la table.
+func cleanupExpiredRecoveryRotationChallenges(db *bun.DB) {
+	ctx := context.Background()
+	res, err := db.ExecContext(ctx,
+		`DELETE FROM recovery_rotation_challenges WHERE expires_at < ?`, time.Now())
+	if err != nil {
+		log.Printf("Error cleaning up expired recovery rotation challenges: %v", err)
+		return
+	}
+	if count, _ := res.RowsAffected(); count > 0 {
+		log.Printf("Cleanup: Removed %d expired recovery rotation challenges", count)
 	}
 }

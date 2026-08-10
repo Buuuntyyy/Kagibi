@@ -16,7 +16,7 @@
     <p class="hint">{{ t('recoveryKit.sectionHint') }}</p>
 
     <!-- Vérification : coller le code -->
-    <div v-if="!showNewCode" class="verify-block">
+    <div v-if="!showNewCode && !showEmailCodeStep" class="verify-block">
       <label class="field-label">{{ t('recoveryKit.verifyLabel') }}</label>
       <form class="verify-row" @submit.prevent="handleVerify">
         <input
@@ -49,12 +49,40 @@
       </div>
     </div>
 
+    <!-- Étape : confirmation par email (obligatoire) -->
+    <div v-else-if="showEmailCodeStep" class="rotate-block">
+      <p class="hint">{{ t('recoveryKit.emailCodeSentHint') }}</p>
+      <form class="verify-row" @submit.prevent="submitEmailCode">
+        <input
+          v-model="emailCodeInput"
+          type="text"
+          class="text-input mono"
+          maxlength="6"
+          inputmode="numeric"
+          autocomplete="off"
+          :placeholder="t('recoveryKit.emailCodePlaceholder')"
+          @input="e => emailCodeInput = e.target.value.replace(/\D/g, '')"
+        />
+        <button type="submit" class="btn-primary" :disabled="rotating || emailCodeInput.length !== 6">
+          {{ rotating ? t('common.loading') : t('recoveryKit.emailCodeConfirm') }}
+        </button>
+      </form>
+      <p v-if="rotateError" class="error-text">{{ rotateError }}</p>
+      <div class="new-code-actions">
+        <button class="btn-secondary" :disabled="requestingCode" @click="handleRotate">
+          {{ requestingCode ? t('common.loading') : t('recoveryKit.emailCodeResend') }}
+        </button>
+        <button class="btn-secondary" @click="cancelRotate">{{ t('recoveryKit.cancel') }}</button>
+      </div>
+    </div>
+
     <!-- Régénération -->
-    <div class="rotate-block">
-      <button class="btn-outline-danger" @click="handleRotate" :disabled="rotating">
-        {{ rotating ? t('common.loading') : t('recoveryKit.rotateButton') }}
+    <div v-else class="rotate-block">
+      <button class="btn-outline-danger" @click="handleRotate" :disabled="requestingCode">
+        {{ requestingCode ? t('common.loading') : t('recoveryKit.rotateButton') }}
       </button>
       <p class="hint">{{ t('recoveryKit.rotateHint') }}</p>
+      <p v-if="requestError" class="error-text">{{ requestError }}</p>
     </div>
 
     <MFAChallengeModal
@@ -90,6 +118,12 @@ const newCode = ref('')
 const showNewCode = ref(false)
 const copied = ref(false)
 
+const requestingCode = ref(false)
+const requestError = ref('')
+const showEmailCodeStep = ref(false)
+const emailCodeInput = ref('')
+const rotateError = ref('')
+
 const showMFAChallenge = ref(false)
 const pendingAction = ref(null)
 
@@ -117,29 +151,63 @@ function downloadKitFromInput() {
   downloadRecoveryKit({ code: codeInput.value.trim(), email: authStore.user?.email })
 }
 
+// doRotate finalise la rotation : le code de confirmation email a déjà été saisi et
+// vérifié côté formulaire (submitEmailCode) ; il ne reste que le step-up MFA éventuel
+// (toujours exigé côté serveur si la MFA est activée — cf. middleware/mfa.go) avant
+// d'envoyer la requête effective.
 async function doRotate() {
   rotating.value = true
+  rotateError.value = ''
   try {
-    newCode.value = await authStore.rotateRecoveryCode()
+    newCode.value = await authStore.rotateRecoveryCode(emailCodeInput.value)
     showNewCode.value = true
+    showEmailCodeStep.value = false
     justVerified.value = false
     codeInput.value = ''
+    emailCodeInput.value = ''
   } catch (e) {
-    console.error('Recovery rotation failed:', e)
-    uiStore.showToast(e.response?.data?.error || e.message || t('recoveryKit.rotateError'), 'error')
+    rotateError.value = e.response?.data?.error || e.message || t('recoveryKit.rotateError')
   } finally {
     rotating.value = false
   }
 }
 
+// handleRotate déclenche l'envoi du code de confirmation par email — première étape
+// obligatoire de la rotation, avant même le step-up MFA (qui n'intervient qu'à l'appel
+// final /auth/recovery/rotate, une fois le code email saisi).
 async function handleRotate() {
-  const confirmed = await uiStore.showConfirm({
-    title: t('recoveryKit.rotateButton'),
-    message: t('recoveryKit.confirmRotate'),
-    confirmLabel: t('recoveryKit.rotateConfirmLabel'),
-  })
-  if (!confirmed) return
+  if (!showEmailCodeStep.value) {
+    const confirmed = await uiStore.showConfirm({
+      title: t('recoveryKit.rotateButton'),
+      message: t('recoveryKit.confirmRotate'),
+      confirmLabel: t('recoveryKit.rotateConfirmLabel'),
+    })
+    if (!confirmed) return
+  }
 
+  requestingCode.value = true
+  requestError.value = ''
+  try {
+    await authStore.requestRecoveryRotationEmailCode()
+    showEmailCodeStep.value = true
+    emailCodeInput.value = ''
+    rotateError.value = ''
+  } catch (e) {
+    requestError.value = e.response?.data?.error || e.message || t('recoveryKit.requestCodeError')
+  } finally {
+    requestingCode.value = false
+  }
+}
+
+function cancelRotate() {
+  showEmailCodeStep.value = false
+  emailCodeInput.value = ''
+  rotateError.value = ''
+}
+
+async function submitEmailCode() {
+  if (emailCodeInput.value.length !== 6) return
+  rotateError.value = ''
   try {
     const mfaRequired = await isMFARequired('recovery_change')
     if (mfaRequired) {

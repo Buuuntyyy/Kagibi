@@ -217,8 +217,8 @@
           </label>
         </div>
 
-        <!-- Recovery Code Change Restriction -->
-        <div class="restriction-item" :class="localSettings.require_mfa_on_recovery_change ? 'item-on' : 'item-off'">
+        <!-- Recovery Code Change — toujours exigé, pas un réglage optionnel -->
+        <div class="restriction-item restriction-item--locked item-on">
           <div class="restriction-info">
             <div class="restriction-icon">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -227,17 +227,10 @@
             </div>
             <div class="restriction-text">
               <span class="restriction-title">Changement du code de récupération</span>
-              <span class="restriction-desc">Exige le MFA avant de générer un nouveau code de récupération</span>
+              <span class="restriction-desc">Toujours exigé (avec confirmation par email) — cette action ne peut pas être désactivée, elle permet de contourner votre mot de passe</span>
             </div>
           </div>
-          <label class="toggle-switch">
-            <input
-              type="checkbox"
-              v-model="localSettings.require_mfa_on_recovery_change"
-              @change="saveRestriction('require_mfa_on_recovery_change')"
-            >
-            <span class="slider"></span>
-          </label>
+          <span class="locked-badge">Toujours actif</span>
         </div>
       </div>
 
@@ -316,8 +309,7 @@ const localSettings = ref({
   require_mfa_on_login: false,
   require_mfa_on_destructive_actions: false,
   require_mfa_on_downloads: false,
-  require_mfa_on_email_change: false,
-  require_mfa_on_recovery_change: false
+  require_mfa_on_email_change: false
 })
 
 // Sync local settings with fetched settings
@@ -326,8 +318,7 @@ watch(securitySettings, (newSettings) => {
     require_mfa_on_login: newSettings.require_mfa_on_login,
     require_mfa_on_destructive_actions: newSettings.require_mfa_on_destructive_actions,
     require_mfa_on_downloads: newSettings.require_mfa_on_downloads,
-    require_mfa_on_email_change: newSettings.require_mfa_on_email_change,
-    require_mfa_on_recovery_change: newSettings.require_mfa_on_recovery_change
+    require_mfa_on_email_change: newSettings.require_mfa_on_email_change
   }
 }, { deep: true, immediate: true })
 
@@ -860,6 +851,17 @@ function filterNumericInput(event) {
 .restriction-item.item-on {
   background: rgba(34, 197, 94, 0.09);
   border-color: rgba(34, 197, 94, 0.28);
+}
+
+.locked-badge {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #2e7d32;
+  background: rgba(34, 197, 94, 0.15);
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
 }
 
 .restriction-item.item-off {

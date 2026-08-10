@@ -428,11 +428,25 @@ export const useAuthStore = defineStore('auth', {
       return true
     },
 
+    // Envoie un code de confirmation à 6 chiffres par email — étape obligatoire avant
+    // toute rotation du code de récupération (défense en profondeur : une rotation
+    // plante un nouveau "passe-partout" qui contourne le mot de passe, une session
+    // compromise seule ne doit donc pas suffire à en générer un silencieusement).
+    async requestRecoveryRotationEmailCode() {
+      const { default: i18n } = await import('../i18n')
+      const lang = i18n.global.locale.value === 'en' ? 'en' : 'fr'
+      await api.post('/auth/recovery/rotate/request-code', { lang })
+      return true
+    },
+
     // Génère un nouveau code de récupération : re-wrappe la master key en mémoire
     // avec une KEK dérivée du nouveau code, invalide l'ancien code côté serveur.
+    // emailCode : code à 6 chiffres reçu par email (cf. requestRecoveryRotationEmailCode),
+    // exigé par le serveur en plus du step-up MFA (toujours requis si la MFA est
+    // activée — cf. backend middleware/mfa.go, action "recovery_change").
     // Renvoie le nouveau code (à afficher/télécharger immédiatement — il ne sera
     // plus jamais récupérable ensuite).
-    async rotateRecoveryCode() {
+    async rotateRecoveryCode(emailCode) {
       if (!this.masterKey) throw new Error('Session expirée : reconnectez-vous pour régénérer un code.')
       await sodium.ready
       const newCode = generateRecoveryCode()
@@ -445,6 +459,7 @@ export const useAuthStore = defineStore('auth', {
         recovery_hash: recoveryHash,
         recovery_salt: saltHex,
         encrypted_master_key_recovery: wrapped,
+        email_code: emailCode,
       })
       if (this.user) {
         this.user.recovery_verified_at = null

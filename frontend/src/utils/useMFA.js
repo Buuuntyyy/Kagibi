@@ -296,7 +296,9 @@ export function useMFA() {
       case 'destructive': return securitySettings.value.require_mfa_on_destructive_actions
       case 'download': return securitySettings.value.require_mfa_on_downloads
       case 'email_change': return securitySettings.value.require_mfa_on_email_change
-      case 'recovery_change': return securitySettings.value.require_mfa_on_recovery_change
+      // Toujours exigé si la MFA est activée (pas d'opt-out) — cf. backend
+      // middleware/mfa.go. require_mfa_on_recovery_change n'est plus consulté ici.
+      case 'recovery_change': return true
       default: return false
     }
   }

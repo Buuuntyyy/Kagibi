@@ -62,6 +62,7 @@ func Migrate(db *bun.DB) error {
 	migratePersonalTrashColumns(ctx, db)
 	migrateFileRequestColumns(ctx, db)
 	migrateRecoveryKitColumn(ctx, db)
+	migrateRecoveryRotationChallenges(ctx, db)
 
 	if err := migrateComments(ctx, db); err != nil {
 		return err
@@ -1106,6 +1107,23 @@ func migrateRecoveryKitColumn(ctx context.Context, db *bun.DB) {
 	); err != nil {
 		log.Printf("Warning: migrateRecoveryKitColumn: %v", err)
 	}
+}
+
+// migrateRecoveryRotationChallenges creates the table backing the email confirmation
+// code required before a recovery-code rotation takes effect (cf.
+// handlers/auth/recovery_kit.go RequestRecoveryRotationCodeHandler).
+func migrateRecoveryRotationChallenges(ctx context.Context, db *bun.DB) {
+	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "recovery_rotation_challenges" (
+		"id"         BIGSERIAL PRIMARY KEY,
+		"user_id"    VARCHAR     NOT NULL,
+		"code_hash"  VARCHAR     NOT NULL,
+		"expires_at" TIMESTAMPTZ NOT NULL,
+		"used_at"    TIMESTAMPTZ,
+		"created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		log.Printf("Warning: migrateRecoveryRotationChallenges: %v", err)
+	}
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_recovery_rotation_challenges_user ON recovery_rotation_challenges (user_id)`)
 }
 
 // migrateFileRequestColumns adds the upload-only "file request" columns to share_links.

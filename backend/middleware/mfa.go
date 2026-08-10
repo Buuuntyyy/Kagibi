@@ -158,7 +158,13 @@ func RequireMFAForAction(db *bun.DB, action string) gin.HandlerFunc {
 		case "email_change":
 			required = gates.RequireOnEmail
 		case "recovery_change":
-			required = gates.RequireOnRecovery
+			// Toujours exigé dès que la MFA est activée+vérifiée — pas d'opt-out pour
+			// cette action : générer un nouveau code de récupération sans MFA
+			// permettrait à une session compromise de planter une porte dérobée
+			// durable (recovery contourne le mot de passe). gates.RequireOnRecovery
+			// (colonne require_mfa_on_recovery_change) n'est plus consulté ici ; il
+			// reste en base pour compatibilité mais n'a plus d'effet sur cette route.
+			required = true
 		}
 		if required {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "mfa_required"})
