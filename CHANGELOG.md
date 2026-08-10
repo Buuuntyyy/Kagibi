@@ -1,5 +1,50 @@
 # Changelog
 
+## v2.29.0 — 2026-08-10
+
+### Nouvelles fonctionnalités
+
+- **Corbeille personnelle** : les fichiers et dossiers supprimés du drive personnel sont désormais conservés dans une corbeille avant suppression définitive, avec restauration et vidage, sur le même modèle que la corbeille des organisations.
+- **Demandes de fichiers** : création de liens de dépôt permettant à des tiers d'envoyer des fichiers chiffrés dans un dossier sans compte, en écriture seule.
+- **Kit de récupération** : vérification de la sauvegarde du code de récupération et régénération d'un nouveau code.
+- **Sécurisation de la régénération du code de récupération** : la rotation exige désormais systématiquement une validation MFA (si activée) et un code de confirmation envoyé par email.
+- **Transfert P2P** : tableau comparatif et flux de consentement amélioré.
+
+### Corrections
+
+- **Liens de partage** : correction du préfixe d'URL retourné par le serveur pour les liens en dépôt seul (`/r/` au lieu de `/s/`).
+
+---
+
+## v2.28.0 — 2026-08-06
+
+### Améliorations
+
+- **MFA appliquée côté serveur** : la vérification à deux facteurs est désormais imposée par le backend à la connexion et pour chaque action sensible.
+- **Secrets TOTP chiffrés au repos** et niveau d'authentification aal2 requis pour la MFA d'organisation.
+- **Fenêtre de fraîcheur et anti-rejeu** : les validations MFA par action sont limitées dans le temps et protégées contre le rejeu de code TOTP.
+- **Challenge MFA lié à l'étape de vérification**.
+
+---
+
+## v2.27.0 — 2026-08-04
+
+### Nouvelles fonctionnalités
+
+- **Page d'abonnement** : nouvelle page de mise à niveau avec récupération dynamique des plans et tarifs.
+- **Modal de nouveautés** : les changements de version sont consultables directement depuis l'application.
+
+### Améliorations
+
+- **Image de marque Kagibi** : finalisation du renommage de SaferCloud vers Kagibi.
+- **Tableau de fichiers** : largeurs de colonnes fixes, troncature, formatage de date et d'unités harmonisé.
+- **Partages** : options d'expiration et de mot de passe repliables.
+- **Notifications d'événements** enrichies pour fichiers et dossiers.
+- **Sécurité** : validation des entrées, quotas de stockage à l'upload, durcissement docker-compose/nginx, prévention des attaques par timing sur la vérification du code de récupération.
+- **Divers** : optimisation des images/logo ; suppression des limites d'échange P2P.
+
+---
+
 ## v2.26.0 — 2026-07-02
 
 ### Nouvelles fonctionnalités
