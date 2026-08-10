@@ -61,6 +61,15 @@ type createShareLinkRequest struct {
 	RequestLabel string           `json:"request_label"` // message affiché au déposant
 }
 
+// sharePathFormat returns the public URL path format for a share link: file
+// requests (upload_only) are dropped off at /r/, regular shares at /s/.
+func sharePathFormat(uploadOnly bool) string {
+	if uploadOnly {
+		return "/r/%s"
+	}
+	return "/s/%s"
+}
+
 func generateToken() (string, error) {
 	b := make([]byte, 32)
 	_, err := rand.Read(b)
@@ -102,7 +111,7 @@ func CreateShareLinkHandler(c *gin.Context, db *bun.DB) {
 			"error": "A share link for this resource already exists",
 			"token": existingShare.Token,
 			"id":    existingShare.ID,
-			"link":  fmt.Sprintf("/s/%s", existingShare.Token),
+			"link":  fmt.Sprintf(sharePathFormat(existingShare.UploadOnly), existingShare.Token),
 		})
 		return
 	}
@@ -127,7 +136,7 @@ func CreateShareLinkHandler(c *gin.Context, db *bun.DB) {
 		"message": "Link created",
 		"token":   shareLink.Token,
 		"id":      shareLink.ID,
-		"link":    fmt.Sprintf("/s/%s", shareLink.Token),
+		"link":    fmt.Sprintf(sharePathFormat(shareLink.UploadOnly), shareLink.Token),
 	})
 }
 
