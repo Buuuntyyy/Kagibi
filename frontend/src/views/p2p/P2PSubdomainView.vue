@@ -16,33 +16,33 @@
             <div class="guest-consent-header">
               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
               <div>
-                <p class="guest-consent-title">Réception d'un fichier</p>
-                <p class="guest-consent-subtitle">Quelqu'un souhaite vous envoyer un fichier via Kagibi P2P</p>
+                <p class="guest-consent-title">{{ t('p2p.invite.guest.consentTitle') }}</p>
+                <p class="guest-consent-subtitle">{{ t('p2p.invite.guest.consentSubtitle') }}</p>
               </div>
             </div>
 
             <div class="guest-consent-info">
-              <p>Le fichier sera transféré <strong>directement</strong> entre les appareils, chiffré de bout en bout. Si la connexion directe est impossible, un relais TURN Kagibi est utilisé en secours — il commute le flux chiffré sans le stocker et sans produire de logs. Aucune limite de taille. Kagibi n'a aucun accès au contenu.</p>
+              <p>{{ t('p2p.invite.guest.consentInfo') }}</p>
             </div>
 
             <label class="guest-consent-check">
               <input type="checkbox" v-model="guestLegalConsent" />
               <span>
-                Je confirme que la réception de ce fichier est légale et j'accepte les
-                <a href="/terms" target="_blank" class="guest-legal-link">Conditions d'Utilisation</a>.
+                {{ t('p2p.invite.guest.consentAgree') }}
+                <a href="/terms" target="_blank" class="guest-legal-link">{{ t('p2p.invite.guest.consentTerms') }}</a>.
               </span>
             </label>
 
             <button class="guest-accept-btn" :disabled="!guestLegalConsent" @click="startGuestAuth">
-              Accepter et télécharger
+              {{ t('p2p.invite.guest.accept') }}
             </button>
             <button class="guest-decline-btn" @click="isGuestMode = false">
-              Refuser
+              {{ t('p2p.invite.guest.decline') }}
             </button>
 
             <p class="guest-privacy-note">
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              End-to-end encrypted · No account required · Powered by Kagibi
+              {{ t('p2p.invite.guest.privacyNote') }}
             </p>
           </template>
 
@@ -73,14 +73,21 @@
               <span class="guest-pct">{{ p2pStore.activeTransfer.progress }}%</span>
             </div>
 
-            <!-- Manual leave button once transfer is complete -->
-            <button v-if="guestState === 'done'" @click="guestLeave" class="btn btn-secondary guest-done-btn">
-              {{ t('p2p.invite.guest.leave') }}
-            </button>
+            <!-- Conversion card once transfer is complete -->
+            <div v-if="guestState === 'done'" class="guest-convert">
+              <p class="guest-convert-title">{{ t('p2p.invite.guest.doneTitle') }}</p>
+              <p class="guest-convert-sub">{{ t('p2p.invite.guest.doneSubtitle') }}</p>
+              <a :href="mainSiteUrl + '/login'" class="guest-accept-btn guest-convert-cta">
+                {{ t('p2p.invite.guest.ctaSignup') }}
+              </a>
+              <button @click="guestLeave" class="guest-decline-btn">
+                {{ t('p2p.invite.guest.leave') }}
+              </button>
+            </div>
 
             <p class="guest-privacy-note">
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              End-to-end encrypted · No account required · Powered by Kagibi
+              {{ t('p2p.invite.guest.privacyNote') }}
             </p>
           </template>
 
@@ -287,6 +294,12 @@ const onlineFriends = computed(() => {
 
 const canSend = computed(() => !!selectedFriend.value && !!selectedFile.value && !inviteMode.value)
 
+// URL du site principal (kagibi.cloud) depuis le sous-domaine send.
+const mainSiteUrl = computed(() => {
+  const { protocol, host } = window.location
+  return host.startsWith('send.') ? `${protocol}//${host.slice(5)}` : ''
+})
+
 const guestStateLabel = computed(() => {
   switch (guestState.value) {
     case 'consent':           return ''
@@ -302,6 +315,7 @@ const guestStateLabel = computed(() => {
 })
 
 onMounted(async () => {
+  document.title = t('p2p.sendPageTitle')
   const inviteToken = route.query.invite
   if (inviteToken) {
     isGuestMode.value = true
@@ -339,7 +353,7 @@ watch(() => p2pStore.activeTransfer?.status, (status) => {
 
 function guestLeave() {
   authClient.clearGuestToken()
-  window.location.href = 'https://kagibi.cloud'
+  window.location.href = mainSiteUrl.value || 'https://kagibi.cloud'
 }
 
 async function guestAutoAuth(inviteToken) {
@@ -984,6 +998,35 @@ const startTransfer = async () => {
   border-radius: 10px;
   font-size: 0.88rem;
   cursor: pointer;
+}
+
+/* Carte de conversion post-transfert (invité) */
+.guest-convert {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  text-align: center;
+  padding-top: 0.4rem;
+}
+
+.guest-convert-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--main-text-color);
+}
+
+.guest-convert-sub {
+  font-size: 0.85rem;
+  color: var(--text-secondary, var(--secondary-text-color));
+  margin: 0 0 0.3rem;
+}
+
+.guest-convert-cta {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  box-sizing: border-box;
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }

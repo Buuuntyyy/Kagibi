@@ -85,6 +85,55 @@
             </div>
           </div>
 
+          <!-- Comparison table -->
+          <div class="compare-card">
+            <h3>{{ t('landing.transfer.cmpTitle') }}</h3>
+            <p class="compare-sub">{{ t('landing.transfer.cmpSubtitle') }}</p>
+            <div class="compare-table-wrap">
+              <table class="compare-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th class="col-kagibi">Kagibi Send</th>
+                    <th>{{ t('landing.transfer.cmpOthers') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>{{ t('landing.transfer.cmpRowSize') }}</td>
+                    <td class="col-kagibi">{{ t('landing.transfer.cmpSizeKagibi') }}</td>
+                    <td>{{ t('landing.transfer.cmpSizeOthers') }}</td>
+                  </tr>
+                  <tr>
+                    <td>{{ t('landing.transfer.cmpRowE2ee') }}</td>
+                    <td class="col-kagibi">{{ t('landing.transfer.cmpYes') }}</td>
+                    <td>{{ t('landing.transfer.cmpE2eeOthers') }}</td>
+                  </tr>
+                  <tr>
+                    <td>{{ t('landing.transfer.cmpRowStorage') }}</td>
+                    <td class="col-kagibi">{{ t('landing.transfer.cmpStorageKagibi') }}</td>
+                    <td>{{ t('landing.transfer.cmpStorageOthers') }}</td>
+                  </tr>
+                  <tr>
+                    <td>{{ t('landing.transfer.cmpRowAds') }}</td>
+                    <td class="col-kagibi">{{ t('landing.transfer.cmpNone') }}</td>
+                    <td>{{ t('landing.transfer.cmpAdsOthers') }}</td>
+                  </tr>
+                  <tr>
+                    <td>{{ t('landing.transfer.cmpRowAccount') }}</td>
+                    <td class="col-kagibi">{{ t('landing.transfer.cmpAccountKagibi') }}</td>
+                    <td>{{ t('landing.transfer.cmpAccountOthers') }}</td>
+                  </tr>
+                  <tr>
+                    <td>{{ t('landing.transfer.cmpRowSource') }}</td>
+                    <td class="col-kagibi">{{ t('landing.transfer.cmpSourceKagibi') }}</td>
+                    <td>{{ t('landing.transfer.cmpSourceOthers') }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <!-- CTA Card -->
           <div class="cta-card">
             <h3>{{ t('landing.transfer.ctaTitle') }}</h3>
@@ -124,10 +173,15 @@
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LandingNav from '../../components/landing/LandingNav.vue'
 
 const { t } = useI18n()
+
+onMounted(() => {
+  document.title = t('p2p.sendPageTitle')
+})
 </script>
 
 <style scoped>
@@ -281,6 +335,66 @@ const { t } = useI18n()
   line-height: 1.6;
 }
 
+/* Comparison table */
+.compare-card {
+  background: var(--card-color);
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  padding: 3rem;
+}
+
+.compare-card h3 {
+  font-size: 2rem;
+  text-align: center;
+  margin-bottom: 0.5rem;
+  color: var(--main-text-color);
+}
+
+.compare-sub {
+  text-align: center;
+  color: var(--secondary-text-color);
+  margin-bottom: 2rem;
+}
+
+.compare-table-wrap {
+  overflow-x: auto;
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 0.9rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--secondary-text-color);
+}
+
+.compare-table thead th {
+  font-size: 1.05rem;
+  color: var(--main-text-color);
+}
+
+.compare-table tbody td:first-child {
+  font-weight: 600;
+  color: var(--main-text-color);
+  white-space: nowrap;
+}
+
+.compare-table .col-kagibi {
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  color: var(--main-text-color);
+  font-weight: 600;
+}
+
+.compare-table thead .col-kagibi {
+  color: var(--primary-color);
+}
+
 /* CTA Card */
 .cta-card {
   background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
@@ -394,6 +508,10 @@ const { t } = useI18n()
 
   .info-card {
     padding: 1.5rem;
+  }
+
+  .compare-card {
+    padding: 1.5rem 1rem;
   }
 }
 
