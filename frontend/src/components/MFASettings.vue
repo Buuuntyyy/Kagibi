@@ -216,6 +216,29 @@
             <span class="slider"></span>
           </label>
         </div>
+
+        <!-- Recovery Code Change Restriction -->
+        <div class="restriction-item" :class="localSettings.require_mfa_on_recovery_change ? 'item-on' : 'item-off'">
+          <div class="restriction-info">
+            <div class="restriction-icon">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
+              </svg>
+            </div>
+            <div class="restriction-text">
+              <span class="restriction-title">Changement du code de récupération</span>
+              <span class="restriction-desc">Exige le MFA avant de générer un nouveau code de récupération</span>
+            </div>
+          </div>
+          <label class="toggle-switch">
+            <input
+              type="checkbox"
+              v-model="localSettings.require_mfa_on_recovery_change"
+              @change="saveRestriction('require_mfa_on_recovery_change')"
+            >
+            <span class="slider"></span>
+          </label>
+        </div>
       </div>
 
       <!-- Disable MFA -->
@@ -293,7 +316,8 @@ const localSettings = ref({
   require_mfa_on_login: false,
   require_mfa_on_destructive_actions: false,
   require_mfa_on_downloads: false,
-  require_mfa_on_email_change: false
+  require_mfa_on_email_change: false,
+  require_mfa_on_recovery_change: false
 })
 
 // Sync local settings with fetched settings
@@ -302,7 +326,8 @@ watch(securitySettings, (newSettings) => {
     require_mfa_on_login: newSettings.require_mfa_on_login,
     require_mfa_on_destructive_actions: newSettings.require_mfa_on_destructive_actions,
     require_mfa_on_downloads: newSettings.require_mfa_on_downloads,
-    require_mfa_on_email_change: newSettings.require_mfa_on_email_change
+    require_mfa_on_email_change: newSettings.require_mfa_on_email_change,
+    require_mfa_on_recovery_change: newSettings.require_mfa_on_recovery_change
   }
 }, { deep: true, immediate: true })
 

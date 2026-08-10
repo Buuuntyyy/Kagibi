@@ -59,7 +59,7 @@
 
     <MFAChallengeModal
       v-model="showMFAChallenge"
-      context="destructive"
+      context="recovery_change"
       @verified="onMFAVerified"
       @cancelled="pendingAction = null"
     />
@@ -141,7 +141,7 @@ async function handleRotate() {
   if (!confirmed) return
 
   try {
-    const mfaRequired = await isMFARequired('destructive')
+    const mfaRequired = await isMFARequired('recovery_change')
     if (mfaRequired) {
       pendingAction.value = doRotate
       showMFAChallenge.value = true

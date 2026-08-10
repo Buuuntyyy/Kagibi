@@ -25,6 +25,7 @@ type mfaGates struct {
 	RequireOnDestruct bool
 	RequireOnDownload bool
 	RequireOnEmail    bool
+	RequireOnRecovery bool
 }
 
 // fetchMFAGates loads the user's MFA enforcement preferences, caching the result on
@@ -42,12 +43,13 @@ func fetchMFAGates(c *gin.Context, db *bun.DB, userID string) mfaGates {
 		RequireOnDestruct bool `bun:"require_mfa_on_destructive_actions"`
 		RequireOnDownload bool `bun:"require_mfa_on_downloads"`
 		RequireOnEmail    bool `bun:"require_mfa_on_email_change"`
+		RequireOnRecovery bool `bun:"require_mfa_on_recovery_change"`
 	}
 
 	gates := mfaGates{}
 	err := db.NewSelect().
 		TableExpr("user_security_settings").
-		ColumnExpr("mfa_enabled, require_mfa_on_login, require_mfa_on_destructive_actions, require_mfa_on_downloads, require_mfa_on_email_change").
+		ColumnExpr("mfa_enabled, require_mfa_on_login, require_mfa_on_destructive_actions, require_mfa_on_downloads, require_mfa_on_email_change, require_mfa_on_recovery_change").
 		Where("user_id = ?", userID).
 		Scan(c.Request.Context(), &row)
 	if err == nil {
@@ -57,6 +59,7 @@ func fetchMFAGates(c *gin.Context, db *bun.DB, userID string) mfaGates {
 			RequireOnDestruct: row.RequireOnDestruct,
 			RequireOnDownload: row.RequireOnDownload,
 			RequireOnEmail:    row.RequireOnEmail,
+			RequireOnRecovery: row.RequireOnRecovery,
 		}
 	}
 
@@ -125,7 +128,7 @@ func EnforceMFAOnLogin(db *bun.DB) gin.HandlerFunc {
 }
 
 // RequireMFAForAction enforces a per-action MFA requirement for a specific route
-// (action is "download", "destructive" or "email_change"). Users without an enrolled
+// (action is "download", "destructive", "email_change" or "recovery_change"). Users without an enrolled
 // factor pass without a DB lookup, as do sessions that completed a *recent* TOTP
 // verification (aal2 within mfaActionFreshness). Otherwise the matching preference is
 // consulted and a 403 {"error":"mfa_required"} is returned when set, prompting the
@@ -154,6 +157,8 @@ func RequireMFAForAction(db *bun.DB, action string) gin.HandlerFunc {
 			required = gates.RequireOnDestruct
 		case "email_change":
 			required = gates.RequireOnEmail
+		case "recovery_change":
+			required = gates.RequireOnRecovery
 		}
 		if required {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "mfa_required"})

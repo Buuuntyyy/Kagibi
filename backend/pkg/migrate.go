@@ -697,6 +697,8 @@ func migrateUserSettings(ctx context.Context, db *bun.DB) error {
 		"require_mfa_on_login"               BOOLEAN NOT NULL DEFAULT false,
 		"require_mfa_on_destructive_actions" BOOLEAN NOT NULL DEFAULT false,
 		"require_mfa_on_downloads"           BOOLEAN NOT NULL DEFAULT false,
+		"require_mfa_on_email_change"        BOOLEAN NOT NULL DEFAULT false,
+		"require_mfa_on_recovery_change"     BOOLEAN NOT NULL DEFAULT false,
 		"created_at"                         TIMESTAMPTZ NOT NULL DEFAULT now(),
 		"updated_at"                         TIMESTAMPTZ NOT NULL DEFAULT now()
 	);`)
@@ -704,12 +706,16 @@ func migrateUserSettings(ctx context.Context, db *bun.DB) error {
 		log.Printf("Warning: failed to create user_security_settings table: %v", err)
 	}
 
-	// Add created_at / updated_at to existing user_security_settings installs that predate this column
+	// Add columns to existing user_security_settings installs that predate them.
+	// require_mfa_on_email_change was referenced by code but never created by any
+	// migration — added here so the email gate actually works on all installs.
 	for _, col := range []string{
 		`ALTER TABLE "user_security_settings" DROP CONSTRAINT IF EXISTS "user_security_settings_user_id_fkey"`,
 		`ALTER TABLE "user_plans" DROP CONSTRAINT IF EXISTS "user_plans_user_id_fkey"`,
 		`ALTER TABLE "user_security_settings" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMPTZ NOT NULL DEFAULT now()`,
 		`ALTER TABLE "user_security_settings" ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now()`,
+		`ALTER TABLE "user_security_settings" ADD COLUMN IF NOT EXISTS "require_mfa_on_email_change" BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE "user_security_settings" ADD COLUMN IF NOT EXISTS "require_mfa_on_recovery_change" BOOLEAN NOT NULL DEFAULT false`,
 	} {
 		if _, err := db.ExecContext(ctx, col); err != nil {
 			log.Printf("Warning: failed to add timestamp column to user_security_settings: %v", err)
