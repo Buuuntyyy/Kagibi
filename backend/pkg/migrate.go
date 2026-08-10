@@ -59,6 +59,7 @@ func Migrate(db *bun.DB) error {
 	}
 	migrateChunkSizeColumns(ctx, db)
 	migrateFolderSyncedColumn(ctx, db)
+	migratePersonalTrashColumns(ctx, db)
 
 	if err := migrateComments(ctx, db); err != nil {
 		return err
@@ -1040,6 +1041,8 @@ func migrateFilesUniqueIndex(ctx context.Context, db *bun.DB) error {
 		WHERE a.id < b.id
 		  AND a.user_id = b.user_id
 		  AND a.path = b.path
+		  AND a.deleted_at IS NULL
+		  AND b.deleted_at IS NULL
 	`); err != nil {
 		log.Printf("Warning: migrateFilesUniqueIndex dedup: %v", err)
 	}
@@ -1050,6 +1053,42 @@ func migrateFilesUniqueIndex(ctx context.Context, db *bun.DB) error {
 		return fmt.Errorf("migrateFilesUniqueIndex: %w", err)
 	}
 	return nil
+}
+
+// migratePersonalTrashColumns adds soft-delete columns to files/folders (personal
+// trash, same model as the org trash) and converts uq_files_user_path into a
+// PARTIAL unique index (WHERE deleted_at IS NULL) so a trashed file no longer
+// blocks re-uploading at the same path.
+func migratePersonalTrashColumns(ctx context.Context, db *bun.DB) {
+	for _, stmt := range []string{
+		`ALTER TABLE "files"   ADD COLUMN IF NOT EXISTS "deleted_at"  TIMESTAMPTZ`,
+		`ALTER TABLE "files"   ADD COLUMN IF NOT EXISTS "delete_root" BOOLEAN NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE "folders" ADD COLUMN IF NOT EXISTS "deleted_at"  TIMESTAMPTZ`,
+		`ALTER TABLE "folders" ADD COLUMN IF NOT EXISTS "delete_root" BOOLEAN NOT NULL DEFAULT FALSE`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migratePersonalTrashColumns: %v", err)
+		}
+	}
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_files_trash   ON files   (user_id, deleted_at) WHERE deleted_at IS NOT NULL AND delete_root = TRUE`)
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_folders_trash ON folders (user_id, deleted_at) WHERE deleted_at IS NOT NULL AND delete_root = TRUE`)
+
+	// Convert the full unique index into a partial one (same pattern as
+	// migrateEnsurePartialOrgIndexes). The upload upsert targets this index with
+	// ON CONFLICT (user_id, path) WHERE deleted_at IS NULL.
+	var isPartial bool
+	_ = db.QueryRowContext(ctx,
+		`SELECT indpred IS NOT NULL FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = ?`, "uq_files_user_path",
+	).Scan(&isPartial)
+	if !isPartial {
+		if _, err := db.ExecContext(ctx, `DROP INDEX IF EXISTS uq_files_user_path`); err != nil {
+			log.Printf("Warning: migratePersonalTrashColumns drop uq_files_user_path: %v", err)
+		} else if _, err := db.ExecContext(ctx,
+			`CREATE UNIQUE INDEX uq_files_user_path ON files (user_id, path) WHERE deleted_at IS NULL`,
+		); err != nil {
+			log.Printf("Warning: migratePersonalTrashColumns create uq_files_user_path: %v", err)
+		}
+	}
 }
 
 // migrateFolderSyncedColumn ajoute la colonne synced à la table folders.

@@ -86,6 +86,9 @@ type File struct {
 	Synced       bool      `bun:"synced,default:false" json:"synced"`                    // true si uploadé via la sync desktop
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt    time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
+	// Corbeille personnelle : même modèle que OrgFile (soft delete bun + delete_root)
+	DeletedAt  *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
+	DeleteRoot bool       `bun:"delete_root,notnull,default:false" json:"-"`
 }
 
 // Champs non persistés utilisés pour l'API
@@ -163,6 +166,9 @@ type Folder struct {
 	SizeBytes    int64     `bun:"size_bytes,scanonly" json:"size_bytes,omitempty"`
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt    time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
+	// Corbeille personnelle : même modèle que OrgFolder (soft delete bun + delete_root)
+	DeletedAt  *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
+	DeleteRoot bool       `bun:"delete_root,notnull,default:false" json:"-"`
 }
 
 type FolderSize struct {

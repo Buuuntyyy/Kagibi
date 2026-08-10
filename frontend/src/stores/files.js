@@ -262,8 +262,72 @@ export const useFileStore = defineStore('files', {
     pendingSearch: null,        // query to execute instead of fetchItems after navigation
     // Maps encrypted folder path → decrypted display name (populated when encrypt_filenames=true)
     folderNameCache: {},
+    // Corbeille personnelle
+    trash: [],
+    trashLoading: false,
   }),
   actions: {
+    // --- CORBEILLE PERSONNELLE ---
+    async fetchTrash() {
+      this.trashLoading = true
+      try {
+        const { data } = await api.get('/trash')
+        const items = data || []
+        // Déchiffrer noms + segments de chemin si l'utilisateur a activé le
+        // chiffrement des noms de fichiers (même logique que fetchItems).
+        const authStore = useAuthStore()
+        if (authStore.user?.encrypt_filenames && authStore.masterKey) {
+          for (const item of items) {
+            try {
+              item._name = await decryptFileName(item.name, authStore.masterKey)
+            } catch (_) {
+              item._name = item.name
+            }
+            if (item.path) {
+              const segs = item.path.split('/')
+              const plain = []
+              for (const s of segs) {
+                if (!s) { plain.push(s); continue }
+                try {
+                  plain.push(await decryptFileName(s, authStore.masterKey))
+                } catch (_) {
+                  plain.push(s)
+                }
+              }
+              item._path = plain.join('/')
+            } else {
+              item._path = item.path
+            }
+          }
+        } else {
+          for (const item of items) { item._name = item.name; item._path = item.path }
+        }
+        this.trash = items
+        return items
+      } finally {
+        this.trashLoading = false
+      }
+    },
+
+    async restoreTrashItem(item) {
+      await api.post(`/trash/${item.item_type}/${item.id}/restore`)
+      this.trash = this.trash.filter(i => !(String(i.id) === String(item.id) && i.item_type === item.item_type))
+      // Rafraîchir la vue fichiers si l'élément restauré y est visible
+      if (this.viewMode === 'drive') {
+        this.fetchItems(this.currentPath).catch(() => {})
+      }
+    },
+
+    async permanentDeleteTrashItem(item) {
+      await api.delete(`/trash/${item.item_type}/${item.id}`)
+      this.trash = this.trash.filter(i => !(String(i.id) === String(item.id) && i.item_type === item.item_type))
+    },
+
+    async emptyTrash() {
+      await api.delete('/trash')
+      this.trash = []
+    },
+
     async fetchRecents() {
         try {
             const res = await api.get('/users/recent')

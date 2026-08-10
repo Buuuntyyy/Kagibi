@@ -156,7 +156,7 @@ func GetUsageHandler(db *bun.DB) gin.HandlerFunc {
 		var realUsage struct{ Sum int64 }
 		_ = db.NewSelect().TableExpr("files").
 			ColumnExpr("COALESCE(SUM(size), 0) AS sum").
-			Where("user_id = ? AND is_preview = false", userID).
+			Where("user_id = ? AND is_preview = false AND deleted_at IS NULL", userID).
 			Scan(c.Request.Context(), &realUsage)
 
 		// Sync the counter so quota checks stay accurate

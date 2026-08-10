@@ -1,7 +1,22 @@
 {
+  "trash": {
+    "title": "Corbeille",
+    "refresh": "Actualiser",
+    "empty": "La corbeille est vide",
+    "restore": "Restaurer",
+    "itemRestored": "Élément restauré",
+    "permanentDelete": "Supprimer définitivement",
+    "permanentDeleted": "Supprimé définitivement",
+    "confirmPermanentDelete": "Supprimer définitivement « {name} » ? Cette action est irréversible.",
+    "emptyTrash": "Vider la corbeille",
+    "confirmEmptyTrash": "Vider la corbeille ? Tous les éléments seront supprimés définitivement. Cette action est irréversible.",
+    "trashEmptied": "Corbeille vidée",
+    "deletedOn": "Supprimé le {date}"
+  },
   "nav": {
     "files": "Mes Fichiers",
     "shared": "Partagés",
+    "trash": "Corbeille",
     "friends": "Amis",
     "settings": "Paramètres",
     "security": "Sécurité",

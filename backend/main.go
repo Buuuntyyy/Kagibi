@@ -327,6 +327,14 @@ func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	filesG.POST("/:id/versions/:versionID/restore", func(c *gin.Context) { files.RestoreVersionHandler(c, db) })
 	filesG.DELETE("/:id/versions/:versionID", middleware.RequireMFAForAction(db, "destructive"), func(c *gin.Context) { files.DeleteVersionHandler(c, db) })
 	filesG.GET("/:id/versions/:versionID/presigned", middleware.RequireMFAForAction(db, "download"), func(c *gin.Context) { files.GetVersionPresignedDownloadHandler(c, db) })
+
+	// Corbeille personnelle — groupe séparé de /files pour éviter le conflit de
+	// wildcard gin avec les routes /files/:id/... (même raison que /comments).
+	trashG := g.Group("/trash")
+	trashG.GET("", func(c *gin.Context) { files.ListTrashHandler(c, db) })
+	trashG.POST("/:itemType/:itemID/restore", func(c *gin.Context) { files.RestoreTrashItemHandler(c, db) })
+	trashG.DELETE("/:itemType/:itemID", middleware.RequireMFAForAction(db, "destructive"), func(c *gin.Context) { files.PermanentDeleteTrashItemHandler(c, db) })
+	trashG.DELETE("", middleware.RequireMFAForAction(db, "destructive"), func(c *gin.Context) { files.EmptyTrashHandler(c, db) })
 }
 
 func registerFolderRoutes(g *gin.RouterGroup, db *bun.DB) {

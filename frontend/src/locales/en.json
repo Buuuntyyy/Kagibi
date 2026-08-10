@@ -1,7 +1,22 @@
 {
+  "trash": {
+    "title": "Trash",
+    "refresh": "Refresh",
+    "empty": "Trash is empty",
+    "restore": "Restore",
+    "itemRestored": "Item restored",
+    "permanentDelete": "Delete permanently",
+    "permanentDeleted": "Permanently deleted",
+    "confirmPermanentDelete": "Permanently delete \"{name}\"? This action cannot be undone.",
+    "emptyTrash": "Empty trash",
+    "confirmEmptyTrash": "Empty the trash? All items will be permanently deleted. This action cannot be undone.",
+    "trashEmptied": "Trash emptied",
+    "deletedOn": "Deleted on {date}"
+  },
   "nav": {
     "files": "My Files",
     "shared": "Shared",
+    "trash": "Trash",
     "friends": "Friends",
     "settings": "Settings",
     "security": "Security",

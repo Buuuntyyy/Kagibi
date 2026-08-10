@@ -362,7 +362,7 @@ func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) 
 	// Atomic upsert: the UNIQUE index uq_files_user_path guarantees no duplicates
 	// even under concurrent imports (CONCURRENT_FILES=3).
 	_, err := tx.NewInsert().Model(file).
-		On("CONFLICT (user_id, path) DO UPDATE").
+		On("CONFLICT (user_id, path) WHERE deleted_at IS NULL DO UPDATE").
 		Set("name = EXCLUDED.name").
 		Set("size = EXCLUDED.size").
 		Set("mime_type = EXCLUDED.mime_type").

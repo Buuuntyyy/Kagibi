@@ -17,6 +17,7 @@ import JoinView from '../views/JoinView.vue'
 import P2PView from '../views/P2PView.vue'
 import HomeView from '../views/HomeView.vue'
 import UpgradeView from '../views/UpgradeView.vue'
+import TrashView from '../views/TrashView.vue'
 import UsageDashboard from '../components/usage/UsageDashboard.vue'
 import LandingHome from '../views/landing/HomeView.vue'
 import LandingPricing from '../views/landing/PricingView.vue'
@@ -112,6 +113,11 @@ const routes = [
         path: 'shares',
         name: 'SharedElements',
         component: SharedElements
+      },
+      {
+        path: 'trash',
+        name: 'Trash',
+        component: TrashView
       },
       {
         path: 'friends',

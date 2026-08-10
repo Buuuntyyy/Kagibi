@@ -59,6 +59,12 @@
         </svg>
         <span>{{ t('nav.shared') }}</span>
       </div>
+      <div class="menu-item" :class="{ active: isActive('/dashboard/trash') }" @click="navigateTo('/dashboard/trash')">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" fill="currentColor"/>
+        </svg>
+        <span>{{ t('nav.trash') }}</span>
+      </div>
       <div class="menu-item" :class="{ active: isActive('/p2p') }" @click="navigateTo('/p2p')">
         <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
              <line x1="22" y1="2" x2="11" y2="13"></line>

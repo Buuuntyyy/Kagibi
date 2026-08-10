@@ -520,7 +520,10 @@ func DeleteFile(db bun.IDB, fileID int64, userID string) error {
 		return err
 	}
 
-	_, err = db.NewDelete().Model((*File)(nil)).Where(queryIDAndUserID, fileID, userID).Exec(ctx)
+	// Hard delete voulu (appelé par les partages / la purge de corbeille) :
+	// ForceDelete contourne le soft delete bun du modèle File.
+	_, err = db.NewDelete().Model((*File)(nil)).Where(queryIDAndUserID, fileID, userID).
+		WhereAllWithDeleted().ForceDelete().Exec(ctx)
 	return err
 }
 
@@ -535,7 +538,8 @@ func DeleteFolder(db bun.IDB, folderID int64, userID string) error {
 		return err
 	}
 
-	_, err = db.NewDelete().Model((*Folder)(nil)).Where(queryIDAndUserID, folderID, userID).Exec(ctx)
+	_, err = db.NewDelete().Model((*Folder)(nil)).Where(queryIDAndUserID, folderID, userID).
+		WhereAllWithDeleted().ForceDelete().Exec(ctx)
 	return err
 }
 
