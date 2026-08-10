@@ -61,6 +61,7 @@ func Migrate(db *bun.DB) error {
 	migrateFolderSyncedColumn(ctx, db)
 	migratePersonalTrashColumns(ctx, db)
 	migrateFileRequestColumns(ctx, db)
+	migrateRecoveryKitColumn(ctx, db)
 
 	if err := migrateComments(ctx, db); err != nil {
 		return err
@@ -1089,6 +1090,15 @@ func migratePersonalTrashColumns(ctx context.Context, db *bun.DB) {
 		); err != nil {
 			log.Printf("Warning: migratePersonalTrashColumns create uq_files_user_path: %v", err)
 		}
+	}
+}
+
+// migrateRecoveryKitColumn adds the recovery-kit verification timestamp to profiles.
+func migrateRecoveryKitColumn(ctx context.Context, db *bun.DB) {
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "recovery_verified_at" TIMESTAMPTZ`,
+	); err != nil {
+		log.Printf("Warning: migrateRecoveryKitColumn: %v", err)
 	}
 }
 

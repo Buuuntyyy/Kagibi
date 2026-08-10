@@ -45,6 +45,7 @@ type User struct {
 	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"`                 // RSA Private Key (Encrypted with MasterKey)
 	EncryptFilenames           bool       `bun:"encrypt_filenames,notnull,default:false" json:"encrypt_filenames"`   // Client-side filename encryption opt-in
 	VersioningEnabled          bool       `bun:"versioning_enabled,notnull,default:false" json:"versioning_enabled"` // File version history opt-in
+	RecoveryVerifiedAt         *time.Time `bun:"recovery_verified_at,nullzero" json:"recovery_verified_at,omitempty"` // Kit de récupération : dernière preuve de possession du code
 	CreatedAt                  time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt                  time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 	DeletedAt                  *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"` // RGPD Article 17 - Soft delete

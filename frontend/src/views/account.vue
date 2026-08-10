@@ -238,6 +238,16 @@
           </div>
         </section>
 
+        <!-- Recovery Kit -->
+        <section class="settings-section" id="recovery-kit">
+          <div class="section-header">
+            <h3>{{ t('recoveryKit.sectionTitle') }}</h3>
+          </div>
+          <div class="section-body">
+            <RecoveryKitSettings />
+          </div>
+        </section>
+
         <section class="settings-section">
           <div class="section-header">
              <h3>{{ t('account.preferences') }}</h3>
@@ -510,6 +520,7 @@ import api from '../api'
 import AvatarSelector from '../components/AvatarSelector.vue'
 import DeleteAccountDialog from '../components/DeleteAccountDialog.vue'
 import MFASettings from '../components/MFASettings.vue'
+import RecoveryKitSettings from '../components/account/RecoveryKitSettings.vue'
 import MFAChallengeModal from '../components/MFAChallengeModal.vue'
 import PasswordCriteria from '../components/auth/PasswordCriteria.vue'
 import GoogleDriveImportDialog from '../components/import/GoogleDriveImportDialog.vue'

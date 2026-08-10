@@ -278,6 +278,8 @@ func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	g.POST("/auth/logout", func(c *gin.Context) { auth.LogoutHandler(c, redisClient) })
 	g.POST("/auth/ws-token", auth.WsTokenHandler(redisClient))
 	g.POST("/auth/update-password", auth.LocalUpdatePasswordHandler(provider, redisClient))
+	g.POST("/auth/recovery/verify-backup", func(c *gin.Context) { auth.VerifyRecoveryBackupHandler(c, db) })
+	g.POST("/auth/recovery/rotate", middleware.RequireMFAForAction(db, "destructive"), func(c *gin.Context) { auth.RotateRecoveryHandler(c, db) })
 	g.PUT("/auth/update-email", middleware.RequireMFAForAction(db, "email_change"), auth.LocalUpdateEmailHandler(provider, db, redisClient))
 	g.DELETE("/auth/account", middleware.RequireMFAForAction(db, "destructive"), auth.DeleteAccount(db, provider))
 

@@ -28,8 +28,9 @@ type UserResponse struct {
 	FriendCode          string    `json:"friend_code"`
 	PublicKey           string    `json:"public_key"`
 	EncryptedPrivateKey string    `json:"encrypted_private_key"`
-	EncryptFilenames    bool      `json:"encrypt_filenames"`
-	CreatedAt           time.Time `json:"created_at"`
+	EncryptFilenames    bool       `json:"encrypt_filenames"`
+	CreatedAt           time.Time  `json:"created_at"`
+	RecoveryVerifiedAt  *time.Time `json:"recovery_verified_at"`
 }
 
 func MeHandler(c *gin.Context, db *bun.DB) {
@@ -80,6 +81,7 @@ func MeHandler(c *gin.Context, db *bun.DB) {
 		EncryptedPrivateKey: user.EncryptedPrivateKey,
 		EncryptFilenames:    user.EncryptFilenames,
 		CreatedAt:           user.CreatedAt,
+		RecoveryVerifiedAt:  user.RecoveryVerifiedAt,
 	}
 
 	c.JSON(http.StatusOK, response)

@@ -6,7 +6,7 @@ import { isP2PSubdomain } from '../composables/useSubdomain'
 import { useFriendStore } from './friends'
 import {
   deriveKeyFromPassword, generateSalt, wrapMasterKey, unwrapMasterKey,
-  hashRecoveryCode, deriveKeyFromRecoveryCode,
+  hashRecoveryCode, deriveKeyFromRecoveryCode, generateRecoveryCode,
   generateRSAKeyPair, exportKeyToPEM, importKeyFromPEM, encryptPrivateKey, decryptPrivateKey
 } from '../utils/crypto'
 import sodium from 'libsodium-wrappers-sumo'
@@ -414,6 +414,43 @@ export const useAuthStore = defineStore('auth', {
 
       this.setupSessionTimeout()
       return true
+    },
+
+    // Kit de récupération : preuve de possession du code (l'utilisateur colle son
+    // code, on n'envoie que son hash — le code lui-même ne quitte pas le client).
+    async verifyRecoveryBackup(recoveryCode) {
+      const recoveryHash = await hashRecoveryCode(recoveryCode.trim())
+      const { data } = await api.post('/auth/recovery/verify-backup', { recovery_hash: recoveryHash })
+      if (this.user) {
+        this.user.recovery_verified_at = data.recovery_verified_at
+        this.persistUserToStorage()
+      }
+      return true
+    },
+
+    // Génère un nouveau code de récupération : re-wrappe la master key en mémoire
+    // avec une KEK dérivée du nouveau code, invalide l'ancien code côté serveur.
+    // Renvoie le nouveau code (à afficher/télécharger immédiatement — il ne sera
+    // plus jamais récupérable ensuite).
+    async rotateRecoveryCode() {
+      if (!this.masterKey) throw new Error('Session expirée : reconnectez-vous pour régénérer un code.')
+      await sodium.ready
+      const newCode = generateRecoveryCode()
+      const salt = generateSalt()
+      const saltHex = sodium.to_hex(salt)
+      const kek = await deriveKeyFromRecoveryCode(newCode, salt)
+      const wrapped = await wrapMasterKey(this.masterKey, kek)
+      const recoveryHash = await hashRecoveryCode(newCode)
+      await api.post('/auth/recovery/rotate', {
+        recovery_hash: recoveryHash,
+        recovery_salt: saltHex,
+        encrypted_master_key_recovery: wrapped,
+      })
+      if (this.user) {
+        this.user.recovery_verified_at = null
+        this.persistUserToStorage()
+      }
+      return newCode
     },
 
     persistUserToStorage() {
