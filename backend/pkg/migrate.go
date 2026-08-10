@@ -60,6 +60,7 @@ func Migrate(db *bun.DB) error {
 	migrateChunkSizeColumns(ctx, db)
 	migrateFolderSyncedColumn(ctx, db)
 	migratePersonalTrashColumns(ctx, db)
+	migrateFileRequestColumns(ctx, db)
 
 	if err := migrateComments(ctx, db); err != nil {
 		return err
@@ -1087,6 +1088,18 @@ func migratePersonalTrashColumns(ctx context.Context, db *bun.DB) {
 			`CREATE UNIQUE INDEX uq_files_user_path ON files (user_id, path) WHERE deleted_at IS NULL`,
 		); err != nil {
 			log.Printf("Warning: migratePersonalTrashColumns create uq_files_user_path: %v", err)
+		}
+	}
+}
+
+// migrateFileRequestColumns adds the upload-only "file request" columns to share_links.
+func migrateFileRequestColumns(ctx context.Context, db *bun.DB) {
+	for _, stmt := range []string{
+		`ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "upload_only"   BOOLEAN NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "request_label" TEXT    NOT NULL DEFAULT ''`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateFileRequestColumns: %v", err)
 		}
 	}
 }

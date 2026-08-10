@@ -235,6 +235,10 @@
         <div class="menu-item" @click.stop="handleContextAction('share')" v-if="fileStore.viewMode !== 'shared'">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg></span> {{ t('file.share') }}
         </div>
+        <div class="menu-item" @click.stop="handleContextAction('file-request')"
+          v-if="fileStore.viewMode !== 'shared' && contextMenu.item.type === 'folder'">
+          <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V6h5.17l2 2H20v10zm-9.41-5.83L9.17 13.59 12.59 17 15.4 14.17l-1.41-1.41-1.4 1.41V9h-2v5.17l-1.41-1.42-.59.42z"/></svg></span> {{ t('fileRequest.menuAction') }}
+        </div>
         <div class="menu-item" v-if="fileStore.viewMode !== 'shared' && contextMenu.item && contextMenu.item.shared" @click.stop="handleContextAction('get-share-link')">
           <span class="menu-icon"><svg xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px" fill="#5f6368"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg></span> {{ t('share.openLink') }}
         </div>
@@ -287,6 +291,11 @@
       @close="closeManageShareDialog"
       @share-deleted="onShareDeleted"
       @share-created="onShareCreated"
+    />
+    <FileRequestDialog
+      :isOpen="fileRequestDialog.isOpen"
+      :item="fileRequestDialog.item"
+      @close="fileRequestDialog.isOpen = false"
     />
     <MoveDialog
       v-if="moveDialog.isOpen"
@@ -354,6 +363,7 @@ import ShareDialog from '../ShareDialog.vue'
 import api from '../../api'
 import MoveDialog from '../MoveDialog.vue';
 import ManageShareDialog from '../ManageShareDialog.vue';
+import FileRequestDialog from '../FileRequestDialog.vue';
 import FileTable from './FileTable.vue';
 import MFAChallengeModal from '../MFAChallengeModal.vue';
 import CommentPanel from './CommentPanel.vue';
@@ -666,6 +676,11 @@ const manageShareDialog = ref({
   isOpen: false,
   item: null,
   initialTab: 'link'
+});
+
+const fileRequestDialog = ref({
+  isOpen: false,
+  item: null,
 });
 
 const moveDialog = ref({
@@ -1079,6 +1094,14 @@ const handleContextAction = (action) => {
       break
     case 'share':
       openShareDialog(item)
+      break
+    case 'file-request':
+      if (item.type === 'folder') {
+        fileRequestDialog.value = {
+          isOpen: true,
+          item: { id: item.ID || item.id, name: item.Name || item.name },
+        }
+      }
       break
     case 'direct-share':
       openManageShareDialog(item, item.type, 'friends')

@@ -175,6 +175,11 @@ const routes = [
     component: PublicShare,
   },
   {
+    path: '/r/:token',
+    name: 'FileRequest',
+    component: () => import('../views/FileRequestView.vue'),
+  },
+  {
     path: '/s/:token/browse/:subpath(.*)*',
     name: 'PublicBrowse',
     component: PublicBrowse,

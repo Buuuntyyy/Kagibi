@@ -57,6 +57,8 @@ type createShareLinkRequest struct {
 	PermCreate   bool             `json:"perm_create"`
 	PermDelete   bool             `json:"perm_delete"`
 	PermMove     bool             `json:"perm_move"`
+	UploadOnly   bool             `json:"upload_only"`   // file request : dépôt seul, pas de lecture
+	RequestLabel string           `json:"request_label"` // message affiché au déposant
 }
 
 func generateToken() (string, error) {
@@ -83,13 +85,18 @@ func CreateShareLinkHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	if req.UploadOnly && req.ResourceType != "folder" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File requests are only supported on folders"})
+		return
+	}
+
 	resourcePath, err := verifyOwnerAndGetPath(c.Request.Context(), db, userID, req.ResourceID, req.ResourceType)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	existingShare, err := checkExistingShareLink(c.Request.Context(), db, userID, req.ResourceID, req.ResourceType)
+	existingShare, err := checkExistingShareLink(c.Request.Context(), db, userID, req.ResourceID, req.ResourceType, req.UploadOnly)
 	if err == nil {
 		c.JSON(http.StatusConflict, gin.H{
 			"error": "A share link for this resource already exists",
@@ -249,6 +256,12 @@ func UpdateSharePermissionsHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	// Les permissions d'un lien de demande de fichiers sont figées (dépôt seul)
+	if share.UploadOnly {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Permissions of a file request link cannot be changed"})
+		return
+	}
+
 	if body.PermDownload != nil {
 		share.PermDownload = *body.PermDownload
 	}
@@ -332,10 +345,12 @@ func verifyOwnerAndGetPath(ctx context.Context, db *bun.DB, userID string, resID
 	return "", fmt.Errorf("Invalid resource type")
 }
 
-func checkExistingShareLink(ctx context.Context, db *bun.DB, userID string, resID int64, resType string) (*pkg.ShareLink, error) {
+// checkExistingShareLink : l'unicité est par (ressource, upload_only) — un dossier
+// peut avoir un lien de partage classique ET un lien de demande de fichiers.
+func checkExistingShareLink(ctx context.Context, db *bun.DB, userID string, resID int64, resType string, uploadOnly bool) (*pkg.ShareLink, error) {
 	var existingShare pkg.ShareLink
 	err := db.NewSelect().Model(&existingShare).
-		Where("resource_id = ? AND resource_type = ? AND owner_id = ?", resID, resType, userID).
+		Where("resource_id = ? AND resource_type = ? AND owner_id = ? AND upload_only = ?", resID, resType, userID, uploadOnly).
 		Scan(ctx)
 	if err != nil {
 		return nil, err
@@ -366,6 +381,18 @@ func createNewShareLink(ctx context.Context, db *bun.DB, userID, path string, re
 		PermCreate:   req.PermCreate,
 		PermDelete:   req.PermDelete,
 		PermMove:     req.PermMove,
+		UploadOnly:   req.UploadOnly,
+		RequestLabel: req.RequestLabel,
+	}
+
+	// File request : dépôt seul — permissions verrouillées côté serveur quoi
+	// qu'envoie le client.
+	if req.UploadOnly {
+		shareLink.PermCreate = true
+		shareLink.PermDownload = false
+		shareLink.PermDelete = false
+		shareLink.PermMove = false
+		shareLink.SingleUse = false
 	}
 
 	if req.Password != "" {
@@ -470,6 +497,8 @@ func buildShareLinkResponse(ctx context.Context, db *bun.DB, sl *pkg.ShareLink, 
 		"resource_name": folder.Name,
 		"owner_email":   ownerEmail,
 		"expires_at":    sl.ExpiresAt,
+		"upload_only":   sl.UploadOnly,
+		"request_label": sl.RequestLabel,
 	}, nil
 }
 

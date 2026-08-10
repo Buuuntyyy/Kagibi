@@ -208,6 +208,10 @@ type ShareLink struct {
 	PermDelete    bool       `bun:"perm_delete,default:false"`      // Folder: can delete files/dirs
 	PermMove      bool       `bun:"perm_move,default:false"`        // Folder: can move files/dirs
 	OrgID         *int64     `bun:"org_id" json:"org_id,omitempty"` // set for org_file shares
+	// File request ("demande de fichiers") : lien de dépôt seul — le destinataire
+	// ne peut ni lister ni télécharger le contenu du dossier, seulement déposer.
+	UploadOnly   bool   `bun:"upload_only,default:false"`
+	RequestLabel string `bun:"request_label,default:''"` // message affiché au déposant
 }
 
 // ShareItemOverride stores per-item access restrictions within a shared folder.

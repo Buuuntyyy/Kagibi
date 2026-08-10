@@ -46,6 +46,12 @@ func BrowseSharedFolderHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	// File request : dépôt seul, le contenu du dossier n'est jamais listé
+	if shareLink.UploadOnly {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Listing not permitted on this share"})
+		return
+	}
+
 	// Clean and validate the subpath to prevent directory traversal
 	requestedPath := path.Join(shareLink.Path, subpath)
 	requestedPath = strings.ReplaceAll(strings.ReplaceAll(requestedPath, "\n", "_"), "\r", "_")

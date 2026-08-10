@@ -1427,6 +1427,37 @@ export const useFileStore = defineStore('files', {
         throw error;
       }
     },
+    // Crée un lien de demande de fichiers (dépôt seul) sur un dossier.
+    // Le déposant chiffre avec la clé dérivée du token ; aucune clé de fichier
+    // existant n'est exposée. Renvoie { token, id } (ou l'existant via un 409).
+    async createFileRequestLink(folderId, { expiresAt = null, password = '', label = '' } = {}) {
+      const token = generateShareToken();
+      try {
+        const response = await api.post('/shares/link', {
+          resource_id: folderId,
+          resource_type: 'folder',
+          expires_at: expiresAt,
+          token,
+          encrypted_key: '',
+          file_keys: {},
+          single_use: false,
+          password: password || '',
+          upload_only: true,
+          request_label: label || '',
+          perm_download: false,
+          perm_create: true,
+          perm_delete: false,
+          perm_move: false,
+        });
+        return { ...response.data, existing: false };
+      } catch (error) {
+        if (error.response?.status === 409 && error.response.data?.token) {
+          return { token: error.response.data.token, id: error.response.data.id, existing: true };
+        }
+        console.error('Error creating file request link:', error);
+        throw error;
+      }
+    },
     async searchFiles(query) {
         if (!query || query.trim() === '') {
             // Si la recherche est vide, on recharge le dossier courant
