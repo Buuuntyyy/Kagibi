@@ -110,8 +110,13 @@ async function handleEmptyTrash() {
 
 <style scoped>
 .trash-view {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
   padding: 20px 24px;
-  max-width: 900px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
 }
 
 .section-header {
