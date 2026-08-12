@@ -1,0 +1,65 @@
+name: Discord Patch Notes
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  notify-discord:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Post release notes to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 - <<'PYEOF'
+          import json
+          import os
+          import re
+          import sys
+          import urllib.request
+
+          tag = os.environ["TAG"]
+          version = tag.lstrip("v")
+          webhook = os.environ["DISCORD_WEBHOOK_URL"]
+          repo = os.environ["REPO"]
+
+          with open("CHANGELOG.md", encoding="utf-8") as f:
+              changelog = f.read()
+
+          # Matches the "## vX.Y.Z — date" section up to the next "## v" heading (or EOF).
+          pattern = re.compile(
+              rf"^## v{re.escape(version)}(?: |$).*?(?=^## v|\Z)",
+              re.DOTALL | re.MULTILINE,
+          )
+          match = pattern.search(changelog)
+          if not match:
+              print(f"::error::No changelog section found for version {version}", file=sys.stderr)
+              sys.exit(1)
+
+          section = match.group(0)
+          section = re.sub(r"^## .*\n", "", section, count=1)  # drop the title line, kept as embed title instead
+          section = re.sub(r"\n?-{3,}\s*$", "", section.strip())  # drop the trailing "---" separator
+
+          payload = {
+              "embeds": [{
+                  "title": f"Kagibi {tag} est disponible",
+                  "description": section[:4090],
+                  "color": 0xD4405B,
+                  "url": f"https://github.com/{repo}/blob/main/CHANGELOG.md",
+              }]
+          }
+
+          req = urllib.request.Request(
+              webhook,
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          urllib.request.urlopen(req)
+          PYEOF
