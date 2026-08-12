@@ -21,6 +21,7 @@ import (
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/monitoring"
 	"kagibi/backend/pkg/workers"
+	"kagibi/backend/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
@@ -45,7 +46,9 @@ type UploadRequest struct {
 	IsPreview    bool
 }
 
-// validatePath validates and sanitizes file paths to prevent path traversal
+// validatePath validates and sanitizes file paths to prevent path traversal.
+// Delegates URL-decoding and ".." checks to utils.SanitizeVirtualPath so that
+// encoded variants (%2e%2e, %252e%252e, …) are also rejected.
 func validatePath(inputPath string) (string, error) {
 	// Normalize separators and check traversal early
 	rawPath := strings.ReplaceAll(inputPath, "\\", "/")
@@ -79,6 +82,10 @@ func validatePath(inputPath string) (string, error) {
 		}
 	}
 
+	cleanPath, err := utils.SanitizeVirtualPath(inputPath)
+	if err != nil {
+		return "", fmt.Errorf(errPathTraversal)
+	}
 	return cleanPath, nil
 }
 

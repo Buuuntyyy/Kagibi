@@ -167,6 +167,14 @@ func GetUsageHandler(db *bun.DB) gin.HandlerFunc {
 				Exec(c.Request.Context())
 		}
 
+		activeShares, _ := db.NewSelect().TableExpr("file_shares fs").
+			Join("JOIN files f ON f.id = fs.file_id").
+			Where("f.user_id = ?", userID).
+			Count(c.Request.Context())
+		_, _ = db.NewUpdate().Model((*pkg.UserPlan)(nil)).
+			Set("p2p_exchanges_used = ?", activeShares).
+			Where("user_id = ?", userID).
+			Exec(c.Request.Context())
 		c.JSON(http.StatusOK, gin.H{
 			"storage_used_bytes": realUsage.Sum,
 			"storage_used_gb":    float64(realUsage.Sum) / (1024 * 1024 * 1024),

@@ -283,9 +283,10 @@ func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	g.POST("/auth/recovery/rotate", middleware.RequireMFAForAction(db, "recovery_change"), func(c *gin.Context) { auth.RotateRecoveryHandler(c, db) })
 	g.PUT("/auth/update-email", middleware.RequireMFAForAction(db, "email_change"), auth.LocalUpdateEmailHandler(provider, db, redisClient))
 	g.DELETE("/auth/account", middleware.RequireMFAForAction(db, "destructive"), auth.DeleteAccount(db, provider))
+	g.PUT("/auth/update-email", auth.LocalUpdateEmailHandler(provider, db, redisClient))
+	g.DELETE("/auth/account", auth.DeleteAccount(db, provider))
 
 	usersG := g.Group("/users")
-	usersG.GET("/", func(c *gin.Context) { users.ListUsersHandler(c, db) })
 	usersG.GET("/me", func(c *gin.Context) { users.MeHandler(c, db) })
 	usersG.POST("/change-password", func(c *gin.Context) { users.UpdatePasswordHandler(c, db) })
 	usersG.PUT("/profile", func(c *gin.Context) { users.UpdateProfileHandler(c, db) })
@@ -338,6 +339,8 @@ func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	trashG.POST("/:itemType/:itemID/restore", func(c *gin.Context) { files.RestoreTrashItemHandler(c, db) })
 	trashG.DELETE("/:itemType/:itemID", middleware.RequireMFAForAction(db, "destructive"), func(c *gin.Context) { files.PermanentDeleteTrashItemHandler(c, db) })
 	trashG.DELETE("", middleware.RequireMFAForAction(db, "destructive"), func(c *gin.Context) { files.EmptyTrashHandler(c, db) })
+	filesG.DELETE("/:id/versions/:versionID", func(c *gin.Context) { files.DeleteVersionHandler(c, db) })
+	filesG.GET("/:id/versions/:versionID/presigned", func(c *gin.Context) { files.GetVersionPresignedDownloadHandler(c, db) })
 }
 
 func registerFolderRoutes(g *gin.RouterGroup, db *bun.DB) {

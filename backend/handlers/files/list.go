@@ -7,10 +7,10 @@ package files
 import (
 	"log"
 	"net/http"
-	"path"
 	"strings"
 
 	"kagibi/backend/pkg"
+	"kagibi/backend/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -21,18 +21,18 @@ func ListFilesHandler(c *gin.Context, db *bun.DB) {
 	userID := userIDInterface.(string)
 
 	pathParam := c.Param("path")
-	pathParam = strings.ReplaceAll(strings.ReplaceAll(pathParam, "\n", "_"), "\r", "_")
-	pathParam = strings.ReplaceAll(pathParam, "\\", "/")
 	if pathParam == "" {
 		pathParam = "/"
 	}
-	cleanPath := path.Clean(pathParam)
-	if cleanPath == "." {
-		cleanPath = "/"
+	// SanitizeVirtualPath handles URL-decoding (including double-encoded variants)
+	// and rejects any ".." component before path.Clean normalization.
+	cleanPath, err := utils.SanitizeVirtualPath(pathParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chemin invalide"})
+		return
 	}
-	if !strings.HasPrefix(cleanPath, "/") {
-		cleanPath = "/" + cleanPath
-	}
+	// Sanitize newlines/CR that could appear in Gin-decoded path params
+	cleanPath = strings.ReplaceAll(strings.ReplaceAll(cleanPath, "\n", "_"), "\r", "_")
 
 	log.Printf("ListFilesHandler: userID=%s path=%s", userID, cleanPath)
 

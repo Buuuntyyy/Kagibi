@@ -28,6 +28,36 @@ func AddRecentActivityHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	// Verify the resource belongs to the authenticated user before recording it.
+	// Return 404 (not 403) to avoid leaking existence of resources owned by others.
+	if req.Type == "file" {
+		exists, err := db.NewSelect().Model((*pkg.File)(nil)).
+			Where("id = ? AND user_id = ?", req.ID, userID).
+			Exists(c.Request.Context())
+		if err != nil {
+			log.Printf("Error checking file ownership: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal error"})
+			return
+		}
+		if !exists {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+			return
+		}
+	} else {
+		exists, err := db.NewSelect().Model((*pkg.Folder)(nil)).
+			Where("id = ? AND user_id = ?", req.ID, userID).
+			Exists(c.Request.Context())
+		if err != nil {
+			log.Printf("Error checking folder ownership: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal error"})
+			return
+		}
+		if !exists {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+			return
+		}
+	}
+
 	// Upsert approach: Check if exists, update AccessedAt, or Insert
 	activity := &pkg.RecentActivity{
 		UserID:     userID,

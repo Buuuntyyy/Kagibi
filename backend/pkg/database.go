@@ -155,6 +155,12 @@ func FindUserPlanByUserID(db *bun.DB, userID string) (*UserPlan, error) {
 	return &plan, nil
 }
 
+func CountUserActiveP2PExchanges(db *bun.DB, userID string) (int, error) {
+	return db.NewSelect().TableExpr("file_shares fs").
+		Join("JOIN files f ON f.id = fs.file_id").
+		Where("f.user_id = ?", userID).
+		Count(context.Background())
+}
 
 func UpsertUserPlan(db *bun.DB, plan *UserPlan) error {
 	_, err := db.NewInsert().Model(plan).
@@ -162,7 +168,9 @@ func UpsertUserPlan(db *bun.DB, plan *UserPlan) error {
 		Set("plan = EXCLUDED.plan").
 		Set("storage_limit = EXCLUDED.storage_limit").
 		Set("storage_used = EXCLUDED.storage_used").
-Set("updated_at = CURRENT_TIMESTAMP").
+		Set("p2p_max_exchanges = EXCLUDED.p2p_max_exchanges").
+		Set("p2p_exchanges_used = EXCLUDED.p2p_exchanges_used").
+		Set("updated_at = CURRENT_TIMESTAMP").
 		Exec(context.Background())
 	return err
 }
