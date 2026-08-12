@@ -155,4 +155,3 @@ func DeleteFolderHandler(c *gin.Context, db *bun.DB) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Dossier déplacé dans la corbeille"})
 }
-

@@ -143,10 +143,10 @@ type Plan struct {
 
 // Usage représente l'usage de la période en cours
 type Usage struct {
-	UserID          string    `json:"user_id"`
-	PeriodStart     time.Time `json:"period_start"`
-	PeriodEnd       time.Time `json:"period_end"`
-	StorageUsedGB   float64   `json:"storage_used_gb"`
+	UserID        string    `json:"user_id"`
+	PeriodStart   time.Time `json:"period_start"`
+	PeriodEnd     time.Time `json:"period_end"`
+	StorageUsedGB float64   `json:"storage_used_gb"`
 }
 
 // QuotaCheckResult est le résultat d'une vérification de quota

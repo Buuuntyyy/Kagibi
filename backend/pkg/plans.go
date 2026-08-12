@@ -75,4 +75,3 @@ func GetP2PLimit(plan string) int {
 		return P2PLimitFree
 	}
 }
-

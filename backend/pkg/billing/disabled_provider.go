@@ -111,7 +111,6 @@ func (d *DisabledProvider) CheckQuota(ctx context.Context, userID string, reques
 	}, nil
 }
 
-
 // === Invoices ===
 
 func (d *DisabledProvider) GetInvoices(ctx context.Context, userID string, limit int) ([]Invoice, error) {

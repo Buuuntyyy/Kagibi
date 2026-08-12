@@ -18,16 +18,16 @@ import (
 // - Partage (public_key, encrypted_private_key, friend_code, id)
 // - Affichage UI (name, email, avatar_url, created_at)
 type UserResponse struct {
-	ID                  string    `json:"id"`
-	Name                string    `json:"name"`
-	Email               string    `json:"email"`
-	AvatarURL           string    `json:"avatar_url"`
-	StorageUsed         int64     `json:"storage_used"`
-	StorageLimit        int64     `json:"storage_limit"`
-	Plan                string    `json:"plan"`
-	FriendCode          string    `json:"friend_code"`
-	PublicKey           string    `json:"public_key"`
-	EncryptedPrivateKey string    `json:"encrypted_private_key"`
+	ID                  string     `json:"id"`
+	Name                string     `json:"name"`
+	Email               string     `json:"email"`
+	AvatarURL           string     `json:"avatar_url"`
+	StorageUsed         int64      `json:"storage_used"`
+	StorageLimit        int64      `json:"storage_limit"`
+	Plan                string     `json:"plan"`
+	FriendCode          string     `json:"friend_code"`
+	PublicKey           string     `json:"public_key"`
+	EncryptedPrivateKey string     `json:"encrypted_private_key"`
 	EncryptFilenames    bool       `json:"encrypt_filenames"`
 	CreatedAt           time.Time  `json:"created_at"`
 	RecoveryVerifiedAt  *time.Time `json:"recovery_verified_at"`

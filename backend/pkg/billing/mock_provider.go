@@ -142,27 +142,27 @@ func (m *MockProvider) getPlans() []Plan {
 			Code: "free", Name: "Gratuit",
 			Description:    "20 Go de stockage",
 			StorageLimitGB: 20,
-			PriceMonthly: 0, PriceYearly: 0, Currency: "EUR",
+			PriceMonthly:   0, PriceYearly: 0, Currency: "EUR",
 		},
 		{
 			Code: "personal", Name: "Personnel",
 			Description:    "200 Go de stockage, versioning",
 			StorageLimitGB: 200,
-			PriceMonthly: 400, PriceYearly: 4000, Currency: "EUR",
+			PriceMonthly:   400, PriceYearly: 4000, Currency: "EUR",
 			Features: map[string]interface{}{"versioning": true},
 		},
 		{
 			Code: "business", Name: "Business",
 			Description:    "1 To de stockage, versioning, organisations",
 			StorageLimitGB: 1024,
-			PriceMonthly: 1400, PriceYearly: 14000, Currency: "EUR",
+			PriceMonthly:   1400, PriceYearly: 14000, Currency: "EUR",
 			Features: map[string]interface{}{"versioning": true, "orgs": true, "priority_support": true},
 		},
 		{
 			Code: "payg", Name: "Pay as you go",
 			Description:    "Stockage à la demande (15 €/To/mois)",
 			StorageLimitGB: -1,
-			PriceMonthly: 1500, Currency: "EUR",
+			PriceMonthly:   1500, Currency: "EUR",
 			Features: map[string]interface{}{"versioning": true, "orgs": true, "billing_model": "payg"},
 		},
 	}
@@ -243,7 +243,6 @@ func (m *MockProvider) CheckQuota(ctx context.Context, userID string, requestedB
 	}
 	return result, nil
 }
-
 
 // === Invoices ===
 
