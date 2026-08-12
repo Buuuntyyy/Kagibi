@@ -40,6 +40,13 @@ func DeleteFolderFromSharedFolderHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	// Enforce the share password gate on destructive operations, consistent with
+	// browse/download/upload. Without this, a caller holding the token but not the
+	// password could delete folders from a password-protected share.
+	if !checkSharePassword(c, &shareLink) {
+		return
+	}
+
 	if !shareLink.PermDelete {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Delete not permitted on this share"})
 		return
@@ -108,9 +115,10 @@ func DeleteFolderFromSharedFolderHandler(c *gin.Context, db *bun.DB) {
 	}
 	defer tx.Rollback()
 
-	// Delete all files under the folder path
+	// Delete all files under the folder path (hard delete: bypass the personal-trash soft delete)
 	if _, err := tx.NewDelete().Model((*pkg.File)(nil)).
 		Where("user_id = ? AND path LIKE ?", shareLink.OwnerID, folder.Path+"/%").
+		WhereAllWithDeleted().ForceDelete().
 		Exec(c.Request.Context()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete files"})
 		return
@@ -119,6 +127,7 @@ func DeleteFolderFromSharedFolderHandler(c *gin.Context, db *bun.DB) {
 	// Delete all subfolders under the folder path (deepest first via ORDER BY path DESC)
 	if _, err := tx.NewDelete().Model((*pkg.Folder)(nil)).
 		Where("user_id = ? AND path LIKE ?", shareLink.OwnerID, folder.Path+"/%").
+		WhereAllWithDeleted().ForceDelete().
 		Exec(c.Request.Context()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete subfolders"})
 		return
@@ -127,6 +136,7 @@ func DeleteFolderFromSharedFolderHandler(c *gin.Context, db *bun.DB) {
 	// Delete the folder itself
 	if _, err := tx.NewDelete().Model((*pkg.Folder)(nil)).
 		Where("id = ?", folderID).
+		WhereAllWithDeleted().ForceDelete().
 		Exec(c.Request.Context()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete folder"})
 		return

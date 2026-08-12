@@ -36,6 +36,7 @@ type authUser struct {
 	TOTPFriendlyName   string     `bun:"totp_friendly_name"`
 	TOTPLastCode       string     `bun:"totp_last_code"`
 	TOTPLastCodeAt     *time.Time `bun:"totp_last_code_at"`
+	TOTPLastStep       int64      `bun:"totp_last_step,notnull,default:0"`
 	TOTPFailedAttempts int        `bun:"totp_failed_attempts,notnull,default:0"`
 	TOTPLockedUntil    *time.Time `bun:"totp_locked_until"`
 	CreatedAt          time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
@@ -63,19 +64,37 @@ func (p *LocalProvider) GetJWTSecret() []byte   { return p.secret }
 
 // GenerateToken creates a signed HS256 JWT valid for 7 days with aal1.
 func (p *LocalProvider) GenerateToken(userID, email string) (string, error) {
-	return p.GenerateTokenWithAAL(userID, email, "aal1")
+	return p.GenerateTokenWithClaims(userID, email, "aal1", false, 0)
 }
 
 // GenerateTokenWithAAL creates a signed HS256 JWT with an explicit AAL claim.
 // aal should be "aal1" (password only) or "aal2" (password + TOTP verified).
 func (p *LocalProvider) GenerateTokenWithAAL(userID, email, aal string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	return p.GenerateTokenWithClaims(userID, email, aal, false, 0)
+}
+
+// GenerateTokenWithClaims creates a signed HS256 JWT.
+//   - mfaEnabled adds an "mfa":"enabled" claim so step-up middleware can require aal2
+//     for MFA-enrolled users without a per-request database lookup.
+//   - mfaVerifiedAt (unix seconds, 0 to omit) stamps an "mfa_at" claim marking when the
+//     session last completed MFA, used to enforce per-action step-up freshness.
+//
+// Both claims are signed, so a client cannot forge or strip them.
+func (p *LocalProvider) GenerateTokenWithClaims(userID, email, aal string, mfaEnabled bool, mfaVerifiedAt int64) (string, error) {
+	claims := jwt.MapClaims{
 		"sub":   userID,
 		"email": email,
 		"aal":   aal,
 		"exp":   time.Now().Add(7 * 24 * time.Hour).Unix(),
 		"iat":   time.Now().Unix(),
-	})
+	}
+	if mfaEnabled {
+		claims["mfa"] = "enabled"
+	}
+	if mfaVerifiedAt > 0 {
+		claims["mfa_at"] = mfaVerifiedAt
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(p.secret)
 }
 
@@ -242,9 +261,17 @@ func (p *LocalProvider) StartTOTPEnrollment(userID, email, friendlyName string) 
 	factorID = fmt.Sprintf("%x-%x-%x-%x-%x",
 		idBytes[0:4], idBytes[4:6], idBytes[6:8], idBytes[8:10], idBytes[10:16])
 
+	// Encrypt the shared secret at rest so a read-only DB leak cannot be used to
+	// generate valid TOTP codes. The plaintext is only returned to the enrolling
+	// client (for the QR code), never persisted in the clear.
+	encSecret, err := emailcrypto.EncryptSecret(key.Secret())
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to encrypt TOTP secret: %w", err)
+	}
+
 	_, err = p.db.NewUpdate().Model((*authUser)(nil)).
 		Set("totp_secret = ?, totp_factor_id = ?, totp_friendly_name = ?, totp_enabled = false",
-			key.Secret(), factorID, friendlyName).
+			encSecret, factorID, friendlyName).
 		Where(queryIDEq, userID).
 		Exec(context.Background())
 	if err != nil {
@@ -254,8 +281,26 @@ func (p *LocalProvider) StartTOTPEnrollment(userID, email, friendlyName string) 
 	return factorID, key.URL(), key.Secret(), nil
 }
 
+// decryptTOTPSecret returns the plaintext TOTP secret from its stored form,
+// transparently handling legacy rows that predate at-rest encryption. legacy is
+// true when the stored value was plaintext and should be upgraded.
+func (p *LocalProvider) decryptTOTPSecret(stored string) (secret string, legacy bool) {
+	if pt, err := emailcrypto.DecryptSecret(stored); err == nil {
+		return pt, false
+	}
+	return stored, true
+}
+
+// DecryptTOTPSecret returns the plaintext TOTP secret for re-displaying a pending
+// enrollment's QR code. Accepts both encrypted and legacy-plaintext stored values.
+func (p *LocalProvider) DecryptTOTPSecret(stored string) string {
+	secret, _ := p.decryptTOTPSecret(stored)
+	return secret
+}
+
 // ValidateTOTPCode checks a 6-digit code against the user's stored TOTP secret.
-// Enforces replay protection (30s window) and per-user lockout (5 failures → 15 min lock).
+// Enforces single-use-per-time-step replay protection (a code cannot be reused
+// anywhere in its validity window) and per-user lockout (5 failures → 15 min lock).
 func (p *LocalProvider) ValidateTOTPCode(userID, code string) error {
 	au, err := p.GetAuthUserByID(userID)
 	if err != nil {
@@ -270,12 +315,12 @@ func (p *LocalProvider) ValidateTOTPCode(userID, code string) error {
 		return fmt.Errorf("MFA temporarily locked due to too many failed attempts")
 	}
 
-	// Replay attack prevention — same code can't be used twice within the same 30s window
-	if au.TOTPLastCode == code && au.TOTPLastCodeAt != nil && time.Since(*au.TOTPLastCodeAt) < 30*time.Second {
-		return fmt.Errorf("TOTP code already used")
-	}
+	secret, legacy := p.decryptTOTPSecret(au.TOTPSecret)
 
-	if !totp.Validate(code, au.TOTPSecret) {
+	// Identify which 30s time-step the code matches (searching ±1 period, replicating
+	// the previous skew) so replays can be rejected across the whole validity window.
+	matchedStep, valid := matchTOTPStep(code, secret)
+	if !valid {
 		newAttempts := au.TOTPFailedAttempts + 1
 		upd := p.db.NewUpdate().Model((*authUser)(nil)).Where(queryIDEq, userID)
 		if newAttempts >= 5 {
@@ -288,13 +333,46 @@ func (p *LocalProvider) ValidateTOTPCode(userID, code string) error {
 		return fmt.Errorf("invalid TOTP code")
 	}
 
-	// Valid — reset counters and record the used code to prevent replay
+	// Replay prevention — a code is single-use across its entire validity window:
+	// reject any code from a time-step that has already been consumed (or an older one).
+	if matchedStep <= au.TOTPLastStep {
+		return fmt.Errorf("TOTP code already used")
+	}
+
+	// Valid and fresh — reset counters, advance the last-used step, record the code.
 	now := time.Now()
-	_, _ = p.db.NewUpdate().Model((*authUser)(nil)).
-		Set("totp_failed_attempts = 0, totp_locked_until = NULL, totp_last_code = ?, totp_last_code_at = ?", code, now).
-		Where(queryIDEq, userID).
-		Exec(context.Background())
+	upd := p.db.NewUpdate().Model((*authUser)(nil)).
+		Set("totp_failed_attempts = 0, totp_locked_until = NULL, totp_last_step = ?, totp_last_code = ?, totp_last_code_at = ?", matchedStep, code, now).
+		Where(queryIDEq, userID)
+	// Opportunistically upgrade a legacy plaintext secret to the encrypted form now
+	// that we have verified it (and thus hold the plaintext).
+	if legacy {
+		if enc, encErr := emailcrypto.EncryptSecret(secret); encErr == nil {
+			upd = upd.Set("totp_secret = ?", enc)
+		}
+	}
+	_, _ = upd.Exec(context.Background())
 	return nil
+}
+
+// matchTOTPStep returns the 30-second time-step (unix/period) whose TOTP code equals
+// the submitted code, searching the current step and its immediate neighbours (±1
+// period, matching the previous default skew). valid is false when no step matches.
+func matchTOTPStep(code, secret string) (step int64, valid bool) {
+	const period = 30
+	opts := totp.ValidateOpts{
+		Period:    period,
+		Skew:      0,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA1,
+	}
+	nowStep := time.Now().Unix() / period
+	for _, s := range []int64{nowStep - 1, nowStep, nowStep + 1} {
+		if ok, err := totp.ValidateCustom(code, secret, time.Unix(s*period, 0), opts); err == nil && ok {
+			return s, true
+		}
+	}
+	return 0, false
 }
 
 // ActivateTOTP marks the TOTP factor as verified (totp_enabled = true).

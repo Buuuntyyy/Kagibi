@@ -129,9 +129,9 @@ func deleteUserData(ctx context.Context, db *bun.DB, userID string, user *pkg.Us
 	// 6. Share links owned by user
 	exec("ShareLink", db.NewDelete().Model((*pkg.ShareLink)(nil)).Where("owner_id = ?", userID))
 
-	// 7. Files, folders, and folder size cache
-	exec("File", db.NewDelete().Model((*pkg.File)(nil)).Where(whereUserID, userID))
-	exec("Folder", db.NewDelete().Model((*pkg.Folder)(nil)).Where(whereUserID, userID))
+	// 7. Files, folders, and folder size cache (ForceDelete : inclut la corbeille — RGPD)
+	exec("File", db.NewDelete().Model((*pkg.File)(nil)).Where(whereUserID, userID).WhereAllWithDeleted().ForceDelete())
+	exec("Folder", db.NewDelete().Model((*pkg.Folder)(nil)).Where(whereUserID, userID).WhereAllWithDeleted().ForceDelete())
 	exec("FolderSize", db.NewDelete().Model((*pkg.FolderSize)(nil)).Where(whereUserID, userID))
 
 	// 8. Remaining user data
@@ -152,7 +152,7 @@ func deleteUserFilesFromS3(ctx context.Context, db *bun.DB, userID string) {
 	}
 
 	var files []pkg.File
-	err := db.NewSelect().Model(&files).Where(whereUserID, userID).Scan(ctx)
+	err := db.NewSelect().Model(&files).WhereAllWithDeleted().Where(whereUserID, userID).Scan(ctx)
 	if err != nil {
 		log.Printf("[RGPD] Failed to fetch files for S3 cleanup (user %s): %v", userID, err)
 		return

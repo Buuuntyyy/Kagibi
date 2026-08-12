@@ -41,6 +41,11 @@ func NewDB() *bun.DB {
 		pgdriver.WithDSN(dsn),
 		// Force l'utilisation de l'IPv4 pour éviter les problèmes de timeout IPv6 avec Supabase
 		pgdriver.WithNetwork("tcp4"),
+		// Le ReadTimeout par défaut de pgdriver (10s) est trop court pour les opérations
+		// récursives sur de gros dossiers (ex: suppression d'un dossier synchronisé
+		// contenant des milliers de fichiers) : la lecture socket expire avant que
+		// Postgres ait fini de répondre, ce qui remonte en 500.
+		pgdriver.WithReadTimeout(60 * time.Second),
 	}
 
 	// Si on est en local (ou si explicitement demandé), on peut désactiver SSL au niveau du driver
@@ -62,6 +67,13 @@ func NewDB() *bun.DB {
 	db := bun.NewDB(sqldb, pgdialect.New())
 
 	return db
+}
+
+func ListUsers(db *bun.DB) ([]User, error) {
+	ctx := context.Background()
+	var users []User
+	err := db.NewSelect().Model(&users).Scan(ctx)
+	return users, err
 }
 
 // DecryptUserEmail decrypts user.EmailEncrypted and stores the result in user.Email.
@@ -121,12 +133,10 @@ func CreateUser(db *bun.DB, user *User) error {
 	}
 
 	planState := &UserPlan{
-		UserID:           user.ID,
-		Plan:             PlanFree,
-		StorageLimit:     StorageFree,
-		StorageUsed:      0,
-		P2PMaxExchanges:  P2PLimitFree,
-		P2PExchangesUsed: 0,
+		UserID:       user.ID,
+		Plan:         PlanFree,
+		StorageLimit: StorageFree,
+		StorageUsed:  0,
 	}
 	if _, err = tx.NewInsert().Model(planState).Exec(ctx); err != nil {
 		return err
@@ -518,7 +528,10 @@ func DeleteFile(db bun.IDB, fileID int64, userID string) error {
 		return err
 	}
 
-	_, err = db.NewDelete().Model((*File)(nil)).Where(queryIDAndUserID, fileID, userID).Exec(ctx)
+	// Hard delete voulu (appelé par les partages / la purge de corbeille) :
+	// ForceDelete contourne le soft delete bun du modèle File.
+	_, err = db.NewDelete().Model((*File)(nil)).Where(queryIDAndUserID, fileID, userID).
+		WhereAllWithDeleted().ForceDelete().Exec(ctx)
 	return err
 }
 
@@ -533,7 +546,8 @@ func DeleteFolder(db bun.IDB, folderID int64, userID string) error {
 		return err
 	}
 
-	_, err = db.NewDelete().Model((*Folder)(nil)).Where(queryIDAndUserID, folderID, userID).Exec(ctx)
+	_, err = db.NewDelete().Model((*Folder)(nil)).Where(queryIDAndUserID, folderID, userID).
+		WhereAllWithDeleted().ForceDelete().Exec(ctx)
 	return err
 }
 

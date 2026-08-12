@@ -6,6 +6,7 @@ package pkg
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -39,11 +40,12 @@ type User struct {
 	EncryptedMasterKeyRecovery string     `bun:"encrypted_master_key_recovery,notnull" json:"encrypted_master_key_recovery"`
 	RecoveryHash               string     `bun:"recovery_hash,notnull" json:"recovery_hash"`
 	RecoverySalt               string     `bun:"recovery_salt,notnull" json:"recovery_salt"`
-	FriendCode                 string     `bun:"friend_code,unique,notnull" json:"friend_code"`                      // Short unique code for friends
-	PublicKey                  string     `bun:"public_key" json:"public_key"`                                       // RSA Public Key (Standard PEM format)
-	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"`                 // RSA Private Key (Encrypted with MasterKey)
-	EncryptFilenames           bool       `bun:"encrypt_filenames,notnull,default:false" json:"encrypt_filenames"`   // Client-side filename encryption opt-in
-	VersioningEnabled          bool       `bun:"versioning_enabled,notnull,default:false" json:"versioning_enabled"` // File version history opt-in
+	FriendCode                 string     `bun:"friend_code,unique,notnull" json:"friend_code"`                       // Short unique code for friends
+	PublicKey                  string     `bun:"public_key" json:"public_key"`                                        // RSA Public Key (Standard PEM format)
+	EncryptedPrivateKey        string     `bun:"encrypted_private_key" json:"encrypted_private_key"`                  // RSA Private Key (Encrypted with MasterKey)
+	EncryptFilenames           bool       `bun:"encrypt_filenames,notnull,default:false" json:"encrypt_filenames"`    // Client-side filename encryption opt-in
+	VersioningEnabled          bool       `bun:"versioning_enabled,notnull,default:false" json:"versioning_enabled"`  // File version history opt-in
+	RecoveryVerifiedAt         *time.Time `bun:"recovery_verified_at,nullzero" json:"recovery_verified_at,omitempty"` // Kit de récupération : dernière preuve de possession du code
 	CreatedAt                  time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt                  time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 	DeletedAt                  *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"` // RGPD Article 17 - Soft delete
@@ -87,6 +89,9 @@ type File struct {
 	Synced       bool      `bun:"synced,default:false" json:"synced"`                    // true si uploadé via la sync desktop
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt    time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
+	// Corbeille personnelle : même modèle que OrgFile (soft delete bun + delete_root)
+	DeletedAt  *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
+	DeleteRoot bool       `bun:"delete_root,notnull,default:false" json:"-"`
 }
 
 // Champs non persistés utilisés pour l'API
@@ -164,6 +169,9 @@ type Folder struct {
 	SizeBytes    int64     `bun:"size_bytes,scanonly" json:"size_bytes,omitempty"`
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
 	UpdatedAt    time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
+	// Corbeille personnelle : même modèle que OrgFolder (soft delete bun + delete_root)
+	DeletedAt  *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"deleted_at,omitempty"`
+	DeleteRoot bool       `bun:"delete_root,notnull,default:false" json:"-"`
 }
 
 type FolderSize struct {
@@ -203,6 +211,10 @@ type ShareLink struct {
 	PermDelete    bool       `bun:"perm_delete,default:false"`      // Folder: can delete files/dirs
 	PermMove      bool       `bun:"perm_move,default:false"`        // Folder: can move files/dirs
 	OrgID         *int64     `bun:"org_id" json:"org_id,omitempty"` // set for org_file shares
+	// File request ("demande de fichiers") : lien de dépôt seul — le destinataire
+	// ne peut ni lister ni télécharger le contenu du dossier, seulement déposer.
+	UploadOnly   bool   `bun:"upload_only,default:false"`
+	RequestLabel string `bun:"request_label,default:''"` // message affiché au déposant
 }
 
 // ShareItemOverride stores per-item access restrictions within a shared folder.
@@ -649,6 +661,23 @@ type Notification struct {
 	CommentID    *int64    `bun:"comment_id" json:"comment_id,omitempty"`
 	IsRead       bool      `bun:"is_read,notnull,default:false" json:"is_read"`
 	CreatedAt    time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+}
+
+// SubscriptionPlan is the plan catalogue entry. StorageBytes == -1 means unbounded (PAYG).
+// BillingModel is "flat" (fixed monthly) or "payg" (per-Go per hour, PriceTTCCents = rate/To/month).
+type SubscriptionPlan struct {
+	bun.BaseModel `bun:"table:subscription_plans,alias:sp"`
+	Code          string          `bun:"code,pk" json:"code"`
+	Name          string          `bun:"name,notnull" json:"name"`
+	PriceTTCCents int             `bun:"price_ttc_cents,notnull,default:0" json:"price_ttc_cents"`
+	Currency      string          `bun:"currency,notnull,default:'EUR'" json:"currency"`
+	StorageBytes  int64           `bun:"storage_bytes,notnull,default:0" json:"storage_bytes"`
+	BillingModel  string          `bun:"billing_model,notnull,default:'flat'" json:"billing_model"`
+	Features      json.RawMessage `bun:"features,type:jsonb,notnull,default:'[]'" json:"features"`
+	IsActive      bool            `bun:"is_active,notnull,default:true" json:"is_active"`
+	SortOrder     int             `bun:"sort_order,notnull,default:0" json:"sort_order"`
+	CreatedAt     time.Time       `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt     time.Time       `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 }
 
 // EmitRealtimeEvent inserts an event into the realtime_events table and

@@ -105,20 +105,31 @@
 
               <!-- Not Shared State -->
               <div v-else-if="!isShared" class="not-shared-state">
-                  <div class="illustration">
-                    <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor" style="opacity:0.35"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
-                  </div>
-                  <p>Ce {{ item?.type === 'folder' ? 'dossier' : 'fichier' }} n'est pas encore partagé par lien.</p>
+                  <p class="ns-title">Ce {{ item?.type === 'folder' ? 'dossier' : 'fichier' }} n'est pas encore partagé par lien.</p>
                   <p class="sub-text">Créez un lien pour le partager avec d'autres personnes.</p>
 
-                  <div class="form-group">
-                      <label for="expiresAt">Expiration (optionnel)</label>
-                      <input type="datetime-local" id="expiresAt" v-model="expiresAt" class="form-control" />
+                  <!-- Expiration (repliable) -->
+                  <div class="form-group collapsible">
+                      <button type="button" class="collapse-toggle" @click="showExpiration = !showExpiration">
+                          <span class="collapse-label">Expiration <span class="opt">(optionnel)</span></span>
+                          <span v-if="expiresAt && !showExpiration" class="collapse-hint">{{ new Date(expiresAt).toLocaleString() }}</span>
+                          <svg class="chevron" :class="{ open: showExpiration }" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+                      </button>
+                      <div v-show="showExpiration" class="collapse-body">
+                          <input type="datetime-local" id="expiresAt" v-model="expiresAt" class="form-control" />
+                      </div>
                   </div>
 
-                  <div class="form-group">
-                      <label for="sharePassword">Mot de passe (optionnel)</label>
-                      <input type="password" id="sharePassword" v-model="sharePassword" class="form-control" placeholder="Laisser vide pour aucun mot de passe" autocomplete="new-password" />
+                  <!-- Mot de passe (repliable) -->
+                  <div class="form-group collapsible">
+                      <button type="button" class="collapse-toggle" @click="showPassword = !showPassword">
+                          <span class="collapse-label">Mot de passe <span class="opt">(optionnel)</span></span>
+                          <span v-if="sharePassword && !showPassword" class="collapse-hint">••••••</span>
+                          <svg class="chevron" :class="{ open: showPassword }" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>
+                      </button>
+                      <div v-show="showPassword" class="collapse-body">
+                          <input type="password" id="sharePassword" v-model="sharePassword" class="form-control" placeholder="Laisser vide pour aucun mot de passe" autocomplete="new-password" />
+                      </div>
                   </div>
 
                   <div class="form-group single-use-group">
@@ -424,6 +435,9 @@ const shareLinkInput = ref(null);
 const expiresAt = ref(null);
 const singleUse = ref(false);
 const sharePassword = ref('');
+// Sections repliables (fermées par défaut pour gagner en hauteur)
+const showExpiration = ref(false);
+const showPassword = ref(false);
 
 // Permissions (for folder shares, set at creation time)
 const permissions = ref({ download: true, create: true, delete: false, move: false });
@@ -488,6 +502,8 @@ watch(() => props.item, (newItem) => {
         };
 
         sharePassword.value = '';
+        showExpiration.value = false;
+        showPassword.value = false;
         directShareStatus.value = {};
         restrictionsPanelOpen.value = false;
         treeItems.value = { folders: [], files: [] };
@@ -1001,7 +1017,8 @@ const close = () => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  max-height: 90vh;
+  overflow: hidden; /* le corps (.modal-body) gère le scroll ; en-tête/pied restent fixes */
 }
 
 /* Side panel */
@@ -1034,6 +1051,7 @@ const close = () => {
   align-items: center;
   padding: 12px 20px;
   border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .modal-header h3 {
@@ -1055,10 +1073,11 @@ const close = () => {
 
 .modal-body {
   padding: 14px 20px;
-  min-height: 100px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  flex: 1 1 auto;
+  min-height: 0; /* autorise le corps à rétrécir et à scroller au lieu de déborder */
+  overflow-y: auto;
 }
 
 .loading-state {
@@ -1073,15 +1092,73 @@ const close = () => {
   text-align: center;
 }
 
-.illustration {
-  font-size: 2rem;
-  margin-bottom: 0.4rem;
+.ns-title {
+  margin: 0 0 0.15rem;
+  font-size: 0.92rem;
+  color: var(--main-text-color);
 }
 
 .sub-text {
   color: var(--secondary-text-color);
-  margin-bottom: 0.75rem;
-  font-size: 0.9rem;
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+}
+
+/* ── Sections repliables (Expiration / Mot de passe) ── */
+.collapsible {
+  margin-bottom: 0.5rem;
+}
+
+.collapse-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: var(--card-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--main-text-color);
+  text-align: left;
+  transition: border-color 0.15s;
+}
+.collapse-toggle:hover {
+  border-color: var(--primary-color);
+}
+
+.collapse-label {
+  flex: 1;
+  min-width: 0;
+}
+.collapse-label .opt {
+  color: var(--secondary-text-color);
+  font-weight: 400;
+  font-size: 0.78rem;
+}
+
+.collapse-hint {
+  font-size: 0.76rem;
+  color: var(--secondary-text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+
+.chevron {
+  flex-shrink: 0;
+  color: var(--secondary-text-color);
+  transition: transform 0.15s;
+}
+.chevron.open {
+  transform: rotate(180deg);
+}
+
+.collapse-body {
+  margin-top: 6px;
 }
 
 .shared-state {
@@ -1141,6 +1218,7 @@ const close = () => {
   justify-content: flex-end;
   gap: 12px;
   background-color: var(--background-color);
+  flex-shrink: 0;
 }
 
 button {
@@ -1386,7 +1464,7 @@ button {
 
 /* Permission chips (creation form) */
 .perm-group {
-  margin-bottom: 1.25rem;
+  margin-bottom: 0.75rem;
   text-align: left;
   width: 100%;
   max-width: 300px;
@@ -1731,7 +1809,7 @@ button {
   max-width: 300px;
   margin-left: auto;
   margin-right: auto;
-  margin-bottom: 1rem;
+  margin-bottom: 0.6rem;
 }
 
 .single-use-label {

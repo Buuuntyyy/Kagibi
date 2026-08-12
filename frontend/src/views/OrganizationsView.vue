@@ -44,7 +44,7 @@
             {{ t(`orgs.premiumFeature${n}`) }}
           </li>
         </ul>
-        <button class="btn-upgrade" @click="router.push('/dashboard/billing')">
+        <button class="btn-upgrade" @click="router.push('/dashboard/upgrade')">
           {{ t('orgs.upgradeCta') }}
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
         </button>
@@ -736,7 +736,9 @@ const pinnedOrgs = computed(() =>
 .paywall-wrapper {
   display: flex;
   justify-content: center;
-  padding: 40px 16px;
+  /* Pas de padding haut : la carte remonte au plus près du sous-titre (l'espace
+     restant provient du margin-bottom du .page-header) pour éviter le rognage en bas. */
+  padding: 0 16px 24px;
 }
 
 .paywall-card {

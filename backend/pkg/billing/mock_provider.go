@@ -20,9 +20,8 @@ type MockProvider struct {
 }
 
 type mockUser struct {
-	subscription    *Subscription
-	storageUsedGB   float64
-	p2pSharesActive int
+	subscription  *Subscription
+	storageUsedGB float64
 }
 
 // NewMockProvider crée un nouveau mock billing provider
@@ -141,24 +140,30 @@ func (m *MockProvider) getPlans() []Plan {
 	return []Plan{
 		{
 			Code: "free", Name: "Gratuit",
-			Description:    "20 Go de stockage, 5 partages P2P actifs",
-			StorageLimitGB: 20, P2PSharesLimit: 5,
-			PriceMonthly: 0, PriceYearly: 0, Currency: "EUR",
-			Features: map[string]interface{}{"p2p_enabled": true},
+			Description:    "20 Go de stockage",
+			StorageLimitGB: 20,
+			PriceMonthly:   0, PriceYearly: 0, Currency: "EUR",
 		},
 		{
-			Code: "pro", Name: "Pro",
-			Description:    "50 Go de stockage, 50 partages P2P actifs",
-			StorageLimitGB: 50, P2PSharesLimit: 50,
-			PriceMonthly: 500, PriceYearly: 5000, Currency: "EUR",
-			Features: map[string]interface{}{"p2p_enabled": true},
+			Code: "personal", Name: "Personnel",
+			Description:    "200 Go de stockage, versioning",
+			StorageLimitGB: 200,
+			PriceMonthly:   400, PriceYearly: 4000, Currency: "EUR",
+			Features: map[string]interface{}{"versioning": true},
 		},
 		{
 			Code: "business", Name: "Business",
-			Description:    "200 Go de stockage, 200 partages P2P actifs",
-			StorageLimitGB: 200, P2PSharesLimit: 200,
-			PriceMonthly: 1500, PriceYearly: 15000, Currency: "EUR",
-			Features: map[string]interface{}{"p2p_enabled": true, "priority_support": true},
+			Description:    "1 To de stockage, versioning, organisations",
+			StorageLimitGB: 1024,
+			PriceMonthly:   1400, PriceYearly: 14000, Currency: "EUR",
+			Features: map[string]interface{}{"versioning": true, "orgs": true, "priority_support": true},
+		},
+		{
+			Code: "payg", Name: "Pay as you go",
+			Description:    "Stockage à la demande (15 €/To/mois)",
+			StorageLimitGB: -1,
+			PriceMonthly:   1500, Currency: "EUR",
+			Features: map[string]interface{}{"versioning": true, "orgs": true, "billing_model": "payg"},
 		},
 	}
 }
@@ -217,7 +222,6 @@ func (m *MockProvider) GetCurrentUsage(ctx context.Context, userID string) (*Usa
 	u := &Usage{UserID: userID, PeriodStart: now.AddDate(0, -1, 0), PeriodEnd: now}
 	if user, ok := m.users[userID]; ok {
 		u.StorageUsedGB = user.storageUsedGB
-		u.P2PSharesActive = user.p2pSharesActive
 	}
 	return u, nil
 }
@@ -234,23 +238,6 @@ func (m *MockProvider) CheckQuota(ctx context.Context, userID string, requestedB
 	if requestedBytes > remaining {
 		result.Allowed = false
 		result.Reason = fmt.Sprintf("Quota dépassé. Restant: %.2f Go", float64(remaining)/(1024*1024*1024))
-	} else {
-		result.Allowed = true
-	}
-	return result, nil
-}
-
-func (m *MockProvider) CheckP2PQuota(ctx context.Context, userID string, currentActiveShares int) (*P2PQuotaCheckResult, error) {
-	plan, _ := m.GetUserPlan(ctx, userID)
-	remaining := plan.P2PSharesLimit - currentActiveShares
-	result := &P2PQuotaCheckResult{
-		ActiveShares:    currentActiveShares,
-		Limit:           plan.P2PSharesLimit,
-		RemainingShares: remaining,
-	}
-	if remaining <= 0 {
-		result.Allowed = false
-		result.Reason = fmt.Sprintf("Limite de %d partages P2P actifs atteinte pour le plan %s", plan.P2PSharesLimit, plan.Name)
 	} else {
 		result.Allowed = true
 	}

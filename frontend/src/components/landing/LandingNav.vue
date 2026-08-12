@@ -5,7 +5,7 @@
   <nav class="landing-nav">
     <div class="nav-container">
       <router-link to="/" class="nav-logo">
-        <img src="/Logo.png" alt="Kagibi Logo" width="40rem"/>
+        <img src="/Logo.png" alt="Kagibi Logo" width="40rem" decoding="async"/>
         <span>Kagibi</span>
       </router-link>
       

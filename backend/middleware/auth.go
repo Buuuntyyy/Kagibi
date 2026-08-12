@@ -129,6 +129,17 @@ func AuthMiddleware(provider authprovider.AuthProvider, redisClient *redis.Clien
 		c.Set("aal", aal)
 		c.Set("is_guest", aal == "guest")
 
+		// Propagate the signed "mfa" claim so step-up middleware can tell, without a
+		// DB lookup, whether the user has an MFA factor enrolled.
+		if mfaClaim, ok := claims["mfa"].(string); ok {
+			c.Set("mfa", mfaClaim)
+		}
+		// Propagate the "mfa_at" claim (unix seconds of last TOTP verification) so
+		// per-action gates can enforce step-up freshness.
+		if mfaAt, ok := claims["mfa_at"].(float64); ok {
+			c.Set("mfa_at", int64(mfaAt))
+		}
+
 		trackActiveSession(redisClient, userID)
 
 		c.Next()

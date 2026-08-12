@@ -160,6 +160,52 @@ func orgInviteBodyEN(toEmail, inviterName, orgName, role, joinURL string) string
 		"to send you an invitation to join their organization.\n"
 }
 
+// SendRecoveryRotationCode emails a one-time confirmation code required before a
+// recovery-code rotation takes effect (cf. handlers/auth/recovery_kit.go — defense in
+// depth so a hijacked session alone cannot silently plant a durable backdoor via the
+// recovery mechanism, which bypasses the password entirely).
+// lang must be "fr" or "en"; any other value falls back to "fr".
+func SendRecoveryRotationCode(toEmail, name, code, lang string) error {
+	var subject, body string
+	if lang == "en" {
+		subject = "Confirm your new Kagibi recovery code"
+		body = recoveryRotationCodeBodyEN(name, code)
+	} else {
+		subject = "Confirmez votre nouveau code de récupération Kagibi"
+		body = recoveryRotationCodeBodyFR(name, code)
+	}
+	return Send(Message{To: toEmail, Subject: subject, Body: body})
+}
+
+func recoveryRotationCodeBodyFR(name, code string) string {
+	return "Bonjour " + name + ",\n\n" +
+		"Une demande de génération d'un nouveau code de récupération a été effectuée sur\n" +
+		"votre compte Kagibi. Pour des raisons de sécurité, cette action doit être confirmée\n" +
+		"par email en plus de votre vérification en deux étapes (si activée).\n\n" +
+		"Code de confirmation :\n\n" +
+		"  " + code + "\n\n" +
+		"Ce code expire dans 15 minutes et ne peut être utilisé qu'une seule fois.\n\n" +
+		"Si vous n'êtes pas à l'origine de cette demande, ignorez cet email et vérifiez la\n" +
+		"sécurité de votre compte (mot de passe, sessions actives) : quelqu'un d'autre\n" +
+		"pourrait avoir accès à votre compte.\n\n" +
+		"—\n" +
+		"L'équipe Kagibi · https://kagibi.cloud\n"
+}
+
+func recoveryRotationCodeBodyEN(name, code string) string {
+	return "Hello " + name + ",\n\n" +
+		"A request to generate a new recovery code was made on your Kagibi account. For\n" +
+		"security reasons, this action must be confirmed by email in addition to your\n" +
+		"two-factor verification (if enabled).\n\n" +
+		"Confirmation code:\n\n" +
+		"  " + code + "\n\n" +
+		"This code expires in 15 minutes and can only be used once.\n\n" +
+		"If you didn't request this, ignore this email and review your account security\n" +
+		"(password, active sessions) — someone else may have access to your account.\n\n" +
+		"—\n" +
+		"The Kagibi team · https://kagibi.cloud\n"
+}
+
 func formatBytes(b int64) string {
 	const unit = 1024
 	if b < unit {

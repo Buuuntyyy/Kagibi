@@ -22,8 +22,18 @@
         <router-view />
       </main>
     </template>
+
+    <!-- Global MFA step-up: shown when the backend requires aal2 for an action
+         (403 mfa_required). On success the request that triggered it is retried. -->
+    <MFAChallengeModal
+      v-model="stepUpOpen"
+      :context="stepUpContext"
+      @verified="completeStepUp"
+      @cancelled="cancelStepUp"
+    />
   </div>
 </template>
+
 
 <script setup>
 import Navbar from './components/layout/navbar.vue'
@@ -35,6 +45,8 @@ import UploadManager from './components/upload/UploadManager.vue'
 import DownloadManager from './components/download/DownloadManager.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import GlobalToast from './components/GlobalToast.vue'
+import MFAChallengeModal from './components/MFAChallengeModal.vue'
+import { stepUpVisible, stepUpContext, completeStepUp, cancelStepUp } from './utils/mfaStepUp'
 import { useThemeStore } from './stores/theme'
 import { useAuthStore } from './stores/auth'
 import { useBillingStore } from './stores/billing'
@@ -50,6 +62,12 @@ const billingStore = useBillingStore()
 const realtimeStore = useRealtimeStore()
 const notifStore = useNotificationStore()
 const route = useRoute()
+
+// Two-way binding for the global MFA step-up modal (state lives in utils/mfaStepUp).
+const stepUpOpen = computed({
+  get: () => stepUpVisible.value,
+  set: (v) => { stepUpVisible.value = v },
+})
 
 // Check if current route is a landing page
 const isLandingPage = computed(() => {

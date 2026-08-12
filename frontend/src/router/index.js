@@ -13,10 +13,11 @@ import Credits from '../views/Credits.vue'
 import FriendsView from '../views/FriendsView.vue'
 import OrganizationsView from '../views/OrganizationsView.vue'
 import OrgDetailView from '../views/OrgDetailView.vue'
-import BillingView from '../views/BillingView.vue'
 import JoinView from '../views/JoinView.vue'
 import P2PView from '../views/P2PView.vue'
 import HomeView from '../views/HomeView.vue'
+import UpgradeView from '../views/UpgradeView.vue'
+import TrashView from '../views/TrashView.vue'
 import UsageDashboard from '../components/usage/UsageDashboard.vue'
 import LandingHome from '../views/landing/HomeView.vue'
 import LandingPricing from '../views/landing/PricingView.vue'
@@ -114,6 +115,11 @@ const routes = [
         component: SharedElements
       },
       {
+        path: 'trash',
+        name: 'Trash',
+        component: TrashView
+      },
+      {
         path: 'friends',
         name: 'Friends',
         component: FriendsView
@@ -129,9 +135,9 @@ const routes = [
         component: OrgDetailView
       },
       {
-        path: 'billing',
-        name: 'Billing',
-        component: BillingView
+        path: 'upgrade',
+        name: 'Upgrade',
+        component: UpgradeView
       }
     ]
   },
@@ -167,6 +173,11 @@ const routes = [
     path: '/s/:token',
     name: 'PublicShare',
     component: PublicShare,
+  },
+  {
+    path: '/r/:token',
+    name: 'FileRequest',
+    component: () => import('../views/FileRequestView.vue'),
   },
   {
     path: '/s/:token/browse/:subpath(.*)*',

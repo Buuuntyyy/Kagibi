@@ -25,9 +25,14 @@
           <span class="plan-value">{{ t('account.subscriptionsComingSoonTitle') }}</span>
         </div>
       </div>
-      <a v-if="buyMeACoffeeUrl" :href="buyMeACoffeeUrl" target="_blank" rel="noopener noreferrer" class="btn-upgrade">
-        ☕ Buy me a coffee
-      </a>
+      <div class="banner-actions">
+        <button class="btn-upgrade btn-upgrade-secondary" @click="router.push('/dashboard/upgrade')">
+          {{ t('account.seePlans') }}
+        </button>
+        <a v-if="buyMeACoffeeUrl" :href="buyMeACoffeeUrl" target="_blank" rel="noopener noreferrer" class="btn-upgrade">
+          ☕ Buy me a coffee
+        </a>
+      </div>
     </div>
 
     <div v-if="loading" class="loading-state">
@@ -230,6 +235,16 @@
           </div>
           <div class="section-body">
             <MFASettings />
+          </div>
+        </section>
+
+        <!-- Recovery Kit -->
+        <section class="settings-section" id="recovery-kit">
+          <div class="section-header">
+            <h3>{{ t('recoveryKit.sectionTitle') }}</h3>
+          </div>
+          <div class="section-body">
+            <RecoveryKitSettings />
           </div>
         </section>
 
@@ -505,6 +520,7 @@ import api from '../api'
 import AvatarSelector from '../components/AvatarSelector.vue'
 import DeleteAccountDialog from '../components/DeleteAccountDialog.vue'
 import MFASettings from '../components/MFASettings.vue'
+import RecoveryKitSettings from '../components/account/RecoveryKitSettings.vue'
 import MFAChallengeModal from '../components/MFAChallengeModal.vue'
 import PasswordCriteria from '../components/auth/PasswordCriteria.vue'
 import GoogleDriveImportDialog from '../components/import/GoogleDriveImportDialog.vue'
@@ -600,8 +616,10 @@ const showSuccess = (title, message) => {
 }
 
 const buyMeACoffeeUrl = computed(() => {
-  const runtimeUrl = typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : ''
-  return runtimeUrl || import.meta.env.VITE_BUY_ME_A_COFFEE_URL || ''
+  const raw = (typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : '')
+    || import.meta.env.VITE_BUY_ME_A_COFFEE_URL || ''
+  if (!raw) return ''
+  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
 })
 
 const openUpgradeInfoPopup = () => {
@@ -1068,6 +1086,13 @@ const executeDeleteAccount = async () => {
   text-transform: capitalize;
 }
 
+.banner-actions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .btn-upgrade {
   background: white;
   color: var(--primary-color);
@@ -1077,6 +1102,14 @@ const executeDeleteAccount = async () => {
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.2s;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btn-upgrade-secondary {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .btn-upgrade:hover {

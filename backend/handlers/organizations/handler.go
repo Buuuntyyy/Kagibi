@@ -314,8 +314,10 @@ func canManage(role string) bool { return role == "owner" || role == "admin" }
 func isOwner(role string) bool   { return role == "owner" }
 
 // checkMFAEnforcement returns true if the caller may proceed.
-// If the org has require_mfa=true and the caller has not enrolled MFA,
-// it writes a 403 response and returns false.
+// When the org has require_mfa=true, the caller's *current session* must be MFA-verified
+// (aal2) — merely having a factor enrolled is not enough. An aal1 session is asked to
+// step up (mfa_required), and a caller without any factor is told to enrol
+// (mfa_enrollment_required). It writes the 403 response and returns false in those cases.
 func (h *OrgHandler) checkMFAEnforcement(c *gin.Context, orgID int64, userID string) bool {
 	ctx := c.Request.Context()
 
@@ -331,6 +333,13 @@ func (h *OrgHandler) checkMFAEnforcement(c *gin.Context, orgID int64, userID str
 		return true
 	}
 
+	// A session that already completed MFA this login satisfies the requirement.
+	if c.GetString("aal") == "aal2" {
+		return true
+	}
+
+	// Not stepped up: distinguish "enrolled but needs to verify now" from "no factor at all"
+	// so the client can either prompt for a code or direct the user to enable MFA.
 	var settings struct {
 		MFAEnabled bool `bun:"mfa_enabled"`
 	}
@@ -339,14 +348,19 @@ func (h *OrgHandler) checkMFAEnforcement(c *gin.Context, orgID int64, userID str
 		ColumnExpr("mfa_enabled").
 		Where("user_id = ?", userID).
 		Scan(ctx, &settings)
-	if err != nil || !settings.MFAEnabled {
+	if err == nil && settings.MFAEnabled {
 		c.JSON(http.StatusForbidden, gin.H{
 			"error":   "mfa_required",
-			"message": "This organization requires two-factor authentication. Please enable MFA in your account settings.",
+			"message": "This organization requires two-factor authentication for this action. Please verify with your authenticator.",
 		})
 		return false
 	}
-	return true
+
+	c.JSON(http.StatusForbidden, gin.H{
+		"error":   "mfa_enrollment_required",
+		"message": "This organization requires two-factor authentication. Please enable MFA in your account settings.",
+	})
+	return false
 }
 
 // hasOrgAccess reports whether userID may use the Organizations feature.

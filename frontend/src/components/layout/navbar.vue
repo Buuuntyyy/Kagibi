@@ -4,7 +4,7 @@
 <template>
   <nav :class="{ 'mobile-search-open': mobileSearchOpen }">
     <router-link v-show="!mobileSearchOpen" :to="authStore.isAuthenticated ? '/dashboard' : '/'" class="brand">
-      <img src="/Logo.png" alt="Kagibi Logo" class="brand-logo"/>
+      <img src="/Logo.png" alt="Kagibi Logo" class="brand-logo" width="36" height="36" decoding="async"/>
       <span>Kagibi</span>
     </router-link>
     <div class="search-wrap">
@@ -78,8 +78,10 @@ const showHelpDialog = ref(false)
 const mobileSearchOpen = ref(false)
 
 const buyMeACoffeeUrl = computed(() => {
-  const runtimeUrl = typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : ''
-  return runtimeUrl || import.meta.env.VITE_BUY_ME_A_COFFEE_URL || ''
+  const raw = (typeof window !== 'undefined' ? window.__APP_CONFIG__?.buyMeACoffeeUrl : '')
+    || import.meta.env.VITE_BUY_ME_A_COFFEE_URL || ''
+  if (!raw) return ''
+  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
 })
 </script>
 

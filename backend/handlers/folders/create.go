@@ -99,5 +99,12 @@ func CreateHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	if err := pkg.EmitRealtimeEvent(c.Request.Context(), db, userID, "folder_created", map[string]any{
+		"id":   folder.ID,
+		"path": folder.Path,
+	}); err != nil {
+		log.Printf("Failed to emit folder_created event: %v", err)
+	}
+
 	c.JSON(http.StatusCreated, gin.H{"message": "Dossier créé avec succès", "folder": folder})
 }

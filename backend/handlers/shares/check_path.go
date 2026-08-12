@@ -83,10 +83,13 @@ func GetActiveSharesForPathHandler(c *gin.Context, db *bun.DB) {
 	// But SQL LIKE is usually 'column LIKE pattern'. Here we want 'pattern LIKE column + %' ?
 	// No, we want: current_path LIKE share_path || '%'
 
+	// Les liens de demande de fichiers (upload_only) sont exclus : leurs
+	// destinataires ne peuvent pas lire, inutile de wrapper des clés pour eux.
 	var shares []pkg.ShareLink
 	err := db.NewSelect().Model(&shares).
 		Where("owner_id = ?", userID).
 		Where("resource_type = ?", "folder").
+		Where("upload_only = FALSE").
 		Where("? LIKE path || '%'", path).
 		Scan(c.Request.Context())
 

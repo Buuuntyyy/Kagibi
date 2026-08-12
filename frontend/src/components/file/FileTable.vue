@@ -97,7 +97,7 @@
 
             <!-- Created At -->
             <template v-else-if="col.key === 'created'">
-              {{ formatDate(folder.CreatedAt) }}
+              {{ formatDateOnly(folder.CreatedAt) }}
             </template>
 
             <!-- Updated At (Folder) -->
@@ -233,12 +233,12 @@
 
             <!-- Created At -->
             <template v-else-if="col.key === 'created'">
-              {{ formatDate(file.CreatedAt) }}
+              {{ formatDateOnly(file.CreatedAt) }}
             </template>
 
             <!-- Updated At (File) -->
             <template v-else-if="col.key === 'updated'">
-              {{ formatDate(file.UpdatedAt) }}
+              {{ formatDateOnly(file.UpdatedAt) }}
             </template>
 
             <!-- Size (File) -->
@@ -264,7 +264,7 @@ import { computed } from 'vue'
 import { useTagStore } from '../../stores/tags'
 import { useCommentStore } from '../../stores/comments'
 import { useFileStore } from '../../stores/files'
-import { formatDate, formatSize } from '../../utils/format'
+import { formatDateOnly, formatSize } from '../../utils/format'
 import { MessageSquare } from 'lucide-vue-next'
 
 const fileStore = useFileStore()
@@ -425,6 +425,7 @@ const onShareIconHover = (isHovering, event) => {
   width: 100%;
   border-collapse: collapse; /* Keep collapse for alignment, but we remove borders */
   min-width: 800px;
+  table-layout: fixed; /* Fixed column widths so long names get truncated instead of stretching the table */
 }
 
 .files-table th, .files-table td {
@@ -433,7 +434,7 @@ const onShareIconHover = (isHovering, event) => {
   /* border-bottom: 1px solid var(--border-color); Removed full width border */
   border-bottom: none;
   color: var(--main-text-color);
-  font-size: 1rem; /* Slightly reduced font size */
+  font-size: 0.85rem; /* Slightly reduced font size */
 }
 
 /* Add custom separator lines that don't touch edges */
@@ -516,6 +517,47 @@ const onShareIconHover = (isHovering, event) => {
   width: 50px;
   text-align: center;
   padding-left: 10px;
+}
+
+.name-cell {
+  /* 75% of the space left after the other fixed-width columns (604px total) — a 25% cut from the previous fill-all-remaining-space behavior */
+  width: calc(75% - 453px);
+  overflow: hidden;
+}
+
+.col-path {
+  width: 130px;
+  overflow: hidden;
+}
+
+.col-path .path-column {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.col-tags {
+  width: 130px;
+  overflow: hidden;
+}
+
+.col-created,
+.col-updated {
+  width: 128px;
+  white-space: nowrap;
+}
+
+td.col-created,
+td.col-updated {
+  font-size: 0.85em;
+}
+
+.col-size {
+  width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .selection-cell {

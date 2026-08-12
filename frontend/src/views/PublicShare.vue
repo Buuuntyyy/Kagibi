@@ -161,7 +161,10 @@ onMounted(async () => {
   try {
     shareInfo.value = await fetchShareInfo()
 
-    if (shareInfo.value.resource_type === 'folder') {
+    if (shareInfo.value.upload_only) {
+      // Lien de demande de fichiers → page de dépôt dédiée
+      router.replace({ name: 'FileRequest', params: { token: route.params.token } })
+    } else if (shareInfo.value.resource_type === 'folder') {
       router.replace({ name: 'PublicBrowse', params: { token: route.params.token, subpath: [] } })
     }
   } catch (err) {
@@ -189,7 +192,9 @@ const submitPassword = async () => {
     publicFileStore.sharePassword = enteredPassword.value
     passwordRequired.value = false
 
-    if (shareInfo.value.resource_type === 'folder') {
+    if (shareInfo.value.upload_only) {
+      router.replace({ name: 'FileRequest', params: { token: route.params.token } })
+    } else if (shareInfo.value.resource_type === 'folder') {
       router.replace({ name: 'PublicBrowse', params: { token: route.params.token, subpath: [] } })
     }
   } catch (err) {

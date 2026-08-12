@@ -116,7 +116,9 @@ FROM folders AS f
 LEFT JOIN files AS fl
   ON fl.user_id = f.user_id
  AND fl.is_preview = false
+ AND fl.deleted_at IS NULL
  AND fl.path LIKE (f.path || '/%')
+WHERE f.deleted_at IS NULL
 GROUP BY f.id, f.user_id
 ON CONFLICT (folder_id) DO UPDATE
 SET size_bytes = EXCLUDED.size_bytes,

@@ -202,6 +202,23 @@ func DownloadOrgShare(c *gin.Context, db *bun.DB) {
 		return
 	}
 
+	// Atomically claim a single-use link before streaming so two concurrent requests
+	// cannot both consume it. Must happen before any response headers/body are written.
+	if share.SingleUse {
+		res, err := db.NewUpdate().Model((*pkg.ShareLink)(nil)).
+			Set("used_at = ?", time.Now()).
+			Where("id = ? AND single_use = true AND used_at IS NULL", share.ID).
+			Exec(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process link"})
+			return
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			c.JSON(http.StatusGone, gin.H{"error": "Link already used"})
+			return
+		}
+	}
+
 	s3Key := orgS3Key(*share.OrgID, file.Path)
 	output, err := s3storage.Client.GetObject(c.Request.Context(), &s3.GetObjectInput{
 		Bucket: aws.String(s3storage.BucketName),
@@ -225,14 +242,6 @@ func DownloadOrgShare(c *gin.Context, db *bun.DB) {
 	c.Header("Content-Type", contentType)
 	c.Header("Content-Length", strconv.FormatInt(file.Size, 10))
 	c.Header("Content-Disposition", cd)
-
-	if share.SingleUse {
-		now := time.Now()
-		_, _ = db.NewUpdate().Model((*pkg.ShareLink)(nil)).
-			Set("used_at = ?", now).
-			Where("id = ?", share.ID).
-			Exec(context.Background())
-	}
 
 	go func() {
 		_, _ = db.NewUpdate().Model((*pkg.ShareLink)(nil)).

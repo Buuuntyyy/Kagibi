@@ -93,13 +93,14 @@ func MFAEnrollHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 			return
 		}
 
-		// Idempotency: return existing pending factor instead of silently overwriting it
+		// Idempotency: return existing pending factor instead of silently overwriting it.
+		// The stored secret is encrypted at rest, so decrypt it for the QR re-display.
 		if au.TOTPFactorID != "" {
 			log.Printf("[MFA] enroll_idempotent user=%s factor=%s", userID, au.TOTPFactorID)
 			c.JSON(http.StatusOK, gin.H{
 				"id": au.TOTPFactorID,
 				"totp": gin.H{
-					"secret": au.TOTPSecret,
+					"secret": lp.DecryptTOTPSecret(au.TOTPSecret),
 				},
 			})
 			return
@@ -122,20 +123,69 @@ func MFAEnrollHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 	}
 }
 
+// mfaChallengeTTL bounds how long an issued MFA challenge stays valid.
+const mfaChallengeTTL = 10 * time.Minute
+
+func mfaChallengeKey(userID, challengeID string) string {
+	return "mfa_challenge:" + userID + ":" + challengeID
+}
+
+// peekMFAChallenge reports whether a challenge issued to userID is present.
+// checked is false when the binding was skipped (no Redis, or a Redis error) — the
+// caller then falls back to code-only verification to preserve availability. When
+// Redis is reachable, an empty challenge ID is treated as an invalid (missing) one.
+func peekMFAChallenge(redisClient *redis.Client, userID, challengeID string) (ok bool, checked bool) {
+	if redisClient == nil {
+		return false, false
+	}
+	if challengeID == "" {
+		return false, true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	n, err := redisClient.Exists(ctx, mfaChallengeKey(userID, challengeID)).Result()
+	if err != nil {
+		return false, false
+	}
+	return n > 0, true
+}
+
+// consumeMFAChallenge deletes a challenge so it cannot be reused after a successful verify.
+func consumeMFAChallenge(redisClient *redis.Client, userID, challengeID string) {
+	if redisClient == nil || challengeID == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = redisClient.Del(ctx, mfaChallengeKey(userID, challengeID)).Err()
+}
+
 // MFAChallengeHandler handles POST /api/v1/auth/mfa/challenge (protected).
-// Returns a random challenge ID. TOTP is time-based so no server state is needed.
-func MFAChallengeHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
+// Issues a random challenge ID and binds it to the user in Redis with a short TTL, so
+// /mfa/verify can require a freshly-issued challenge. Best-effort: a Redis outage does
+// not block challenge creation (verification then falls back to code-only).
+func MFAChallengeHandler(provider authprovider.AuthProvider, redisClient *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if _, ok := getLocalProvider(provider); !ok {
 			c.JSON(http.StatusNotImplemented, gin.H{"error": errMFALocalOnly})
 			return
 		}
 
+		userID := c.GetString("user_id")
+
 		b := make([]byte, 16)
 		rand.Read(b)
 		challengeID := hex.EncodeToString(b)
 
-		log.Printf("[MFA] challenge_created user=%s", c.GetString("user_id"))
+		if redisClient != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			if err := redisClient.Set(ctx, mfaChallengeKey(userID, challengeID), "1", mfaChallengeTTL).Err(); err != nil {
+				log.Printf("[MFA] challenge_store_failed user=%s err=%v", userID, err)
+			}
+			cancel()
+		}
+
+		log.Printf("[MFA] challenge_created user=%s", userID)
 		c.JSON(http.StatusOK, gin.H{"id": challengeID})
 	}
 }
@@ -169,8 +219,9 @@ func activateTOTPIfNeeded(lp *authprovider.LocalProvider, userID, factorID strin
 }
 
 // MFAVerifyHandler handles POST /api/v1/auth/mfa/verify (protected).
-// Validates a TOTP code, activates the factor if unverified, and returns an AAL2 JWT.
-func MFAVerifyHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
+// Validates a TOTP code against a freshly-issued challenge, activates the factor if
+// unverified, and returns an AAL2 JWT.
+func MFAVerifyHandler(provider authprovider.AuthProvider, redisClient *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		lp, ok := getLocalProvider(provider)
 		if !ok {
@@ -195,6 +246,15 @@ func MFAVerifyHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 			return
 		}
 
+		// Require a freshly-issued, user-scoped challenge. Peek (don't consume) so a
+		// wrong code can be retried with the same challenge; it is consumed only on
+		// success. If Redis is unavailable the binding is skipped (code-only fallback).
+		challengeOK, challengeChecked := peekMFAChallenge(redisClient, userID, req.ChallengeID)
+		if challengeChecked && !challengeOK {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Challenge invalide ou expiré"})
+			return
+		}
+
 		au, err := lp.GetAuthUserByID(userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": errUserNotFound})
@@ -207,12 +267,19 @@ func MFAVerifyHandler(provider authprovider.AuthProvider) gin.HandlerFunc {
 			return
 		}
 
+		// Code valid — consume the challenge so this (challenge, code) pair is single-use.
+		if challengeChecked {
+			consumeMFAChallenge(redisClient, userID, req.ChallengeID)
+		}
+
 		if err := activateTOTPIfNeeded(lp, userID, au.TOTPFactorID, au.TOTPEnabled); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to activate MFA"})
 			return
 		}
 
-		token, err := lp.GenerateTokenWithAAL(userID, au.Email, "aal2")
+		// aal2 + mfa=enabled (so per-action gates keep enforcing once the elevation
+		// goes stale) + mfa_at=now (step-up freshness anchor).
+		token, err := lp.GenerateTokenWithClaims(userID, au.Email, "aal2", true, time.Now().Unix())
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 			return

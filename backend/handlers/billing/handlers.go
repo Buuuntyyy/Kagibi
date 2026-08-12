@@ -25,12 +25,10 @@ func getUserPlanState(db *bun.DB, userID string) (*pkg.UserPlan, error) {
 
 	// Fallback self-heal: create a free default row if missing
 	planState = &pkg.UserPlan{
-		UserID:           userID,
-		Plan:             pkg.PlanFree,
-		StorageLimit:     pkg.StorageFree,
-		StorageUsed:      0,
-		P2PMaxExchanges:  pkg.P2PLimitFree,
-		P2PExchangesUsed: 0,
+		UserID:       userID,
+		Plan:         pkg.PlanFree,
+		StorageLimit: pkg.StorageFree,
+		StorageUsed:  0,
 	}
 	if upsertErr := pkg.UpsertUserPlan(db, planState); upsertErr != nil {
 		return nil, upsertErr
@@ -122,21 +120,21 @@ func GetSubscriptionHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, subscription)
 }
 
-// GetPlansHandler retourne la liste des plans disponibles
+// GetPlansHandler retourne la liste des plans disponibles depuis le catalogue en base
 // GET /api/billing/plans
-func GetPlansHandler(c *gin.Context) {
-	provider := billingpkg.GetProvider()
-	if provider == nil {
-		// Billing not configured — return empty list
-		c.JSON(http.StatusOK, []interface{}{})
-		return
+func GetPlansHandler(db *bun.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var plans []pkg.SubscriptionPlan
+		err := db.NewSelect().Model(&plans).
+			Where("is_active = ?", true).
+			OrderExpr("sort_order ASC").
+			Scan(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusOK, []interface{}{})
+			return
+		}
+		c.JSON(http.StatusOK, plans)
 	}
-	plans, err := provider.ListPlans(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusOK, []interface{}{})
-		return
-	}
-	c.JSON(http.StatusOK, plans)
 }
 
 // GetUsageHandler retourne l'utilisation actuelle depuis la DB
@@ -158,7 +156,7 @@ func GetUsageHandler(db *bun.DB) gin.HandlerFunc {
 		var realUsage struct{ Sum int64 }
 		_ = db.NewSelect().TableExpr("files").
 			ColumnExpr("COALESCE(SUM(size), 0) AS sum").
-			Where("user_id = ? AND is_preview = false", userID).
+			Where("user_id = ? AND is_preview = false AND deleted_at IS NULL", userID).
 			Scan(c.Request.Context(), &realUsage)
 
 		// Sync the counter so quota checks stay accurate
@@ -181,8 +179,6 @@ func GetUsageHandler(db *bun.DB) gin.HandlerFunc {
 			"storage_used_bytes": realUsage.Sum,
 			"storage_used_gb":    float64(realUsage.Sum) / (1024 * 1024 * 1024),
 			"storage_limit_gb":   float64(planState.StorageLimit) / (1024 * 1024 * 1024),
-			"p2p_shares_active":  activeShares,
-			"p2p_shares_limit":   planState.P2PMaxExchanges,
 		})
 	}
 }
@@ -219,31 +215,6 @@ func CheckQuotaHandler(db *bun.DB) gin.HandlerFunc {
 			result.Reason = fmt.Sprintf("Quota de stockage dépassé. Restant : %.2f Go", float64(remaining)/(1024*1024*1024))
 		} else {
 			result.Allowed = true
-		}
-		c.JSON(http.StatusOK, result)
-	}
-}
-
-// CheckP2PQuotaHandler vérifie si un nouveau partage P2P peut être créé
-// POST /api/billing/quota/p2p
-func CheckP2PQuotaHandler(db *bun.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userID := c.GetString("user_id")
-		if userID == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-			return
-		}
-		activeShares, _ := db.NewSelect().TableExpr("file_shares fs").
-			Join("JOIN files f ON f.id = fs.file_id").
-			Where("f.user_id = ?", userID).
-			Count(c.Request.Context())
-
-		// Billing disabled: P2P quota is not enforced
-		result := billingpkg.P2PQuotaCheckResult{
-			ActiveShares:    activeShares,
-			Limit:           -1, // unlimited
-			RemainingShares: -1,
-			Allowed:         true,
 		}
 		c.JSON(http.StatusOK, result)
 	}
@@ -340,7 +311,7 @@ func RegisterRoutes(router *gin.RouterGroup, authMiddleware gin.HandlerFunc, db 
 	billing := router.Group("/billing")
 	{
 		billing.GET("/status", GetBillingStatusHandler)
-		billing.GET("/plans", GetPlansHandler)
+		billing.GET("/plans", GetPlansHandler(db))
 
 		authenticated := billing.Group("")
 		authenticated.Use(authMiddleware)
@@ -349,7 +320,6 @@ func RegisterRoutes(router *gin.RouterGroup, authMiddleware gin.HandlerFunc, db 
 			authenticated.GET("/subscription", GetSubscriptionHandler)
 			authenticated.GET("/usage", GetUsageHandler(db))
 			authenticated.POST("/quota/check", CheckQuotaHandler(db))
-			authenticated.POST("/quota/p2p", CheckP2PQuotaHandler(db))
 			authenticated.GET("/invoices", GetInvoicesHandler(db))
 			authenticated.GET("/invoices/:id/payment-link", GetPaymentLinkHandler)
 			authenticated.POST("/checkout", CreateCheckoutHandler)

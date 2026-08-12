@@ -120,6 +120,10 @@
                      {{ p2pStore.activeTransfer.connectionInfo.connectionType }}
                  </span>
              </div>
+             <div v-if='p2pStore.activeTransfer.peerKeyFingerprint' class='info-row' :title='t("p2p.keyFingerprintHint")'>
+                 <span class='info-label'>{{ t('p2p.keyFingerprint') }}:</span>
+                 <span class='info-value' style='font-family: monospace; letter-spacing: 0.5px;'>{{ p2pStore.activeTransfer.peerKeyFingerprint }}</span>
+             </div>
          </div>
 
          <div class='actions-grid single' v-if='isDone || isError'>

@@ -77,7 +77,6 @@ func (d *DisabledProvider) getUnlimitedPlan() *Plan {
 		Name:           "Self-Hosted",
 		Description:    "Stockage illimité (mode auto-hébergé)",
 		StorageLimitGB: 999999999,
-		P2PSharesLimit: 999999999,
 		PriceMonthly:   0,
 		Currency:       "EUR",
 		Features: map[string]interface{}{
@@ -109,15 +108,6 @@ func (d *DisabledProvider) CheckQuota(ctx context.Context, userID string, reques
 		CurrentUsage:   0,
 		Limit:          999999999 * 1024 * 1024 * 1024,
 		RemainingBytes: 999999999 * 1024 * 1024 * 1024,
-	}, nil
-}
-
-func (d *DisabledProvider) CheckP2PQuota(ctx context.Context, userID string, currentActiveShares int) (*P2PQuotaCheckResult, error) {
-	return &P2PQuotaCheckResult{
-		Allowed:         true,
-		ActiveShares:    currentActiveShares,
-		Limit:           999999999,
-		RemainingShares: 999999999,
 	}, nil
 }
 

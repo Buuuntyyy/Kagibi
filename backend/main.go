@@ -154,6 +154,19 @@ func initAuth(db *bun.DB) authprovider.AuthProvider {
 
 func setupRouter(redisClient *redis.Client) *gin.Engine {
 	router := gin.Default()
+
+	// SÉCURITÉ : par défaut Gin fait confiance à tous les proxies et lit X-Forwarded-For
+	// tel quel, ce qui permet d'usurper l'IP cliente et de contourner le rate-limiting.
+	// Ne faire confiance qu'aux proxies déclarés (CIDR séparés par des virgules) ;
+	// sinon, ClientIP() se base sur RemoteAddr.
+	if tp := os.Getenv("TRUSTED_PROXIES"); tp != "" {
+		if err := router.SetTrustedProxies(strings.Split(tp, ",")); err != nil {
+			log.Fatalf("invalid TRUSTED_PROXIES: %v", err)
+		}
+	} else if err := router.SetTrustedProxies(nil); err != nil {
+		log.Fatalf("failed to disable trusted proxies: %v", err)
+	}
+
 	config := cors.DefaultConfig()
 
 	allowedOriginsEnv := os.Getenv("ALLOWED_ORIGINS")
@@ -214,8 +227,8 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	mfaGroup.Use(middleware.AuthMiddleware(provider, redisClient))
 	mfaGroup.GET("/factors", auth.MFAListFactorsHandler(provider))
 	mfaGroup.POST("/enroll", auth.MFAEnrollHandler(provider))
-	mfaGroup.POST("/challenge", auth.MFAChallengeHandler(provider))
-	mfaGroup.POST("/verify", auth.MFAVerifyHandler(provider))
+	mfaGroup.POST("/challenge", auth.MFAChallengeHandler(provider, redisClient))
+	mfaGroup.POST("/verify", auth.MFAVerifyHandler(provider, redisClient))
 	mfaGroup.DELETE("/unenroll", auth.MFAUnenrollHandler(provider, redisClient))
 
 	// Protected routes (JWT required, guest tokens rejected)
@@ -223,6 +236,9 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	protected := api.Group("")
 	protected.Use(authMW)
 	protected.Use(middleware.BlockGuest())
+	// Enforce MFA step-up (aal2) for accounts that require MFA at login. No-op for
+	// non-MFA users and sessions already stepped up, so the hot path is unaffected.
+	protected.Use(middleware.EnforceMFAOnLogin(db))
 
 	registerUserRoutes(protected, db, redisClient, provider)
 	registerFileRoutes(protected, db, redisClient)
@@ -262,6 +278,11 @@ func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	g.POST("/auth/logout", func(c *gin.Context) { auth.LogoutHandler(c, redisClient) })
 	g.POST("/auth/ws-token", auth.WsTokenHandler(redisClient))
 	g.POST("/auth/update-password", auth.LocalUpdatePasswordHandler(provider, redisClient))
+	g.POST("/auth/recovery/verify-backup", func(c *gin.Context) { auth.VerifyRecoveryBackupHandler(c, db) })
+	g.POST("/auth/recovery/rotate/request-code", func(c *gin.Context) { auth.RequestRecoveryRotationCodeHandler(c, db) })
+	g.POST("/auth/recovery/rotate", middleware.RequireMFAForAction(db, "recovery_change"), func(c *gin.Context) { auth.RotateRecoveryHandler(c, db) })
+	g.PUT("/auth/update-email", middleware.RequireMFAForAction(db, "email_change"), auth.LocalUpdateEmailHandler(provider, db, redisClient))
+	g.DELETE("/auth/account", middleware.RequireMFAForAction(db, "destructive"), auth.DeleteAccount(db, provider))
 	g.PUT("/auth/update-email", auth.LocalUpdateEmailHandler(provider, db, redisClient))
 	g.DELETE("/auth/account", auth.DeleteAccount(db, provider))
 
@@ -288,26 +309,36 @@ func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	filesG.POST("/upload", func(c *gin.Context) { files.UploadHandler(c, db, redisClient) })
 	filesG.GET("/list-recursive", func(c *gin.Context) { files.ListAllFilesRecursiveHandler(c, db) })
 	filesG.GET("/list/*path", func(c *gin.Context) { files.ListFilesHandler(c, db) })
-	filesG.POST("/bulk-delete", func(c *gin.Context) { files.BulkDeleteHandler(c, db) })
-	filesG.DELETE("/file/:fileID", func(c *gin.Context) { files.DeleteFileHandler(c, db) })
-	filesG.DELETE("/folder/:folderID", func(c *gin.Context) { files.DeleteFolderHandler(c, db) })
+	filesG.POST("/bulk-delete", middleware.RequireMFAForAction(db, "destructive"), func(c *gin.Context) { files.BulkDeleteHandler(c, db) })
+	filesG.DELETE("/file/:fileID", middleware.RequireMFAForAction(db, "destructive"), func(c *gin.Context) { files.DeleteFileHandler(c, db) })
+	filesG.DELETE("/folder/:folderID", middleware.RequireMFAForAction(db, "destructive"), func(c *gin.Context) { files.DeleteFolderHandler(c, db) })
 	filesG.POST("/move", func(c *gin.Context) { files.MoveHandler(c, db, redisClient) })
 	filesG.POST("/rename", func(c *gin.Context) { files.RenameHandler(c, db, redisClient) })
 	filesG.POST("/tags", func(c *gin.Context) { files.UpdateTagsHandler(c, db) })
-	filesG.GET("/download/:fileID", func(c *gin.Context) { files.DownloadFileHandler(c, db) })
-	filesG.GET("/preview/:fileID", func(c *gin.Context) { files.PreviewFileHandler(c, db) })
+	filesG.GET("/download/:fileID", middleware.RequireMFAForAction(db, "download"), func(c *gin.Context) { files.DownloadFileHandler(c, db) })
+	filesG.GET("/preview/:fileID", middleware.RequireMFAForAction(db, "download"), func(c *gin.Context) { files.PreviewFileHandler(c, db) })
 	filesG.GET("/search", func(c *gin.Context) { files.SearchFilesHandler(c, db) })
 	filesG.POST("/multipart/initiate", func(c *gin.Context) { files.InitiateMultipartHandler(c, db) })
 	filesG.POST("/multipart/complete", func(c *gin.Context) { files.CompleteMultipartHandler(c, db) })
 	filesG.POST("/multipart/abort", func(c *gin.Context) { files.AbortMultipartHandler(c, db) })
 	filesG.POST("/multipart/refresh-url", func(c *gin.Context) { files.RefreshPresignedURLsHandler(c, db) })
-	filesG.GET("/download/:fileID/presigned", func(c *gin.Context) { files.GetPresignedDownloadHandler(c, db) })
-	filesG.POST("/batch-presign", func(c *gin.Context) { files.BatchPresignDownloadHandler(c, db) })
+	filesG.GET("/download/:fileID/presigned", middleware.RequireMFAForAction(db, "download"), func(c *gin.Context) { files.GetPresignedDownloadHandler(c, db) })
+	filesG.POST("/batch-presign", middleware.RequireMFAForAction(db, "download"), func(c *gin.Context) { files.BatchPresignDownloadHandler(c, db) })
 	filesG.POST("/selection-tree", func(c *gin.Context) { files.GetSelectionTreeHandler(c, db) })
 	filesG.GET("/:id/folder-key", func(c *gin.Context) { files.GetFileFolderKeyHandler(c, db) })
 	// Version history routes (use :id to match /:id/folder-key param name at same level)
 	filesG.GET("/:id/versions", func(c *gin.Context) { files.ListVersionsHandler(c, db) })
 	filesG.POST("/:id/versions/:versionID/restore", func(c *gin.Context) { files.RestoreVersionHandler(c, db) })
+	filesG.DELETE("/:id/versions/:versionID", middleware.RequireMFAForAction(db, "destructive"), func(c *gin.Context) { files.DeleteVersionHandler(c, db) })
+	filesG.GET("/:id/versions/:versionID/presigned", middleware.RequireMFAForAction(db, "download"), func(c *gin.Context) { files.GetVersionPresignedDownloadHandler(c, db) })
+
+	// Corbeille personnelle — groupe séparé de /files pour éviter le conflit de
+	// wildcard gin avec les routes /files/:id/... (même raison que /comments).
+	trashG := g.Group("/trash")
+	trashG.GET("", func(c *gin.Context) { files.ListTrashHandler(c, db) })
+	trashG.POST("/:itemType/:itemID/restore", func(c *gin.Context) { files.RestoreTrashItemHandler(c, db) })
+	trashG.DELETE("/:itemType/:itemID", middleware.RequireMFAForAction(db, "destructive"), func(c *gin.Context) { files.PermanentDeleteTrashItemHandler(c, db) })
+	trashG.DELETE("", middleware.RequireMFAForAction(db, "destructive"), func(c *gin.Context) { files.EmptyTrashHandler(c, db) })
 	filesG.DELETE("/:id/versions/:versionID", func(c *gin.Context) { files.DeleteVersionHandler(c, db) })
 	filesG.GET("/:id/versions/:versionID/presigned", func(c *gin.Context) { files.GetVersionPresignedDownloadHandler(c, db) })
 }
@@ -518,6 +549,30 @@ func registerOrganizationRoutes(public, g *gin.RouterGroup, h *orghandlers.OrgHa
 	g.POST("/org-invitations/:token/accept", h.AcceptInvitation)
 }
 
+// canSignalTarget reports whether senderID is allowed to send a P2P signal to
+// targetID. A signal is authorised only when the two parties share an accepted
+// friendship or an active (non-expired) P2P invite in either direction. This
+// prevents any authenticated user — including ephemeral guests — from injecting
+// arbitrary signals (spoofed offers, substitute public keys, ping spam) toward
+// unrelated users.
+func canSignalTarget(ctx context.Context, db *bun.DB, senderID, targetID string) bool {
+	if senderID == "" || targetID == "" || senderID == targetID {
+		return false
+	}
+	friendCount, err := db.NewSelect().Model((*pkg.Friendship)(nil)).
+		Where("status = 'accepted' AND ((user_id_1 = ? AND user_id_2 = ?) OR (user_id_1 = ? AND user_id_2 = ?))",
+			senderID, targetID, targetID, senderID).
+		Count(ctx)
+	if err == nil && friendCount > 0 {
+		return true
+	}
+	inviteCount, err := db.NewSelect().Model((*pkg.P2PInvite)(nil)).
+		Where("expires_at > NOW() AND ((sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?))",
+			senderID, targetID, targetID, senderID).
+		Count(ctx)
+	return err == nil && inviteCount > 0
+}
+
 func p2pSignalHandler(db *bun.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, _ := c.Get("user_id")
@@ -528,6 +583,10 @@ func p2pSignalHandler(db *bun.DB) gin.HandlerFunc {
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(400, gin.H{"error": err.Error()})
+			return
+		}
+		if !canSignalTarget(c.Request.Context(), db, userID.(string), req.TargetUserID) {
+			c.JSON(403, gin.H{"error": "Not authorized to signal this user"})
 			return
 		}
 		signal := &pkg.P2PSignal{

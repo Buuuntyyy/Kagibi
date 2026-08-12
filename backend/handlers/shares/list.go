@@ -30,6 +30,8 @@ type ShareResponse struct {
 	PermCreate   bool       `json:"perm_create"`
 	PermDelete   bool       `json:"perm_delete"`
 	PermMove     bool       `json:"perm_move"`
+	UploadOnly   bool       `json:"upload_only"`
+	RequestLabel string     `json:"request_label,omitempty"`
 }
 
 // ListSharesHandler lists all active share links created by the user
@@ -65,10 +67,14 @@ func fetchAndProcessShareLinks(ctx context.Context, db *bun.DB, userID string) [
 			continue
 		}
 
+		linkPrefix := "/s/%s"
+		if l.UploadOnly {
+			linkPrefix = "/r/%s"
+		}
 		response = append(response, ShareResponse{
 			ID:           l.ID,
 			Token:        l.Token,
-			Link:         fmt.Sprintf("/s/%s", l.Token),
+			Link:         fmt.Sprintf(linkPrefix, l.Token),
 			ResourceType: l.ResourceType,
 			ResourceName: name,
 			ResourceID:   l.ResourceID,
@@ -80,6 +86,8 @@ func fetchAndProcessShareLinks(ctx context.Context, db *bun.DB, userID string) [
 			PermCreate:   l.PermCreate,
 			PermDelete:   l.PermDelete,
 			PermMove:     l.PermMove,
+			UploadOnly:   l.UploadOnly,
+			RequestLabel: l.RequestLabel,
 		})
 	}
 	return response

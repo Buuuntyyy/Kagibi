@@ -33,6 +33,8 @@ import (
 
 var hashKey []byte
 var encKey []byte
+var decoyKey []byte
+var secretKey []byte
 
 // Init reads EMAIL_ENCRYPTION_KEY from the environment and derives two subkeys.
 // Must be called once at startup, before any Hash/Encrypt/Decrypt call.
@@ -47,6 +49,8 @@ func Init() {
 	}
 	hashKey = deriveSubkey(keyBytes, "email-hash-v1")
 	encKey = deriveSubkey(keyBytes, "email-enc-v1")
+	decoyKey = deriveSubkey(keyBytes, "decoy-v1")
+	secretKey = deriveSubkey(keyBytes, "secret-enc-v1")
 }
 
 func deriveSubkey(master []byte, context string) []byte {
@@ -63,11 +67,52 @@ func Hash(email string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+// Decoy returns n deterministic, secret-keyed pseudo-random bytes derived from the
+// email and a label. The output is stable for a given (email, label) pair but
+// unpredictable without the server secret. It is used to build decoy responses
+// (e.g. account-recovery blobs for non-existent accounts) that are byte-for-byte
+// indistinguishable from real ones, defeating account enumeration.
+func Decoy(email, label string, n int) []byte {
+	normalized := strings.ToLower(strings.TrimSpace(email))
+	seed := hmac.New(sha256.New, decoyKey)
+	seed.Write([]byte(label + ":" + normalized))
+	base := seed.Sum(nil)
+
+	out := make([]byte, 0, n)
+	for counter := 0; len(out) < n; counter++ {
+		block := hmac.New(sha256.New, decoyKey)
+		block.Write(base)
+		block.Write([]byte{byte(counter), byte(counter >> 8)})
+		out = append(out, block.Sum(nil)...)
+	}
+	return out[:n]
+}
+
 // Encrypt encrypts the email with AES-256-GCM using a fresh random 12-byte nonce.
 // The returned string is base64(nonce || ciphertext || auth_tag).
 // Each call produces a different ciphertext even for the same input.
 func Encrypt(email string) (string, error) {
-	block, err := aes.NewCipher(encKey)
+	return encryptWith(encKey, email)
+}
+
+// Decrypt decrypts a ciphertext previously produced by Encrypt.
+func Decrypt(ciphertext string) (string, error) {
+	return decryptWith(encKey, ciphertext)
+}
+
+// EncryptSecret encrypts a non-email secret (e.g. a TOTP shared secret) at rest under
+// a dedicated subkey, so its protection is independent from the email ciphertexts.
+func EncryptSecret(plaintext string) (string, error) {
+	return encryptWith(secretKey, plaintext)
+}
+
+// DecryptSecret reverses EncryptSecret.
+func DecryptSecret(ciphertext string) (string, error) {
+	return decryptWith(secretKey, ciphertext)
+}
+
+func encryptWith(key []byte, plaintext string) (string, error) {
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", fmt.Errorf("emailcrypto: create cipher: %w", err)
 	}
@@ -79,17 +124,16 @@ func Encrypt(email string) (string, error) {
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", fmt.Errorf("emailcrypto: generate nonce: %w", err)
 	}
-	ct := gcm.Seal(nonce, nonce, []byte(email), nil)
+	ct := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
 	return base64.StdEncoding.EncodeToString(ct), nil
 }
 
-// Decrypt decrypts a ciphertext previously produced by Encrypt.
-func Decrypt(ciphertext string) (string, error) {
+func decryptWith(key []byte, ciphertext string) (string, error) {
 	data, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
 		return "", fmt.Errorf("emailcrypto: base64 decode: %w", err)
 	}
-	block, err := aes.NewCipher(encKey)
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", fmt.Errorf("emailcrypto: create cipher: %w", err)
 	}

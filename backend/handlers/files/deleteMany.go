@@ -6,12 +6,10 @@ package files
 import (
 	"fmt"
 	"kagibi/backend/pkg"
-	"kagibi/backend/pkg/s3storage"
 	"log"
 	"net/http"
+	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
 )
@@ -23,34 +21,23 @@ type BulkDeleteRequest struct {
 	FileIDs []int64 `json:"file_ids" binding:"required"`
 }
 
-// bulkDeleteS3Objects deletes all S3 objects for the given files.
-func bulkDeleteS3Objects(c *gin.Context, userID string, files []pkg.File) {
-	for _, file := range files {
-		s3Key := fmt.Sprintf(s3UserPathFormat, userID, file.Path)
-		log.Printf("BulkDelete: Deleting S3 object. Bucket: %s, Key: %s", s3storage.BucketName, s3Key)
-		if _, err := s3storage.Client.DeleteObject(c.Request.Context(), &s3.DeleteObjectInput{
-			Bucket: aws.String(s3storage.BucketName),
-			Key:    aws.String(s3Key),
-		}); err != nil {
-			log.Printf("Error deleting file from S3: %v", err)
-		}
-	}
-}
-
-// bulkDeleteInTx removes file records and decrements storage quota within a transaction.
+// bulkDeleteInTx soft-deletes file records (personal trash) and decrements
+// storage quota within a transaction. S3 objects, versions and shares are kept
+// until the items are permanently deleted from the trash.
 func bulkDeleteInTx(c *gin.Context, tx bun.Tx, userID string, fileIDs []int64, files []pkg.File) error {
-	if _, err := tx.NewDelete().Model((*pkg.File)(nil)).
+	if _, err := tx.NewUpdate().Model((*pkg.File)(nil)).
+		Set("deleted_at = ?, delete_root = TRUE", time.Now().UTC()).
 		Where("id IN (?)", bun.In(fileIDs)).
 		Where(queryUserIDEq, userID).
 		Exec(c); err != nil {
-		return fmt.Errorf("Impossible de supprimer les fichiers de la base de données")
+		return fmt.Errorf("Impossible de déplacer les fichiers dans la corbeille")
 	}
 	var totalSize int64
 	for _, f := range files {
 		totalSize += f.Size
 	}
 	if _, err := tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
-		Set("storage_used = storage_used - ?", totalSize).
+		Set("storage_used = GREATEST(storage_used - ?, 0)", totalSize).
 		Where(queryUserIDEq, userID).
 		Exec(c); err != nil {
 		return fmt.Errorf("Impossible de mettre à jour le quota de stockage")
@@ -94,8 +81,6 @@ func BulkDeleteHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	bulkDeleteS3Objects(c, userID, filesToDelete)
-
 	if err := bulkDeleteInTx(c, tx, userID, req.FileIDs, filesToDelete); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -116,5 +101,8 @@ func BulkDeleteHandler(c *gin.Context, db *bun.DB) {
 	}
 
 	notifyStorageUpdate(c.Request.Context(), db, userID)
+	for _, file := range filesToDelete {
+		notifyFileEvent(c.Request.Context(), db, userID, "file_deleted", file.ID, file.Path)
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Fichiers supprimés avec succès"})
 }

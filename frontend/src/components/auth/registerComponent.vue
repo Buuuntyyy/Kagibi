@@ -144,6 +144,7 @@
     </div>
     <div class="actions">
       <button @click="copyCode" class="btn-secondary">Copier le code</button>
+      <button @click="downloadKit" class="btn-secondary">Télécharger le kit de récupération</button>
 
       <div class="copy-confirm">
         <input
@@ -207,6 +208,7 @@ import { useRouter } from 'vue-router'
 import AvatarSelector from '../AvatarSelector.vue'
 import PasswordCriteria from './PasswordCriteria.vue'
 import { checkPasswordCriteria } from '../../utils/passwordStrength'
+import { downloadRecoveryKit } from '../../utils/recoveryKit'
 
 const username = ref('')
 const email = ref('')
@@ -276,6 +278,10 @@ const copyCode = async () => {
   } catch {
     error.value = 'Impossible de copier le code. Copiez-le manuellement.'
   }
+}
+
+const downloadKit = () => {
+  downloadRecoveryKit({ code: recoveryCode.value, email: email.value })
 }
 
 // Focus trap for recovery display section (UX-DR13)

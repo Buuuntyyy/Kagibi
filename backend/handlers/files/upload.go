@@ -50,9 +50,34 @@ type UploadRequest struct {
 // Delegates URL-decoding and ".." checks to utils.SanitizeVirtualPath so that
 // encoded variants (%2e%2e, %252e%252e, …) are also rejected.
 func validatePath(inputPath string) (string, error) {
-	// Reject raw null bytes / CRLF before any decoding
-	for _, c := range []string{"\x00", "\n", "\r"} {
-		if strings.Contains(inputPath, c) {
+	// Normalize separators and check traversal early
+	rawPath := strings.ReplaceAll(inputPath, "\\", "/")
+	if strings.Contains(rawPath, "..") {
+		return "", fmt.Errorf(errPathTraversal)
+	}
+
+	// 1. Clean the path using POSIX rules (virtual paths)
+	cleanPath := path.Clean(rawPath)
+
+	// 2. Check if it starts with ".."
+	if strings.HasPrefix(cleanPath, "..") {
+		return "", fmt.Errorf(errPathTraversal)
+	}
+
+	// 3. Check if it contains ".."
+	if strings.Contains(cleanPath, "..") {
+		return "", fmt.Errorf(errPathTraversal)
+	}
+
+	// 4. Ensure it starts with "/"
+	if !strings.HasPrefix(cleanPath, "/") {
+		cleanPath = "/" + cleanPath
+	}
+
+	// 5. Check for forbidden characters
+	invalidChars := []string{"\x00", "\n", "\r"}
+	for _, char := range invalidChars {
+		if strings.Contains(cleanPath, char) {
 			return "", fmt.Errorf("invalid characters in path")
 		}
 	}
@@ -168,9 +193,11 @@ func parseUploadRequest(c *gin.Context, userID string) (UploadRequest, error) {
 func checkStorageQuota(ctx context.Context, db *bun.DB, userID string, size int64) error {
 	planState, err := pkg.FindUserPlanByUserID(db, userID)
 	if err != nil {
-		return nil // Skip check if user load fails (handled later)
+		// SÉCURITÉ : fail-closed. Autoriser l'upload quand le plan ne peut être chargé
+		// permettrait de contourner le quota en provoquant l'erreur de chargement.
+		return fmt.Errorf("quota check unavailable")
 	}
-	if planState.StorageUsed+size > planState.StorageLimit {
+	if planState.StorageLimit > 0 && planState.StorageUsed+size > planState.StorageLimit {
 		return fmt.Errorf("Storage limit exceeded")
 	}
 	return nil
@@ -182,7 +209,17 @@ func handleChunkAssembly(fileHeader *multipart.FileHeader, userID string, req Up
 		return "", fmt.Errorf("Failed to create temp directory")
 	}
 
-	tempFilePath := filepath.Join(tempDir, fileHeader.Filename+"_partial")
+	// SÉCURITÉ : le nom de fichier multipart est contrôlé par le client. Neutraliser
+	// toute traversée de répertoire avant de l'utiliser comme chemin sur disque.
+	safeName := filepath.Base(filepath.FromSlash(fileHeader.Filename))
+	if safeName == "." || safeName == ".." || safeName == "" || strings.ContainsAny(safeName, `/\`) {
+		return "", fmt.Errorf("invalid filename")
+	}
+	tempFilePath := filepath.Join(tempDir, safeName+"_partial")
+	// Défense en profondeur : confirmer que le chemin résolu reste dans tempDir.
+	if rel, err := filepath.Rel(tempDir, tempFilePath); err != nil || strings.HasPrefix(rel, "..") {
+		return "", fmt.Errorf("invalid filename")
+	}
 
 	flags := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 	if req.IsChunked && req.ChunkIndex > 0 {
@@ -223,13 +260,19 @@ func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, 
 	}
 	defer tx.Rollback()
 
-	// 3. Quota Check
+	// 3. Quota Check (fast-fail avant tout travail ; l'enforcement autoritaire et
+	//    atomique du quota se fait dans upsertFileInDB pour fermer la fenêtre TOCTOU).
 	if err := checkStorageQuota(ctx, db, req.UserID, fileSize); err != nil {
 		return nil, err
 	}
 
-	// 4. Enqueue S3 Task
-	fullPathDB := path.Join(req.Path, fileHeader.Filename)
+	// 4. Compute destination path
+	// SÉCURITÉ : ne conserver que le nom de base du fichier (le client contrôle Filename).
+	safeName := path.Base(filepath.ToSlash(fileHeader.Filename))
+	if safeName == "." || safeName == ".." || safeName == "" {
+		return nil, fmt.Errorf("invalid filename")
+	}
+	fullPathDB := path.Join(req.Path, safeName)
 	fullPathDB = path.Clean(fullPathDB)
 	if !strings.HasPrefix(fullPathDB, "/") {
 		fullPathDB = "/" + fullPathDB
@@ -237,22 +280,10 @@ func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, 
 
 	s3Key := fmt.Sprintf("users/%s%s", req.UserID, fullPathDB)
 
-	task := workers.S3Task{
-		Type:        workers.TaskUpload,
-		UserID:      req.UserID,
-		SrcKey:      tempFilePath,
-		DestKey:     s3Key,
-		ContentType: fileHeader.Header.Get("Content-Type"),
-	}
-
-	if err := workers.EnqueueTask(redisClient, task); err != nil {
-		log.Printf("Upload Handler ERROR: Failed to enqueue task: %v", err)
-		return nil, fmt.Errorf("Failed to enqueue upload task")
-	}
-
-	// 5. Update DB
+	// 5. Update DB — réserve le quota de façon atomique. Doit précéder l'enqueue S3
+	//    pour qu'un dépassement de quota n'engendre pas d'upload orphelin sur S3.
 	fileRecord := &pkg.File{
-		Name:         fileHeader.Filename,
+		Name:         safeName,
 		Path:         fullPathDB,
 		Size:         fileSize,
 		MimeType:     fileHeader.Header.Get("Content-Type"),
@@ -272,6 +303,20 @@ func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, 
 		fmt.Printf("Error inserting share keys: %v\n", err)
 	}
 
+	// 7. Enqueue S3 Task (après réservation du quota, avant commit)
+	task := workers.S3Task{
+		Type:        workers.TaskUpload,
+		UserID:      req.UserID,
+		SrcKey:      tempFilePath,
+		DestKey:     s3Key,
+		ContentType: fileHeader.Header.Get("Content-Type"),
+	}
+
+	if err := workers.EnqueueTask(redisClient, task); err != nil {
+		log.Printf("Upload Handler ERROR: Failed to enqueue task: %v", err)
+		return nil, fmt.Errorf("Failed to enqueue upload task")
+	}
+
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("Transaction commit failed")
 	}
@@ -284,8 +329,32 @@ func finalizeUpload(ctx context.Context, db *bun.DB, redisClient *redis.Client, 
 
 	// 7. Notify Storage Update via Supabase Realtime
 	notifyStorageUpdate(ctx, db, req.UserID)
+	notifyFileEvent(ctx, db, req.UserID, "file_updated", fileRecord.ID, fileRecord.Path)
 
 	return fileRecord, nil
+}
+
+// notifyFileEvent emits a granular realtime event for a file/folder change (create,
+// update, delete, move) so that desktop sync clients can trigger a fast reconciliation
+// instead of waiting for their periodic poll (cf. section 0.2 du plan de sync).
+func notifyFileEvent(ctx context.Context, db *bun.DB, userID, eventType string, resourceID int64, path string) {
+	if err := pkg.EmitRealtimeEvent(ctx, db, userID, eventType, map[string]any{
+		"id":   resourceID,
+		"path": path,
+	}); err != nil {
+		log.Printf("Failed to emit %s event: %v", eventType, err)
+	}
+}
+
+// notifyMoveEvent emits a granular realtime event for a move/rename (old_path -> new_path).
+func notifyMoveEvent(ctx context.Context, db *bun.DB, userID, eventType string, resourceID int64, oldPath, newPath string) {
+	if err := pkg.EmitRealtimeEvent(ctx, db, userID, eventType, map[string]any{
+		"id":       resourceID,
+		"old_path": oldPath,
+		"new_path": newPath,
+	}); err != nil {
+		log.Printf("Failed to emit %s event: %v", eventType, err)
+	}
 }
 
 func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) (int64, error) {
@@ -300,7 +369,7 @@ func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) 
 	// Atomic upsert: the UNIQUE index uq_files_user_path guarantees no duplicates
 	// even under concurrent imports (CONCURRENT_FILES=3).
 	_, err := tx.NewInsert().Model(file).
-		On("CONFLICT (user_id, path) DO UPDATE").
+		On("CONFLICT (user_id, path) WHERE deleted_at IS NULL DO UPDATE").
 		Set("name = EXCLUDED.name").
 		Set("size = EXCLUDED.size").
 		Set("mime_type = EXCLUDED.mime_type").
@@ -309,6 +378,7 @@ func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) 
 		Set("preview_id = EXCLUDED.preview_id").
 		Set("is_preview = EXCLUDED.is_preview").
 		Set("synced = EXCLUDED.synced").
+		Set("updated_at = current_timestamp").
 		Exec(ctx)
 	if err != nil {
 		log.Printf("[UpsertFile] ERROR upserting file: %v", err)
@@ -317,6 +387,30 @@ func upsertFileInDB(ctx context.Context, tx bun.Tx, file *pkg.File, size int64) 
 	log.Printf("[UpsertFile] Successfully upserted file with ID: %d", file.ID)
 
 	delta := size - oldSize
+
+	// SÉCURITÉ (TOCTOU) : réserver le quota de façon atomique. Pour un delta positif,
+	// n'appliquer l'incrément que si le résultat reste sous la limite. Le verrou de ligne
+	// Postgres sérialise les uploads concurrents : le second UPDATE ré-évalue la garde
+	// contre la valeur déjà committée par le premier, empêchant tout dépassement collectif.
+	if delta > 0 {
+		res, uErr := tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
+			Set("storage_used = storage_used + ?", delta).
+			Where("user_id = ?", file.UserID).
+			Where("(storage_limit <= 0 OR storage_used + ? <= storage_limit)", delta).
+			Exec(ctx)
+		if uErr != nil {
+			log.Printf("[UpsertFile] ERROR updating storage_used: %v", uErr)
+			return 0, uErr
+		}
+		// 0 ligne affectée ⇒ la garde de quota a échoué (la présence de la ligne user_plans
+		// est déjà garantie par checkStorageQuota, fail-closed, en amont).
+		if n, _ := res.RowsAffected(); n == 0 {
+			return 0, fmt.Errorf("Storage limit exceeded")
+		}
+		return delta, nil
+	}
+
+	// delta <= 0 : fichier de taille égale ou inférieure — toujours autorisé, sans underflow.
 	_, err = tx.NewUpdate().Model((*pkg.UserPlan)(nil)).
 		Set("storage_used = GREATEST(storage_used + ?, 0)", delta).
 		Where("user_id = ?", file.UserID).Exec(ctx)

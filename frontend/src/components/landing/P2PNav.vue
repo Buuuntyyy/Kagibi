@@ -5,7 +5,7 @@
   <nav class="landing-nav">
     <div class="nav-container">
       <a href="https://kagibi.cloud" class="nav-logo">
-        <img src="/Logo.png" alt="Kagibi Logo" width="40rem"/>
+        <img src="/Logo.png" alt="Kagibi Logo" width="40rem" decoding="async"/>
         <span>Kagibi</span>
       </a>
 

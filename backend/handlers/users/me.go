@@ -18,20 +18,19 @@ import (
 // - Partage (public_key, encrypted_private_key, friend_code, id)
 // - Affichage UI (name, email, avatar_url, created_at)
 type UserResponse struct {
-	ID                  string    `json:"id"`
-	Name                string    `json:"name"`
-	Email               string    `json:"email"`
-	AvatarURL           string    `json:"avatar_url"`
-	StorageUsed         int64     `json:"storage_used"`
-	StorageLimit        int64     `json:"storage_limit"`
-	Plan                string    `json:"plan"`
-	P2PMaxExchanges     int       `json:"p2p_max_exchanges"`
-	P2PExchangesUsed    int       `json:"p2p_exchanges_used"`
-	FriendCode          string    `json:"friend_code"`
-	PublicKey           string    `json:"public_key"`
-	EncryptedPrivateKey string    `json:"encrypted_private_key"`
-	EncryptFilenames    bool      `json:"encrypt_filenames"`
-	CreatedAt           time.Time `json:"created_at"`
+	ID                  string     `json:"id"`
+	Name                string     `json:"name"`
+	Email               string     `json:"email"`
+	AvatarURL           string     `json:"avatar_url"`
+	StorageUsed         int64      `json:"storage_used"`
+	StorageLimit        int64      `json:"storage_limit"`
+	Plan                string     `json:"plan"`
+	FriendCode          string     `json:"friend_code"`
+	PublicKey           string     `json:"public_key"`
+	EncryptedPrivateKey string     `json:"encrypted_private_key"`
+	EncryptFilenames    bool       `json:"encrypt_filenames"`
+	CreatedAt           time.Time  `json:"created_at"`
+	RecoveryVerifiedAt  *time.Time `json:"recovery_verified_at"`
 }
 
 func MeHandler(c *gin.Context, db *bun.DB) {
@@ -56,21 +55,14 @@ func MeHandler(c *gin.Context, db *bun.DB) {
 		return
 	}
 
-	activeP2P, _ := pkg.CountUserActiveP2PExchanges(db, userID)
-
 	planState, err := pkg.FindUserPlanByUserID(db, userID)
 	if err != nil || planState == nil {
 		planState = &pkg.UserPlan{
-			UserID:           user.ID,
-			Plan:             pkg.PlanFree,
-			StorageLimit:     pkg.StorageFree,
-			StorageUsed:      0,
-			P2PMaxExchanges:  pkg.P2PLimitFree,
-			P2PExchangesUsed: activeP2P,
+			UserID:       user.ID,
+			Plan:         pkg.PlanFree,
+			StorageLimit: pkg.StorageFree,
+			StorageUsed:  0,
 		}
-		_ = pkg.UpsertUserPlan(db, planState)
-	} else {
-		planState.P2PExchangesUsed = activeP2P
 		_ = pkg.UpsertUserPlan(db, planState)
 	}
 
@@ -84,13 +76,12 @@ func MeHandler(c *gin.Context, db *bun.DB) {
 		StorageUsed:         planState.StorageUsed,
 		StorageLimit:        planState.StorageLimit,
 		Plan:                planState.Plan,
-		P2PMaxExchanges:     planState.P2PMaxExchanges,
-		P2PExchangesUsed:    planState.P2PExchangesUsed,
 		FriendCode:          user.FriendCode,
 		PublicKey:           user.PublicKey,
 		EncryptedPrivateKey: user.EncryptedPrivateKey,
 		EncryptFilenames:    user.EncryptFilenames,
 		CreatedAt:           user.CreatedAt,
+		RecoveryVerifiedAt:  user.RecoveryVerifiedAt,
 	}
 
 	c.JSON(http.StatusOK, response)

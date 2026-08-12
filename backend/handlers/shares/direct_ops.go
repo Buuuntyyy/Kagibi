@@ -155,7 +155,8 @@ func DeleteFileFromDirectShareHandler(c *gin.Context, db *bun.DB) {
 		log.Printf("S3 delete error for %s (continuing): %v", s3Key, err)
 	}
 
-	if _, err := db.NewDelete().Model((*pkg.File)(nil)).Where("id = ?", fileID).Exec(c.Request.Context()); err != nil {
+	if _, err := db.NewDelete().Model((*pkg.File)(nil)).Where("id = ?", fileID).
+		WhereAllWithDeleted().ForceDelete().Exec(c.Request.Context()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete file"})
 		return
 	}
@@ -237,6 +238,7 @@ func DeleteFolderFromDirectShareHandler(c *gin.Context, db *bun.DB) {
 
 	if _, err := tx.NewDelete().Model((*pkg.File)(nil)).
 		Where("user_id = ? AND path LIKE ?", rootFolder.UserID, folder.Path+"/%").
+		WhereAllWithDeleted().ForceDelete().
 		Exec(c.Request.Context()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete files"})
 		return
@@ -244,6 +246,7 @@ func DeleteFolderFromDirectShareHandler(c *gin.Context, db *bun.DB) {
 
 	if _, err := tx.NewDelete().Model((*pkg.Folder)(nil)).
 		Where("user_id = ? AND path LIKE ?", rootFolder.UserID, folder.Path+"/%").
+		WhereAllWithDeleted().ForceDelete().
 		Exec(c.Request.Context()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete subfolders"})
 		return
@@ -251,6 +254,7 @@ func DeleteFolderFromDirectShareHandler(c *gin.Context, db *bun.DB) {
 
 	if _, err := tx.NewDelete().Model((*pkg.Folder)(nil)).
 		Where("id = ?", folderID).
+		WhereAllWithDeleted().ForceDelete().
 		Exec(c.Request.Context()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete folder"})
 		return

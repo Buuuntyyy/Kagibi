@@ -5,9 +5,11 @@ package auth
 
 import (
 	"context"
-	"crypto/hmac"
+	"encoding/base64"
+	"encoding/hex"
 	"kagibi/backend/pkg"
 	"kagibi/backend/pkg/authprovider"
+	"kagibi/backend/pkg/emailcrypto"
 	"log"
 	"net/http"
 	"strconv"
@@ -39,8 +41,16 @@ func RecoveryInitHandler(c *gin.Context, db *bun.DB) {
 
 	user, err := pkg.FindUserByEmail(db, req.Email)
 	if err != nil {
-		// Don't reveal whether the user exists
-		c.JSON(http.StatusOK, gin.H{"message": "If the account exists, recovery data has been sent."})
+		// Return decoy recovery material for unknown accounts. The response is
+		// byte-for-byte shaped like a real one (hex salt of 16 bytes, base64url
+		// blob of 60 bytes) and the decoy blob fails client-side decryption exactly
+		// like a wrong recovery code — so this endpoint cannot be used to enumerate
+		// which emails are registered. Decoys are deterministic per email (keyed by
+		// the server secret) so repeated queries cannot expose them either.
+		c.JSON(http.StatusOK, gin.H{
+			"encrypted_master_key_recovery": base64.RawURLEncoding.EncodeToString(emailcrypto.Decoy(req.Email, "recovery-blob", 60)),
+			"salt":                          hex.EncodeToString(emailcrypto.Decoy(req.Email, "recovery-salt", 16)),
+		})
 		return
 	}
 
@@ -59,12 +69,16 @@ func RecoveryFinishHandler(c *gin.Context, db *bun.DB, provider authprovider.Aut
 
 	user, err := pkg.FindUserByEmail(db, req.Email)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		// Return the same error as an invalid code so this endpoint cannot be used
+		// to enumerate which accounts exist.
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid recovery code"})
 		return
 	}
 
-	// Constant-time comparison to prevent timing side-channel on recovery hash.
-	if !hmac.Equal([]byte(user.RecoveryHash), []byte(req.RecoveryHash)) {
+	// Constant-time verification of the recovery hash, transparently supporting
+	// legacy (pre-hash) verifiers which are upgraded to the hashed form below.
+	verified, needsUpgrade := verifyRecoveryHash(user.RecoveryHash, req.RecoveryHash)
+	if !verified {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid recovery code"})
 		return
 	}
@@ -98,8 +112,15 @@ func RecoveryFinishHandler(c *gin.Context, db *bun.DB, provider authprovider.Aut
 	// Update the encrypted crypto keys on the backend
 	user.Salt = req.NewSalt
 	user.EncryptedMasterKey = req.NewEncryptedMasterKey
+	columns := []string{"salt", "encrypted_master_key"}
+	if needsUpgrade {
+		// Opportunistically rewrite a legacy plaintext verifier in the hashed
+		// at-rest format now that we have verified the code.
+		user.RecoveryHash = hashRecoveryVerifier(req.RecoveryHash)
+		columns = append(columns, "recovery_hash")
+	}
 
-	_, err = db.NewUpdate().Model(user).Column("salt", "encrypted_master_key").Where("id = ?", user.ID).Exec(c.Request.Context())
+	_, err = db.NewUpdate().Model(user).Column(columns...).Where("id = ?", user.ID).Exec(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
 		return

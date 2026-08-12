@@ -59,6 +59,10 @@ func Migrate(db *bun.DB) error {
 	}
 	migrateChunkSizeColumns(ctx, db)
 	migrateFolderSyncedColumn(ctx, db)
+	migratePersonalTrashColumns(ctx, db)
+	migrateFileRequestColumns(ctx, db)
+	migrateRecoveryKitColumn(ctx, db)
+	migrateRecoveryRotationChallenges(ctx, db)
 
 	if err := migrateComments(ctx, db); err != nil {
 		return err
@@ -78,6 +82,9 @@ func Migrate(db *bun.DB) error {
 		return err
 	}
 	if err := migrateOrgGroupKeys(ctx, db); err != nil {
+		return err
+	}
+	if err := migrateSubscriptionPlans(ctx, db); err != nil {
 		return err
 	}
 
@@ -120,6 +127,77 @@ func migrateOrgGroupKeys(ctx context.Context, db *bun.DB) error {
 		`ALTER TABLE org_folders ADD COLUMN IF NOT EXISTS group_id BIGINT REFERENCES org_groups(id) ON DELETE SET NULL`,
 	); err != nil {
 		log.Printf("Warning: migrateOrgGroupKeys add group_id to org_folders: %v", err)
+	}
+
+	return nil
+}
+
+func migrateSubscriptionPlans(ctx context.Context, db *bun.DB) error {
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS subscription_plans (
+		code             VARCHAR     PRIMARY KEY,
+		name             VARCHAR     NOT NULL,
+		price_ttc_cents  INTEGER     NOT NULL DEFAULT 0,
+		currency         VARCHAR(3)  NOT NULL DEFAULT 'EUR',
+		storage_bytes    BIGINT      NOT NULL DEFAULT 0,
+		billing_model    VARCHAR     NOT NULL DEFAULT 'flat',
+		features         JSONB       NOT NULL DEFAULT '[]',
+		is_active        BOOLEAN     NOT NULL DEFAULT true,
+		sort_order       INTEGER     NOT NULL DEFAULT 0,
+		created_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at       TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	if err != nil {
+		return fmt.Errorf("migrateSubscriptionPlans create table: %w", err)
+	}
+
+	// Add billing_model for existing installs that predate this column
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS billing_model VARCHAR NOT NULL DEFAULT 'flat'`,
+	); err != nil {
+		log.Printf("Warning: migrateSubscriptionPlans add billing_model: %v", err)
+	}
+
+	// Seed / update plans — DO UPDATE so re-runs refresh the catalogue.
+	_, err = db.ExecContext(ctx, `INSERT INTO subscription_plans
+		(code, name, price_ttc_cents, currency, storage_bytes, billing_model, features, is_active, sort_order)
+	VALUES
+		('free',
+		 'Gratuit',
+		 0, 'EUR', 21474836480, 'flat',
+		 '["20 Go de stockage","Partage de fichiers","Chiffrement de bout en bout","P2P illimité"]',
+		 true, 0),
+		('personal',
+		 'Personnel',
+		 400, 'EUR', 214748364800, 'flat',
+		 '["200 Go de stockage","Partage de fichiers","Chiffrement de bout en bout","Versionning de fichiers","P2P illimité"]',
+		 true, 1),
+		('business',
+		 'Business',
+		 1400, 'EUR', 1099511627776, 'flat',
+		 '["1 To de stockage","Partage de fichiers","Chiffrement de bout en bout","Versionning de fichiers","Organisations (quota inclus)","Support prioritaire"]',
+		 true, 2),
+		('payg',
+		 'Pay as you go',
+		 1500, 'EUR', -1, 'payg',
+		 '["Stockage à la demande (15 €/To/mois)","Facturation au Go par heure","Partage de fichiers","Chiffrement de bout en bout","Versionning de fichiers","Organisations (facturation au Go par heure)"]',
+		 true, 3)
+	ON CONFLICT (code) DO UPDATE SET
+		name             = EXCLUDED.name,
+		price_ttc_cents  = EXCLUDED.price_ttc_cents,
+		storage_bytes    = EXCLUDED.storage_bytes,
+		billing_model    = EXCLUDED.billing_model,
+		features         = EXCLUDED.features,
+		sort_order       = EXCLUDED.sort_order,
+		updated_at       = CURRENT_TIMESTAMP`)
+	if err != nil {
+		log.Printf("Warning: migrateSubscriptionPlans seed: %v", err)
+	}
+
+	// Remove plans that no longer exist in the catalogue
+	_, err = db.ExecContext(ctx,
+		`DELETE FROM subscription_plans WHERE code NOT IN ('free','personal','business','payg')`)
+	if err != nil {
+		log.Printf("Warning: migrateSubscriptionPlans cleanup: %v", err)
 	}
 
 	return nil
@@ -169,6 +247,7 @@ func migrateAuthUsers(ctx context.Context, db *bun.DB) error {
 		`ALTER TABLE "auth_users" ADD COLUMN IF NOT EXISTS "totp_friendly_name"   VARCHAR`,
 		`ALTER TABLE "auth_users" ADD COLUMN IF NOT EXISTS "totp_last_code"       VARCHAR`,
 		`ALTER TABLE "auth_users" ADD COLUMN IF NOT EXISTS "totp_last_code_at"    TIMESTAMPTZ`,
+		`ALTER TABLE "auth_users" ADD COLUMN IF NOT EXISTS "totp_last_step"       BIGINT NOT NULL DEFAULT 0`,
 		`ALTER TABLE "auth_users" ADD COLUMN IF NOT EXISTS "totp_failed_attempts" INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE "auth_users" ADD COLUMN IF NOT EXISTS "totp_locked_until"    TIMESTAMPTZ`,
 	} {
@@ -574,17 +653,24 @@ func migrateUserSettings(ctx context.Context, db *bun.DB) error {
 
 	// --- USER PLANS ---
 	_, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "user_plans" (
-		"user_id"             VARCHAR PRIMARY KEY,
-		"plan"                VARCHAR NOT NULL DEFAULT 'free',
-		"storage_limit"       BIGINT NOT NULL DEFAULT 21474836480,
-		"storage_used"        BIGINT NOT NULL DEFAULT 0,
-		"p2p_max_exchanges"   INTEGER NOT NULL DEFAULT 5,
-		"p2p_exchanges_used"  INTEGER NOT NULL DEFAULT 0,
-		"created_at"          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		"updated_at"          TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		"user_id"      VARCHAR PRIMARY KEY,
+		"plan"         VARCHAR NOT NULL DEFAULT 'free',
+		"storage_limit" BIGINT NOT NULL DEFAULT 21474836480,
+		"storage_used"  BIGINT NOT NULL DEFAULT 0,
+		"created_at"   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		"updated_at"   TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);`)
 	if err != nil {
 		log.Printf("Warning: failed to create user_plans table: %v", err)
+	}
+
+	// Drop legacy P2P quota columns (no longer used — P2P is unlimited for all plans)
+	for _, col := range []string{"p2p_max_exchanges", "p2p_exchanges_used"} {
+		if _, err := db.ExecContext(ctx,
+			`ALTER TABLE user_plans DROP COLUMN IF EXISTS "`+col+`"`,
+		); err != nil {
+			log.Printf("Warning: failed to drop %s from user_plans: %v", col, err)
+		}
 	}
 
 	_, err = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_user_plans_plan ON user_plans (plan);`)
@@ -592,9 +678,9 @@ func migrateUserSettings(ctx context.Context, db *bun.DB) error {
 		log.Printf("Warning: failed to create idx_user_plans_plan: %v", err)
 	}
 
-	// Backfill missing user_plans rows from profiles (best-effort; profiles may not have legacy plan columns)
-	_, err = db.ExecContext(ctx, `INSERT INTO user_plans (user_id, plan, storage_limit, storage_used, p2p_max_exchanges, p2p_exchanges_used)
-		SELECT p.id, 'free', 21474836480, 0, 5, 0
+	// Backfill missing user_plans rows from profiles
+	_, err = db.ExecContext(ctx, `INSERT INTO user_plans (user_id, plan, storage_limit, storage_used)
+		SELECT p.id, 'free', 21474836480, 0
 		FROM profiles p
 		ON CONFLICT (user_id) DO NOTHING;`)
 	if err != nil {
@@ -612,6 +698,8 @@ func migrateUserSettings(ctx context.Context, db *bun.DB) error {
 		"require_mfa_on_login"               BOOLEAN NOT NULL DEFAULT false,
 		"require_mfa_on_destructive_actions" BOOLEAN NOT NULL DEFAULT false,
 		"require_mfa_on_downloads"           BOOLEAN NOT NULL DEFAULT false,
+		"require_mfa_on_email_change"        BOOLEAN NOT NULL DEFAULT false,
+		"require_mfa_on_recovery_change"     BOOLEAN NOT NULL DEFAULT false,
 		"created_at"                         TIMESTAMPTZ NOT NULL DEFAULT now(),
 		"updated_at"                         TIMESTAMPTZ NOT NULL DEFAULT now()
 	);`)
@@ -619,12 +707,16 @@ func migrateUserSettings(ctx context.Context, db *bun.DB) error {
 		log.Printf("Warning: failed to create user_security_settings table: %v", err)
 	}
 
-	// Add created_at / updated_at to existing user_security_settings installs that predate this column
+	// Add columns to existing user_security_settings installs that predate them.
+	// require_mfa_on_email_change was referenced by code but never created by any
+	// migration — added here so the email gate actually works on all installs.
 	for _, col := range []string{
 		`ALTER TABLE "user_security_settings" DROP CONSTRAINT IF EXISTS "user_security_settings_user_id_fkey"`,
 		`ALTER TABLE "user_plans" DROP CONSTRAINT IF EXISTS "user_plans_user_id_fkey"`,
 		`ALTER TABLE "user_security_settings" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMPTZ NOT NULL DEFAULT now()`,
 		`ALTER TABLE "user_security_settings" ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now()`,
+		`ALTER TABLE "user_security_settings" ADD COLUMN IF NOT EXISTS "require_mfa_on_email_change" BOOLEAN NOT NULL DEFAULT false`,
+		`ALTER TABLE "user_security_settings" ADD COLUMN IF NOT EXISTS "require_mfa_on_recovery_change" BOOLEAN NOT NULL DEFAULT false`,
 	} {
 		if _, err := db.ExecContext(ctx, col); err != nil {
 			log.Printf("Warning: failed to add timestamp column to user_security_settings: %v", err)
@@ -958,6 +1050,8 @@ func migrateFilesUniqueIndex(ctx context.Context, db *bun.DB) error {
 		WHERE a.id < b.id
 		  AND a.user_id = b.user_id
 		  AND a.path = b.path
+		  AND a.deleted_at IS NULL
+		  AND b.deleted_at IS NULL
 	`); err != nil {
 		log.Printf("Warning: migrateFilesUniqueIndex dedup: %v", err)
 	}
@@ -968,6 +1062,80 @@ func migrateFilesUniqueIndex(ctx context.Context, db *bun.DB) error {
 		return fmt.Errorf("migrateFilesUniqueIndex: %w", err)
 	}
 	return nil
+}
+
+// migratePersonalTrashColumns adds soft-delete columns to files/folders (personal
+// trash, same model as the org trash) and converts uq_files_user_path into a
+// PARTIAL unique index (WHERE deleted_at IS NULL) so a trashed file no longer
+// blocks re-uploading at the same path.
+func migratePersonalTrashColumns(ctx context.Context, db *bun.DB) {
+	for _, stmt := range []string{
+		`ALTER TABLE "files"   ADD COLUMN IF NOT EXISTS "deleted_at"  TIMESTAMPTZ`,
+		`ALTER TABLE "files"   ADD COLUMN IF NOT EXISTS "delete_root" BOOLEAN NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE "folders" ADD COLUMN IF NOT EXISTS "deleted_at"  TIMESTAMPTZ`,
+		`ALTER TABLE "folders" ADD COLUMN IF NOT EXISTS "delete_root" BOOLEAN NOT NULL DEFAULT FALSE`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migratePersonalTrashColumns: %v", err)
+		}
+	}
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_files_trash   ON files   (user_id, deleted_at) WHERE deleted_at IS NOT NULL AND delete_root = TRUE`)
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_folders_trash ON folders (user_id, deleted_at) WHERE deleted_at IS NOT NULL AND delete_root = TRUE`)
+
+	// Convert the full unique index into a partial one (same pattern as
+	// migrateEnsurePartialOrgIndexes). The upload upsert targets this index with
+	// ON CONFLICT (user_id, path) WHERE deleted_at IS NULL.
+	var isPartial bool
+	_ = db.QueryRowContext(ctx,
+		`SELECT indpred IS NOT NULL FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = ?`, "uq_files_user_path",
+	).Scan(&isPartial)
+	if !isPartial {
+		if _, err := db.ExecContext(ctx, `DROP INDEX IF EXISTS uq_files_user_path`); err != nil {
+			log.Printf("Warning: migratePersonalTrashColumns drop uq_files_user_path: %v", err)
+		} else if _, err := db.ExecContext(ctx,
+			`CREATE UNIQUE INDEX uq_files_user_path ON files (user_id, path) WHERE deleted_at IS NULL`,
+		); err != nil {
+			log.Printf("Warning: migratePersonalTrashColumns create uq_files_user_path: %v", err)
+		}
+	}
+}
+
+// migrateRecoveryKitColumn adds the recovery-kit verification timestamp to profiles.
+func migrateRecoveryKitColumn(ctx context.Context, db *bun.DB) {
+	if _, err := db.ExecContext(ctx,
+		`ALTER TABLE "profiles" ADD COLUMN IF NOT EXISTS "recovery_verified_at" TIMESTAMPTZ`,
+	); err != nil {
+		log.Printf("Warning: migrateRecoveryKitColumn: %v", err)
+	}
+}
+
+// migrateRecoveryRotationChallenges creates the table backing the email confirmation
+// code required before a recovery-code rotation takes effect (cf.
+// handlers/auth/recovery_kit.go RequestRecoveryRotationCodeHandler).
+func migrateRecoveryRotationChallenges(ctx context.Context, db *bun.DB) {
+	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS "recovery_rotation_challenges" (
+		"id"         BIGSERIAL PRIMARY KEY,
+		"user_id"    VARCHAR     NOT NULL,
+		"code_hash"  VARCHAR     NOT NULL,
+		"expires_at" TIMESTAMPTZ NOT NULL,
+		"used_at"    TIMESTAMPTZ,
+		"created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		log.Printf("Warning: migrateRecoveryRotationChallenges: %v", err)
+	}
+	_, _ = db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_recovery_rotation_challenges_user ON recovery_rotation_challenges (user_id)`)
+}
+
+// migrateFileRequestColumns adds the upload-only "file request" columns to share_links.
+func migrateFileRequestColumns(ctx context.Context, db *bun.DB) {
+	for _, stmt := range []string{
+		`ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "upload_only"   BOOLEAN NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "request_label" TEXT    NOT NULL DEFAULT ''`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			log.Printf("Warning: migrateFileRequestColumns: %v", err)
+		}
+	}
 }
 
 // migrateFolderSyncedColumn ajoute la colonne synced à la table folders.
