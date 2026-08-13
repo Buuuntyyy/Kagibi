@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.30.0 — 2026-08-13
+
+### Nouvelles fonctionnalités
+
+- **Demandes de fichiers par e-mail** : le créateur d'un lien de dépôt peut désormais l'envoyer directement par e-mail au destinataire, avec choix de la langue (français/anglais), sur le même modèle que l'invitation de transfert P2P.
+
+### Corrections
+
+- **Déchiffrement des fichiers déposés** : le propriétaire d'un dossier ne pouvait pas prévisualiser ni télécharger les fichiers reçus via un lien de demande de fichiers (« Ce fichier ne peut pas être déchiffré : clé manquante »). La récupération de la clé côté serveur couvre désormais aussi le cas d'un dépôt anonyme (clé enveloppée avec une clé dérivée du token du lien), en plus du cas déjà géré d'un ami déposant dans un dossier partagé.
+- **Persistance de la clé après récupération** : dès la première ouverture d'un fichier déposé par un tiers, sa clé est ré-enveloppée avec la clé maîtresse du propriétaire et enregistrée durablement, afin qu'elle reste déchiffrable même après révocation du lien de dépôt ou du partage d'origine.
+- **Avertissement à la révocation** : la confirmation de révocation d'un lien de demande de fichiers signale désormais que les fichiers déposés jamais ouverts ni prévisualisés deviendront définitivement illisibles.
+
+---
+
 ## v2.29.0 — 2026-08-10
 
 ### Nouvelles fonctionnalités

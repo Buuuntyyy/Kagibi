@@ -326,6 +326,7 @@ func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	filesG.POST("/batch-presign", middleware.RequireMFAForAction(db, "download"), func(c *gin.Context) { files.BatchPresignDownloadHandler(c, db) })
 	filesG.POST("/selection-tree", func(c *gin.Context) { files.GetSelectionTreeHandler(c, db) })
 	filesG.GET("/:id/folder-key", func(c *gin.Context) { files.GetFileFolderKeyHandler(c, db) })
+	filesG.POST("/:id/persist-key", func(c *gin.Context) { files.PersistFileKeyHandler(c, db) })
 	// Version history routes (use :id to match /:id/folder-key param name at same level)
 	filesG.GET("/:id/versions", func(c *gin.Context) { files.ListVersionsHandler(c, db) })
 	filesG.POST("/:id/versions/:versionID/restore", func(c *gin.Context) { files.RestoreVersionHandler(c, db) })

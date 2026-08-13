@@ -993,6 +993,23 @@ export const useFileStore = defineStore('files', {
       return { file, targetFileId, targetEncryptedKey, finalMimeType };
     },
 
+    /**
+     * Wraps a recovered file key with the owner's master key and persists it server-side
+     * (POST /files/:id/persist-key), so future access no longer depends on the folder/share
+     * key chain it was originally recovered through. Best-effort and non-blocking — a
+     * failure here just means the next access falls back to the folder-key endpoint again.
+     */
+    async _persistRecoveredFileKey(fileId, fileKey, masterKey) {
+      try {
+        const encryptedKey = await wrapMasterKey(fileKey, masterKey);
+        await api.post(`/files/${fileId}/persist-key`, { encrypted_key: encryptedKey });
+        const file = this.files.find(f => f.ID === fileId);
+        if (file) file.EncryptedKey = encryptedKey;
+      } catch (e) {
+        console.warn('Failed to persist recovered file key for file', fileId, e);
+      }
+    },
+
     async downloadFile(fileId, fileName, mimeType = 'application/octet-stream', preview = false, encryptedKey = null) {
       const authStore = useAuthStore();
       if (!preview) this.startHeartbeat();
@@ -1035,14 +1052,26 @@ export const useFileStore = defineStore('files', {
           return;
         }
       } else {
-        // No direct key — file was uploaded by a friend into a shared folder.
-        // Try to recover the key chain: folderKey = unwrap(folder.encrypted_key, masterKey)
-        //                               fileKey   = unwrap(fk.encrypted_key, folderKey)
+        // No direct key — file was uploaded by someone else (friend or anonymous depositor).
+        // Try to recover the key chain:
+        //  - "folder": friend uploaded into a directly-shared folder
+        //              folderKey = unwrap(folder.encrypted_key, masterKey); fileKey = unwrap(fk.encrypted_key, folderKey)
+        //  - "token":  anonymous depositor via a file-request / public-share link
+        //              tokenKey = deriveKeyFromToken(share_token); fileKey = unwrap(fk.encrypted_key, tokenKey)
         if (preview) this.preview.status = 'Récupération de la clé...';
         try {
           const res = await api.get(`/files/${targetFileId}/folder-key`);
-          const folderKey = await unwrapMasterKey(res.data.folder_encrypted_key, authStore.masterKey);
-          fileKey = await unwrapMasterKey(res.data.file_encrypted_key, folderKey);
+          if (res.data.type === 'token') {
+            const tokenKey = await deriveKeyFromToken(res.data.share_token);
+            fileKey = await unwrapMasterKey(res.data.file_encrypted_key, tokenKey);
+          } else {
+            const folderKey = await unwrapMasterKey(res.data.folder_encrypted_key, authStore.masterKey);
+            fileKey = await unwrapMasterKey(res.data.file_encrypted_key, folderKey);
+          }
+          // Recovered via the share/folder key chain — persist a direct copy wrapped
+          // with our own master key so this stops depending on that share/folder
+          // still existing (e.g. survives the file-request link being revoked).
+          this._persistRecoveredFileKey(targetFileId, fileKey, authStore.masterKey);
         } catch (e) {
           console.error('Folder-key fallback failed for file', targetFileId, e);
           useUIStore().showError('Ce fichier ne peut pas être déchiffré (clé manquante).');
@@ -1430,7 +1459,7 @@ export const useFileStore = defineStore('files', {
     // Crée un lien de demande de fichiers (dépôt seul) sur un dossier.
     // Le déposant chiffre avec la clé dérivée du token ; aucune clé de fichier
     // existant n'est exposée. Renvoie { token, id } (ou l'existant via un 409).
-    async createFileRequestLink(folderId, { expiresAt = null, password = '', label = '' } = {}) {
+    async createFileRequestLink(folderId, { expiresAt = null, password = '', label = '', recipientEmail = '', sendEmail = false, emailLang = 'fr' } = {}) {
       const token = generateShareToken();
       try {
         const response = await api.post('/shares/link', {
@@ -1448,6 +1477,9 @@ export const useFileStore = defineStore('files', {
           perm_create: true,
           perm_delete: false,
           perm_move: false,
+          recipient_email: recipientEmail || '',
+          send_email: !!sendEmail,
+          email_lang: emailLang || 'fr',
         });
         return { ...response.data, existing: false };
       } catch (error) {
