@@ -13,20 +13,20 @@
       <!-- Section: Mes Partages -->
       <div class="accordion-item">
         <div class="accordion-header" @click="toggleSection('my-shares')" :class="{ active: sections['my-shares'] }">
-          <span class="accordion-title">{{ t('shared.myShares') }} ({{ uniqueShares.length }})</span>
+          <span class="accordion-title">{{ t('shared.myShares') }} ({{ regularShares.length }})</span>
           <span class="accordion-icon">{{ sections['my-shares'] ? '▼' : '▶' }}</span>
         </div>
-        
+
         <div v-show="sections['my-shares']" class="accordion-content">
           <div v-if="loading" class="loading">
             <div class="spinner"></div> {{ t('shared.loading') }}
           </div>
           <div v-else-if="error" class="error">{{ error }}</div>
-          <div v-else-if="uniqueShares.length === 0" class="empty">
+          <div v-else-if="regularShares.length === 0" class="empty">
             <p>{{ t('shared.noShares') }}</p>
           </div>
-          <FileTable 
-            v-else 
+          <FileTable
+            v-else
             :folders="sharedFolders"
             :files="sharedFiles"
             :columns="columns"
@@ -36,8 +36,7 @@
             </template>
 
             <template #resource_type="{ item }">
-              <span v-if="item.upload_only" class="badge request">{{ t('fileRequest.badge') }}</span>
-              <span v-else-if="item.resource_type === 'file'" class="badge file">{{ t('file.files') }}</span>
+              <span v-if="item.resource_type === 'file'" class="badge file">{{ t('file.files') }}</span>
               <span v-else class="badge folder">{{ t('file.folders') }}</span>
             </template>
 
@@ -65,7 +64,7 @@
 
             <template #actions="{ item }">
               <div class="action-group">
-                <button v-if="!item.upload_only" @click.stop="openManageDialog(item)" class="icon-btn" title="Gérer le partage">
+                <button @click.stop="openManageDialog(item)" class="icon-btn" title="Gérer le partage">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
                 </button>
                 <button v-if="item.resource_type === 'folder'" @click.stop="navigateToFolder(item)" class="icon-btn" title="Naviguer vers le dossier">
@@ -74,6 +73,65 @@
                 <button @click.stop="deleteShare(item.id, item)" class="delete-btn" :title="t('shared.deleteShare')">
                   <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM15.5 4l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                   {{ t('common.delete') }}
+                </button>
+              </div>
+            </template>
+          </FileTable>
+        </div>
+      </div>
+
+      <!-- Section: Demandes de fichiers -->
+      <div class="accordion-item">
+        <div class="accordion-header" @click="toggleSection('file-requests')" :class="{ active: sections['file-requests'] }">
+          <span class="accordion-title">{{ t('fileRequest.sectionTitle') }} ({{ fileRequestShares.length }})</span>
+          <span class="accordion-icon">{{ sections['file-requests'] ? '▼' : '▶' }}</span>
+        </div>
+
+        <div v-show="sections['file-requests']" class="accordion-content">
+          <div v-if="loading" class="loading">
+            <div class="spinner"></div> {{ t('shared.loading') }}
+          </div>
+          <div v-else-if="error" class="error">{{ error }}</div>
+          <div v-else-if="fileRequestShares.length === 0" class="empty">
+            <p>{{ t('fileRequest.noRequests') }}</p>
+          </div>
+          <FileTable
+            v-else
+            :folders="fileRequestShares"
+            :files="[]"
+            :columns="requestColumns"
+          >
+            <template #resource_name="{ item }">
+              <span :title="item.request_label || item.resource_name">{{ item.resource_name }}</span>
+              <span v-if="item.request_label" class="request-label-hint"> — « {{ item.request_label }} »</span>
+            </template>
+
+            <template #created_at="{ item }">
+              {{ formatDate(item.created_at) }}
+            </template>
+
+            <template #expires_at="{ item }">
+              <span :class="{ 'expired': isExpired(item.expires_at) }">
+                {{ item.expires_at ? formatDate(item.expires_at) : t('shared.expired') }}
+              </span>
+            </template>
+
+            <template #link="{ item }">
+              <div class="link-actions">
+                <button @click.stop="copyLink(item.link)" class="icon-btn" :title="t('shared.copyLink')">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                </button>
+              </div>
+            </template>
+
+            <template #actions="{ item }">
+              <div class="action-group">
+                <button @click.stop="navigateToFolder(item)" class="icon-btn" title="Naviguer vers le dossier">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+                </button>
+                <button @click.stop="deleteShare(item.id, item)" class="delete-btn" :title="t('fileRequest.revoke')">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM15.5 4l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                  {{ t('fileRequest.revoke') }}
                 </button>
               </div>
             </template>
@@ -125,6 +183,7 @@ const managingItem = ref(null);
 
 const sections = reactive({
   'my-shares': true,
+  'file-requests': false,
   'shared-with-me': false
 });
 
@@ -156,6 +215,14 @@ const columns = [
   { key: 'actions', label: 'Actions' }
 ]
 
+const requestColumns = [
+  { key: 'resource_name', label: 'Dossier', cellClass: 'name-cell' },
+  { key: 'created_at', label: 'Créé le' },
+  { key: 'expires_at', label: 'Expire le' },
+  { key: 'link', label: 'Lien', cellClass: 'link-cell' },
+  { key: 'actions', label: 'Actions' }
+]
+
 // Deduplicate: one entry per (resource_type, resource_id, upload_only) — un
 // dossier peut avoir un lien classique ET un lien de demande de fichiers.
 const uniqueShares = computed(() => {
@@ -174,8 +241,13 @@ const uniqueShares = computed(() => {
   return Array.from(map.values());
 });
 
-const sharedFolders = computed(() => uniqueShares.value.filter(s => s.resource_type === 'folder').map(s => ({...s, ID: s.id})))
-const sharedFiles = computed(() => uniqueShares.value.filter(s => s.resource_type === 'file').map(s => ({...s, ID: s.id})))
+// Demandes de fichiers (upload_only) affichées dans leur propre section, séparément
+// des partages classiques — un dossier peut avoir les deux à la fois.
+const fileRequestShares = computed(() => uniqueShares.value.filter(s => s.upload_only).map(s => ({ ...s, ID: s.id })))
+const regularShares = computed(() => uniqueShares.value.filter(s => !s.upload_only))
+
+const sharedFolders = computed(() => regularShares.value.filter(s => s.resource_type === 'folder').map(s => ({...s, ID: s.id})))
+const sharedFiles = computed(() => regularShares.value.filter(s => s.resource_type === 'file').map(s => ({...s, ID: s.id})))
 
 const fetchShares = async () => {
   loading.value = true;
@@ -192,7 +264,10 @@ const fetchShares = async () => {
 };
 
 const deleteShare = async (id, item) => {
-  if (!await uiStore.showConfirm({ title: 'Supprimer le partage', message: 'Voulez-vous vraiment supprimer ce partage ?', confirmLabel: 'Supprimer' })) return
+  const confirmed = item.upload_only
+    ? await uiStore.showConfirm({ title: t('fileRequest.revoke'), message: t('fileRequest.confirmRevoke'), confirmLabel: t('fileRequest.revoke') })
+    : await uiStore.showConfirm({ title: 'Supprimer le partage', message: 'Voulez-vous vraiment supprimer ce partage ?', confirmLabel: 'Supprimer' });
+  if (!confirmed) return
 
   try {
     if (item._hasPublicLink) {
@@ -405,6 +480,11 @@ onMounted(() => {
 .badge.request {
   background-color: #e8f5e9;
   color: #2e7d32;
+}
+
+.request-label-hint {
+  color: var(--subtle-text-color, #8a8a8a);
+  font-size: 0.85em;
 }
 
 .link-actions {

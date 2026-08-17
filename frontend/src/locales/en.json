@@ -41,6 +41,8 @@
   "fileRequest": {
     "badge": "File request",
     "menuAction": "Request files",
+    "sectionTitle": "My file requests",
+    "noRequests": "No file request created yet.",
     "dialogTitle": "Request files into \"{name}\"",
     "dialogHint": "Create a drop link: recipients can send encrypted files into this folder, without an account, and without ever seeing its contents.",
     "labelField": "Message shown to the sender (optional)",

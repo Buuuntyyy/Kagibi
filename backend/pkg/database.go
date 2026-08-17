@@ -168,8 +168,6 @@ func UpsertUserPlan(db *bun.DB, plan *UserPlan) error {
 		Set("plan = EXCLUDED.plan").
 		Set("storage_limit = EXCLUDED.storage_limit").
 		Set("storage_used = EXCLUDED.storage_used").
-		Set("p2p_max_exchanges = EXCLUDED.p2p_max_exchanges").
-		Set("p2p_exchanges_used = EXCLUDED.p2p_exchanges_used").
 		Set("updated_at = CURRENT_TIMESTAMP").
 		Exec(context.Background())
 	return err
@@ -369,12 +367,28 @@ func fetchFolderShareData(ctx context.Context, db *bun.DB, folderIds []int64) ([
 	return folderLinks, directFolderShares, errDirect
 }
 
-// buildFoldersWithShare annotates plain folders with share metadata.
+// buildFoldersWithShare annotates plain folders with share metadata. A folder can have
+// both a regular share link and a file-request (upload_only) link at once, so the two
+// are tracked independently rather than collapsed into a single "shared" flag.
 func buildFoldersWithShare(userID string, foldersPlain []Folder, folderLinks []ShareLink, directFolderShares []FolderShare) []FolderWithShare {
-	folderLinkMap := make(map[int64]ShareLink, len(folderLinks))
-	for _, l := range folderLinks {
-		if _, ok := folderLinkMap[l.ResourceID]; !ok {
-			folderLinkMap[l.ResourceID] = l
+	type linkPair struct {
+		regular *ShareLink
+		request *ShareLink
+	}
+	linksByFolder := make(map[int64]*linkPair, len(folderLinks))
+	for i := range folderLinks {
+		l := &folderLinks[i]
+		pair, ok := linksByFolder[l.ResourceID]
+		if !ok {
+			pair = &linkPair{}
+			linksByFolder[l.ResourceID] = pair
+		}
+		if l.UploadOnly {
+			if pair.request == nil {
+				pair.request = l
+			}
+		} else if pair.regular == nil {
+			pair.regular = l
 		}
 	}
 	directFolderMap := make(map[int64]bool, len(directFolderShares))
@@ -384,14 +398,19 @@ func buildFoldersWithShare(userID string, foldersPlain []Folder, folderLinks []S
 	result := make([]FolderWithShare, len(foldersPlain))
 	for i, f := range foldersPlain {
 		fw := FolderWithShare{Folder: f}
-		if l, ok := folderLinkMap[f.ID]; ok {
-			fw.Shared = true
-			if l.OwnerID == userID {
-				tok := l.Token
-				fw.ShareToken = &tok
-				id := l.ID
-				fw.ShareID = &id
-				fw.ExpiresAt = l.ExpiresAt
+		if pair, ok := linksByFolder[f.ID]; ok {
+			if pair.regular != nil {
+				fw.Shared = true
+				if pair.regular.OwnerID == userID {
+					tok := pair.regular.Token
+					fw.ShareToken = &tok
+					id := pair.regular.ID
+					fw.ShareID = &id
+					fw.ExpiresAt = pair.regular.ExpiresAt
+				}
+			}
+			if pair.request != nil {
+				fw.HasFileRequest = true
 			}
 		}
 		if directFolderMap[f.ID] {

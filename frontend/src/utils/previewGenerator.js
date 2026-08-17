@@ -59,7 +59,7 @@ async function generatePdfPreview(file) {
     // Use standard font map to avoid warnings/missing text
     const loadingTask = pdfjsLib.getDocument({
         data: arrayBuffer,
-        cMapUrl: 'https://unpkg.com/pdfjs-dist@5.4.530/cmaps/',
+        cMapUrl: 'https://unpkg.com/pdfjs-dist@5.7.284/cmaps/',
         cMapPacked: true,
     });
     const pdf = await loadingTask.promise;

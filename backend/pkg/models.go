@@ -66,8 +66,6 @@ type UserPlan struct {
 	StorageLimit        int64     `bun:"storage_limit,notnull,default:21474836480" json:"storage_limit"`
 	StorageUsed         int64     `bun:"storage_used,notnull,default:0" json:"storage_used"`
 	VersionStorageBytes int64     `bun:"version_storage_bytes,notnull,default:0" json:"version_storage_bytes"`
-	P2PMaxExchanges     int       `bun:"p2p_max_exchanges,notnull,default:-1" json:"p2p_max_exchanges"`
-	P2PExchangesUsed    int       `bun:"p2p_exchanges_used,notnull,default:0" json:"p2p_exchanges_used"`
 	CreatedAt           time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
 	UpdatedAt           time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
 }
@@ -109,10 +107,11 @@ type FileWithShare struct {
 
 type FolderWithShare struct {
 	Folder
-	Shared     bool       `bun:"-" json:"shared"`
-	ShareToken *string    `bun:"-" json:"share_token,omitempty"`
-	ShareID    *int64     `bun:"-" json:"share_id,omitempty"`
-	ExpiresAt  *time.Time `bun:"-" json:"expires_at,omitempty"`
+	Shared         bool       `bun:"-" json:"shared"`
+	ShareToken     *string    `bun:"-" json:"share_token,omitempty"`
+	ShareID        *int64     `bun:"-" json:"share_id,omitempty"`
+	ExpiresAt      *time.Time `bun:"-" json:"expires_at,omitempty"`
+	HasFileRequest bool       `bun:"-" json:"has_file_request"` // dépôt seul (upload_only) — distinct d'un partage classique
 }
 
 type FileShare struct {

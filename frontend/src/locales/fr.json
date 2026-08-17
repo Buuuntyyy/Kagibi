@@ -41,6 +41,8 @@
   "fileRequest": {
     "badge": "Demande de fichiers",
     "menuAction": "Demander des fichiers",
+    "sectionTitle": "Mes demandes de fichiers",
+    "noRequests": "Aucune demande de fichiers créée pour le moment.",
     "dialogTitle": "Demander des fichiers dans « {name} »",
     "dialogHint": "Créez un lien de dépôt : les destinataires pourront envoyer des fichiers chiffrés dans ce dossier, sans compte, et sans jamais voir son contenu.",
     "labelField": "Message affiché au déposant (optionnel)",

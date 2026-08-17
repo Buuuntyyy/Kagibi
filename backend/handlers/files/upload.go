@@ -191,12 +191,12 @@ func parseUploadRequest(c *gin.Context, userID string) (UploadRequest, error) {
 }
 
 func checkStorageQuota(ctx context.Context, db *bun.DB, userID string, size int64) error {
-	planState, err := pkg.FindUserPlanByUserID(db, userID)
-	if err != nil {
-		// SÉCURITÉ : fail-closed. Autoriser l'upload quand le plan ne peut être chargé
-		// permettrait de contourner le quota en provoquant l'erreur de chargement.
-		return fmt.Errorf("quota check unavailable")
-	}
+	// Self-heals a missing user_plans row (e.g. accounts provisioned outside the
+	// normal registration flow) instead of failing closed — mirrors ensureUserPlan
+	// in multipart.go, which every other quota-check call site already relies on.
+	// This used to fail-closed on any load error, including a simple missing row,
+	// which permanently blocked uploads for any account without a plan row.
+	planState := ensureUserPlan(db, userID)
 	if planState.StorageLimit > 0 && planState.StorageUsed+size > planState.StorageLimit {
 		return fmt.Errorf("Storage limit exceeded")
 	}

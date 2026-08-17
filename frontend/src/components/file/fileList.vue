@@ -205,6 +205,7 @@
       @folder-drag-over="onFolderDragOver"
       @folder-drag-leave="onFolderDragLeave"
       @manage-share="openManageShareDialog"
+      @manage-file-request="openFileRequestDialog"
       @remove-tag="removeTag"
       @open-comments="openComments"
     />
@@ -692,6 +693,13 @@ const openManageShareDialog = (item, type = 'file', initialTab = 'link') => {
     isOpen: true,
     item: { ...item, type: type },
     initialTab: initialTab
+  };
+};
+
+const openFileRequestDialog = (folder) => {
+  fileRequestDialog.value = {
+    isOpen: true,
+    item: { id: folder.ID || folder.id, name: folder.Name || folder.name },
   };
 };
 

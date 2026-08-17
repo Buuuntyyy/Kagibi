@@ -378,6 +378,35 @@ func GetShareForResourceHandler(c *gin.Context, db *bun.DB) {
 	c.JSON(http.StatusOK, gin.H{"links": resp})
 }
 
+// GetFileRequestLinkHandler returns the existing file-request (upload_only) link for a
+// folder, if one exists — used by the frontend to show the existing link and its
+// settings immediately when reopening the "request files" dialog, instead of the user
+// having to attempt creation first and being told it already exists via a 409.
+func GetFileRequestLinkHandler(c *gin.Context, db *bun.DB) {
+	userID := c.GetString("user_id")
+	folderID, err := strconv.ParseInt(c.Query("folder_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid folder ID"})
+		return
+	}
+
+	existing, err := checkExistingShareLink(c.Request.Context(), db, userID, folderID, "folder", true)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No file request link found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":            existing.ID,
+		"token":         existing.Token,
+		"link":          fmt.Sprintf(sharePathFormat(true), existing.Token),
+		"request_label": existing.RequestLabel,
+		"expires_at":    existing.ExpiresAt,
+		"has_password":  existing.PasswordHash != "",
+		"created_at":    existing.CreatedAt,
+	})
+}
+
 // --- Helpers ---
 
 func verifyOwnerAndGetPath(ctx context.Context, db *bun.DB, userID string, resID int64, resType string) (string, error) {

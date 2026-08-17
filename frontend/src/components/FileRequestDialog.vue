@@ -7,7 +7,11 @@
     <div class="modal-content">
       <h3>{{ t('fileRequest.dialogTitle', { name: item?.name || '' }) }}</h3>
 
-      <div v-if="!generatedLink" class="request-form">
+      <div v-if="checkingExisting" class="request-form">
+        <p class="request-hint">{{ t('common.loading') }}</p>
+      </div>
+
+      <div v-else-if="!generatedLink" class="request-form">
         <p class="request-hint">{{ t('fileRequest.dialogHint') }}</p>
 
         <div class="form-group">
@@ -82,6 +86,13 @@
       <div v-else class="request-result">
         <p v-if="isExisting" class="existing-note">{{ t('fileRequest.existingNote') }}</p>
         <p v-else>{{ t('fileRequest.linkReady') }}</p>
+
+        <div v-if="isExisting" class="existing-details">
+          <p v-if="existingRequestLabel">{{ t('fileRequest.labelField') }} : « {{ existingRequestLabel }} »</p>
+          <p v-if="existingExpiresAt">{{ t('fileRequest.expiration') }} : {{ new Date(existingExpiresAt).toLocaleString() }}</p>
+          <p v-if="existingHasPassword">🔒 {{ t('fileRequest.password') }}</p>
+        </div>
+
         <div class="link-display">
           <input type="text" :value="generatedLink" readonly />
           <button @click="copyLink" class="btn-copy">
@@ -134,21 +145,50 @@ const shareId = ref(null)
 const isExisting = ref(false)
 const loading = ref(false)
 const copied = ref(false)
+const checkingExisting = ref(false)
+const existingRequestLabel = ref('')
+const existingExpiresAt = ref(null)
+const existingHasPassword = ref(false)
 
-watch(() => props.isOpen, (open) => {
-  if (open) {
-    label.value = ''
-    expiresAt.value = ''
-    password.value = ''
-    recipientEmail.value = ''
-    sendEmailOption.value = false
-    emailLang.value = 'fr'
-    emailSent.value = false
-    generatedLink.value = ''
-    shareId.value = null
-    isExisting.value = false
-    copied.value = false
-    loading.value = false
+watch(() => props.isOpen, async (open) => {
+  if (!open) return
+
+  label.value = ''
+  expiresAt.value = ''
+  password.value = ''
+  recipientEmail.value = ''
+  sendEmailOption.value = false
+  emailLang.value = 'fr'
+  emailSent.value = false
+  generatedLink.value = ''
+  shareId.value = null
+  isExisting.value = false
+  copied.value = false
+  loading.value = false
+  existingRequestLabel.value = ''
+  existingExpiresAt.value = null
+  existingHasPassword.value = false
+
+  if (!props.item) return
+
+  // Un lien de demande de fichiers existe peut-être déjà pour ce dossier — on le
+  // vérifie avant d'afficher le formulaire de création, pour l'afficher directement
+  // au lieu de forcer l'utilisateur à tenter une création qui échouerait avec un 409.
+  checkingExisting.value = true
+  try {
+    const existing = await fileStore.getExistingFileRequestLink(props.item.id)
+    if (existing) {
+      generatedLink.value = `${window.location.origin}/r/${existing.token}`
+      shareId.value = existing.id
+      isExisting.value = true
+      existingRequestLabel.value = existing.request_label || ''
+      existingExpiresAt.value = existing.expires_at || null
+      existingHasPassword.value = !!existing.has_password
+    }
+  } catch (e) {
+    console.error('Failed to check for an existing file request link', e)
+  } finally {
+    checkingExisting.value = false
   }
 })
 
@@ -194,6 +234,9 @@ const revoke = async () => {
     generatedLink.value = ''
     shareId.value = null
     isExisting.value = false
+    existingRequestLabel.value = ''
+    existingExpiresAt.value = null
+    existingHasPassword.value = false
   } catch (e) {
     console.error('Failed to revoke file request link', e)
     uiStore.showToast(t('fileRequest.revokeError'), 'error')
@@ -293,6 +336,24 @@ const copyLink = () => {
 .existing-note {
   font-size: 0.82rem;
   color: var(--subtle-text-color, #8a8a8a);
+}
+
+.existing-details {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--background-color, #f5f5f5);
+  border: 1px solid var(--border-color, #e2e2e2);
+}
+
+.existing-details p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--main-text-color, #333);
+}
+
+.existing-details p + p {
+  margin-top: 4px;
 }
 
 .optional-tag {

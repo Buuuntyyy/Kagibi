@@ -177,7 +177,7 @@ func setupRouter(redisClient *redis.Client) *gin.Engine {
 	}
 
 	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "X-Share-Password"}
 	config.ExposeHeaders = []string{"Content-Length"}
 	config.AllowCredentials = true
 	config.MaxAge = 12 * time.Hour
@@ -374,6 +374,7 @@ func registerShareRoutes(g *gin.RouterGroup, db *bun.DB) {
 	sharesG.GET("/check-path", func(c *gin.Context) { shares.GetActiveSharesForPathHandler(c, db) })
 	sharesG.GET("/check-path-direct", func(c *gin.Context) { shares.GetDirectSharesForPathHandler(c, db) })
 	sharesG.GET("/file/:fileID", func(c *gin.Context) { shares.GetShareForResourceHandler(c, db) })
+	sharesG.GET("/file-request", func(c *gin.Context) { shares.GetFileRequestLinkHandler(c, db) })
 	sharesG.GET("/direct/folder/:folderID/content", func(c *gin.Context) { shares.GetSharedFolderContentHandler(c, db) })
 	sharesG.GET("/direct/folder/:folderID/files-recursive", func(c *gin.Context) { shares.DirectFolderFilesRecursiveHandler(c, db) })
 	sharesG.DELETE("/link/:shareID", func(c *gin.Context) { shares.DeleteShareLinkHandler(c, db) })

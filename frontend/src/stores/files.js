@@ -1490,6 +1490,19 @@ export const useFileStore = defineStore('files', {
         throw error;
       }
     },
+    // Récupère le lien de demande de fichiers existant pour un dossier, s'il y en a
+    // un — utilisé pour pré-remplir la modale sans passer par une tentative de
+    // création qui échoue avec un 409. Renvoie null si aucun lien n'existe.
+    async getExistingFileRequestLink(folderId) {
+      try {
+        const response = await api.get('/shares/file-request', { params: { folder_id: folderId } });
+        return response.data;
+      } catch (error) {
+        if (error.response?.status === 404) return null;
+        console.error('Error fetching existing file request link:', error);
+        throw error;
+      }
+    },
     async searchFiles(query) {
         if (!query || query.trim() === '') {
             // Si la recherche est vide, on recharge le dossier courant
