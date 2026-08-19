@@ -1,24 +1,31 @@
 <!-- Copyright (C) 2025-2026  Buuuntyyy -->
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 
+<!-- "What's new" modal, driven entirely by the repo-root CHANGELOG.md / CHANGELOG.en.md
+     (mirrored into public/ at build time by vite.config.js's syncChangelogPlugin). Only the
+     latest (topmost) version section is parsed and shown — there is nothing to hand-edit
+     here per release: write the changelog entry as usual, deploy, and the modal reflects it
+     automatically, once per version per browser (tracked in localStorage). -->
+
 <template>
   <transition name="modal-fade">
     <div v-if="visible" class="changelog-overlay" @click.self="dismiss">
       <div class="changelog-box">
         <div class="changelog-header">
           <div class="changelog-title-group">
-            <span class="version-badge">v{{ CURRENT_VERSION }}</span>
+            <span v-if="entry" class="version-badge">v{{ entry.version }}</span>
             <h3>{{ t('changelog.title') }}</h3>
           </div>
           <button class="close-btn" @click="dismiss" :aria-label="t('common.close')">✕</button>
         </div>
 
         <div class="changelog-content">
-          <div v-for="section in sections" :key="section.title" class="changelog-section">
+          <div v-for="section in entry?.sections ?? []" :key="section.title" class="changelog-section">
             <h4 class="section-title">{{ section.title }}</h4>
             <ul>
-              <li v-for="item in section.items" :key="item.label">
-                <strong>{{ item.label }}</strong> — {{ item.text }}
+              <li v-for="(item, idx) in section.items" :key="idx">
+                <template v-if="item.label"><strong>{{ item.label }}</strong><template v-if="item.text"> — {{ item.text }}</template></template>
+                <template v-else>{{ item.text }}</template>
               </li>
             </ul>
           </div>
@@ -33,76 +40,54 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { parseLatestChangelogEntry } from '../utils/changelog'
 
 const { t, locale } = useI18n()
 
-const CURRENT_VERSION = '2.26.0'
-const STORAGE_KEY = 'kagibi_changelog_seen_v'
-
 const visible = ref(false)
+const entry = ref(null)
 
-const sectionsFr = [
-  {
-    title: '🚀 Nouvelles fonctionnalités',
-    items: [
-      {
-        label: 'Demandes d\'accès',
-        text: 'Les membres peuvent demander l\'accès à un dossier d\'organisation. Les admins reçoivent et traitent ces demandes depuis le panneau d\'administration.',
-      },
-      {
-        label: 'Vue d\'accès effectif',
-        text: 'Nouvelle vue synthétique affichant les permissions réelles d\'un utilisateur sur un dossier (droits directs + groupes).',
-      },
-      {
-        label: 'Gestion du chiffrement par groupe',
-        text: 'Les admins d\'organisation peuvent gérer la clé chiffrée par groupe — attribution et révocation sécurisée.',
-      },
-      {
-        label: 'Héritage des permissions de dossier',
-        text: 'Les permissions définies pour un groupe sur un dossier s\'héritent désormais correctement dans les sous-dossiers.',
-      },
-    ],
-  },
-]
+function storageKey(lang) {
+  return `kagibi_changelog_seen_v_${lang}`
+}
 
-const sectionsEn = [
-  {
-    title: '🚀 New Features',
-    items: [
-      {
-        label: 'Access Requests',
-        text: 'Members can now request access to an organization folder. Admins receive and handle these requests from the admin panel.',
-      },
-      {
-        label: 'Effective Access View',
-        text: 'New summary view showing a user\'s effective permissions on a folder, combining direct rights and group memberships.',
-      },
-      {
-        label: 'Group Encryption Management',
-        text: 'Organization admins can manage the encrypted key per group — granting and securely revoking encrypted access.',
-      },
-      {
-        label: 'Folder Permission Inheritance',
-        text: 'Permissions assigned to a group on a folder are now correctly inherited by all subfolders.',
-      },
-    ],
-  },
-]
+async function loadAndMaybeShow() {
+  const file = locale.value === 'en' ? '/CHANGELOG.en.md' : '/CHANGELOG.md'
+  try {
+    const res = await fetch(file, { cache: 'no-cache' })
+    if (!res.ok) return
+    const text = await res.text()
+    const parsed = parseLatestChangelogEntry(text)
+    if (!parsed) return
 
-const sections = computed(() => (locale.value === 'fr' ? sectionsFr : sectionsEn))
+    entry.value = parsed
+    const seen = localStorage.getItem(storageKey(locale.value))
+    if (seen !== parsed.version) {
+      visible.value = true
+    }
+  } catch (e) {
+    // Non-blocking — worst case the "what's new" modal just doesn't appear.
+    console.warn('[Changelog] Failed to load changelog:', e)
+  }
+}
 
 const dismiss = () => {
   visible.value = false
-  localStorage.setItem(STORAGE_KEY, CURRENT_VERSION)
+  if (entry.value) {
+    localStorage.setItem(storageKey(locale.value), entry.value.version)
+  }
 }
 
-onMounted(() => {
-  const seen = localStorage.getItem(STORAGE_KEY)
-  if (seen !== CURRENT_VERSION) {
-    visible.value = true
-  }
+onMounted(loadAndMaybeShow)
+
+// Re-check when the user switches language while the app is open (e.g. a French user
+// who already dismissed v2.31 switches to English before CHANGELOG.en.md catches up —
+// per-language storage keys mean this correctly evaluates the English file on its own).
+watch(locale, () => {
+  visible.value = false
+  loadAndMaybeShow()
 })
 </script>
 
