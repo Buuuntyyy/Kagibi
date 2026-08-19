@@ -16,6 +16,7 @@
       <GlobalToast />
       <UploadManager v-if="!isLandingPage" />
       <DownloadManager v-if="!isLandingPage" />
+      <ImportManager v-if="!isLandingPage" />
     </template>
     <template v-else>
       <main class="landing-content">
@@ -43,6 +44,7 @@ import WarnDialog from './components/WarnDialog.vue'
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
 import UploadManager from './components/upload/UploadManager.vue'
 import DownloadManager from './components/download/DownloadManager.vue'
+import ImportManager from './components/import/ImportManager.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import GlobalToast from './components/GlobalToast.vue'
 import MFAChallengeModal from './components/MFAChallengeModal.vue'

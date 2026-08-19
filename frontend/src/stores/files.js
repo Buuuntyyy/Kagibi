@@ -448,6 +448,12 @@ export const useFileStore = defineStore('files', {
       this.heartbeatInterval = setInterval(async () => {
         try {
           await api.get('/heartbeat');
+          // The backend session is kept alive above, but the client also holds its own
+          // 30-minute absolute timer (auth.js: setupSessionTimeout) that clears the master
+          // key and logs out regardless of server-side activity. Push it back too, or any
+          // transfer running longer than 30 min (large upload/download/cloud import) gets
+          // forcibly logged out mid-transfer even though it's actively making progress.
+          useAuthStore().setupSessionTimeout();
           //console.log('[Upload/Download] Heartbeat sent to prevent session timeout');
         } catch (err) {
           console.error('[Upload/Download] Heartbeat failed:', err);

@@ -9,12 +9,14 @@ import (
 	"kagibi/backend/handlers/auth"
 	billinghandlers "kagibi/backend/handlers/billing"
 	commenthandlers "kagibi/backend/handlers/comments"
+	"kagibi/backend/handlers/dbimport"
 	"kagibi/backend/handlers/files"
 	"kagibi/backend/handlers/folders"
 	"kagibi/backend/handlers/friends"
 	"kagibi/backend/handlers/gdimport"
 	"kagibi/backend/handlers/keys"
 	notifhandlers "kagibi/backend/handlers/notifications"
+	"kagibi/backend/handlers/odimport"
 	orghandlers "kagibi/backend/handlers/organizations"
 	p2phandlers "kagibi/backend/handlers/p2p"
 	"kagibi/backend/handlers/security"
@@ -343,6 +345,7 @@ func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 func registerFolderRoutes(g *gin.RouterGroup, db *bun.DB) {
 	foldersG := g.Group("/folders")
 	foldersG.POST("/create", func(c *gin.Context) { folders.CreateHandler(c, db) })
+	foldersG.POST("/batch-create", func(c *gin.Context) { folders.BatchCreateHandler(c, db) })
 	foldersG.PUT("/:id/key", func(c *gin.Context) { folders.UpdateFolderKeyHandler(c, db) })
 	foldersG.GET("/:id/tree", func(c *gin.Context) { folders.GetFolderTreeHandler(c, db) })
 }
@@ -732,6 +735,11 @@ func registerImportRoutes(g *gin.RouterGroup) {
 	importG.GET("/google/config", gdimport.GetGoogleConfig)
 	// Échange du code PKCE contre un access_token côté serveur (client_secret sécurisé)
 	importG.POST("/google/desktop-token", gdimport.ExchangeDesktopToken)
+	// OneDrive utilise un flux PKCE direct (client public, pas de secret) : le navigateur
+	// et l'app desktop échangent le code directement avec Microsoft, pas de proxy ici.
+	importG.GET("/onedrive/config", odimport.GetOneDriveConfig)
+	// Dropbox utilise également un flux PKCE direct (client public, pas de secret).
+	importG.GET("/dropbox/config", dbimport.GetDropboxConfig)
 }
 
 func registerCommentRoutes(g *gin.RouterGroup, db *bun.DB) {

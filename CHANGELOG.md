@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.31.0 — 2026-08-19
+
+### Nouvelles fonctionnalités
+
+- **Migration depuis OneDrive et Dropbox** : en plus de Google Drive, il est désormais possible d'importer directement ses fichiers depuis OneDrive et Dropbox vers Kagibi (chiffrement de bout en bout côté client, avant envoi), aussi bien sur le web que dans l'application desktop.
+- **Transferts d'import en arrière-plan** : le transfert des fichiers importés ne bloque plus la fenêtre de migration — l'import continue en tâche de fond pendant que l'utilisateur continue d'utiliser Kagibi, suivi via un widget flottant.
+
+### Améliorations
+
+- **Création des dossiers par lot lors d'un import** : la reconstruction de l'arborescence (Google Drive/OneDrive/Dropbox) envoie désormais les dossiers par lots groupés au lieu d'une requête par dossier, sur le web comme dans l'application desktop — gain de temps important sur les imports volumineux.
+- **Conflits de dossiers résolus automatiquement** : un dossier déjà existant lors d'un import n'est plus soumis à une question de fusion/ignorer ; il est simplement réutilisé silencieusement.
+- **Clé de chiffrement des dossiers importés (web)** : les dossiers créés par un import cloud depuis le web reçoivent désormais une clé de chiffrement dédiée à la création, comme le faisait déjà l'application desktop.
+
+### Corrections
+
+- **Erreur 502 sur les imports volumineux** : la création groupée de dossiers était traitée séquentiellement côté serveur, ce qui pouvait dépasser le délai du proxy sur de gros imports ; le traitement est désormais parallélisé côté serveur, et le délai d'attente du client desktop augmenté en conséquence.
+- **Déconnexion pendant une migration longue** : la minuterie de session côté client n'était jamais réinitialisée pendant un import ou un transfert de longue durée, provoquant une déconnexion inopinée malgré une activité continue.
+
+---
+
 ## v2.30.0 — 2026-08-13
 
 ### Nouvelles fonctionnalités
