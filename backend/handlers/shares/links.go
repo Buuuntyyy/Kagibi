@@ -11,11 +11,14 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"kagibi/backend/middleware"
 	"kagibi/backend/pkg"
+	"kagibi/backend/pkg/mailer"
 	"kagibi/backend/pkg/monitoring"
 	"kagibi/backend/pkg/s3storage"
 
@@ -45,20 +48,23 @@ func checkSharePassword(c *gin.Context, shareLink *pkg.ShareLink) bool {
 }
 
 type createShareLinkRequest struct {
-	ResourceID   int64            `json:"resource_id"`
-	ResourceType string           `json:"resource_type"` // "file" or "folder"
-	ExpiresAt    *time.Time       `json:"expires_at"`
-	Password     string           `json:"password"` // Optional
-	EncryptedKey string           `json:"encrypted_key"`
-	Token        string           `json:"token"`
-	FileKeys     map[int64]string `json:"file_keys"`
-	SingleUse    bool             `json:"single_use"`
-	PermDownload bool             `json:"perm_download"`
-	PermCreate   bool             `json:"perm_create"`
-	PermDelete   bool             `json:"perm_delete"`
-	PermMove     bool             `json:"perm_move"`
-	UploadOnly   bool             `json:"upload_only"`   // file request : dépôt seul, pas de lecture
-	RequestLabel string           `json:"request_label"` // message affiché au déposant
+	ResourceID     int64            `json:"resource_id"`
+	ResourceType   string           `json:"resource_type"` // "file" or "folder"
+	ExpiresAt      *time.Time       `json:"expires_at"`
+	Password       string           `json:"password"` // Optional
+	EncryptedKey   string           `json:"encrypted_key"`
+	Token          string           `json:"token"`
+	FileKeys       map[int64]string `json:"file_keys"`
+	SingleUse      bool             `json:"single_use"`
+	PermDownload   bool             `json:"perm_download"`
+	PermCreate     bool             `json:"perm_create"`
+	PermDelete     bool             `json:"perm_delete"`
+	PermMove       bool             `json:"perm_move"`
+	UploadOnly     bool             `json:"upload_only"`     // file request : dépôt seul, pas de lecture
+	RequestLabel   string           `json:"request_label"`   // message affiché au déposant
+	RecipientEmail string           `json:"recipient_email"` // optionnel : destinataire à notifier par mail
+	SendEmail      bool             `json:"send_email"`      // envoyer un mail de notification avec le lien
+	EmailLang      string           `json:"email_lang"`      // "fr" ou "en"
 }
 
 // sharePathFormat returns the public URL path format for a share link: file
@@ -107,6 +113,7 @@ func CreateShareLinkHandler(c *gin.Context, db *bun.DB) {
 
 	existingShare, err := checkExistingShareLink(c.Request.Context(), db, userID, req.ResourceID, req.ResourceType, req.UploadOnly)
 	if err == nil {
+		sendShareLinkEmail(db, userID, req, existingShare.Token, existingShare.RequestLabel)
 		c.JSON(http.StatusConflict, gin.H{
 			"error": "A share link for this resource already exists",
 			"token": existingShare.Token,
@@ -132,12 +139,50 @@ func CreateShareLinkHandler(c *gin.Context, db *bun.DB) {
 
 	monitoring.RecordShareCreated()
 	middleware.LogShareCreated(c.Request.Context(), userID, req.ResourceType, req.ResourceID, shareLink.Token, c.ClientIP(), c.Request.UserAgent())
+	sendShareLinkEmail(db, userID, req, shareLink.Token, shareLink.RequestLabel)
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Link created",
 		"token":   shareLink.Token,
 		"id":      shareLink.ID,
 		"link":    fmt.Sprintf(sharePathFormat(shareLink.UploadOnly), shareLink.Token),
 	})
+}
+
+// sendShareLinkEmail fires (asynchronously) a notification email pointing the
+// recipient at a file-request drop link, mirroring the P2P invite email flow.
+// Only used for upload_only (file request) links — regular shares are already
+// meant to be sent by the owner through their own channel.
+func sendShareLinkEmail(db *bun.DB, ownerID string, req createShareLinkRequest, token, requestLabel string) {
+	recipientEmail := strings.TrimSpace(req.RecipientEmail)
+	if !req.UploadOnly || !req.SendEmail || recipientEmail == "" {
+		return
+	}
+
+	lang := req.EmailLang
+	if lang != "en" {
+		lang = "fr"
+	}
+
+	go func() {
+		bgCtx := context.Background()
+		var owner pkg.User
+		if err := db.NewSelect().Model(&owner).Where(queryIDEq, ownerID).Scan(bgCtx); err != nil {
+			log.Printf("[FileRequest] fetch owner name: %v", err)
+			return
+		}
+
+		appURL := os.Getenv("APP_URL")
+		if appURL == "" {
+			appURL = "https://kagibi.cloud"
+		}
+		link := appURL + fmt.Sprintf(sharePathFormat(true), token)
+
+		if err := mailer.SendFileRequestInvite(recipientEmail, owner.Name, requestLabel, link, lang); err != nil {
+			log.Printf("[FileRequest] invite email failed to %s: %v", recipientEmail, err)
+		} else {
+			log.Printf("[FileRequest] invite email sent to %s", recipientEmail)
+		}
+	}()
 }
 
 // GetShareLinkHandler retrieves info about a shared resource
@@ -331,6 +376,35 @@ func GetShareForResourceHandler(c *gin.Context, db *bun.DB) {
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"links": resp})
+}
+
+// GetFileRequestLinkHandler returns the existing file-request (upload_only) link for a
+// folder, if one exists — used by the frontend to show the existing link and its
+// settings immediately when reopening the "request files" dialog, instead of the user
+// having to attempt creation first and being told it already exists via a 409.
+func GetFileRequestLinkHandler(c *gin.Context, db *bun.DB) {
+	userID := c.GetString("user_id")
+	folderID, err := strconv.ParseInt(c.Query("folder_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid folder ID"})
+		return
+	}
+
+	existing, err := checkExistingShareLink(c.Request.Context(), db, userID, folderID, "folder", true)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "No file request link found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":            existing.ID,
+		"token":         existing.Token,
+		"link":          fmt.Sprintf(sharePathFormat(true), existing.Token),
+		"request_label": existing.RequestLabel,
+		"expires_at":    existing.ExpiresAt,
+		"has_password":  existing.PasswordHash != "",
+		"created_at":    existing.CreatedAt,
+	})
 }
 
 // --- Helpers ---

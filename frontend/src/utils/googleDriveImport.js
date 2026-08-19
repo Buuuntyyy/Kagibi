@@ -27,6 +27,7 @@ import {
 } from './crypto'
 import { MultipartUploadManager, PART_SIZE, pickChunkSize } from './multipartUpload'
 import { useAuthStore } from '../stores/auth'
+import { ensureFoldersBatch } from './importShared'
 
 const DRIVE_API = 'https://www.googleapis.com/drive/v3'
 
@@ -65,20 +66,6 @@ const UNSUPPORTED_TYPES = new Set([
 function sanitizeName(name) {
   const s = name.replace(/[^\p{L}\p{N}\s\-._\u2018\u2019']/gu, "_").trim() || "Import"
   return (s === "." || s === "..") ? "Import" : s
-}
-
-function _isDescendantOf(path, parentSet) {
-  for (const p of parentSet) {
-    if (path.startsWith(p + "/")) return true
-  }
-  return false
-}
-
-function _getAncestorValue(path, map) {
-  for (const [k, v] of map) {
-    if (path.startsWith(k + "/")) return v
-  }
-  return ""
 }
 
 // Returns total encrypted byte count for a given plaintext size and chunk size.
@@ -319,7 +306,7 @@ export class GoogleDriveImport {
     const authStore = useAuthStore()
     if (!authStore.masterKey) throw new Error('Clé maître non disponible')
 
-    const { onTotal, onFileStart, onFileDone, onFileError, onFileSkipped, onFolderConflict, onBytesProgress, onFolderProgress } = callbacks
+    const { onTotal, onFileStart, onFileDone, onFileError, onBytesProgress, onFolderProgress } = callbacks
     onTotal(selectedFiles.length)
 
     // Pre-compute total encrypted bytes for the progress bar.
@@ -362,27 +349,8 @@ export class GoogleDriveImport {
     const sortedFolders = [...neededDirs]
       .sort((a, b) => a.split('/').length - b.split('/').length)
 
-    const skippedPaths = new Set()   // user chose to skip these folder paths
-    const invalidPaths = new Map()   // folder path → error message (400 from backend)
-
-    let foldersCreated = 0
-    onFolderProgress?.(0, sortedFolders.length)
-    for (const logicalPath of sortedFolders) {
-      if (this._aborted) return
-      const fullPath = targetPath === '/' ? logicalPath : targetPath + logicalPath
-      if (_isDescendantOf(fullPath, skippedPaths)) { skippedPaths.add(fullPath); continue }
-      if (_isDescendantOf(fullPath, invalidPaths)) {
-        invalidPaths.set(fullPath, _getAncestorValue(fullPath, invalidPaths))
-        continue
-      }
-      const result = await this._ensureFolder(logicalPath, targetPath, onFolderConflict)
-      if (result === 'skip') skippedPaths.add(fullPath)
-      else if (typeof result === 'string' && result.startsWith('invalid:')) {
-        invalidPaths.set(fullPath, result.slice(8))
-      }
-      foldersCreated++
-      onFolderProgress?.(foldersCreated, sortedFolders.length)
-    }
+    if (this._aborted) return
+    const { invalidPaths } = await ensureFoldersBatch(sortedFolders, targetPath, authStore.masterKey, onFolderProgress)
 
     // Import files with bounded concurrency: CONCURRENT_FILES pipelines run in parallel.
     // Each pipeline overlaps its download/encrypt/upload with the others, hiding network
@@ -408,10 +376,6 @@ export class GoogleDriveImport {
         if (this._aborted) return
         const { kagibiDir, fileName } = this._resolveFilePath(file, pathMap, targetPath)
         onFileStart(file.name, fileIdx)
-        if (skippedPaths.has(kagibiDir)) {
-          onFileSkipped?.(file.name)
-          return
-        }
         if (invalidPaths.has(kagibiDir)) {
           onFileError(file.name, invalidPaths.get(kagibiDir))
           return
@@ -428,35 +392,6 @@ export class GoogleDriveImport {
       filePromises.push(p)
     }
     await Promise.all(filePromises)
-  }
-
-  // Creates a Kagibi folder at (targetPath + logicalPath).
-  // Returns 'created', 'merged', 'skip', or 'invalid:<msg>' (on 400).
-  // onConflict(name, fullPath) → Promise<'merge'|'skip'> is called on 409.
-  async _ensureFolder(logicalPath, targetPath, onConflict) {
-    const segments = logicalPath.split('/').filter(Boolean)
-    const name = segments[segments.length - 1]
-    const parentSegments = segments.slice(0, -1)
-    const parent = parentSegments.length > 0
-      ? (targetPath === '/' ? '/' + parentSegments.join('/') : targetPath + '/' + parentSegments.join('/'))
-      : targetPath
-
-    try {
-      await api.post('/folders/create', { name, path: parent })
-      return 'created'
-    } catch (err) {
-      if (err?.response?.status === 409) {
-        if (onConflict) {
-          const fullPath = targetPath === '/' ? logicalPath : targetPath + logicalPath
-          return await onConflict(name, fullPath)
-        }
-        return 'merged'
-      }
-      if (err?.response?.status === 400) {
-        return `invalid:${err?.response?.data?.error ?? 'Nom de dossier invalide'}`
-      }
-      throw err
-    }
   }
 
   // Dispatches to workspace export or regular streaming import.

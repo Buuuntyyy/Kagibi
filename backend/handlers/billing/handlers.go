@@ -5,6 +5,7 @@ package billing
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 
@@ -31,6 +32,10 @@ func getUserPlanState(db *bun.DB, userID string) (*pkg.UserPlan, error) {
 		StorageUsed:  0,
 	}
 	if upsertErr := pkg.UpsertUserPlan(db, planState); upsertErr != nil {
+		// The generic client-facing error above intentionally doesn't leak DB
+		// internals, but that means it has to be logged here or it's lost —
+		// this line is the only place that ever sees the real cause.
+		log.Printf("[Billing] getUserPlanState: failed to self-heal user_plans for %s: %v", userID, upsertErr)
 		return nil, upsertErr
 	}
 	return planState, nil
@@ -167,14 +172,6 @@ func GetUsageHandler(db *bun.DB) gin.HandlerFunc {
 				Exec(c.Request.Context())
 		}
 
-		activeShares, _ := db.NewSelect().TableExpr("file_shares fs").
-			Join("JOIN files f ON f.id = fs.file_id").
-			Where("f.user_id = ?", userID).
-			Count(c.Request.Context())
-		_, _ = db.NewUpdate().Model((*pkg.UserPlan)(nil)).
-			Set("p2p_exchanges_used = ?", activeShares).
-			Where("user_id = ?", userID).
-			Exec(c.Request.Context())
 		c.JSON(http.StatusOK, gin.H{
 			"storage_used_bytes": realUsage.Sum,
 			"storage_used_gb":    float64(realUsage.Sum) / (1024 * 1024 * 1024),

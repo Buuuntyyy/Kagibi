@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<!--
+  Copyright (C) 2025-2026  Buuuntyyy
+  SPDX-License-Identifier: AGPL-3.0-or-later
+
+  Dropbox OAuth (PKCE) popup callback. Relays the authorization code/state back to the
+  window that opened this popup via postMessage, then closes itself. Kept as a static file
+  (not a Vue route) so it never runs through Kagibi's auth navigation guards while the
+  OAuth popup is open, and doesn't need to load the whole SPA bundle just to bounce a
+  query string back to the opener.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Dropbox</title>
+</head>
+<body>
+<script>
+  (function () {
+    var params = new URLSearchParams(window.location.search);
+    var payload = {
+      code: params.get('code'),
+      state: params.get('state'),
+      error: params.get('error'),
+      error_description: params.get('error_description')
+    };
+    if (window.opener) {
+      window.opener.postMessage(payload, window.location.origin);
+    }
+    window.close();
+  })();
+</script>
+</body>
+</html>

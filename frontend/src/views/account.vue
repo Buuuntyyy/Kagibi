@@ -365,6 +365,47 @@
                 </button>
               </div>
             </div>
+
+            <div class="form-divider"></div>
+
+            <!-- Import depuis OneDrive -->
+            <div class="portability-item">
+              <div class="portability-info">
+                <p class="portability-desc">{{ t('account.importOneDriveDesc') }}</p>
+                <p class="portability-details">{{ t('account.importOneDriveDetails') }}</p>
+              </div>
+              <div class="portability-actions">
+                <button class="btn-secondary" @click="showOneDriveImport = true">
+                  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" width="16" height="16" style="margin-right: 0.5rem; vertical-align: middle;" aria-hidden="true">
+                    <path d="M23.5 13.6c-.5-3.6-3.6-6.4-7.3-6.4-2.9 0-5.4 1.6-6.7 4-.3 0-.5-.1-.8-.1-3.3 0-6 2.7-6 6 0 .3 0 .6.1.9C1.1 18.7 0 20.5 0 22.5 0 25.5 2.5 28 5.5 28h18c3.6 0 6.5-2.9 6.5-6.5 0-3.3-2.5-6-5.7-6.4z" fill="#0078D4"/>
+                    <path d="M23.5 13.6c3.2.4 5.7 3.1 5.7 6.4 0 .5-.1 1-.2 1.5-.5-2.8-2.9-5-5.8-5.2-.5-3.6-3.6-6.4-7.3-6.4-1 0-1.9.2-2.8.5 1-1.3 2.6-2.2 4.5-2.2 3.7 0 6.8 2.8 7.3 6.4z" fill="#28A8EA" opacity="0.85"/>
+                  </svg>
+                  {{ t('account.importOneDriveBtn') }}
+                </button>
+              </div>
+            </div>
+
+            <div class="form-divider"></div>
+
+            <!-- Import depuis Dropbox -->
+            <div class="portability-item">
+              <div class="portability-info">
+                <p class="portability-desc">{{ t('account.importDropboxDesc') }}</p>
+                <p class="portability-details">{{ t('account.importDropboxDetails') }}</p>
+              </div>
+              <div class="portability-actions">
+                <button class="btn-secondary" @click="showDropboxImport = true">
+                  <svg viewBox="0 0 43 40" xmlns="http://www.w3.org/2000/svg" width="16" height="15" style="margin-right: 0.5rem; vertical-align: middle;" aria-hidden="true">
+                    <path d="M12.5 0L0 8.1l8.7 6.9L21.2 7 12.5 0z" fill="#0061FF"/>
+                    <path d="M0 21.9l12.5 8.1 8.7-6.9-12.5-8.1L0 21.9z" fill="#0061FF"/>
+                    <path d="M21.2 23.1l8.7 6.9L42.4 21.9l-8.7-6.9-12.5 8.1z" fill="#0061FF"/>
+                    <path d="M42.4 8.1L29.9 0l-8.7 6.9 12.5 8.1 8.7-6.9z" fill="#0061FF"/>
+                    <path d="M21.3 24.6l-8.7 6.9-3.7-2.4v2.7L21.3 40l12.4-8.2v-2.7l-3.7 2.4-8.4-6.9z" fill="#0061FF"/>
+                  </svg>
+                  {{ t('account.importDropboxBtn') }}
+                </button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -504,6 +545,12 @@
 
     <!-- Google Drive Import Dialog -->
     <GoogleDriveImportDialog v-model="showGoogleDriveImport" />
+
+    <!-- OneDrive Import Dialog -->
+    <OneDriveImportDialog v-model="showOneDriveImport" />
+
+    <!-- Dropbox Import Dialog -->
+    <DropboxImportDialog v-model="showDropboxImport" />
   </div>
 </template>
 
@@ -524,6 +571,8 @@ import RecoveryKitSettings from '../components/account/RecoveryKitSettings.vue'
 import MFAChallengeModal from '../components/MFAChallengeModal.vue'
 import PasswordCriteria from '../components/auth/PasswordCriteria.vue'
 import GoogleDriveImportDialog from '../components/import/GoogleDriveImportDialog.vue'
+import OneDriveImportDialog from '../components/import/OneDriveImportDialog.vue'
+import DropboxImportDialog from '../components/import/DropboxImportDialog.vue'
 import { checkPasswordCriteria, getPasswordErrors } from '../utils/passwordStrength'
 
 const { t } = useI18n()
@@ -537,6 +586,12 @@ const uiStore = useUIStore()
 
 // Google Drive import dialog
 const showGoogleDriveImport = ref(false)
+
+// OneDrive import dialog
+const showOneDriveImport = ref(false)
+
+// Dropbox import dialog
+const showDropboxImport = ref(false)
 
 // MFA Challenge state
 const showMFAChallenge = ref(false)

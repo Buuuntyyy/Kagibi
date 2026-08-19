@@ -7,7 +7,11 @@
     <div class="modal-content">
       <h3>{{ t('fileRequest.dialogTitle', { name: item?.name || '' }) }}</h3>
 
-      <div v-if="!generatedLink" class="request-form">
+      <div v-if="checkingExisting" class="request-form">
+        <p class="request-hint">{{ t('common.loading') }}</p>
+      </div>
+
+      <div v-else-if="!generatedLink" class="request-form">
         <p class="request-hint">{{ t('fileRequest.dialogHint') }}</p>
 
         <div class="form-group">
@@ -37,6 +41,40 @@
           />
         </div>
 
+        <div class="form-group">
+          <label>{{ t('fileRequest.recipientEmail') }} <span class="optional-tag">{{ t('common.optional') }}</span></label>
+          <input
+            type="email"
+            v-model="recipientEmail"
+            class="text-input"
+            :placeholder="t('fileRequest.emailPlaceholder')"
+          />
+          <p class="field-hint">{{ t('fileRequest.emailHint') }}</p>
+        </div>
+
+        <label class="send-email-toggle">
+          <input type="checkbox" v-model="sendEmailOption" />
+          <span>{{ t('fileRequest.sendEmailOption') }}</span>
+        </label>
+
+        <div v-if="sendEmailOption" class="email-lang-row">
+          <span class="email-lang-label">{{ t('fileRequest.emailLang') }}</span>
+          <div class="lang-toggle">
+            <button
+              class="lang-btn"
+              :class="{ active: emailLang === 'fr' }"
+              @click="emailLang = 'fr'"
+              type="button"
+            >🇫🇷 Français</button>
+            <button
+              class="lang-btn"
+              :class="{ active: emailLang === 'en' }"
+              @click="emailLang = 'en'"
+              type="button"
+            >🇬🇧 English</button>
+          </div>
+        </div>
+
         <div class="modal-actions">
           <button @click="close">{{ t('fileRequest.cancel') }}</button>
           <button @click="generateLink" class="btn-primary" :disabled="loading">
@@ -48,6 +86,13 @@
       <div v-else class="request-result">
         <p v-if="isExisting" class="existing-note">{{ t('fileRequest.existingNote') }}</p>
         <p v-else>{{ t('fileRequest.linkReady') }}</p>
+
+        <div v-if="isExisting" class="existing-details">
+          <p v-if="existingRequestLabel">{{ t('fileRequest.labelField') }} : « {{ existingRequestLabel }} »</p>
+          <p v-if="existingExpiresAt">{{ t('fileRequest.expiration') }} : {{ new Date(existingExpiresAt).toLocaleString() }}</p>
+          <p v-if="existingHasPassword">🔒 {{ t('fileRequest.password') }}</p>
+        </div>
+
         <div class="link-display">
           <input type="text" :value="generatedLink" readonly />
           <button @click="copyLink" class="btn-copy">
@@ -55,6 +100,8 @@
             <span v-else>{{ t('fileRequest.copy') }}</span>
           </button>
         </div>
+
+        <p v-if="emailSent" class="email-sent-notice">{{ t('fileRequest.emailSent') }}</p>
 
         <div class="modal-actions">
           <button v-if="shareId" class="btn-danger" @click="revoke" :disabled="loading">
@@ -89,22 +136,59 @@ const uiStore = useUIStore()
 const label = ref('')
 const expiresAt = ref('')
 const password = ref('')
+const recipientEmail = ref('')
+const sendEmailOption = ref(false)
+const emailLang = ref('fr')
+const emailSent = ref(false)
 const generatedLink = ref('')
 const shareId = ref(null)
 const isExisting = ref(false)
 const loading = ref(false)
 const copied = ref(false)
+const checkingExisting = ref(false)
+const existingRequestLabel = ref('')
+const existingExpiresAt = ref(null)
+const existingHasPassword = ref(false)
 
-watch(() => props.isOpen, (open) => {
-  if (open) {
-    label.value = ''
-    expiresAt.value = ''
-    password.value = ''
-    generatedLink.value = ''
-    shareId.value = null
-    isExisting.value = false
-    copied.value = false
-    loading.value = false
+watch(() => props.isOpen, async (open) => {
+  if (!open) return
+
+  label.value = ''
+  expiresAt.value = ''
+  password.value = ''
+  recipientEmail.value = ''
+  sendEmailOption.value = false
+  emailLang.value = 'fr'
+  emailSent.value = false
+  generatedLink.value = ''
+  shareId.value = null
+  isExisting.value = false
+  copied.value = false
+  loading.value = false
+  existingRequestLabel.value = ''
+  existingExpiresAt.value = null
+  existingHasPassword.value = false
+
+  if (!props.item) return
+
+  // Un lien de demande de fichiers existe peut-être déjà pour ce dossier — on le
+  // vérifie avant d'afficher le formulaire de création, pour l'afficher directement
+  // au lieu de forcer l'utilisateur à tenter une création qui échouerait avec un 409.
+  checkingExisting.value = true
+  try {
+    const existing = await fileStore.getExistingFileRequestLink(props.item.id)
+    if (existing) {
+      generatedLink.value = `${window.location.origin}/r/${existing.token}`
+      shareId.value = existing.id
+      isExisting.value = true
+      existingRequestLabel.value = existing.request_label || ''
+      existingExpiresAt.value = existing.expires_at || null
+      existingHasPassword.value = !!existing.has_password
+    }
+  } catch (e) {
+    console.error('Failed to check for an existing file request link', e)
+  } finally {
+    checkingExisting.value = false
   }
 })
 
@@ -119,10 +203,14 @@ const generateLink = async () => {
       expiresAt: expiration,
       password: password.value,
       label: label.value,
+      recipientEmail: recipientEmail.value.trim(),
+      sendEmail: sendEmailOption.value,
+      emailLang: emailLang.value,
     })
     generatedLink.value = `${window.location.origin}/r/${result.token}`
     shareId.value = result.id || null
     isExisting.value = !!result.existing
+    emailSent.value = sendEmailOption.value && !!recipientEmail.value.trim()
   } catch (e) {
     console.error('Failed to create file request link', e)
     uiStore.showToast(t('fileRequest.createError'), 'error')
@@ -146,6 +234,9 @@ const revoke = async () => {
     generatedLink.value = ''
     shareId.value = null
     isExisting.value = false
+    existingRequestLabel.value = ''
+    existingExpiresAt.value = null
+    existingHasPassword.value = false
   } catch (e) {
     console.error('Failed to revoke file request link', e)
     uiStore.showToast(t('fileRequest.revokeError'), 'error')
@@ -245,6 +336,98 @@ const copyLink = () => {
 .existing-note {
   font-size: 0.82rem;
   color: var(--subtle-text-color, #8a8a8a);
+}
+
+.existing-details {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--background-color, #f5f5f5);
+  border: 1px solid var(--border-color, #e2e2e2);
+}
+
+.existing-details p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--main-text-color, #333);
+}
+
+.existing-details p + p {
+  margin-top: 4px;
+}
+
+.optional-tag {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--subtle-text-color, #8a8a8a);
+  opacity: 0.8;
+  margin-left: 0.2rem;
+}
+
+.field-hint {
+  font-size: 0.75rem;
+  color: var(--subtle-text-color, #8a8a8a);
+  margin: 4px 0 0;
+  opacity: 0.85;
+}
+
+.send-email-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--subtle-text-color, #8a8a8a);
+  cursor: pointer;
+  margin-bottom: 12px;
+  user-select: none;
+}
+
+.send-email-toggle input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--primary-color, #4f6ef7);
+}
+
+.email-lang-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -6px 0 12px;
+}
+
+.email-lang-label {
+  font-size: 0.8rem;
+  color: var(--subtle-text-color, #8a8a8a);
+  white-space: nowrap;
+}
+
+.lang-toggle {
+  display: flex;
+  gap: 5px;
+}
+
+.lang-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--subtle-text-color, #8a8a8a);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.lang-btn.active {
+  border-color: var(--primary-color, #4f6ef7);
+  background: var(--primary-color, #4f6ef7);
+  color: #fff;
+}
+
+.email-sent-notice {
+  font-size: 0.82rem;
+  color: #2e9e5b;
+  margin: 10px 0 0;
 }
 
 .link-display {

@@ -63,6 +63,9 @@
                 <span v-if="folder.shared" class="shared-icon" title="Dossier partagé" @click.stop="$emit('manage-share', folder, 'folder')">
                   <svg xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 0 24 24" width="18px" fill="#5f6368"><path d="M0 0h24v24H0z" fill="none"/><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
                 </span>
+                <span v-if="folder.has_file_request" class="file-request-icon" :title="t('fileRequest.badge')" @click.stop="$emit('manage-file-request', folder)">
+                  <svg xmlns="http://www.w3.org/2000/svg" height="18px" viewBox="0 0 24 24" width="18px" fill="#2e7d32"><path d="M0 0h24v24H0z" fill="none"/><path d="M19 3H4.99c-1.11 0-1.98.9-1.98 2L3 19c0 1.1.88 2 1.99 2H19c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 12h-4c0 1.66-1.35 3-3 3s-3-1.34-3-3H4.99V5H19v10z"/><path d="M14 9h-4v4H7l5 5 5-5h-3z"/></svg>
+                </span>
               </div>
             </template>
 
@@ -261,12 +264,14 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useTagStore } from '../../stores/tags'
 import { useCommentStore } from '../../stores/comments'
 import { useFileStore } from '../../stores/files'
 import { formatDateOnly, formatSize } from '../../utils/format'
 import { MessageSquare } from 'lucide-vue-next'
 
+const { t } = useI18n()
 const fileStore = useFileStore()
 
 const props = defineProps({
@@ -321,6 +326,7 @@ const emit = defineEmits([
   'folder-drag-over',
   'folder-drag-leave',
   'manage-share',
+  'manage-file-request',
   'remove-tag',
   'sort-change',
   'toggle-select-all',
@@ -596,6 +602,17 @@ td.col-updated {
   cursor: pointer;
 }
 .shared-icon:hover {
+  background-color: var(--hover-background-color);
+  border-radius: 25%;
+}
+
+.file-request-icon {
+  margin-left: 0.5rem;
+  flex-shrink: 0;
+  text-align: right;
+  cursor: pointer;
+}
+.file-request-icon:hover {
   background-color: var(--hover-background-color);
   border-radius: 25%;
 }

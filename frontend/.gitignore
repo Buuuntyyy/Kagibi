@@ -13,6 +13,11 @@ dist-ssr
 *.local
 .env
 
+# Mirrored by vite.config.js's syncChangelogPlugin from the repo-root files at every
+# dev/build start — keep the root CHANGELOG*.md as the only source of truth.
+public/CHANGELOG.md
+public/CHANGELOG.en.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

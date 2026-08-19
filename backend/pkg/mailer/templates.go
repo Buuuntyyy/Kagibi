@@ -160,6 +160,61 @@ func orgInviteBodyEN(toEmail, inviterName, orgName, role, joinURL string) string
 		"to send you an invitation to join their organization.\n"
 }
 
+// SendFileRequestInvite notifies a recipient that someone wants them to drop files
+// into a Kagibi file request (upload-only share link).
+// lang must be "fr" or "en"; any other value falls back to "fr".
+func SendFileRequestInvite(toEmail, senderName, requestLabel, link, lang string) error {
+	var subject, body string
+	if lang == "en" {
+		subject = senderName + " is requesting files from you on Kagibi"
+		body = fileRequestInviteBodyEN(toEmail, senderName, requestLabel, link)
+	} else {
+		subject = senderName + " vous demande des fichiers sur Kagibi"
+		body = fileRequestInviteBodyFR(toEmail, senderName, requestLabel, link)
+	}
+	return Send(Message{To: toEmail, Subject: subject, Body: body})
+}
+
+func fileRequestInviteBodyFR(toEmail, senderName, requestLabel, link string) string {
+	labelLine := ""
+	if requestLabel != "" {
+		labelLine = "  « " + requestLabel + " »\n\n"
+	}
+	return "Bonjour,\n\n" +
+		senderName + " vous invite à déposer des fichiers de façon sécurisée via Kagibi.\n\n" +
+		labelLine +
+		"Pour déposer vos fichiers, cliquez sur le lien ci-dessous. Aucun compte n'est nécessaire.\n\n" +
+		"  " + link + "\n\n" +
+		"Vos fichiers sont chiffrés directement dans votre navigateur avant l'envoi : " + senderName + "\n" +
+		"est la seule personne à pouvoir les lire, et nos serveurs n'y ont jamais accès.\n\n" +
+		"Si vous ne vous attendiez pas à recevoir ce message, vous pouvez l'ignorer sans\n" +
+		"vous inquiéter — aucune action n'est requise de votre part.\n\n" +
+		"—\n" +
+		"L'équipe Kagibi · https://kagibi.cloud\n\n" +
+		"Vous recevez cet e-mail car " + senderName + " a utilisé votre adresse (" + toEmail + ")\n" +
+		"pour vous envoyer une demande de dépôt de fichiers.\n"
+}
+
+func fileRequestInviteBodyEN(toEmail, senderName, requestLabel, link string) string {
+	labelLine := ""
+	if requestLabel != "" {
+		labelLine = "  \"" + requestLabel + "\"\n\n"
+	}
+	return "Hello,\n\n" +
+		senderName + " is asking you to securely drop off some files through Kagibi.\n\n" +
+		labelLine +
+		"Click the link below to upload your files. No account required.\n\n" +
+		"  " + link + "\n\n" +
+		"Your files are encrypted directly in your browser before upload: " + senderName + "\n" +
+		"is the only one who can read them, and our servers never have access to their content.\n\n" +
+		"If you weren't expecting this message, feel free to ignore it —\n" +
+		"no action is required on your part.\n\n" +
+		"—\n" +
+		"The Kagibi team · https://kagibi.cloud\n\n" +
+		"You received this email because " + senderName + " used your address (" + toEmail + ")\n" +
+		"to send you a file request.\n"
+}
+
 // SendRecoveryRotationCode emails a one-time confirmation code required before a
 // recovery-code rotation takes effect (cf. handlers/auth/recovery_kit.go — defense in
 // depth so a hijacked session alone cannot silently plant a durable backdoor via the

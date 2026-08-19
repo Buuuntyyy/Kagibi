@@ -282,12 +282,21 @@ func streamFileFromS3(c *gin.Context, file *pkg.File) {
 	}
 }
 
-// GetFileFolderKeyHandler returns the folder-key chain for a file whose encrypted_key
-// is empty (uploaded by a friend into a shared folder). The owner calls this endpoint
-// to obtain the two wrapped keys needed to derive the file key:
+// GetFileFolderKeyHandler returns the key-recovery chain for a file whose encrypted_key
+// is empty. Two cases exist, depending on how the file was uploaded by someone other
+// than the owner:
 //
-//	folderKey = unwrap(folder_encrypted_key, masterKey)
-//	fileKey   = unwrap(file_encrypted_key,   folderKey)
+//  1. A friend with an account uploaded into a directly-shared folder (folder_file_keys):
+//     folderKey = unwrap(folder_encrypted_key, masterKey)
+//     fileKey   = unwrap(file_encrypted_key,   folderKey)
+//     Response: {"type": "folder", "folder_encrypted_key": ..., "file_encrypted_key": ...}
+//
+//  2. An anonymous depositor used a file-request / public-share link (share_file_keys).
+//     There the uploader has no account and no folder key, so the client wraps the file
+//     key with a key derived from the public share token instead:
+//     tokenKey = deriveKeyFromToken(share_token)
+//     fileKey  = unwrap(file_encrypted_key, tokenKey)
+//     Response: {"type": "token", "share_token": ..., "file_encrypted_key": ...}
 func GetFileFolderKeyHandler(c *gin.Context, db *bun.DB) {
 	userID := c.GetString("user_id")
 	fileID, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -313,26 +322,100 @@ func GetFileFolderKeyHandler(c *gin.Context, db *bun.DB) {
 	var fk pkg.FolderFileKey
 	if err := db.NewSelect().Model(&fk).
 		Where("file_id = ?", fileID).
-		Scan(c.Request.Context()); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no folder key found for this file"})
+		Scan(c.Request.Context()); err == nil {
+		var folder pkg.Folder
+		if err := db.NewSelect().Model(&folder).
+			Where("id = ? AND user_id = ?", fk.FolderID, userID).
+			Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "folder not found"})
+			return
+		}
+		if folder.EncryptedKey == "" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "folder key not set"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"type":                 "folder",
+			"folder_encrypted_key": folder.EncryptedKey,
+			"file_encrypted_key":   fk.EncryptedKey,
+		})
 		return
 	}
 
-	var folder pkg.Folder
-	if err := db.NewSelect().Model(&folder).
-		Where("id = ? AND user_id = ?", fk.FolderID, userID).
-		Scan(c.Request.Context()); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "folder not found"})
+	var sfk pkg.ShareFileKey
+	if err := db.NewSelect().Model(&sfk).
+		Where("file_id = ?", fileID).
+		Scan(c.Request.Context()); err == nil {
+		var shareLink pkg.ShareLink
+		if err := db.NewSelect().Model(&shareLink).
+			Where("id = ? AND owner_id = ?", sfk.ShareID, userID).
+			Scan(c.Request.Context()); err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "share not found"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"type":               "token",
+			"share_token":        shareLink.Token,
+			"file_encrypted_key": sfk.EncryptedKey,
+		})
 		return
 	}
 
-	if folder.EncryptedKey == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "folder key not set"})
+	c.JSON(http.StatusNotFound, gin.H{"error": "no key found for this file"})
+}
+
+type persistFileKeyRequest struct {
+	EncryptedKey string `json:"encrypted_key" binding:"required"`
+}
+
+// PersistFileKeyHandler lets the owner permanently attach a direct, master-key-wrapped
+// key to a file once they've recovered its plaintext key client-side via the folder-key
+// or share-token fallback (GetFileFolderKeyHandler). Without this, a file deposited
+// through a file-request/shared-folder link only stays decryptable as long as the
+// underlying share_links / folders row (and its CASCADE-linked key row) still exists —
+// revoking the share link permanently destroys the recovery path. Persisting a direct
+// copy of the key decouples the file from the share it arrived through.
+//
+// Only fills in a key that isn't already set (first-recovery wins) — the client is
+// trusted here the same way it is for the original upload's encrypted_key, since the
+// server never sees plaintext keys either way.
+func PersistFileKeyHandler(c *gin.Context, db *bun.DB) {
+	userID := c.GetString("user_id")
+	fileID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file ID"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"folder_encrypted_key": folder.EncryptedKey,
-		"file_encrypted_key":   fk.EncryptedKey,
-	})
+	var req persistFileKeyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	res, err := db.NewUpdate().Model((*pkg.File)(nil)).
+		Set("encrypted_key = ?", req.EncryptedKey).
+		Where("id = ? AND user_id = ? AND (encrypted_key IS NULL OR encrypted_key = '')", fileID, userID).
+		Exec(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to persist key"})
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		// Either the file doesn't belong to this user, or it already has a direct key
+		// (nothing to do in the latter case — not an error).
+		c.JSON(http.StatusOK, gin.H{"message": "Nothing to persist"})
+		return
+	}
+
+	// The direct key now supersedes the folder/share key chain for this file — clean up
+	// the now-redundant rows so revoking the originating share doesn't leave dangling data.
+	if _, err := db.NewDelete().Model((*pkg.FolderFileKey)(nil)).Where("file_id = ?", fileID).Exec(c.Request.Context()); err != nil {
+		log.Printf("Warning: failed to clean up folder_file_keys for file %d: %v", fileID, err)
+	}
+	if _, err := db.NewDelete().Model((*pkg.ShareFileKey)(nil)).Where("file_id = ?", fileID).Exec(c.Request.Context()); err != nil {
+		log.Printf("Warning: failed to clean up share_file_keys for file %d: %v", fileID, err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Key persisted"})
 }

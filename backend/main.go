@@ -9,12 +9,14 @@ import (
 	"kagibi/backend/handlers/auth"
 	billinghandlers "kagibi/backend/handlers/billing"
 	commenthandlers "kagibi/backend/handlers/comments"
+	"kagibi/backend/handlers/dbimport"
 	"kagibi/backend/handlers/files"
 	"kagibi/backend/handlers/folders"
 	"kagibi/backend/handlers/friends"
 	"kagibi/backend/handlers/gdimport"
 	"kagibi/backend/handlers/keys"
 	notifhandlers "kagibi/backend/handlers/notifications"
+	"kagibi/backend/handlers/odimport"
 	orghandlers "kagibi/backend/handlers/organizations"
 	p2phandlers "kagibi/backend/handlers/p2p"
 	"kagibi/backend/handlers/security"
@@ -177,7 +179,7 @@ func setupRouter(redisClient *redis.Client) *gin.Engine {
 	}
 
 	config.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "X-Share-Password"}
 	config.ExposeHeaders = []string{"Content-Length"}
 	config.AllowCredentials = true
 	config.MaxAge = 12 * time.Hour
@@ -283,8 +285,6 @@ func registerUserRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	g.POST("/auth/recovery/rotate", middleware.RequireMFAForAction(db, "recovery_change"), func(c *gin.Context) { auth.RotateRecoveryHandler(c, db) })
 	g.PUT("/auth/update-email", middleware.RequireMFAForAction(db, "email_change"), auth.LocalUpdateEmailHandler(provider, db, redisClient))
 	g.DELETE("/auth/account", middleware.RequireMFAForAction(db, "destructive"), auth.DeleteAccount(db, provider))
-	g.PUT("/auth/update-email", auth.LocalUpdateEmailHandler(provider, db, redisClient))
-	g.DELETE("/auth/account", auth.DeleteAccount(db, provider))
 
 	usersG := g.Group("/users")
 	usersG.GET("/me", func(c *gin.Context) { users.MeHandler(c, db) })
@@ -326,6 +326,7 @@ func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	filesG.POST("/batch-presign", middleware.RequireMFAForAction(db, "download"), func(c *gin.Context) { files.BatchPresignDownloadHandler(c, db) })
 	filesG.POST("/selection-tree", func(c *gin.Context) { files.GetSelectionTreeHandler(c, db) })
 	filesG.GET("/:id/folder-key", func(c *gin.Context) { files.GetFileFolderKeyHandler(c, db) })
+	filesG.POST("/:id/persist-key", func(c *gin.Context) { files.PersistFileKeyHandler(c, db) })
 	// Version history routes (use :id to match /:id/folder-key param name at same level)
 	filesG.GET("/:id/versions", func(c *gin.Context) { files.ListVersionsHandler(c, db) })
 	filesG.POST("/:id/versions/:versionID/restore", func(c *gin.Context) { files.RestoreVersionHandler(c, db) })
@@ -339,13 +340,12 @@ func registerFileRoutes(g *gin.RouterGroup, db *bun.DB, redisClient *redis.Clien
 	trashG.POST("/:itemType/:itemID/restore", func(c *gin.Context) { files.RestoreTrashItemHandler(c, db) })
 	trashG.DELETE("/:itemType/:itemID", middleware.RequireMFAForAction(db, "destructive"), func(c *gin.Context) { files.PermanentDeleteTrashItemHandler(c, db) })
 	trashG.DELETE("", middleware.RequireMFAForAction(db, "destructive"), func(c *gin.Context) { files.EmptyTrashHandler(c, db) })
-	filesG.DELETE("/:id/versions/:versionID", func(c *gin.Context) { files.DeleteVersionHandler(c, db) })
-	filesG.GET("/:id/versions/:versionID/presigned", func(c *gin.Context) { files.GetVersionPresignedDownloadHandler(c, db) })
 }
 
 func registerFolderRoutes(g *gin.RouterGroup, db *bun.DB) {
 	foldersG := g.Group("/folders")
 	foldersG.POST("/create", func(c *gin.Context) { folders.CreateHandler(c, db) })
+	foldersG.POST("/batch-create", func(c *gin.Context) { folders.BatchCreateHandler(c, db) })
 	foldersG.PUT("/:id/key", func(c *gin.Context) { folders.UpdateFolderKeyHandler(c, db) })
 	foldersG.GET("/:id/tree", func(c *gin.Context) { folders.GetFolderTreeHandler(c, db) })
 }
@@ -377,6 +377,7 @@ func registerShareRoutes(g *gin.RouterGroup, db *bun.DB) {
 	sharesG.GET("/check-path", func(c *gin.Context) { shares.GetActiveSharesForPathHandler(c, db) })
 	sharesG.GET("/check-path-direct", func(c *gin.Context) { shares.GetDirectSharesForPathHandler(c, db) })
 	sharesG.GET("/file/:fileID", func(c *gin.Context) { shares.GetShareForResourceHandler(c, db) })
+	sharesG.GET("/file-request", func(c *gin.Context) { shares.GetFileRequestLinkHandler(c, db) })
 	sharesG.GET("/direct/folder/:folderID/content", func(c *gin.Context) { shares.GetSharedFolderContentHandler(c, db) })
 	sharesG.GET("/direct/folder/:folderID/files-recursive", func(c *gin.Context) { shares.DirectFolderFilesRecursiveHandler(c, db) })
 	sharesG.DELETE("/link/:shareID", func(c *gin.Context) { shares.DeleteShareLinkHandler(c, db) })
@@ -734,6 +735,11 @@ func registerImportRoutes(g *gin.RouterGroup) {
 	importG.GET("/google/config", gdimport.GetGoogleConfig)
 	// Échange du code PKCE contre un access_token côté serveur (client_secret sécurisé)
 	importG.POST("/google/desktop-token", gdimport.ExchangeDesktopToken)
+	// OneDrive utilise un flux PKCE direct (client public, pas de secret) : le navigateur
+	// et l'app desktop échangent le code directement avec Microsoft, pas de proxy ici.
+	importG.GET("/onedrive/config", odimport.GetOneDriveConfig)
+	// Dropbox utilise également un flux PKCE direct (client public, pas de secret).
+	importG.GET("/dropbox/config", dbimport.GetDropboxConfig)
 }
 
 func registerCommentRoutes(g *gin.RouterGroup, db *bun.DB) {

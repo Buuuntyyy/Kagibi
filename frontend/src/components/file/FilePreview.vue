@@ -166,7 +166,7 @@ const loadPdf = async (url) => {
         // Option A: Pass URL directly (let VuePdfEmbed handle it)
         pdfSource.value = {
              url: url,
-             cMapUrl: 'https://unpkg.com/pdfjs-dist@4.10.38/cmaps/',
+             cMapUrl: 'https://unpkg.com/pdfjs-dist@5.7.284/cmaps/',
              cMapPacked: true,
         };
     } catch (e) {

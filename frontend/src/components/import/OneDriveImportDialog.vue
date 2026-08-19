@@ -3,23 +3,19 @@
 
 <template>
   <Teleport to="body">
-    <div v-if="modelValue" class="gdi-overlay" @click.self="handleClose">
-      <div class="gdi-dialog" role="dialog" aria-modal="true" :aria-labelledby="'gdi-title-' + uid">
+    <div v-if="modelValue" class="odi-overlay" @click.self="handleClose">
+      <div class="odi-dialog" role="dialog" aria-modal="true" :aria-labelledby="'odi-title-' + uid">
 
         <!-- Header -->
-        <div class="gdi-header">
-          <div class="gdi-header-left">
-            <svg class="gdi-gdrive-icon" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
-              <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
-              <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
-              <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
-              <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
-              <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 27h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+        <div class="odi-header">
+          <div class="odi-header-left">
+            <svg class="odi-onedrive-icon" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M23.5 13.6c-.5-3.6-3.6-6.4-7.3-6.4-2.9 0-5.4 1.6-6.7 4-.3 0-.5-.1-.8-.1-3.3 0-6 2.7-6 6 0 .3 0 .6.1.9C1.1 18.7 0 20.5 0 22.5 0 25.5 2.5 28 5.5 28h18c3.6 0 6.5-2.9 6.5-6.5 0-3.3-2.5-6-5.7-6.4z" fill="#0078D4"/>
+              <path d="M23.5 13.6c3.2.4 5.7 3.1 5.7 6.4 0 .5-.1 1-.2 1.5-.5-2.8-2.9-5-5.8-5.2-.5-3.6-3.6-6.4-7.3-6.4-1 0-1.9.2-2.8.5 1-1.3 2.6-2.2 4.5-2.2 3.7 0 6.8 2.8 7.3 6.4z" fill="#28A8EA" opacity="0.85"/>
             </svg>
-            <h2 :id="'gdi-title-' + uid">{{ t('gdImport.title') }}</h2>
+            <h2 :id="'odi-title-' + uid">{{ t('odImport.title') }}</h2>
           </div>
-          <button class="gdi-close" @click="handleClose" :aria-label="t('gdImport.close')">
+          <button class="odi-close" @click="handleClose" :aria-label="t('odImport.close')">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 6L6 18M6 6l12 12"/>
             </svg>
@@ -27,169 +23,160 @@
         </div>
 
         <!-- ── Phase 1: Connect ── -->
-        <div v-if="phase === 'connect'" class="gdi-body">
-          <p class="gdi-intro">{{ t('gdImport.connectIntro') }}</p>
+        <div v-if="phase === 'connect'" class="odi-body">
+          <p class="odi-intro">{{ t('odImport.connectIntro') }}</p>
 
-          <div class="gdi-info-box">
-            <div class="gdi-info-row">
-              <svg class="gdi-info-icon gdi-icon-ok" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-              <span>{{ t('gdImport.infoE2E') }}</span>
+          <div class="odi-info-box">
+            <div class="odi-info-row">
+              <svg class="odi-info-icon odi-icon-ok" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              <span>{{ t('odImport.infoE2E') }}</span>
             </div>
-            <div class="gdi-info-row">
-              <svg class="gdi-info-icon gdi-icon-ok" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-              <span>{{ t('gdImport.infoReadOnly') }}</span>
+            <div class="odi-info-row">
+              <svg class="odi-info-icon odi-icon-ok" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              <span>{{ t('odImport.infoReadOnly') }}</span>
             </div>
-            <div class="gdi-info-row">
-              <svg class="gdi-info-icon gdi-icon-ok" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
-              <span>{{ t('gdImport.infoTokenNotStored') }}</span>
-            </div>
-            <div class="gdi-info-row">
-              <svg class="gdi-info-icon gdi-icon-info" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span>{{ t('gdImport.infoWorkspace') }}</span>
+            <div class="odi-info-row">
+              <svg class="odi-info-icon odi-icon-ok" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+              <span>{{ t('odImport.infoTokenNotStored') }}</span>
             </div>
           </div>
 
-          <div v-if="connecting" class="gdi-connect-status">
-            <span class="gdi-spinner gdi-spinner-sm"></span>
+          <div v-if="connecting" class="odi-connect-status">
+            <span class="odi-spinner odi-spinner-sm"></span>
             <span>{{ connectStatusLabel }}</span>
           </div>
 
-          <p v-if="connectError" class="gdi-error">{{ connectError }}</p>
+          <p v-if="connectError" class="odi-error">{{ connectError }}</p>
 
-          <div class="gdi-actions">
-            <button class="gdi-btn-secondary" @click="handleClose" :disabled="connecting">{{ t('gdImport.cancel') }}</button>
-            <button class="gdi-btn-primary" @click="doConnect" :disabled="connecting">
-              <span v-if="connecting" class="gdi-spinner"></span>
-              {{ connecting ? t('gdImport.connecting') : t('gdImport.connectBtn') }}
+          <div class="odi-actions">
+            <button class="odi-btn-secondary" @click="handleClose" :disabled="connecting">{{ t('odImport.cancel') }}</button>
+            <button class="odi-btn-primary" @click="doConnect" :disabled="connecting">
+              <span v-if="connecting" class="odi-spinner"></span>
+              {{ connecting ? t('odImport.connecting') : t('odImport.connectBtn') }}
             </button>
           </div>
         </div>
 
         <!-- ── Phase 1.5: Select Source Folders ── -->
-        <div v-else-if="phase === 'folders'" class="gdi-body">
-          <p class="gdi-intro">{{ t('gdImport.foldersIntro') }}</p>
-          <div class="gdi-select-toolbar">
-            <span class="gdi-count-label">{{ t('gdImport.rootFolderCount', { n: rootFolders.length }) }}</span>
-            <div class="gdi-select-actions">
-              <button class="gdi-btn-text" @click="selectAllRoots">{{ t('gdImport.selectAll') }}</button>
-              <button class="gdi-btn-text" @click="deselectAllRoots">{{ t('gdImport.deselectAll') }}</button>
+        <div v-else-if="phase === 'folders'" class="odi-body">
+          <p class="odi-intro">{{ t('odImport.foldersIntro') }}</p>
+          <div class="odi-select-toolbar">
+            <span class="odi-count-label">{{ t('odImport.rootFolderCount', { n: rootFolders.length }) }}</span>
+            <div class="odi-select-actions">
+              <button class="odi-btn-text" @click="selectAllRoots">{{ t('odImport.selectAll') }}</button>
+              <button class="odi-btn-text" @click="deselectAllRoots">{{ t('odImport.deselectAll') }}</button>
             </div>
           </div>
-          <div class="gdi-file-list" role="list">
-            <label v-for="folder in rootFolders" :key="folder.path" class="gdi-file-row" role="listitem">
-              <input type="checkbox" :checked="selectedRoots.has(folder.path)" @change="toggleRoot(folder.path)" class="gdi-checkbox" />
-              <span class="gdi-file-icon">📁</span>
-              <span class="gdi-file-name">{{ folder.name }}</span>
+          <div class="odi-file-list" role="list">
+            <label v-for="folder in rootFolders" :key="folder.path" class="odi-file-row" role="listitem">
+              <input type="checkbox" :checked="selectedRoots.has(folder.path)" @change="toggleRoot(folder.path)" class="odi-checkbox" />
+              <span class="odi-file-icon">📁</span>
+              <span class="odi-file-name">{{ folder.name }}</span>
             </label>
           </div>
           <!-- Dedicated root folder option -->
-          <div class="gdi-dedicated-option">
-            <label class="gdi-dedicated-checkbox">
-              <input type="checkbox" v-model="useDedicatedFolder" class="gdi-checkbox" />
-              <span>{{ t('gdImport.dedicatedFolder') }}</span>
+          <div class="odi-dedicated-option">
+            <label class="odi-dedicated-checkbox">
+              <input type="checkbox" v-model="useDedicatedFolder" class="odi-checkbox" />
+              <span>{{ t('odImport.dedicatedFolder') }}</span>
             </label>
-            <div v-if="useDedicatedFolder" class="gdi-dedicated-name-row">
-              <span class="gdi-dedicated-prefix">Kagibi /</span>
+            <div v-if="useDedicatedFolder" class="odi-dedicated-name-row">
+              <span class="odi-dedicated-prefix">Kagibi /</span>
               <input
                 type="text"
                 v-model.trim="dedicatedFolderName"
-                class="gdi-dedicated-input"
-                :placeholder="t('gdImport.dedicatedFolderPlaceholder')"
+                class="odi-dedicated-input"
+                :placeholder="t('odImport.dedicatedFolderPlaceholder')"
                 maxlength="100"
                 spellcheck="false"
               />
             </div>
           </div>
 
-          <div class="gdi-actions">
-            <button class="gdi-btn-secondary" @click="handleClose">{{ t('gdImport.cancel') }}</button>
+          <div class="odi-actions">
+            <button class="odi-btn-secondary" @click="handleClose">{{ t('odImport.cancel') }}</button>
             <button
-              class="gdi-btn-primary"
+              class="odi-btn-primary"
               @click="confirmFolders"
               :disabled="selectedRoots.size === 0 || (useDedicatedFolder && !dedicatedFolderName)"
             >
-              {{ t('gdImport.foldersConfirm', { n: selectedRoots.size }) }}
+              {{ t('odImport.foldersConfirm', { n: selectedRoots.size }) }}
             </button>
           </div>
         </div>
 
         <!-- ── Phase 2: Select ── -->
-        <div v-else-if="phase === 'select'" class="gdi-body">
-          <div class="gdi-select-toolbar">
-            <div class="gdi-toolbar-left">
-              <button class="gdi-btn-text gdi-btn-back" @click="goBackToFolders">
+        <div v-else-if="phase === 'select'" class="odi-body">
+          <div class="odi-select-toolbar">
+            <div class="odi-toolbar-left">
+              <button class="odi-btn-text odi-btn-back" @click="goBackToFolders">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
-                {{ t('gdImport.back') }}
+                {{ t('odImport.back') }}
               </button>
-              <span class="gdi-count-label">{{ t('gdImport.fileCount', { n: allFiles.length }) }}</span>
-              <span class="gdi-dest-hint" :title="t('gdImport.destinationHint')">
+              <span class="odi-count-label">{{ t('odImport.fileCount', { n: allFiles.length }) }}</span>
+              <span class="odi-dest-hint" :title="t('odImport.destinationHint')">
                 <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 {{ targetPathDisplay }}
               </span>
             </div>
-            <div class="gdi-select-actions">
-              <button class="gdi-btn-text" @click="selectAll">{{ t('gdImport.selectAll') }}</button>
-              <button class="gdi-btn-text" @click="deselectAll">{{ t('gdImport.deselectAll') }}</button>
+            <div class="odi-select-actions">
+              <button class="odi-btn-text" @click="selectAll">{{ t('odImport.selectAll') }}</button>
+              <button class="odi-btn-text" @click="deselectAll">{{ t('odImport.deselectAll') }}</button>
             </div>
           </div>
 
-          <div class="gdi-file-list" role="list">
+          <div class="odi-file-list" role="list">
             <template v-for="row in treeRows" :key="row.type === 'folder' ? 'd:' + row.path : 'f:' + row.file.id">
 
               <!-- Folder row -->
-              <div v-if="row.type === 'folder'" class="gdi-tree-dir" :style="{ paddingLeft: (row.level * 18) + 'px' }">
-                <button class="gdi-tree-toggle" @click.stop="toggleFolder(row.path)" :aria-expanded="row.isExpanded">
-                  <svg class="gdi-tree-chevron" :class="{ 'gdi-tree-chevron-open': row.isExpanded }" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
+              <div v-if="row.type === 'folder'" class="odi-tree-dir" :style="{ paddingLeft: (row.level * 18) + 'px' }">
+                <button class="odi-tree-toggle" @click.stop="toggleFolder(row.path)" :aria-expanded="row.isExpanded">
+                  <svg class="odi-tree-chevron" :class="{ 'odi-tree-chevron-open': row.isExpanded }" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5">
                     <path d="M9 18l6-6-6-6"/>
                   </svg>
                 </button>
-                <label class="gdi-tree-dir-label">
+                <label class="odi-tree-dir-label">
                   <input
                     type="checkbox"
-                    class="gdi-checkbox"
+                    class="odi-checkbox"
                     :checked="folderCheckState(row.fileIds) !== 'none'"
                     :indeterminate="folderCheckState(row.fileIds) === 'some'"
                     @change="toggleFolderSelection(row.fileIds)"
                   />
-                  <span class="gdi-file-icon">📁</span>
-                  <span class="gdi-tree-dir-name">{{ row.name }}</span>
-                  <span class="gdi-tree-dir-count">{{ row.fileIds.length }}</span>
+                  <span class="odi-file-icon">📁</span>
+                  <span class="odi-tree-dir-name">{{ row.name }}</span>
+                  <span class="odi-tree-dir-count">{{ row.fileIds.length }}</span>
                 </label>
               </div>
 
               <!-- File row -->
-              <label v-else class="gdi-file-row gdi-tree-file" :style="{ paddingLeft: (row.level * 18 + 22) + 'px' }">
-                <input type="checkbox" :checked="selectedSet.has(row.file.id)" @change="toggleFile(row.file.id)" class="gdi-checkbox" />
-                <span class="gdi-file-icon" :title="row.file.mimeType">{{ mimeIcon(row.file.mimeType) }}</span>
-                <span class="gdi-file-name">
-                  {{ row.file.name }}
-                  <span v-if="isWorkspaceFile(row.file.mimeType)" class="gdi-badge-workspace">
-                    → {{ workspaceExtension(row.file.mimeType) }}
-                  </span>
-                </span>
-                <span class="gdi-file-size">{{ formatBytes(parseInt(row.file.size || '0', 10)) }}</span>
+              <label v-else class="odi-file-row odi-tree-file" :style="{ paddingLeft: (row.level * 18 + 22) + 'px' }">
+                <input type="checkbox" :checked="selectedSet.has(row.file.id)" @change="toggleFile(row.file.id)" class="odi-checkbox" />
+                <span class="odi-file-icon" :title="row.file.mimeType">{{ mimeIcon(row.file.mimeType) }}</span>
+                <span class="odi-file-name">{{ row.file.name }}</span>
+                <span class="odi-file-size">{{ formatBytes(parseInt(row.file.size || '0', 10)) }}</span>
               </label>
 
             </template>
           </div>
 
-          <div class="gdi-select-summary">
-            {{ t('gdImport.selectedSummary', {
+          <div class="odi-select-summary">
+            {{ t('odImport.selectedSummary', {
               n: selectedSet.size,
               size: formatBytes(selectedTotalSize)
             }) }}
           </div>
 
-          <p v-if="selectError" class="gdi-error">{{ selectError }}</p>
+          <p v-if="selectError" class="odi-error">{{ selectError }}</p>
 
-          <div class="gdi-actions">
-            <button class="gdi-btn-secondary" @click="handleClose">{{ t('gdImport.cancel') }}</button>
+          <div class="odi-actions">
+            <button class="odi-btn-secondary" @click="handleClose">{{ t('odImport.cancel') }}</button>
             <button
-              class="gdi-btn-primary"
+              class="odi-btn-primary"
               @click="doImport"
               :disabled="selectedSet.size === 0"
             >
-              {{ t('gdImport.importBtn', { n: selectedSet.size }) }}
+              {{ t('odImport.importBtn', { n: selectedSet.size }) }}
             </button>
           </div>
         </div>
@@ -205,12 +192,10 @@ import { useI18n } from 'vue-i18n'
 import { useImportStore } from '../../stores/imports'
 import { useFileStore } from '../../stores/files'
 import {
-  GoogleDriveImport,
+  OneDriveImport,
   getImportableFiles,
-  isWorkspaceFile,
-  workspaceExtension,
   formatBytes
-} from '../../utils/googleDriveImport'
+} from '../../utils/oneDriveImport'
 
 const { t } = useI18n()
 const importStore = useImportStore()
@@ -235,16 +220,16 @@ const selectError = ref('')
 const allFiles    = ref([])
 const pathMap     = ref(new Map())
 const selectedSet = ref(new Set())  // O(1) lookup, avoids Array.includes on every checkbox render
-const rootFolders = ref([])         // [{ path: '/Name', name: 'Name' }] — depth-1 Drive folders
+const rootFolders = ref([])         // [{ path: '/Name', name: 'Name' }] — depth-1 OneDrive folders
 const selectedRoots = ref(new Set())
 
 const expandedFolders    = ref(new Set())   // set of kagibi folder paths currently expanded
 const allFilesUnfiltered = ref([])          // full file list before confirmFolders filter
 
-const useDedicatedFolder  = ref(true)              // import into a dedicated root folder
-const dedicatedFolderName = ref('Google Drive')    // name of that folder
+const useDedicatedFolder  = ref(true)         // import into a dedicated root folder
+const dedicatedFolderName = ref('OneDrive')   // name of that folder
 
-const importer = new GoogleDriveImport()
+const importer = new OneDriveImport()
 
 // ── Computed ──
 const targetPathDisplay = computed(() =>
@@ -259,8 +244,7 @@ const treeRows = computed(() => {
   // Group files by their kagibi directory path
   const dirFiles = new Map()
   for (const file of allFiles.value) {
-    const parentId = (file.parents ?? [])[0]
-    const fp = parentId ? pathMap.value.get(parentId) : null
+    const fp = file.parentId ? pathMap.value.get(file.parentId) : null
     const dir = fp || '__root__'
     if (!dirFiles.has(dir)) dirFiles.set(dir, [])
     dirFiles.get(dir).push(file)
@@ -337,21 +321,29 @@ function resetDialog() {
   expandedFolders.value    = new Set()
   allFilesUnfiltered.value = []
   useDedicatedFolder.value  = true
-  dedicatedFolderName.value = 'Google Drive'
+  dedicatedFolderName.value = 'OneDrive'
+  listedCount.value = 0
 }
 
 // ── Phase 1: Connect ──
 const connectStatus = ref('auth')  // 'auth' | 'listing' | 'building'
-const connectStatusLabel = computed(() => ({
-  auth:     t('gdImport.statusAuth'),
-  listing:  t('gdImport.statusListing'),
-  building: t('gdImport.statusBuilding'),
-}[connectStatus.value] ?? t('gdImport.connecting')))
+const listedCount   = ref(0)       // live item count while connectStatus === 'listing'
+const connectStatusLabel = computed(() => {
+  if (connectStatus.value === 'listing' && listedCount.value > 0) {
+    return t('odImport.statusListingCount', { n: listedCount.value })
+  }
+  return ({
+    auth:     t('odImport.statusAuth'),
+    listing:  t('odImport.statusListing'),
+    building: t('odImport.statusBuilding'),
+  }[connectStatus.value] ?? t('odImport.connecting'))
+})
 
 async function doConnect() {
   connecting.value = true
   connectError.value = ''
   connectStatus.value = 'auth'
+  listedCount.value = 0
   // Listing a large drive can take well over the session's inactivity window — keep the
   // session (server + client-side timers) alive for the whole connect phase, not just
   // the transfer that useImportStore covers afterwards.
@@ -359,12 +351,12 @@ async function doConnect() {
   try {
     await importer.init()
     if (!importer.isConfigured) {
-      connectError.value = t('gdImport.errorNotConfigured')
+      connectError.value = t('odImport.errorNotConfigured')
       return
     }
     await importer.authenticate()
     connectStatus.value = 'listing'
-    const { folders, files } = await importer.listAllItems()
+    const { folders, files } = await importer.listAllItems((n) => { listedCount.value = n })
     connectStatus.value = 'building'
     pathMap.value = await importer.buildPathMap(folders)
     allFiles.value = getImportableFiles(files)
@@ -383,26 +375,23 @@ async function doConnect() {
       .map(([path, name]) => ({ path, name }))
       .sort((a, b) => a.name.localeCompare(b.name))
 
-    // Detect files sitting directly in My Drive root (parent not in pathMap).
+    // Detect files sitting directly at the OneDrive root (parent not in pathMap).
     // Expose them as an explicit selectable entry so users can include or exclude them.
-    const hasRootFiles = allFiles.value.some(f => {
-      const parentId = (f.parents ?? [])[0]
-      return !parentId || !pathMap.value.has(parentId)
-    })
+    const hasRootFiles = allFiles.value.some(f => !f.parentId || !pathMap.value.has(f.parentId))
     if (hasRootFiles) {
-      rootFolders.value.unshift({ path: '__root__', name: t('gdImport.driveRoot') })
+      rootFolders.value.unshift({ path: '__root__', name: t('odImport.driveRoot') })
     }
 
     if (rootFolders.value.length > 0) {
       selectedRoots.value = new Set(rootFolders.value.map(r => r.path))
       phase.value = 'folders'
     } else {
-      // No sub-folders at all — all files are at Drive root, skip folder selection.
+      // No sub-folders at all — all files are at the OneDrive root, skip folder selection.
       selectedSet.value = new Set(allFiles.value.map(f => f.id))
       phase.value = 'select'
     }
   } catch (err) {
-    connectError.value = err.message || t('gdImport.errorConnect')
+    connectError.value = err.message || t('odImport.errorConnect')
   } finally {
     connecting.value = false
     fileStore.stopHeartbeat()
@@ -422,8 +411,7 @@ function confirmFolders() {
   const includeRoot = selectedRoots.value.has('__root__')
   // Always filter from the original full list so back+confirm works correctly
   const filtered = allFilesUnfiltered.value.filter(f => {
-    const parentId = (f.parents ?? [])[0]
-    const folderPath = parentId ? pathMap.value.get(parentId) : null
+    const folderPath = f.parentId ? pathMap.value.get(f.parentId) : null
     if (!folderPath) return includeRoot
     const rootPath = '/' + folderPath.split('/').filter(Boolean)[0]
     return selectedRoots.value.has(rootPath)
@@ -434,8 +422,7 @@ function confirmFolders() {
   // Expand all folders that contain at least one file
   const expanded = new Set()
   for (const file of filtered) {
-    const parentId = (file.parents ?? [])[0]
-    const fp = parentId ? pathMap.value.get(parentId) : null
+    const fp = file.parentId ? pathMap.value.get(file.parentId) : null
     if (fp) {
       const segs = fp.split('/').filter(Boolean)
       for (let i = 1; i <= segs.length; i++) expanded.add('/' + segs.slice(0, i).join('/'))
@@ -491,8 +478,8 @@ function toggleFile(id) {
 function doImport() {
   if (selectedSet.value.size === 0) return
 
-  // Deduplicate by file ID — the same Drive file can appear in allFiles more than once
-  // if the user went back and re-confirmed, or if the Drive API returned duplicates.
+  // Deduplicate by file ID — the same OneDrive file can appear in allFiles more than once
+  // if the user went back and re-confirmed.
   const seenIds = new Set()
   const filesToImport = []
   for (const f of allFiles.value) {
@@ -503,7 +490,7 @@ function doImport() {
   }
 
   const started = importStore.start({
-    namespace: 'gdImport',
+    namespace: 'odImport',
     importer,
     filesToImport,
     pathMap: pathMap.value,
@@ -512,7 +499,7 @@ function doImport() {
   })
 
   if (!started) {
-    selectError.value = t('gdImport.errorAlreadyRunning')
+    selectError.value = t('odImport.errorAlreadyRunning')
     return
   }
 
@@ -526,23 +513,22 @@ function handleClose() {
 
 // ── Helpers ──
 function mimeIcon(mimeType) {
-  if (mimeType === 'application/vnd.google-apps.document')      return '📄'
-  if (mimeType === 'application/vnd.google-apps.spreadsheet')   return '📊'
-  if (mimeType === 'application/vnd.google-apps.presentation')  return '📽'
-  if (mimeType === 'application/vnd.google-apps.drawing')       return '🎨'
-  if (mimeType === 'application/vnd.google-apps.form')          return '📋'
+  if (!mimeType) return '📃'
+  if (mimeType.includes('wordprocessingml') || mimeType === 'application/msword') return '📄'
+  if (mimeType.includes('spreadsheetml') || mimeType === 'application/vnd.ms-excel') return '📊'
+  if (mimeType.includes('presentationml') || mimeType === 'application/vnd.ms-powerpoint') return '📽'
   if (mimeType.startsWith('image/'))   return '🖼'
   if (mimeType.startsWith('video/'))   return '🎬'
   if (mimeType.startsWith('audio/'))   return '🎵'
   if (mimeType === 'application/pdf')  return '📑'
   if (mimeType.includes('zip') || mimeType.includes('compressed')) return '🗜'
-  return '📁'
+  return '📃'
 }
 
 </script>
 
 <style scoped>
-.gdi-overlay {
+.odi-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
@@ -553,7 +539,7 @@ function mimeIcon(mimeType) {
   padding: 1rem;
 }
 
-.gdi-dialog {
+.odi-dialog {
   background: var(--card-background, #fff);
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
@@ -566,7 +552,7 @@ function mimeIcon(mimeType) {
 }
 
 /* Header */
-.gdi-header {
+.odi-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -574,26 +560,26 @@ function mimeIcon(mimeType) {
   border-bottom: 1px solid var(--border-color, #e5e7eb);
 }
 
-.gdi-header-left {
+.odi-header-left {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-.gdi-gdrive-icon {
+.odi-onedrive-icon {
   width: 28px;
   height: 28px;
   flex-shrink: 0;
 }
 
-.gdi-header h2 {
+.odi-header h2 {
   font-size: 1.1rem;
   font-weight: 600;
   margin: 0;
   color: var(--text-color, #1a1a1a);
 }
 
-.gdi-close {
+.odi-close {
   background: none;
   border: none;
   cursor: pointer;
@@ -604,10 +590,10 @@ function mimeIcon(mimeType) {
   align-items: center;
   transition: color 0.15s;
 }
-.gdi-close:hover { color: var(--text-color, #1a1a1a); }
+.odi-close:hover { color: var(--text-color, #1a1a1a); }
 
 /* Body */
-.gdi-body {
+.odi-body {
   padding: 1.5rem;
   overflow-y: auto;
   flex: 1;
@@ -616,7 +602,7 @@ function mimeIcon(mimeType) {
   gap: 1.25rem;
 }
 
-.gdi-intro {
+.odi-intro {
   color: var(--secondary-text-color, #6b7280);
   line-height: 1.6;
   margin: 0;
@@ -624,7 +610,7 @@ function mimeIcon(mimeType) {
 }
 
 /* Connect status */
-.gdi-connect-status {
+.odi-connect-status {
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -634,7 +620,7 @@ function mimeIcon(mimeType) {
 }
 
 /* Info box */
-.gdi-info-box {
+.odi-info-box {
   background: var(--background-color, #f8fafc);
   border: 1px solid var(--border-color, #e5e7eb);
   border-radius: 8px;
@@ -644,7 +630,7 @@ function mimeIcon(mimeType) {
   gap: 0.6rem;
 }
 
-.gdi-info-row {
+.odi-info-row {
   display: flex;
   align-items: flex-start;
   gap: 0.6rem;
@@ -653,12 +639,12 @@ function mimeIcon(mimeType) {
   line-height: 1.5;
 }
 
-.gdi-info-icon { flex-shrink: 0; margin-top: 1px; }
-.gdi-icon-ok { color: #16a34a; }
-.gdi-icon-info { color: #2563eb; }
+.odi-info-icon { flex-shrink: 0; margin-top: 1px; }
+.odi-icon-ok { color: #16a34a; }
+.odi-icon-info { color: #2563eb; }
 
 /* Select phase */
-.gdi-select-toolbar {
+.odi-select-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -666,24 +652,24 @@ function mimeIcon(mimeType) {
   gap: 0.5rem;
 }
 
-.gdi-count-label {
+.odi-count-label {
   font-size: 0.9rem;
   color: var(--secondary-text-color, #6b7280);
 }
 
-.gdi-select-actions {
+.odi-select-actions {
   display: flex;
   gap: 0.75rem;
 }
 
-.gdi-file-list {
+.odi-file-list {
   border: 1px solid var(--border-color, #e5e7eb);
   border-radius: 8px;
   max-height: 280px;
   overflow-y: auto;
 }
 
-.gdi-file-row {
+.odi-file-row {
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -693,13 +679,13 @@ function mimeIcon(mimeType) {
   border-bottom: 1px solid var(--border-color, #f0f0f0);
   font-size: 0.875rem;
 }
-.gdi-file-row:last-child { border-bottom: none; }
-.gdi-file-row:hover { background: var(--background-color, #f8fafc); }
+.odi-file-row:last-child { border-bottom: none; }
+.odi-file-row:hover { background: var(--background-color, #f8fafc); }
 
-.gdi-checkbox { flex-shrink: 0; cursor: pointer; accent-color: var(--primary-color, #42b983); }
-.gdi-file-icon { font-size: 1rem; flex-shrink: 0; }
+.odi-checkbox { flex-shrink: 0; cursor: pointer; accent-color: var(--primary-color, #42b983); }
+.odi-file-icon { font-size: 1rem; flex-shrink: 0; }
 
-.gdi-file-name {
+.odi-file-name {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -708,31 +694,21 @@ function mimeIcon(mimeType) {
   color: var(--text-color, #1a1a1a);
 }
 
-.gdi-badge-workspace {
-  font-size: 0.75rem;
-  background: #dbeafe;
-  color: #1d4ed8;
-  border-radius: 4px;
-  padding: 0 5px;
-  margin-left: 0.3rem;
-  white-space: nowrap;
-}
-
-.gdi-file-size {
+.odi-file-size {
   font-size: 0.8rem;
   color: var(--secondary-text-color, #9ca3af);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-.gdi-select-summary {
+.odi-select-summary {
   font-size: 0.88rem;
   color: var(--secondary-text-color, #6b7280);
   text-align: right;
 }
 
 /* Shared buttons */
-.gdi-actions {
+.odi-actions {
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
@@ -740,7 +716,7 @@ function mimeIcon(mimeType) {
   padding-top: 0.25rem;
 }
 
-.gdi-btn-primary {
+.odi-btn-primary {
   background: var(--primary-color, #42b983);
   color: #fff;
   border: none;
@@ -754,10 +730,10 @@ function mimeIcon(mimeType) {
   gap: 0.5rem;
   transition: opacity 0.15s;
 }
-.gdi-btn-primary:disabled { opacity: 0.5; cursor: default; }
-.gdi-btn-primary:not(:disabled):hover { opacity: 0.88; }
+.odi-btn-primary:disabled { opacity: 0.5; cursor: default; }
+.odi-btn-primary:not(:disabled):hover { opacity: 0.88; }
 
-.gdi-btn-secondary {
+.odi-btn-secondary {
   background: transparent;
   color: var(--secondary-text-color, #6b7280);
   border: 1px solid var(--border-color, #d1d5db);
@@ -767,9 +743,9 @@ function mimeIcon(mimeType) {
   cursor: pointer;
   transition: background-color 0.15s;
 }
-.gdi-btn-secondary:hover { background: var(--background-color, #f8fafc); }
+.odi-btn-secondary:hover { background: var(--background-color, #f8fafc); }
 
-.gdi-btn-text {
+.odi-btn-text {
   background: none;
   border: none;
   color: var(--primary-color, #42b983);
@@ -779,10 +755,10 @@ function mimeIcon(mimeType) {
   border-radius: 4px;
   transition: background-color 0.15s;
 }
-.gdi-btn-text:hover { background: rgba(66, 185, 131, 0.08); }
+.odi-btn-text:hover { background: rgba(66, 185, 131, 0.08); }
 
 /* Error */
-.gdi-error {
+.odi-error {
   color: #dc2626;
   font-size: 0.875rem;
   background: #fef2f2;
@@ -793,28 +769,28 @@ function mimeIcon(mimeType) {
 }
 
 /* Spinner */
-.gdi-spinner {
+.odi-spinner {
   display: inline-block;
   width: 16px;
   height: 16px;
   border: 2px solid rgba(255, 255, 255, 0.4);
   border-top-color: #fff;
   border-radius: 50%;
-  animation: gdi-spin 0.7s linear infinite;
+  animation: odi-spin 0.7s linear infinite;
 }
-.gdi-spinner-sm {
+.odi-spinner-sm {
   width: 12px;
   height: 12px;
   border: 2px solid var(--border-color, #d1d5db);
   border-top-color: var(--primary-color, #42b983);
 }
 
-@keyframes gdi-spin {
+@keyframes odi-spin {
   to { transform: rotate(360deg); }
 }
 
 /* Dedicated folder option */
-.gdi-dedicated-option {
+.odi-dedicated-option {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -825,7 +801,7 @@ function mimeIcon(mimeType) {
   font-size: 0.88rem;
 }
 
-.gdi-dedicated-checkbox {
+.odi-dedicated-checkbox {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -834,20 +810,20 @@ function mimeIcon(mimeType) {
   font-weight: 500;
 }
 
-.gdi-dedicated-name-row {
+.odi-dedicated-name-row {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   margin-left: 1.5rem;
 }
 
-.gdi-dedicated-prefix {
+.odi-dedicated-prefix {
   font-size: 0.85rem;
   color: var(--secondary-text-color, #6b7280);
   white-space: nowrap;
 }
 
-.gdi-dedicated-input {
+.odi-dedicated-input {
   flex: 1;
   border: 1px solid var(--border-color, #d1d5db);
   border-radius: 6px;
@@ -858,10 +834,10 @@ function mimeIcon(mimeType) {
   outline: none;
   min-width: 0;
 }
-.gdi-dedicated-input:focus { border-color: var(--primary-color, #42b983); }
+.odi-dedicated-input:focus { border-color: var(--primary-color, #42b983); }
 
 /* Destination hint in select toolbar */
-.gdi-dest-hint {
+.odi-dest-hint {
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -872,23 +848,23 @@ function mimeIcon(mimeType) {
 }
 
 /* Toolbar back button */
-.gdi-toolbar-left {
+.odi-toolbar-left {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-.gdi-btn-back {
+.odi-btn-back {
   display: flex;
   align-items: center;
   gap: 0.25rem;
   color: var(--secondary-text-color, #6b7280);
   font-size: 0.85rem;
 }
-.gdi-btn-back:hover { background: rgba(107, 114, 128, 0.08); }
+.odi-btn-back:hover { background: rgba(107, 114, 128, 0.08); }
 
 /* Tree view */
-.gdi-tree-dir {
+.odi-tree-dir {
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--border-color, #f0f0f0);
@@ -897,7 +873,7 @@ function mimeIcon(mimeType) {
   min-height: 36px;
 }
 
-.gdi-tree-toggle {
+.odi-tree-toggle {
   flex-shrink: 0;
   width: 22px;
   height: 22px;
@@ -912,15 +888,15 @@ function mimeIcon(mimeType) {
   margin-left: 6px;
   transition: background 0.1s;
 }
-.gdi-tree-toggle:hover { background: var(--border-color, #e5e7eb); }
+.odi-tree-toggle:hover { background: var(--border-color, #e5e7eb); }
 
-.gdi-tree-chevron {
+.odi-tree-chevron {
   transition: transform 0.15s;
   flex-shrink: 0;
 }
-.gdi-tree-chevron-open { transform: rotate(90deg); }
+.odi-tree-chevron-open { transform: rotate(90deg); }
 
-.gdi-tree-dir-label {
+.odi-tree-dir-label {
   display: flex;
   align-items: center;
   gap: 0.45rem;
@@ -930,7 +906,7 @@ function mimeIcon(mimeType) {
   min-width: 0;
 }
 
-.gdi-tree-dir-name {
+.odi-tree-dir-name {
   flex: 1;
   font-weight: 500;
   color: var(--text-color, #1a1a1a);
@@ -940,7 +916,7 @@ function mimeIcon(mimeType) {
   white-space: nowrap;
 }
 
-.gdi-tree-dir-count {
+.odi-tree-dir-count {
   font-size: 0.72rem;
   color: var(--secondary-text-color, #9ca3af);
   background: var(--border-color, #e5e7eb);
@@ -949,13 +925,13 @@ function mimeIcon(mimeType) {
   flex-shrink: 0;
 }
 
-.gdi-tree-file {
-  /* gdi-file-row covers the rest; extra indent is applied inline */
+.odi-tree-file {
+  /* odi-file-row covers the rest; extra indent is applied inline */
 }
 
 @media (max-width: 600px) {
-  .gdi-dialog { border-radius: 8px; max-height: 95vh; }
-  .gdi-body { padding: 1rem; }
-  .gdi-header { padding: 1rem; }
+  .odi-dialog { border-radius: 8px; max-height: 95vh; }
+  .odi-body { padding: 1rem; }
+  .odi-header { padding: 1rem; }
 }
 </style>
