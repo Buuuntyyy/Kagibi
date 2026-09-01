@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -34,10 +35,27 @@ const (
 	// It must also be longer than pingPeriod (54 s) so the key is still alive when renewPresence
 	// is called from the pong handler. 5 minutes gives plenty of headroom.
 	presenceTTL = 5 * time.Minute
+
+	// maxConnectionsPerUser bounds how many simultaneous WebSocket connections a single
+	// user may hold — enough for several devices/tabs at once, but not an unbounded
+	// number. Protects a pod's memory/goroutines (local mode) and the whole cluster
+	// (Redis mode) from being exhausted by one compromised or misbehaving account
+	// opening connections in a loop.
+	maxConnectionsPerUser = 8
+
+	// redisConnPrefix keys a per-user sorted set of connection IDs, score = slot
+	// expiry (unix seconds). Using a TTL'd score rather than a plain counter means a
+	// pod that crashes without unregistering its clients can't leak a permanently
+	// inflated count — ZRemRangeByScore below sweeps expired slots on every check.
+	redisConnPrefix = "ws:conns:"
+	// connSlotTTL must outlive pingPeriod so a slot doesn't expire while the
+	// connection is still alive and being renewed on every pong (mirrors presenceTTL).
+	connSlotTTL = 2 * pingPeriod
 )
 
 // Client represents a single WebSocket connection from an authenticated user.
 type Client struct {
+	id     string // random per-connection ID, used for the Redis connection-cap slot
 	userID string
 	hub    *Hub
 	conn   *websocket.Conn
@@ -210,6 +228,70 @@ func (h *Hub) renewPresence(userID string) {
 	}
 }
 
+// CanAcceptConnection reports whether userID is under maxConnectionsPerUser.
+// This is a best-effort check meant to be called before the WebSocket upgrade (to
+// avoid wasting a handshake on a connection that will immediately be over budget).
+// A small race is possible if several upgrades for the same user pass the check
+// concurrently — acceptable for a soft resource guard rather than a hard limit.
+func (h *Hub) CanAcceptConnection(userID string) bool {
+	if h.rdb != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		key := redisConnPrefix + userID
+		now := strconv.FormatInt(time.Now().Unix(), 10)
+		h.rdb.ZRemRangeByScore(ctx, key, "-inf", now)
+		count, err := h.rdb.ZCard(ctx, key).Result()
+		if err != nil {
+			log.Printf("[WS] Redis connection-count check failed for user=%s: %v — allowing", userID, err)
+			return true
+		}
+		return count < maxConnectionsPerUser
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.clients[userID]) < maxConnectionsPerUser
+}
+
+// reserveConnSlot records c's connection slot in Redis so cross-pod counting sees it.
+// No-op in local mode, where h.clients already provides an accurate local count.
+func (h *Hub) reserveConnSlot(c *Client) {
+	if h.rdb == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	expiry := float64(time.Now().Add(connSlotTTL).Unix())
+	if err := h.rdb.ZAdd(ctx, redisConnPrefix+c.userID, &redis.Z{Score: expiry, Member: c.id}).Err(); err != nil {
+		log.Printf("[WS] Redis reserveConnSlot failed for user=%s: %v", c.userID, err)
+	}
+}
+
+// renewConnSlot refreshes c's Redis connection slot so it doesn't expire while the
+// connection is still alive. Called on every pong, alongside renewPresence.
+func (h *Hub) renewConnSlot(c *Client) {
+	if h.rdb == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	expiry := float64(time.Now().Add(connSlotTTL).Unix())
+	if err := h.rdb.ZAdd(ctx, redisConnPrefix+c.userID, &redis.Z{Score: expiry, Member: c.id}).Err(); err != nil {
+		log.Printf("[WS] Redis renewConnSlot failed for user=%s: %v", c.userID, err)
+	}
+}
+
+// releaseConnSlot removes c's Redis connection slot on disconnect.
+func (h *Hub) releaseConnSlot(c *Client) {
+	if h.rdb == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := h.rdb.ZRem(ctx, redisConnPrefix+c.userID, c.id).Err(); err != nil {
+		log.Printf("[WS] Redis releaseConnSlot failed for user=%s: %v", c.userID, err)
+	}
+}
+
 // Register adds a client to the hub.
 func (h *Hub) Register(c *Client) {
 	h.mu.Lock()
@@ -217,6 +299,7 @@ func (h *Hub) Register(c *Client) {
 	h.clients[c.userID] = append(h.clients[c.userID], c)
 	log.Printf("[WS] Client registered: user=%s (total: %d)", c.userID, len(h.clients[c.userID]))
 	h.mu.Unlock()
+	h.reserveConnSlot(c)
 	monitoring.IncrementWSConnections()
 
 	// If there was a pending offline timer, cancel it — the user reconnected in time.
@@ -262,6 +345,7 @@ func (h *Hub) Unregister(c *Client) {
 	log.Printf("[WS] Client unregistered: user=%s (remaining: %d)", c.userID, len(h.clients[c.userID]))
 	h.mu.Unlock()
 
+	h.releaseConnSlot(c)
 	monitoring.DecrementWSConnections()
 	if !lastConn {
 		return
@@ -429,6 +513,7 @@ func (c *Client) readPump() {
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(pongWait))
 		c.hub.renewPresence(c.userID)
+		c.hub.renewConnSlot(c)
 		return nil
 	})
 

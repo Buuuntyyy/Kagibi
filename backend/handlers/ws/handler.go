@@ -5,18 +5,22 @@ package ws
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"kagibi/backend/middleware"
 	"kagibi/backend/pkg/authprovider"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
+	"github.com/uptrace/bun"
 )
 
 const (
@@ -31,7 +35,7 @@ const (
 //     stored in Redis for 30 s, consumed on first use (preferred for browser clients)
 //  3. "Sec-WebSocket-Protocol: token, <JWT>" header — legacy browser workaround,
 //     kept for backwards compatibility
-func WebSocketHandler(provider authprovider.AuthProvider, redisClient *redis.Client, allowedOrigins []string) gin.HandlerFunc {
+func WebSocketHandler(provider authprovider.AuthProvider, redisClient *redis.Client, db *bun.DB, allowedOrigins []string) gin.HandlerFunc {
 	originSet := make(map[string]bool, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		if trimmed := strings.TrimSpace(o); trimmed != "" {
@@ -89,6 +93,31 @@ func WebSocketHandler(provider authprovider.AuthProvider, redisClient *redis.Cli
 			return
 		}
 
+		// Reject an aal1 session that must still complete MFA step-up — mirrors
+		// EnforceMFAOnLogin so a stolen pre-step-up JWT cannot open a realtime channel
+		// and passively observe activity (friend/org/storage/presence events) as a way
+		// to bypass the HTTP API's MFA gate. Only applies to methods 2 & 3 (claims != nil):
+		// the ws_token path (method 1) already passed through EnforceMFAOnLogin when the
+		// token was issued via the protected, MFA-gated POST /auth/ws-token route.
+		if claims != nil {
+			aal, _ := claims["aal"].(string)
+			if aal == "" {
+				aal = "aal1"
+			}
+			mfaClaim, _ := claims["mfa"].(string)
+			if middleware.MFALoginStepUpRequired(c.Request.Context(), db, userID, aal, mfaClaim) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "mfa_required"})
+				return
+			}
+		}
+
+		// Reject once the user is already at the connection cap — checked before the
+		// upgrade so an over-budget attempt doesn't waste a handshake.
+		if !GlobalHub.CanAcceptConnection(userID) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "too many active connections"})
+			return
+		}
+
 		// When the client used the Sec-WebSocket-Protocol trick, echo "token" back
 		// so the browser does not close the connection due to a protocol mismatch.
 		var responseHeader http.Header
@@ -103,6 +132,7 @@ func WebSocketHandler(provider authprovider.AuthProvider, redisClient *redis.Cli
 		}
 
 		client := &Client{
+			id:     newConnID(),
 			userID: userID,
 			hub:    GlobalHub,
 			conn:   conn,
@@ -114,6 +144,19 @@ func WebSocketHandler(provider authprovider.AuthProvider, redisClient *redis.Cli
 		go client.writePump()
 		client.readPump() // blocks until connection closes
 	}
+}
+
+// newConnID generates a random per-connection identifier, used as the member key
+// for this connection's slot in the Redis connection-cap sorted set.
+func newConnID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand failure is effectively unrecoverable; fall back to a
+		// timestamp-based ID so the connection cap degrades to "less precise"
+		// rather than panicking the connection.
+		return strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	return hex.EncodeToString(b)
 }
 
 // consumeWsToken validates and atomically deletes a single-use WebSocket token from Redis.

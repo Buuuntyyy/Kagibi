@@ -39,6 +39,14 @@ var endpointWindows = map[string][2]int64{
 	// File operations — higher limits for chunked transfers
 	"/api/v1/files/upload":   {1, 50},
 	"/api/v1/files/download": {1, 100},
+	// WebSocket — an upgrade holds a persistent connection (goroutines + buffers)
+	// per attempt, far costlier than a normal request, so it gets a tighter budget
+	// than defaultWindow's 30/s. 20/min comfortably covers the client's reconnect
+	// backoff (starts at 1 retry/s, doubles up to one per 30 s) while blocking
+	// rapid-fire upgrade floods. ws-token issuance is cheap (no upgrade) but is
+	// fetched on every WS (re)connect, so it shares the same budget.
+	"/api/v1/ws":            {60, 20},
+	"/api/v1/auth/ws-token": {60, 20},
 }
 
 // defaultWindow is used for all endpoints not listed in endpointWindows.

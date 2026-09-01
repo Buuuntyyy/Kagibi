@@ -242,6 +242,19 @@ Chaque organisation peut se connecter à un annuaire **LDAP** ou **Active Direct
 8. Les membres suspendus depuis plus de `auto_deprovision_days` jours sont **retirés** de l'org.
 9. Si `group_base_dn` est défini, les groupes LDAP sont créés ou mis à jour comme groupes Kagibi (`source = 'ldap'`).
 
+#### Contrainte réseau : connexion directe sortante
+
+**Le modèle actuel exige que le backend Kagibi puisse joindre directement le serveur LDAP/AD du client.** `client.Dial()` (`backend/internal/ldap/client.go`) ouvre une connexion TCP sortante vers l'URL configurée — il n'existe aucun agent ni tunnel intermédiaire côté client.
+
+Implications pour un déploiement réel (client dont l'annuaire est sur son réseau interne, hors du réseau où tourne Kagibi) :
+
+- **Le serveur LDAP/AD du client doit être exposé publiquement** sur le port configuré (389/636), au moins vers l'IP de sortie de Kagibi — typiquement via un NAT/port-forward sur le pare-feu du client.
+- **`ldaps://` (TLS implicite) est fortement recommandé** pour tout trafic hors réseau local : le bind DN et le mot de passe transitent en clair sur `ldap://` simple. Le fallback `StartTLS` du client (`client.go`) échoue silencieusement côté serveur (log uniquement) si la cible ne le supporte pas — rien n'empêche côté Kagibi une connexion effectivement non chiffrée.
+- **Restriction par IP côté client** : pour ne pas exposer l'annuaire à tout Internet, le client doit idéalement restreindre l'accès à l'IP de sortie de Kagibi. Cela suppose une IP de sortie **stable et documentée** côté Kagibi (passerelle NAT dédiée) — non garanti par défaut selon l'infrastructure d'hébergement du backend.
+- **Friction attendue côté client** : la majorité des équipes sécurité/IT en entreprise refusent d'exposer un annuaire interne (AD en particulier) sur Internet, même restreint par IP — c'est un vecteur d'attaque activement scanné. Ce modèle convient à des structures plus petites ou déjà ouvertes sur Internet (LDAP déjà hébergé dans un cloud, VPN existant), mais constitue un blocage dur pour les clients avec des exigences de sécurité strictes.
+
+L'alternative standard du marché (Okta, Azure AD Connect, JumpCloud…) est un **agent installé dans le réseau du client**, qui interroge l'annuaire en local et ouvre lui-même une connexion **sortante** vers le SaaS (HTTPS/WebSocket) — aucun port entrant à ouvrir côté client. Kagibi ne dispose pas de ce mode aujourd'hui.
+
 #### Chiffrement du mot de passe Bind
 
 Le mot de passe du compte de service est chiffré **AES-256-GCM** via `emailcrypto.Encrypt` (clé dérivée de `EMAIL_ENCRYPTION_KEY`) avant stockage en base. Il n'est jamais transmis en clair.
@@ -702,6 +715,19 @@ Each organization can connect to an **LDAP** or **Active Directory** server to a
 7. Members with `source = 'ldap'` absent from the LDAP result are **suspended** (`suspended_at` set).
 8. Members suspended for longer than `auto_deprovision_days` are **removed** from the org.
 9. If `group_base_dn` is set, LDAP groups are created or updated as Kagibi groups (`source = 'ldap'`).
+
+#### Network constraint: direct outbound connection
+
+**The current model requires the Kagibi backend to reach the client's LDAP/AD server directly.** `client.Dial()` (`backend/internal/ldap/client.go`) opens an outbound TCP connection to the configured URL — there is no agent or intermediary tunnel on the client side.
+
+Implications for a real-world deployment (a client whose directory sits on their internal network, outside Kagibi's own network):
+
+- **The client's LDAP/AD server must be publicly reachable** on the configured port (389/636), at least from Kagibi's outbound IP — typically via a NAT/port-forward on the client's firewall.
+- **`ldaps://` (implicit TLS) is strongly recommended** for any traffic outside a local network: the bind DN and password travel in plain text over bare `ldap://`. The client's `StartTLS` fallback (`client.go`) fails silently (server-side log only) if the target doesn't support it — nothing on the Kagibi side prevents an effectively unencrypted connection.
+- **IP restriction on the client side**: to avoid exposing the directory to the whole internet, the client should ideally restrict access to Kagibi's outbound IP. That requires a **stable, documented outbound IP** on Kagibi's side (a dedicated NAT gateway) — not guaranteed by default depending on backend hosting infrastructure.
+- **Expected client friction**: most enterprise security/IT teams refuse to expose an internal directory (AD in particular) to the internet, even IP-restricted — it's an actively scanned attack vector. This model suits smaller organizations or ones already internet-facing (LDAP already cloud-hosted, existing VPN), but is a hard blocker for clients with strict security requirements.
+
+The standard industry alternative (Okta, Azure AD Connect, JumpCloud…) is an **agent installed inside the client's network**, which queries the directory locally and opens an **outbound** connection to the SaaS itself (HTTPS/WebSocket) — no inbound port required on the client side. Kagibi does not offer this mode today.
 
 #### Bind password encryption
 
