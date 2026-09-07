@@ -630,27 +630,11 @@ Si le code de récupération est également perdu, les données sont **définiti
 
 ---
 
-## Démarrage rapide (développement)
+## Installation & auto-hébergement
 
-**Prérequis :** Docker, Docker Compose
+**Développement local, et déploiement production (stockage S3 externe ou 100% local avec Garage) : commencez par [`self-hosting/prerequisites.md`](./self-hosting/prerequisites.md)**, qui enchaîne sur la configuration du stockage (`storage.md`) puis le reverse proxy (`nginx.md`).
 
-```bash
-git clone https://github.com/Buuuntyyy/Kagibi.git
-cd Kagibi
-cp backend/.env.example backend/.env   # Configurer les variables S3, JWT_SECRET, etc.
-cp frontend/.env.example frontend/.env # Configurer VITE_BACKEND_URL=http://localhost:8080
-
-cd backend
-go run main.go
-
-cd frontend
-npm install
-npm run dev
-```
-
-Frontend : `http://localhost` — Backend : `http://localhost:8080`
-
-Pour la configuration détaillée (variables d'environnement, S3, Kubernetes), voir [`backend/README.md`](../backend/README.md).
+Pour la référence API/architecture du backend, voir [`backend/README.md`](../backend/README.md).
 
 ---
 

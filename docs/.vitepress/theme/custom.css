@@ -1,0 +1,119 @@
+/*
+ * Kagibi brand palette, mirrored from frontend/src/style.css (Warm Coral /
+ * Deep Cherry) onto VitePress's own CSS variables, so the docs site matches
+ * the app's look without needing custom Vue components.
+ */
+
+:root {
+  --vp-c-brand-1: #fa7268;
+  --vp-c-brand-2: #d4405b;
+  --vp-c-brand-3: #c62368;
+  --vp-c-brand-soft: rgba(250, 114, 104, 0.14);
+
+  --vp-c-bg: #fff9f8;
+  --vp-c-bg-alt: #ffe8e3;
+  --vp-c-bg-elv: #ffffff;
+
+  --vp-c-text-1: #2d1b22;
+  --vp-c-text-2: #6b5860;
+
+  --vp-c-divider: #f0d9d1;
+
+  /* Links and inline code default to --vp-c-brand-1 in VitePress's own theme.
+   * Measured contrast of coral (#fa7268) on this light background is ~2.6:1,
+   * well under WCAG AA's 4.5:1 for text — illegible, not just a style
+   * preference. Falling back to the normal text color removes the accent
+   * entirely rather than hunting for a "just readable enough" shade; links
+   * stay identifiable via the underline already applied to all prose links. */
+  --vp-code-color: var(--vp-c-text-1);
+  --vp-code-link-color: var(--vp-c-text-1);
+
+  /* Fenced code blocks (```bash, ```nginx...) default to --vp-code-block-bg:
+   * var(--vp-c-bg-alt) in VitePress's theme — which we tinted coral above for
+   * hover states/sidebar elsewhere. That tint carried into every code block's
+   * background, washing out the syntax-highlighting contrast on top of it.
+   * Reset to VitePress's own neutral default here so code stays neutral
+   * regardless of the brand palette. */
+  --vp-code-block-bg: #f6f6f7;
+  --vp-code-tab-bg: #f6f6f7;
+}
+
+.vp-doc a,
+.vp-doc a:hover,
+.vp-doc a > code,
+.vp-doc a:hover > code {
+  color: var(--vp-c-text-1);
+}
+
+/*
+ * Language switcher: show the current locale's flag instead of VitePress's
+ * generic "translate" icon on the desktop nav trigger (it has no text of its
+ * own to carry a flag, unlike the dropdown list items, which already show one
+ * via the "label" values in config.mts).
+ */
+.VPNavBarTranslations .option-icon {
+  background: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+  width: auto;
+  height: auto;
+}
+.VPNavBarTranslations .option-icon::before {
+  font-size: 16px;
+  line-height: 1;
+}
+html[lang='fr'] .VPNavBarTranslations .option-icon::before {
+  content: '🇫🇷';
+}
+html[lang='en'] .VPNavBarTranslations .option-icon::before {
+  content: '🇬🇧';
+}
+
+/* Mobile menu already shows the flag via the locale label text next to this
+ * icon — hide it there instead of duplicating the flag. */
+.VPNavScreenTranslations .icon.lang {
+  display: none;
+}
+
+/*
+ * Widen the reading area. With both a left sidebar (nav tree) and a right
+ * aside ("on this page" outline) now present, VitePress's own default caps
+ * prose at 688px via ".VPDoc.has-aside .content-container" — this is the one
+ * rule that actually matters for our 3-column layout (the sidebar/aside
+ * widths are handled by other components; this is the remaining constraint
+ * on the content column itself). 880px leaves comfortable room next to both
+ * side panels while still being noticeably wider than the 688px default,
+ * useful for this site's wide code blocks (nginx configs, YAML).
+ *
+ * !important is required: VitePress's own rule for this selector carries a
+ * Vue scoped-style attribute (e.g. "[data-v-e6f2a212]"), which outweighs our
+ * plain class selector on specificity regardless of source order — and that
+ * hash can change on any VitePress upgrade, so matching it exactly would be
+ * brittle. !important sidesteps that entirely.
+ */
+.VPDoc.has-aside .content-container {
+  max-width: 880px !important;
+}
+
+.dark {
+  --vp-c-brand-1: #ff8b7f;
+  --vp-c-brand-2: #ff6b5c;
+  --vp-c-brand-3: #e94478;
+  --vp-c-brand-soft: rgba(255, 139, 127, 0.16);
+
+  --vp-c-bg: #120a0e;
+  --vp-c-bg-alt: #1c1117;
+  --vp-c-bg-elv: #1c1117;
+
+  --vp-c-text-1: #fcf0ee;
+  --vp-c-text-2: #d4a9a1;
+
+  --vp-c-divider: #3d2a31;
+
+  --vp-code-color: var(--vp-c-text-1);
+  --vp-code-link-color: var(--vp-c-text-1);
+
+  /* Same neutral reset as light mode — see the :root block above. */
+  --vp-code-block-bg: #161618;
+  --vp-code-tab-bg: #161618;
+}

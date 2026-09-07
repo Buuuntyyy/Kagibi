@@ -1,5 +1,12 @@
 db_data/*
 redis-data/*
+garage/garage.toml
+garage/meta/*
+garage/data/*
+garage/credentials/*
+docs/node_modules/*
+docs/.vitepress/dist/*
+docs/.vitepress/cache/*
 backend/.tmp/*
 backend/uploads/*
 .gemini/
@@ -43,8 +50,6 @@ backend/node_modules/
 # Build outputs
 frontend/dist/
 backend/bin/
-
-docs/
 
 scripts/s3-cors-config.json
 
