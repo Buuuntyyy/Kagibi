@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.32.0 — 2026-09-10
+
+### Auto-hébergement : Stack complète et mise à jour simplifiée
+
+Jusqu'ici, mettre à jour une instance auto-hébergée voulait dire recompiler depuis les sources à l'aveugle, sans sauvegarde imposée, sans savoir précisément quelles migrations avaient tourné ni comment revenir en arrière en cas de problème. Cette version referme ce chantier de bout en bout :
+
+- **Images Docker versionnées et signées** : chaque release publie des images `vX.Y.Z` sur GitHub Container Registry, signées avec cosign — vérifiables avant déploiement, sans clé à récupérer nulle part. `docker-compose.yaml` les utilise désormais par défaut (`image:`) au lieu de compiler localement ; revenir à une compilation depuis les sources (pour qui préfère auditer le code avant de l'exécuter) reste possible et documenté.
+- **Suivi des migrations de base de données** : chaque étape de migration est désormais tracée (nom, version applicative, date de dernière exécution) dans une table dédiée, avec une ligne de confirmation claire dans les logs de démarrage — de quoi vérifier après coup qu'une mise à jour s'est réellement bien terminée, plutôt que de le supposer.
+- **Publication et signature automatisées** : un pipeline dédié construit, tague et signe les images à chaque version, sans étape manuelle.
+
+### Documentation
+
+- **Nouvelle page « Mise à jour »** (FR/EN) dans la documentation self-hosting : procédure complète pas à pas — sauvegarde vérifiée (base de données, et fichiers si stockage local), vérification de signature des images, application de la mise à jour, contrôle que les migrations se sont bien terminées, et procédure de retour en arrière si besoin.
+- **Correction** : la documentation nginx citait encore la compilation locale du backend/frontend pour justifier l'incompatibilité avec Docker Swarm — mise à jour pour refléter le passage aux images versionnées.
+
 ## v2.31.0 — 2026-08-19
 
 ### Nouvelles fonctionnalités

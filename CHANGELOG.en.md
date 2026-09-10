@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.32.0 — 2026-09-10
+
+### Self-hosting: upgrades you can finally trust (the main focus of this release)
+
+Until now, upgrading a self-hosted instance meant rebuilding from source blind, with no enforced backup, no clear record of which migrations had actually run, and no defined way back if something went wrong. This release closes that gap end to end:
+
+- **Versioned, signed Docker images**: every release publishes `vX.Y.Z` images to the GitHub Container Registry, signed with cosign — verifiable before deployment, with no key to fetch anywhere. `docker-compose.yaml` now uses these by default (`image:`) instead of building locally; switching back to building from source (for anyone who prefers to audit the code before running it) is still possible and documented.
+- **Database migration tracking**: every migration step is now recorded (name, app version, last-run timestamp) in a dedicated table, with a clear confirmation line in the startup logs — so you can actually verify an upgrade completed successfully instead of just assuming it did.
+- **Automated build, tagging and signing**: a dedicated pipeline builds, tags and signs the images on every release, with no manual step.
+
+### Documentation
+
+- **New "Upgrading" page** (FR/EN) in the self-hosting docs: a full step-by-step procedure — verified backup (database, plus files if using local storage), image signature verification, applying the upgrade, confirming migrations completed, and rolling back if needed.
+- **Fix**: the nginx documentation still cited the local backend/frontend build to justify Docker Swarm incompatibility — updated to reflect the move to versioned images.
+
 ## v2.31.0 — 2026-08-19
 
 ### New Features
