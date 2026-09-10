@@ -661,7 +661,8 @@
 
         <div v-if="orgStore.loading" class="loading-inline"><div class="spinner-sm-dark"></div></div>
         <div v-else class="members-list">
-          <div v-for="m in sortedMembers" :key="m.user_id" class="member-row" :class="{ 'needs-key': canManage && !m.encrypted_org_key }">
+          <template v-for="m in sortedMembers" :key="m.user_id">
+          <div class="member-row" :class="{ 'needs-key': canManage && !m.encrypted_org_key }">
             <div class="member-avatar">{{ (m.name || m.email || '?').charAt(0).toUpperCase() }}</div>
             <div class="member-info">
               <div class="member-name">{{ m.name || m.email }}</div>
@@ -749,6 +750,7 @@
               </tbody>
             </table>
           </div>
+          </template>
         </div>
       </div>
 
@@ -2008,7 +2010,7 @@ onMounted(async () => {
   await orgStore.fetchOrg(orgID.value)
   await Promise.all([
     orgStore.fetchItems(orgID.value, '/'),
-    orgStore.fetchMembers(orgID.value),
+    orgStore.fetchMembers(orgID.value).catch(() => {}),
     orgStore.fetchOrgTags(orgID.value).catch(() => {}),
     orgStore.fetchFavorites(orgID.value).catch(() => {}),
     orgStore.fetchMyGroups(orgID.value).catch(() => {}),
@@ -3332,8 +3334,10 @@ const membersNeedingKey = computed(() =>
 )
 
 // Sort: members needing provisioning first, then alphabetically by name.
+// filter(Boolean) guards against a stale/partial members array while fetchMembers
+// is still in flight (loading only tracks fetchOrg/fetchItems, not fetchMembers).
 const sortedMembers = computed(() => {
-  return [...orgStore.members].sort((a, b) => {
+  return orgStore.members.filter(Boolean).sort((a, b) => {
     const aNeedsKey = !a.encrypted_org_key ? 0 : 1
     const bNeedsKey = !b.encrypted_org_key ? 0 : 1
     if (aNeedsKey !== bNeedsKey) return aNeedsKey - bNeedsKey
@@ -4781,8 +4785,8 @@ const formatDate = (dateStr) => {
   align-items: center;
   gap: 4px;
   font-size: 0.72rem;
-  color: #2A9D8F;
-  background: color-mix(in srgb, #2A9D8F 10%, transparent);
+  color: var(--success-color);
+  background: color-mix(in srgb, var(--success-color) 10%, transparent);
   padding: 2px 7px;
   border-radius: 10px;
   max-width: 180px;

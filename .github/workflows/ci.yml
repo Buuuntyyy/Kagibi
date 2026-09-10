@@ -230,7 +230,12 @@ jobs:
     - name: Start Backend Server
       working-directory: ./backend
       env:
-        DATABASE_URL: postgres://test:testpassword@localhost:5432/kagibi_test
+        # sslmode=disable est requis : backend/pkg/database.go ne désactive le TLS au
+        # niveau du driver que pour un DSN de dev local exact ; pour toute autre valeur
+        # (dont celle-ci), c'est ce paramètre dans l'URL qui doit le faire — sans lui,
+        # pgdriver tente une négociation TLS contre le postgres:16 du job, qui n'a pas
+        # SSL activé, et échoue avec "SSL is not enabled on the server".
+        DATABASE_URL: postgres://test:testpassword@localhost:5432/kagibi_test?sslmode=disable
         REDIS_URL: redis://localhost:6379
         JWT_SECRET: test-secret-key-for-ci
         EMAIL_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"

@@ -264,7 +264,7 @@ func registerRoutes(router *gin.Engine, db *bun.DB, redisClient *redis.Client, p
 	if len(wsAllowedOrigins) == 0 || wsAllowedOrigins[0] == "" {
 		wsAllowedOrigins = []string{"http://localhost:5173", "http://localhost:3000"}
 	}
-	api.GET("/ws", wshandler.WebSocketHandler(provider, redisClient, wsAllowedOrigins))
+	api.GET("/ws", wshandler.WebSocketHandler(provider, redisClient, db, wsAllowedOrigins))
 
 	router.GET("/health", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	router.GET("/api/v1/ping", func(c *gin.Context) { c.JSON(200, gin.H{"message": "pong", "version": "3.0"}) })

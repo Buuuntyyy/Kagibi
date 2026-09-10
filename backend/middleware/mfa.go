@@ -4,6 +4,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -36,7 +37,15 @@ func fetchMFAGates(c *gin.Context, db *bun.DB, userID string) mfaGates {
 	if cached, ok := c.Get("mfa_gates"); ok {
 		return cached.(mfaGates)
 	}
+	gates := fetchMFAGatesCtx(c.Request.Context(), db, userID)
+	c.Set("mfa_gates", gates)
+	return gates
+}
 
+// fetchMFAGatesCtx is the gin-context-free core of fetchMFAGates, usable from call
+// sites that authenticate outside the normal middleware chain (e.g. the WebSocket
+// upgrade, which validates its own token and never runs AuthMiddleware).
+func fetchMFAGatesCtx(ctx context.Context, db *bun.DB, userID string) mfaGates {
 	var row struct {
 		MFAEnabled        bool `bun:"mfa_enabled"`
 		RequireOnLogin    bool `bun:"require_mfa_on_login"`
@@ -51,7 +60,7 @@ func fetchMFAGates(c *gin.Context, db *bun.DB, userID string) mfaGates {
 		TableExpr("user_security_settings").
 		ColumnExpr("mfa_enabled, require_mfa_on_login, require_mfa_on_destructive_actions, require_mfa_on_downloads, require_mfa_on_email_change, require_mfa_on_recovery_change").
 		Where("user_id = ?", userID).
-		Scan(c.Request.Context(), &row)
+		Scan(ctx, &row)
 	if err == nil {
 		gates = mfaGates{
 			MFAEnabled:        row.MFAEnabled,
@@ -62,9 +71,21 @@ func fetchMFAGates(c *gin.Context, db *bun.DB, userID string) mfaGates {
 			RequireOnRecovery: row.RequireOnRecovery,
 		}
 	}
-
-	c.Set("mfa_gates", gates)
 	return gates
+}
+
+// MFALoginStepUpRequired reports whether a session at the given assurance level
+// ("aal1"/"aal2") and enrollment claim (the JWT's "mfa" claim, "enabled" or empty)
+// must complete TOTP step-up before being granted a long-lived resource — mirroring
+// EnforceMFAOnLogin's decision for callers that authenticate outside the gin
+// middleware chain, such as the WebSocket upgrade (handlers/ws), which validates its
+// own JWT and never runs AuthMiddleware/EnforceMFAOnLogin.
+func MFALoginStepUpRequired(ctx context.Context, db *bun.DB, userID, aal, mfaClaim string) bool {
+	if aal == "aal2" || mfaClaim != "enabled" {
+		return false
+	}
+	gates := fetchMFAGatesCtx(ctx, db, userID)
+	return gates.MFAEnabled && gates.RequireOnLogin
 }
 
 // mfaStepUpAllowed lists the protected-group paths that must stay reachable with an

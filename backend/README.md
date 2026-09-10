@@ -34,62 +34,9 @@ Le backend Kagibi est une API Go qui respecte les principes **Zero-Knowledge** :
 
 ---
 
-## Démarrage Rapide
+## Installation
 
-### Prérequis
-
-```bash
-Go 1.21+
-PostgreSQL 16+
-Redis 7+
-MinIO ou AWS S3
-```
-
-### Installation
-
-```bash
-cd backend
-go mod download
-```
-
-### Configuration
-
-Créez `.env`:
-
-```bash
-# Base de données
-DATABASE_URL=postgresql://user:password@localhost:5432/kagibi
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# Supabase (Authentification JWT)
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_JWT_SECRET=your-jwt-secret
-
-# Stockage S3/MinIO
-S3_ENDPOINT=http://localhost:9000
-S3_REGION=us-east-1
-S3_ACCESS_KEY=minioadmin
-S3_SECRET_KEY=minioadmin
-S3_BUCKET=kagibi-files
-
-# CORS
-ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
-
-# TURN (optionnel - WebRTC)
-TURN_URLS=turn:your-turn-server.com:3478
-TURN_SECRET=your-turn-secret
-TURN_USER=username
-TURN_PASSWORD=password
-```
-
-### Lancement
-
-```bash
-go run main.go
-# → API disponible sur http://localhost:8080
-```
+Pour lancer le backend (développement local ou déploiement production, stockage S3 externe ou 100% local avec Garage), voir le guide : [`docs/self-hosting/prerequisites.md`](../docs/self-hosting/prerequisites.md).
 
 ---
 
@@ -618,29 +565,7 @@ func TestCreateFolderHandler(t *testing.T) {
 
 ## Déploiement
 
-### Build Production
-
-```bash
-go build -o server .
-./server
-```
-
-### Docker
-
-```bash
-# Avec docker-compose (voir racine)
-docker-compose up -d
-```
-
-### Variables d'Environnement Production
-
-```bash
-DATABASE_URL=postgres://prod_user:prod_pass@db:5432/kagibi
-REDIS_URL=redis://redis:6379
-S3_ENDPOINT=https://s3.amazonaws.com
-S3_BUCKET=kagibi-prod
-ALLOWED_ORIGINS=https://kagibi.com
-```
+Voir [`docs/self-hosting/prerequisites.md`](../docs/self-hosting/prerequisites.md).
 
 ---
 

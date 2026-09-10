@@ -630,27 +630,11 @@ If the recovery code is also lost, the data is **permanently inaccessible**. Thi
 
 ---
 
-## Quick Start (development)
+## Installation & self-hosting
 
-**Prerequisites:** Docker, Docker Compose
+**Local development, and production deployment (external S3 storage or fully local storage with Garage): start with [`en/self-hosting/prerequisites.md`](./en/self-hosting/prerequisites.md)**, which continues into storage setup (`storage.md`) and the reverse-proxy guide (`nginx.md`).
 
-```bash
-git clone https://github.com/Buuuntyyy/Kagibi.git
-cd Kagibi
-cp backend/.env.example backend/.env   # Fill in S3 variables, JWT_SECRET, etc.
-cp frontend/.env.example frontend/.env # Fill in VITE_BACKEND_URL=http://localhost:8080
-
-cd backend
-go run main.go
-
-cd frontend
-npm install
-npm run dev
-```
-
-Frontend: `http://localhost` — Backend: `http://localhost:8080`
-
-For detailed configuration (environment variables, S3, Kubernetes), see [`backend/README.md`](../backend/README.md).
+For the backend's API/architecture reference, see [`backend/README.md`](../backend/README.md).
 
 ---
 

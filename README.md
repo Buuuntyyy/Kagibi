@@ -58,23 +58,9 @@ Read the documentation in your language:
 
 ---
 
-## Quick start
+## Installation & self-hosting
 
-```bash
-git clone https://github.com/Buuuntyyy/Kagibi.git
-cd Kagibi
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-
-cd backend
-go run main.go
-
-cd frontend
-npm install
-npm run dev
-```
-
-Frontend: `http://localhost` — Backend: `http://localhost:8080`
+**Everything you need — local development, and production deployment with external S3 or fully local storage (Garage) — starts here: [`docs/en/self-hosting/prerequisites.md`](./docs/en/self-hosting/prerequisites.md)** (French: [`docs/self-hosting/prerequisites.md`](./docs/self-hosting/prerequisites.md)), which links onward to storage setup and the reverse-proxy guide.
 
 ## License
 

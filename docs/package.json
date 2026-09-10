@@ -1,0 +1,14 @@
+{
+  "name": "kagibi-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docs:dev": "vitepress dev .",
+    "docs:build": "vitepress build .",
+    "docs:preview": "vitepress preview ."
+  },
+  "devDependencies": {
+    "github-slugger": "^2.0.0",
+    "vitepress": "^1.5.0"
+  }
+}

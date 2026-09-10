@@ -1,0 +1,67 @@
+# =================================
+# Stockage 100% local et self-hosted (Garage), en alternative à un S3 externe.
+#
+# Usage : ajouter ce fichier au lancement, en plus du docker-compose.yaml de base —
+#   docker compose -f docker-compose.yaml -f docker-compose.garage.yml up -d
+#
+# Setup unique avant le premier démarrage :
+#   cp garage/garage.toml.example garage/garage.toml   # puis y coller 2 secrets (voir le fichier)
+#   mkdir -p garage/credentials && touch garage/credentials/s3.env
+#
+# Les identifiants S3 (S3_ACCESS_KEY/S3_SECRET_KEY) sont générés automatiquement
+# par garage-init au premier démarrage (voir garage/bootstrap.sh) — inutile de les
+# renseigner dans .env, ils sont ignorés (ce fichier les écrase pour le backend).
+#
+# IMPORTANT — GARAGE_PUBLIC_ENDPOINT (obligatoire dans .env) :
+# le backend génère des URLs présignées que le NAVIGATEUR utilise pour uploader/
+# télécharger directement, sans passer par le backend. "http://garage:3900" (nom
+# de service Docker interne) ne serait joignable que depuis les autres conteneurs,
+# jamais depuis le navigateur — d'où la nécessité de publier le port S3 sur l'hôte
+# (ci-dessous) et de renseigner une adresse que le navigateur peut réellement
+# atteindre : IP LAN du NAS (http://192.168.1.50:3900) ou domaine derrière un
+# reverse-proxy TLS (https://s3.mon-domaine.example).
+# =================================
+
+services:
+  garage:
+    image: dxflrs/garage:v1.0.1
+    restart: unless-stopped
+    ports:
+      - "${GARAGE_S3_PORT:-3900}:3900"
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - ./garage/meta:/var/lib/garage/meta
+      - ./garage/data:/var/lib/garage/data
+
+  garage-init:
+    image: dxflrs/garage:v1.0.1
+    entrypoint: ["/bin/sh", "/bootstrap.sh"]
+    depends_on:
+      - garage
+    environment:
+      GARAGE_BUCKET: ${GARAGE_BUCKET:-kagibi}
+      GARAGE_KEY_NAME: ${GARAGE_KEY_NAME:-kagibi-key}
+      GARAGE_CAPACITY: ${GARAGE_CAPACITY:-10G}
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - ./garage/bootstrap.sh:/bootstrap.sh:ro
+      - ./garage/credentials:/credentials
+
+  backend:
+    depends_on:
+      # Attend que garage-init ait fini d'assigner le layout et écrit les
+      # identifiants S3 avant de démarrer le backend avec des credentials valides.
+      garage-init:
+        condition: service_completed_successfully
+    env_file:
+      # S'ajoute au ".env" du fichier de base — écrase S3_ACCESS_KEY/S3_SECRET_KEY
+      # si ces variables y sont encore renseignées pour un autre provider.
+      - ./garage/credentials/s3.env
+    environment:
+      # Adresse joignable par le NAVIGATEUR (voir note ci-dessus) — pas le nom de
+      # service Docker interne. Pas de valeur par défaut : dépend du réseau de
+      # l'utilisateur, une mauvaise valeur ici casse silencieusement les
+      # uploads/téléchargements côté navigateur.
+      S3_ENDPOINT: "${GARAGE_PUBLIC_ENDPOINT:?GARAGE_PUBLIC_ENDPOINT manquant dans .env - adresse par laquelle le navigateur joint Garage, ex http://192.168.1.50:3900}"
+      S3_REGION: ${GARAGE_S3_REGION:-garage}
+      S3_BUCKET: ${GARAGE_BUCKET:-kagibi}

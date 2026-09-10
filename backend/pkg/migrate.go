@@ -8,85 +8,117 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 
 	"kagibi/backend/pkg/emailcrypto"
 
 	"github.com/uptrace/bun"
 )
 
+// kagibiVersion reports the running app version (set via KAGIBI_VERSION, matching the
+// tag of the Docker image in use — see docker-compose.yaml). Falls back to "dev" for
+// local/source builds where the variable isn't set.
+func kagibiVersion() string {
+	if v := os.Getenv("KAGIBI_VERSION"); v != "" {
+		return v
+	}
+	return "dev"
+}
+
+// ensureSchemaMigrationsTable creates the tracking table used by recordMigration.
+// Every migration function below stays idempotent and re-runs on every startup
+// regardless of this table's contents — it exists purely as an audit trail (what ran,
+// when, on which app version), not as a gate deciding whether a step executes. That
+// keeps this change low-risk: no existing migration's execution logic changes.
+func ensureSchemaMigrationsTable(ctx context.Context, db *bun.DB) error {
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
+		name        VARCHAR PRIMARY KEY,
+		app_version VARCHAR NOT NULL DEFAULT 'dev',
+		applied_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`)
+	if err != nil {
+		return fmt.Errorf("ensureSchemaMigrationsTable: %w", err)
+	}
+	return nil
+}
+
+// recordMigration upserts the last-successful-run timestamp and app version for a
+// named migration step. Best-effort: a failure here must never abort startup, since
+// the actual schema change (if any) already succeeded by the time this is called.
+func recordMigration(ctx context.Context, db *bun.DB, name string) {
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO schema_migrations (name, app_version, applied_at)
+		VALUES (?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT (name) DO UPDATE SET
+			app_version = EXCLUDED.app_version,
+			applied_at  = CURRENT_TIMESTAMP`,
+		name, kagibiVersion())
+	if err != nil {
+		log.Printf("Warning: recordMigration %s: %v", name, err)
+	}
+}
+
 func Migrate(db *bun.DB) error {
 	ctx := context.Background()
 
-	if err := migrateAuthUsers(ctx, db); err != nil {
+	if err := ensureSchemaMigrationsTable(ctx, db); err != nil {
 		return err
 	}
-	if err := migrateCoreModels(ctx, db); err != nil {
-		return err
-	}
-	if err := migrateSchemaAlterations(ctx, db); err != nil {
-		return err
-	}
-	if err := migrateCoreIndices(ctx, db); err != nil {
-		return err
-	}
-	if err := migrateBillingTables(ctx, db); err != nil {
-		return err
-	}
-	if err := migrateUserSettings(ctx, db); err != nil {
-		return err
-	}
-	if err := migrateEmailEncryption(ctx, db); err != nil {
-		return err
-	}
-	if err := migrateOrganizationTables(ctx, db); err != nil {
-		return err
-	}
-	if err := migrateOrgTags(ctx, db); err != nil {
-		return err
-	}
-	if err := migrateOrgFavorites(ctx, db); err != nil {
-		return err
-	}
-	if err := migrateOrgTrashColumns(ctx, db); err != nil {
-		return err
-	}
-	if err := migrateNewFeatureColumns(ctx, db); err != nil {
-		return err
-	}
-	migrateEnsurePartialOrgIndexes(ctx, db)
-	if err := migrateFilesUniqueIndex(ctx, db); err != nil {
-		return err
-	}
-	migrateChunkSizeColumns(ctx, db)
-	migrateFolderSyncedColumn(ctx, db)
-	migratePersonalTrashColumns(ctx, db)
-	migrateFileRequestColumns(ctx, db)
-	migrateRecoveryKitColumn(ctx, db)
-	migrateRecoveryRotationChallenges(ctx, db)
 
-	if err := migrateComments(ctx, db); err != nil {
-		return err
+	// Étapes dont l'échec doit interrompre le démarrage (erreur propagée).
+	steps := []struct {
+		name string
+		fn   func(context.Context, *bun.DB) error
+	}{
+		{"migrateAuthUsers", migrateAuthUsers},
+		{"migrateCoreModels", migrateCoreModels},
+		{"migrateSchemaAlterations", migrateSchemaAlterations},
+		{"migrateCoreIndices", migrateCoreIndices},
+		{"migrateBillingTables", migrateBillingTables},
+		{"migrateUserSettings", migrateUserSettings},
+		{"migrateEmailEncryption", migrateEmailEncryption},
+		{"migrateOrganizationTables", migrateOrganizationTables},
+		{"migrateOrgTags", migrateOrgTags},
+		{"migrateOrgFavorites", migrateOrgFavorites},
+		{"migrateOrgTrashColumns", migrateOrgTrashColumns},
+		{"migrateNewFeatureColumns", migrateNewFeatureColumns},
+		{"migrateFilesUniqueIndex", migrateFilesUniqueIndex},
+		{"migrateComments", migrateComments},
+		{"migrateNotifications", migrateNotifications},
+		{"migrateVersioning", migrateVersioning},
+		{"migrateOrgLDAP", migrateOrgLDAP},
+		{"migrateOrgAccessRequests", migrateOrgAccessRequests},
+		{"migrateOrgGroupKeys", migrateOrgGroupKeys},
+		{"migrateSubscriptionPlans", migrateSubscriptionPlans},
 	}
-	if err := migrateNotifications(ctx, db); err != nil {
-		return err
+	for _, s := range steps {
+		if err := s.fn(ctx, db); err != nil {
+			return fmt.Errorf("%s: %w", s.name, err)
+		}
+		recordMigration(ctx, db, s.name)
 	}
-	if err := migrateVersioning(ctx, db); err != nil {
-		return err
-	}
-	if err := migrateOrgLDAP(ctx, db); err != nil {
-		return err
-	}
-	migrateCompressionColumn(ctx, db)
 
-	if err := migrateOrgAccessRequests(ctx, db); err != nil {
-		return err
+	// Étapes déjà conçues "best-effort" (pas d'erreur retournée) : simplement tracées.
+	bestEffortSteps := []struct {
+		name string
+		fn   func(context.Context, *bun.DB)
+	}{
+		{"migrateEnsurePartialOrgIndexes", migrateEnsurePartialOrgIndexes},
+		{"migrateChunkSizeColumns", migrateChunkSizeColumns},
+		{"migrateFolderSyncedColumn", migrateFolderSyncedColumn},
+		{"migratePersonalTrashColumns", migratePersonalTrashColumns},
+		{"migrateFileRequestColumns", migrateFileRequestColumns},
+		{"migrateRecoveryKitColumn", migrateRecoveryKitColumn},
+		{"migrateRecoveryRotationChallenges", migrateRecoveryRotationChallenges},
+		{"migrateCompressionColumn", migrateCompressionColumn},
 	}
-	if err := migrateOrgGroupKeys(ctx, db); err != nil {
-		return err
+	for _, s := range bestEffortSteps {
+		s.fn(ctx, db)
+		recordMigration(ctx, db, s.name)
 	}
-	if err := migrateSubscriptionPlans(ctx, db); err != nil {
-		return err
-	}
+
+	log.Printf("[migrate] Schema OK — %d étapes appliquées (version applicative %s)",
+		len(steps)+len(bestEffortSteps), kagibiVersion())
 
 	return nil
 }

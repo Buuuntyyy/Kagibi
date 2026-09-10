@@ -435,8 +435,8 @@ async function createFirstFolder() {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: color-mix(in srgb, #2A9D8F 12%, transparent);
-  color: #2A9D8F;
+  background: color-mix(in srgb, var(--success-color) 12%, transparent);
+  color: var(--success-color);
   font-size: 0.78rem;
   font-weight: 600;
   padding: 3px 10px;
@@ -520,7 +520,7 @@ async function createFirstFolder() {
   align-items: center;
   gap: 8px;
 }
-.folder-done-check { color: #2A9D8F; }
+.folder-done-check { color: var(--success-color); }
 .folder-done p { font-size: 0.9rem; color: var(--main-text-color); margin: 0; font-weight: 500; }
 
 /* Step 4 – done screen */
