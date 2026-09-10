@@ -1,0 +1,175 @@
+name: Kagibi Release
+
+# Ne construit/publie des images QUE si "Kagibi CI" (tests) a réussi sur main — on ne
+# publie jamais une image dont les tests n'ont pas été validés.
+on:
+  workflow_run:
+    workflows: ["Kagibi CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write # créer/pousser le tag Git + la GitHub Release
+  packages: write # publier sur GHCR
+  id-token: write # signature keyless cosign via OIDC (aucun secret à gérer)
+
+jobs:
+  release:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      is_release: ${{ steps.version.outputs.is_release }}
+      changelog_version: ${{ steps.version.outputs.changelog_version }}
+    steps:
+      - name: Checkout (au commit testé par la CI)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0 # historique complet + tags, nécessaire pour comparer les versions
+
+      - name: Déterminer si CHANGELOG.md introduit une nouvelle version
+        id: version
+        run: |
+          CHANGELOG_VERSION=$(grep -m1 -oP '^## v\K[0-9]+\.[0-9]+\.[0-9]+' CHANGELOG.md)
+          LATEST_TAG=$(git tag --sort=-v:refname | head -n1 | sed 's/^v//')
+
+          echo "changelog_version=${CHANGELOG_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
+
+          if [ "$CHANGELOG_VERSION" != "$LATEST_TAG" ]; then
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+            echo "➡️  Nouvelle version détectée : v${CHANGELOG_VERSION} (dernier tag : v${LATEST_TAG:-aucun})"
+          else
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+            echo "➡️  Aucun changement de version — build 'edge' uniquement"
+          fi
+
+      - name: Lowercase du owner (exigé par GHCR)
+        id: owner
+        run: echo "lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Créer et pousser le tag Git
+        if: steps.version.outputs.is_release == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.version.outputs.changelog_version }}" -m "v${{ steps.version.outputs.changelog_version }}"
+          git push origin "v${{ steps.version.outputs.changelog_version }}"
+
+      - name: Connexion à GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Installer cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Build + push — backend (release)
+        if: steps.version.outputs.is_release == 'true'
+        id: build_backend_release
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ghcr.io/${{ steps.owner.outputs.lc }}/kagibi-backend:v${{ steps.version.outputs.changelog_version }}
+            ghcr.io/${{ steps.owner.outputs.lc }}/kagibi-backend:latest
+
+      - name: Build + push — frontend (release)
+        if: steps.version.outputs.is_release == 'true'
+        id: build_frontend_release
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ghcr.io/${{ steps.owner.outputs.lc }}/kagibi-frontend:v${{ steps.version.outputs.changelog_version }}
+            ghcr.io/${{ steps.owner.outputs.lc }}/kagibi-frontend:latest
+
+      - name: Build + push — backend (edge, hors release)
+        if: steps.version.outputs.is_release == 'false'
+        id: build_backend_edge
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ghcr.io/${{ steps.owner.outputs.lc }}/kagibi-backend:edge
+
+      - name: Build + push — frontend (edge, hors release)
+        if: steps.version.outputs.is_release == 'false'
+        id: build_frontend_edge
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: ghcr.io/${{ steps.owner.outputs.lc }}/kagibi-frontend:edge
+
+      # Signature keyless : associe cryptographiquement chaque image à ce run de CI,
+      # vérifiable par quiconque avec `cosign verify` sans clé privée à distribuer.
+      - name: Signer les images publiées (cosign, keyless)
+        run: |
+          # $2 est vérifié seul (pas l'URL déjà concaténée) : quand une étape est sautée
+          # par son `if:`, son output "digest" est une chaîne vide, mais "image@" +
+          # vide resterait une chaîne non-vide et tromperait un simple `[ -n ]` sur l'URL.
+          sign_if_present() {
+            [ -n "$2" ] && cosign sign --yes "$1@$2"
+          }
+          sign_if_present "ghcr.io/${{ steps.owner.outputs.lc }}/kagibi-backend" "${{ steps.build_backend_release.outputs.digest }}"
+          sign_if_present "ghcr.io/${{ steps.owner.outputs.lc }}/kagibi-frontend" "${{ steps.build_frontend_release.outputs.digest }}"
+          sign_if_present "ghcr.io/${{ steps.owner.outputs.lc }}/kagibi-backend" "${{ steps.build_backend_edge.outputs.digest }}"
+          sign_if_present "ghcr.io/${{ steps.owner.outputs.lc }}/kagibi-frontend" "${{ steps.build_frontend_edge.outputs.digest }}"
+
+      - name: Extraire la section du changelog pour la Release
+        if: steps.version.outputs.is_release == 'true'
+        run: awk '/^## v/{c++} c==1{print} c==2{exit}' CHANGELOG.md > release_notes.md
+
+      - name: Créer la GitHub Release
+        if: steps.version.outputs.is_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.version.outputs.changelog_version }}" \
+            --title "v${{ steps.version.outputs.changelog_version }}" \
+            --notes-file release_notes.md
+
+  # Ne se déclenche QUE pour une vraie release (jamais un build "edge"), et attend une
+  # approbation humaine avant de toucher kagibi.cloud : configurer une fois, dans
+  # Settings → Environments → "production" → Required reviewers, sur ce dépôt GitHub.
+  # Secret requis : KUBE_CONFIG_PROD (kubeconfig base64 du ServiceAccount
+  # "kagibi-ci-deployer", voir infra/kagibi/kagibi.yaml pour le générer).
+  deploy:
+    needs: release
+    if: needs.release.outputs.is_release == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Configurer kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Écrire le kubeconfig
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG_PROD }}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Déployer la nouvelle version
+        run: |
+          kubectl set image deployment/kagibi-backend \
+            backend=ghcr.io/bunnntyyy/kagibi-backend:v${{ needs.release.outputs.changelog_version }} \
+            -n kagibi
+          kubectl set image deployment/kagibi-frontend \
+            frontend=ghcr.io/bunnntyyy/kagibi-frontend:v${{ needs.release.outputs.changelog_version }} \
+            -n kagibi
+          # KAGIBI_VERSION tenu synchronisé avec le tag d'image (voir schema_migrations
+          # dans backend/pkg/migrate.go) — sinon la table d'audit affiche un numéro
+          # de version qui ne correspond plus à l'image réellement en cours d'exécution.
+          kubectl set env deployment/kagibi-backend \
+            KAGIBI_VERSION=v${{ needs.release.outputs.changelog_version }} \
+            -n kagibi
+
+      - name: Vérifier que le rollout aboutit
+        run: |
+          kubectl rollout status deployment/kagibi-backend  -n kagibi --timeout=300s
+          kubectl rollout status deployment/kagibi-frontend -n kagibi --timeout=300s

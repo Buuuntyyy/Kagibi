@@ -40,8 +40,14 @@ services:
   # variables automatiquement, sans toucher à ce fichier.
 
   backend:
-    build:
-      context: ./backend
+    # Image publiée par la pipeline "Kagibi Release" (.github/workflows/release.yml),
+    # signée avec cosign. KAGIBI_VERSION vaut "latest" par défaut pour simplifier une
+    # première installation, mais pour un déploiement en production, épinglez une
+    # version précise dans .env (ex: KAGIBI_VERSION=v2.31.0) et ne la changez que
+    # volontairement lors d'une mise à jour maîtrisée (voir doc self-hosting).
+    # Pour builder depuis les sources à la place (audit du code avant compilation),
+    # remplacez cette ligne par : build: { context: ./backend }
+    image: ghcr.io/bunnntyyy/kagibi-backend:${KAGIBI_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       - db
@@ -49,6 +55,10 @@ services:
     env_file:
       - .env
     environment:
+      # Même variable que le tag d'image ci-dessus : le backend trace cette version dans
+      # schema_migrations (voir backend/pkg/migrate.go) pour savoir depuis quelle release
+      # chaque étape de migration a tourné en dernier.
+      KAGIBI_VERSION: ${KAGIBI_VERSION:-latest}
       AUTH_PROVIDER: ${AUTH_PROVIDER:-local}
       DATABASE_URL: postgres://${DB_USER:-user}:${DB_PASSWORD}@db:5432/${DB_NAME:-mydb}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis-db:6379
@@ -62,8 +72,10 @@ services:
   # ── Frontend ─────────────────────────────────────────────────────────────────
 
   frontend:
-    build:
-      context: ./frontend
+    # Même image pour tous les déploiements : la config (API URL, provider d'auth...)
+    # est injectée au démarrage du conteneur via les variables ci-dessous, pas figée au
+    # build. Voir la note KAGIBI_VERSION sur le service "backend" ci-dessus.
+    image: ghcr.io/bunnntyyy/kagibi-frontend:${KAGIBI_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       - backend
