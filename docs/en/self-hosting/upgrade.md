@@ -51,7 +51,7 @@ Images are signed with [cosign](https://docs.sigstore.dev/) (keyless mode, via G
 cosign verify \
   --certificate-identity-regexp "^https://github\.com/Buuuntyyy/Kagibi/\.github/workflows/release\.yml@refs/heads/main$" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-  ghcr.io/bunnntyyy/kagibi-backend:v2.32.0
+  ghcr.io/buuuntyyy/kagibi-backend:v2.32.0
 ```
 
 (swap the tag for the equivalent `kagibi-frontend` command). A successful verification confirms the image genuinely came from this repository's official pipeline and wasn't tampered with between publishing and your `pull`.

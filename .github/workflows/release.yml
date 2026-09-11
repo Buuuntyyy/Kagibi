@@ -157,10 +157,10 @@ jobs:
       - name: Déployer la nouvelle version
         run: |
           kubectl set image deployment/kagibi-backend \
-            backend=ghcr.io/bunnntyyy/kagibi-backend:v${{ needs.release.outputs.changelog_version }} \
+            backend=ghcr.io/buuuntyyy/kagibi-backend:v${{ needs.release.outputs.changelog_version }} \
             -n kagibi
           kubectl set image deployment/kagibi-frontend \
-            frontend=ghcr.io/bunnntyyy/kagibi-frontend:v${{ needs.release.outputs.changelog_version }} \
+            frontend=ghcr.io/buuuntyyy/kagibi-frontend:v${{ needs.release.outputs.changelog_version }} \
             -n kagibi
           # KAGIBI_VERSION tenu synchronisé avec le tag d'image (voir schema_migrations
           # dans backend/pkg/migrate.go) — sinon la table d'audit affiche un numéro

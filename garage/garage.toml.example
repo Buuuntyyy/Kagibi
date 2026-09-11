@@ -1,32 +1,32 @@
 # =================================
-# Garage — configuration du nœud (mono-nœud, pour un déploiement self-hosted)
+# Garage — node configuration (single node, for a self-hosted deployment)
 # =================================
-# 1. Copiez ce fichier : cp garage/garage.toml.example garage/garage.toml
-# 2. Générez deux secrets et collez-les ci-dessous :
+# 1. Copy this file: cp garage/garage.toml.example garage/garage.toml
+# 2. Generate two secrets and paste them below:
 #      openssl rand -hex 32   →  rpc_secret
 #      openssl rand -hex 32   →  admin_token
-# "garage.toml" (sans .example) est ignoré par git — ne committez jamais la
-# version remplie avec de vrais secrets.
+# "garage.toml" (without .example) is gitignored — never commit the
+# filled-in version with real secrets.
 
 metadata_dir = "/var/lib/garage/meta"
 data_dir = "/var/lib/garage/data"
 db_engine = "sqlite"
 
-# Nœud unique : une seule copie des données (pas de réplication inter-nœuds).
-# Passez à 3 uniquement si vous ajoutez au moins 3 nœuds Garage physiques.
+# Single node: one copy of the data (no inter-node replication).
+# Only raise this to 3 if you add at least 3 physical Garage nodes.
 replication_factor = 1
 
 rpc_bind_addr = "[::]:3901"
-# Nom du service Docker Compose, PAS 127.0.0.1 — c'est l'adresse à laquelle
-# les autres conteneurs (dont garage-init) joignent ce nœud.
+# The Docker Compose service name, NOT 127.0.0.1 — this is the address other
+# containers (including garage-init) use to reach this node.
 rpc_public_addr = "garage:3901"
-rpc_secret = "COLLEZ_ICI_UN_openssl_rand_hex_32"
+rpc_secret = "PASTE_AN_openssl_rand_hex_32_HERE"
 
 [s3_api]
-# Doit correspondre à GARAGE_S3_REGION dans .env (défaut : "garage").
+# Must match GARAGE_S3_REGION in .env (default: "garage").
 s3_region = "garage"
 api_bind_addr = "[::]:3900"
 
 [admin]
 api_bind_addr = "[::]:3903"
-admin_token = "COLLEZ_ICI_UN_AUTRE_openssl_rand_hex_32"
+admin_token = "PASTE_ANOTHER_openssl_rand_hex_32_HERE"

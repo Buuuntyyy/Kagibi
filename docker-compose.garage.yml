@@ -1,25 +1,25 @@
 # =================================
-# Stockage 100% local et self-hosted (Garage), en alternative à un S3 externe.
+# 100% local, self-hosted storage (Garage), as an alternative to external S3.
 #
-# Usage : ajouter ce fichier au lancement, en plus du docker-compose.yaml de base —
+# Usage: add this file on top of the base docker-compose.yaml —
 #   docker compose -f docker-compose.yaml -f docker-compose.garage.yml up -d
 #
-# Setup unique avant le premier démarrage :
-#   cp garage/garage.toml.example garage/garage.toml   # puis y coller 2 secrets (voir le fichier)
+# One-time setup before the first start:
+#   cp garage/garage.toml.example garage/garage.toml   # then paste 2 secrets into it (see the file)
 #   mkdir -p garage/credentials && touch garage/credentials/s3.env
 #
-# Les identifiants S3 (S3_ACCESS_KEY/S3_SECRET_KEY) sont générés automatiquement
-# par garage-init au premier démarrage (voir garage/bootstrap.sh) — inutile de les
-# renseigner dans .env, ils sont ignorés (ce fichier les écrase pour le backend).
+# S3 credentials (S3_ACCESS_KEY/S3_SECRET_KEY) are generated automatically by
+# garage-init on first start (see garage/bootstrap.sh) — no need to fill them in
+# .env, they're ignored (this file overrides them for the backend).
 #
-# IMPORTANT — GARAGE_PUBLIC_ENDPOINT (obligatoire dans .env) :
-# le backend génère des URLs présignées que le NAVIGATEUR utilise pour uploader/
-# télécharger directement, sans passer par le backend. "http://garage:3900" (nom
-# de service Docker interne) ne serait joignable que depuis les autres conteneurs,
-# jamais depuis le navigateur — d'où la nécessité de publier le port S3 sur l'hôte
-# (ci-dessous) et de renseigner une adresse que le navigateur peut réellement
-# atteindre : IP LAN du NAS (http://192.168.1.50:3900) ou domaine derrière un
-# reverse-proxy TLS (https://s3.mon-domaine.example).
+# IMPORTANT — GARAGE_PUBLIC_ENDPOINT (required in .env):
+# the backend generates presigned URLs that the BROWSER uses to upload/download
+# directly, without going through the backend. "http://garage:3900" (the internal
+# Docker service name) would only be reachable from other containers, never from
+# the browser — hence the need to publish the S3 port on the host (below) and
+# provide an address the browser can actually reach: your NAS's LAN IP
+# (http://192.168.1.50:3900) or a domain behind a TLS reverse proxy
+# (https://s3.your-domain.example).
 # =================================
 
 services:
@@ -49,19 +49,18 @@ services:
 
   backend:
     depends_on:
-      # Attend que garage-init ait fini d'assigner le layout et écrit les
-      # identifiants S3 avant de démarrer le backend avec des credentials valides.
+      # Wait for garage-init to finish assigning the layout and writing the S3
+      # credentials before starting the backend with valid credentials.
       garage-init:
         condition: service_completed_successfully
     env_file:
-      # S'ajoute au ".env" du fichier de base — écrase S3_ACCESS_KEY/S3_SECRET_KEY
-      # si ces variables y sont encore renseignées pour un autre provider.
+      # Layered on top of the base file's ".env" — overrides S3_ACCESS_KEY/
+      # S3_SECRET_KEY if those variables are still set there for another provider.
       - ./garage/credentials/s3.env
     environment:
-      # Adresse joignable par le NAVIGATEUR (voir note ci-dessus) — pas le nom de
-      # service Docker interne. Pas de valeur par défaut : dépend du réseau de
-      # l'utilisateur, une mauvaise valeur ici casse silencieusement les
-      # uploads/téléchargements côté navigateur.
-      S3_ENDPOINT: "${GARAGE_PUBLIC_ENDPOINT:?GARAGE_PUBLIC_ENDPOINT manquant dans .env - adresse par laquelle le navigateur joint Garage, ex http://192.168.1.50:3900}"
+      # Address reachable by the BROWSER (see note above) — not the internal
+      # Docker service name. No default value: depends on the user's network: a
+      # wrong value here silently breaks uploads/downloads on the browser side.
+      S3_ENDPOINT: "${GARAGE_PUBLIC_ENDPOINT:?GARAGE_PUBLIC_ENDPOINT missing in .env - the address by which the browser reaches Garage, e.g. http://192.168.1.50:3900}"
       S3_REGION: ${GARAGE_S3_REGION:-garage}
       S3_BUCKET: ${GARAGE_BUCKET:-kagibi}

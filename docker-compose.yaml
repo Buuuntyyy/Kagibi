@@ -47,7 +47,7 @@ services:
     # volontairement lors d'une mise à jour maîtrisée (voir doc self-hosting).
     # Pour builder depuis les sources à la place (audit du code avant compilation),
     # remplacez cette ligne par : build: { context: ./backend }
-    image: ghcr.io/bunnntyyy/kagibi-backend:${KAGIBI_VERSION:-latest}
+    image: ghcr.io/buuuntyyy/kagibi-backend:${KAGIBI_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       - db
@@ -75,7 +75,7 @@ services:
     # Même image pour tous les déploiements : la config (API URL, provider d'auth...)
     # est injectée au démarrage du conteneur via les variables ci-dessous, pas figée au
     # build. Voir la note KAGIBI_VERSION sur le service "backend" ci-dessus.
-    image: ghcr.io/bunnntyyy/kagibi-frontend:${KAGIBI_VERSION:-latest}
+    image: ghcr.io/buuuntyyy/kagibi-frontend:${KAGIBI_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       - backend
