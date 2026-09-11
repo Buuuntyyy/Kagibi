@@ -82,7 +82,13 @@ Then, in the app: create an account, upload a file, download it — confirms the
 
 ### 0. Decide the browser-reachable address
 
-Unlike the backend (which can talk to Garage over Docker's internal network), presigned URLs handed to the **browser** must point to an address it can actually resolve: your machine/NAS's LAN IP (`http://192.168.1.50:3900`) or a domain behind a TLS reverse proxy (`https://s3.your-domain.example`). Decide this now — it's used in step 3.
+Unlike the backend (which can talk to Garage over Docker's internal network), presigned URLs handed to the **browser** must point to an address it can actually resolve:
+
+- **Strictly local use** (you access Kagibi via `http://localhost` on the same machine as Docker, no reverse proxy): `http://localhost:3900` — the port is already published on the host by `docker-compose.garage.yml` (`"${GARAGE_S3_PORT:-3900}:3900"`), nothing more to do in this case.
+- **Access from other devices on your local network**: your machine/NAS's LAN IP, e.g. `http://192.168.1.50:3900`.
+- **Access from the internet**: a domain behind a TLS reverse proxy, e.g. `https://s3.your-domain.example` (see the [Nginx](./nginx) page).
+
+Decide this now — it's used in step 3.
 
 ### 1. Configure Garage
 
@@ -108,7 +114,8 @@ Required even empty: Docker Compose validates that every referenced `env_file:` 
 Reopen the same `.env` file created during the common prerequisites (the one that already has `JWT_SECRET`, `DB_PASSWORD`, etc.) and add:
 
 ```bash
-# Required — see step 0
+# Required — see step 0. Example below is for local-network (LAN) access;
+# use http://localhost:3900 instead for strictly local use with no reverse proxy.
 GARAGE_PUBLIC_ENDPOINT=http://192.168.1.50:3900
 
 # Optional — defaults already consistent across garage.toml, bootstrap.sh and the backend

@@ -82,7 +82,13 @@ Ensuite, dans l'interface : créez un compte, envoyez un fichier puis téléchar
 
 ### 0. Décider de l'adresse joignable par le navigateur
 
-Contrairement au backend (qui peut communiquer avec Garage via le réseau Docker interne), les URLs présignées données au **navigateur** doivent pointer vers une adresse qu'il peut réellement résoudre : l'IP LAN de votre machine/NAS (`http://192.168.1.50:3900`) ou un domaine derrière un reverse-proxy TLS (`https://s3.votre-domaine.example`). Décidez-le maintenant, cette adresse sert à l'étape 3.
+Contrairement au backend (qui peut communiquer avec Garage via le réseau Docker interne), les URLs présignées données au **navigateur** doivent pointer vers une adresse qu'il peut réellement résoudre :
+
+- **Usage strictement local** (vous accédez à Kagibi via `http://localhost` sur la même machine que Docker, aucun reverse-proxy) : `http://localhost:3900` — le port est déjà publié sur l'hôte par `docker-compose.garage.yml` (`"${GARAGE_S3_PORT:-3900}:3900"`), inutile d'aller plus loin dans ce cas.
+- **Accès depuis d'autres appareils sur le réseau local** : l'IP LAN de votre machine/NAS, ex. `http://192.168.1.50:3900`.
+- **Accès depuis Internet** : un domaine derrière un reverse-proxy TLS, ex. `https://s3.votre-domaine.example` (voir la page [Nginx](./nginx)).
+
+Décidez-le maintenant, cette adresse sert à l'étape 3.
 
 ### 1. Configurer Garage
 
@@ -108,7 +114,8 @@ Requis même vide : Docker Compose valide l'existence de tous les `env_file:` r�
 Rouvrez le même fichier `.env` créé à l'étape des prérequis communs (celui qui contient déjà `JWT_SECRET`, `DB_PASSWORD`, etc.) et ajoutez-y :
 
 ```bash
-# Obligatoire — voir étape 0
+# Obligatoire — voir étape 0. Exemple ci-dessous pour un accès réseau local (LAN) ;
+# remplacez par http://localhost:3900 pour un usage strictement local sans reverse-proxy.
 GARAGE_PUBLIC_ENDPOINT=http://192.168.1.50:3900
 
 # Optionnel — valeurs par défaut déjà cohérentes entre garage.toml, bootstrap.sh et le backend
