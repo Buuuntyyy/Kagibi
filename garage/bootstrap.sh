@@ -11,7 +11,7 @@
 set -e
 
 CREDENTIALS_FILE="/credentials/s3.env"
-GARAGE="garage -c /etc/garage.toml --rpc-host garage:3901"
+NODE_KEY_FILE="/var/lib/garage/meta/node_key.pub"
 BUCKET="${GARAGE_BUCKET:-kagibi}"
 KEY_NAME="${GARAGE_KEY_NAME:-kagibi-key}"
 CAPACITY="${GARAGE_CAPACITY:-10G}"
@@ -21,13 +21,23 @@ if [ -s "$CREDENTIALS_FILE" ]; then
     exit 0
 fi
 
-echo "[garage-init] Attente que le nœud Garage réponde..."
+echo "[garage-init] Attente que le nœud Garage écrive sa clé..."
+until [ -s "$NODE_KEY_FILE" ]; do
+    sleep 1
+done
+
+# --rpc-host exige "<node-id>@host:port" (pas juste "host:port") — l'identifiant
+# du nœud EST sa clé publique RPC, dérivable directement du fichier sans passer
+# par une commande RPC (qui échouerait justement tant que --rpc-host est invalide).
+# xxd n'est pas dans Alpine/busybox par défaut (fourni par vim) — od l'est.
+NODE_ID=$(od -An -tx1 "$NODE_KEY_FILE" | tr -d ' \n')
+GARAGE="garage -c /etc/garage.toml --rpc-host $NODE_ID@garage:3901"
+
+echo "[garage-init] Attente que le nœud Garage réponde (id=$NODE_ID)..."
 until $GARAGE status >/dev/null 2>&1; do
     sleep 2
 done
-
-NODE_ID=$($GARAGE node id -q)
-echo "[garage-init] Nœud prêt (id=$NODE_ID)."
+echo "[garage-init] Nœud prêt."
 
 # Best-effort : si un layout a déjà été appliqué pour ce nœud (ex. le fichier
 # de credentials a été supprimé manuellement après un premier bootstrap),
