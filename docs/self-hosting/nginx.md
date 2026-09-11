@@ -139,4 +139,4 @@ kagibi.votre-domaine.example {
 
 Les deux options fonctionnent à l'identique via **Portainer en mode Standalone** (stack Docker Compose classique) — Portainer appelle le même moteur Compose en interne. Pour l'option B, ajouter les deux fichiers Compose (`docker-compose.yaml` et `docker-compose.garage.yml`) au stack, et réaliser les étapes 1-3 dans le répertoire de travail du stack sur l'hôte avant le premier démarrage.
 
-**Ne fonctionne pas en mode Docker Swarm** (`docker stack deploy`) : Swarm ignore les conditions `depends_on` (notamment `condition: service_completed_successfully`), donc `garage-init` et `backend` démarreraient sans ordre garanti.
+**Ne fonctionne pas en mode Docker Swarm** (`docker stack deploy`) : Swarm ignore les conditions `depends_on` (notamment `condition: service_healthy`), donc `backend` démarrerait sans attendre que `garage` ait fini son bootstrap.
