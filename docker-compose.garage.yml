@@ -34,7 +34,12 @@ services:
       - ./garage/data:/var/lib/garage/data
 
   garage-init:
-    image: dxflrs/garage:v1.0.1
+    # dxflrs/garage is built FROM scratch and has no shell at all — bootstrap.sh
+    # (a real POSIX script) can't run inside it. Dockerfile.init copies just the
+    # garage binary into a minimal shell-capable base. See that file for details.
+    build:
+      context: ./garage
+      dockerfile: Dockerfile.init
     entrypoint: ["/bin/sh", "/bootstrap.sh"]
     depends_on:
       - garage

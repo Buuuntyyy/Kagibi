@@ -1,0 +1,10 @@
+# dxflrs/garage is built FROM scratch (no shell at all — confirmed via
+# `docker inspect`: empty Entrypoint, Cmd is ["/garage","server"]), so
+# bootstrap.sh (a real POSIX shell script) cannot run inside it directly.
+# This copies only the garage binary into a minimal shell-capable base.
+# bootstrap.sh itself stays bind-mounted at runtime (see
+# docker-compose.garage.yml) — nothing to rebuild when it changes.
+FROM dxflrs/garage:v1.0.1 AS garage
+
+FROM alpine:3.20
+COPY --from=garage /garage /usr/local/bin/garage
