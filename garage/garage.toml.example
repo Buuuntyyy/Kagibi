@@ -17,8 +17,8 @@ db_engine = "sqlite"
 replication_factor = 1
 
 rpc_bind_addr = "[::]:3901"
-# The Docker Compose service name, NOT 127.0.0.1 — this is the address other
-# containers (including garage-init) use to reach this node.
+# The Docker Compose service name, NOT 127.0.0.1 — relevant if you later add
+# more Garage nodes to this cluster; a single node doesn't strictly need this.
 rpc_public_addr = "garage:3901"
 rpc_secret = "PASTE_AN_openssl_rand_hex_32_HERE"
 

@@ -107,7 +107,7 @@ openssl rand -hex 32   # → admin_token
 ```bash
 mkdir -p garage/credentials && touch garage/credentials/s3.env
 ```
-Required even empty: Docker Compose validates that every referenced `env_file:` exists before starting anything — without this file, `docker compose up` refuses to start. It gets filled automatically on first launch by `garage-init`.
+Required even empty: Docker Compose validates that every referenced `env_file:` exists before starting anything — without this file, `docker compose up` refuses to start. It gets filled automatically by the `garage` service on first launch.
 
 ### 3. Fill in `.env`
 
@@ -118,7 +118,7 @@ Reopen the same `.env` file created during the common prerequisites (the one tha
 # use http://localhost:3900 instead for strictly local use with no reverse proxy.
 GARAGE_PUBLIC_ENDPOINT=http://192.168.1.50:3900
 
-# Optional — defaults already consistent across garage.toml, bootstrap.sh and the backend
+# Optional — defaults already consistent across garage.toml, entrypoint.sh and the backend
 # GARAGE_S3_PORT=3900
 # GARAGE_S3_REGION=garage
 # GARAGE_BUCKET=kagibi
@@ -132,18 +132,18 @@ The 5 `S3_*` variables from the previous section don't need to be filled in here
 ```bash
 docker compose -f docker-compose.yaml -f docker-compose.garage.yml up -d --build
 ```
-On first launch, `garage-init` waits for the Garage node to respond, assigns the layout (required even for a single node), creates the bucket and an S3 key, then writes `garage/credentials/s3.env` — the backend only starts once this step has completed successfully (`depends_on: condition: service_completed_successfully`).
+On first launch, the `garage` service waits for its own node to respond, assigns the layout (required even for a single node), creates the bucket and an S3 key, then writes `garage/credentials/s3.env` — all of this happens inside the same container as the server itself (there's no separate `garage-init` container). The backend only starts once this step has completed successfully (`depends_on: condition: service_healthy` — the `garage` service's healthcheck is exactly what checks that this file exists).
 
 ### 5. Verify the bootstrap
 
 ```bash
-docker compose -f docker-compose.yaml -f docker-compose.garage.yml ps garage-init
-# → should show "Exited (0)"
+docker compose -f docker-compose.yaml -f docker-compose.garage.yml ps garage
+# → should show "healthy" (may show "starting" for a few seconds first)
 
 cat garage/credentials/s3.env
 # → should contain non-empty S3_ACCESS_KEY=... and S3_SECRET_KEY=...
 ```
-If `garage-init` failed (non-zero exit code): `docker compose logs garage-init` — the script stops at the first failure (`set -e`) with an explicit message.
+If the service stays "unhealthy": `docker compose logs garage` — lines prefixed `[garage]` trace each bootstrap step, whichever one is missing tells you where it's stuck.
 
 ### 6. Configure the bucket's CORS (required, same as option A)
 
@@ -167,7 +167,7 @@ Then, in the app: create an account, upload a file, download it. If the upload h
 
 ### Maintenance
 
-- **Update**: `git pull && docker compose -f docker-compose.yaml -f docker-compose.garage.yml up -d --build`. `garage-init` exits immediately on restart (`garage/credentials/s3.env` already filled), nothing is reapplied.
+- **Update**: `git pull && docker compose -f docker-compose.yaml -f docker-compose.garage.yml up -d --build`. Bootstrap is skipped on restart (`garage/credentials/s3.env` already filled), nothing is reapplied.
 - **Backup**: back up `garage/data/` (objects), `garage/meta/` (Garage metadata), and `garage/garage.toml` (holds `rpc_secret`/`admin_token` — without them a restored node can't rejoin its own layout) — a regular ZFS snapshot of the dataset hosting these folders covers all three. `db_data/` (PostgreSQL) still needs a separate backup, same as option A.
 
 ### Troubleshooting
@@ -176,6 +176,6 @@ Then, in the app: create an account, upload a file, download it. If the upload h
 |---|---|
 | `docker compose up` refuses to start, `env file ... s3.env not found` | Step 2 not done |
 | `GARAGE_PUBLIC_ENDPOINT manquant dans .env` at launch | Variable missing from `.env` (step 3) |
-| `garage-init` errors on `layout apply` | A layout was already applied with a different version (e.g. `garage/credentials/s3.env` manually deleted after a first successful bootstrap) — check `docker compose exec garage garage layout show` and adjust manually if needed |
+| Error on `layout apply` in the `garage` logs | A layout was already applied with a different version (e.g. `garage/credentials/s3.env` manually deleted after a first successful bootstrap) — check `docker compose exec garage garage -c /etc/garage.toml layout show` and adjust manually if needed |
 | Upload/download hangs from the browser, but `curl` on `/health` works | `GARAGE_PUBLIC_ENDPOINT` unreachable from the client machine (wrong IP, port not open on firewall/router), or CORS not configured (step 6) |
-| `garage-init` stuck indefinitely on "waiting for the Garage node" | `garage.toml` missing or misconfigured (step 1) — check `docker compose logs garage` |
+| `garage` service stuck indefinitely on "waiting for the local node to respond" | `garage.toml` missing or misconfigured (step 1) — check `docker compose logs garage` |

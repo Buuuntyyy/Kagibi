@@ -2,15 +2,22 @@
 # 100% local, self-hosted storage (Garage), as an alternative to external S3.
 #
 # Usage: add this file on top of the base docker-compose.yaml —
-#   docker compose -f docker-compose.yaml -f docker-compose.garage.yml up -d
+#   docker compose -f docker-compose.yaml -f docker-compose.garage.yml up -d --build
 #
 # One-time setup before the first start:
 #   cp garage/garage.toml.example garage/garage.toml   # then paste 2 secrets into it (see the file)
 #   mkdir -p garage/credentials && touch garage/credentials/s3.env
 #
 # S3 credentials (S3_ACCESS_KEY/S3_SECRET_KEY) are generated automatically by
-# garage-init on first start (see garage/bootstrap.sh) — no need to fill them in
-# .env, they're ignored (this file overrides them for the backend).
+# the garage service itself on first start (see garage/entrypoint.sh) — no need
+# to fill them in .env, they're ignored (this file overrides them for the backend).
+#
+# Bootstrap (layout/bucket/key) runs INSIDE the same container as the server —
+# not a separate "garage-init" container. A separate container would need to
+# reach this node over RPC to run those commands, which requires knowing the
+# node's RPC identity first; with db_engine=sqlite that identity isn't readable
+# from a file before the server computes it, so a separate container can't get
+# started at all. Running everything locally sidesteps the problem entirely.
 #
 # IMPORTANT — GARAGE_PUBLIC_ENDPOINT (required in .env):
 # the backend generates presigned URLs that the BROWSER uses to upload/download
@@ -24,43 +31,33 @@
 
 services:
   garage:
-    image: dxflrs/garage:v1.0.1
+    build:
+      context: ./garage
     restart: unless-stopped
     ports:
       - "${GARAGE_S3_PORT:-3900}:3900"
-    volumes:
-      - ./garage/garage.toml:/etc/garage.toml:ro
-      - ./garage/meta:/var/lib/garage/meta
-      - ./garage/data:/var/lib/garage/data
-
-  garage-init:
-    # dxflrs/garage is built FROM scratch and has no shell at all — bootstrap.sh
-    # (a real POSIX script) can't run inside it. Dockerfile.init copies just the
-    # garage binary into a minimal shell-capable base. See that file for details.
-    build:
-      context: ./garage
-      dockerfile: Dockerfile.init
-    entrypoint: ["/bin/sh", "/bootstrap.sh"]
-    depends_on:
-      - garage
     environment:
       GARAGE_BUCKET: ${GARAGE_BUCKET:-kagibi}
       GARAGE_KEY_NAME: ${GARAGE_KEY_NAME:-kagibi-key}
       GARAGE_CAPACITY: ${GARAGE_CAPACITY:-10G}
     volumes:
       - ./garage/garage.toml:/etc/garage.toml:ro
-      - ./garage/bootstrap.sh:/bootstrap.sh:ro
+      - ./garage/meta:/var/lib/garage/meta
+      - ./garage/data:/var/lib/garage/data
       - ./garage/credentials:/credentials
-      # Lecture seule — nécessaire pour lire node_key.pub (voir bootstrap.sh) :
-      # --rpc-host exige "<node-id>@host:port", impossible à obtenir sans ce fichier.
-      - ./garage/meta:/var/lib/garage/meta:ro
+    healthcheck:
+      # "Healthy" = bootstrap has actually finished and credentials exist — not
+      # just "the process is up". backend's depends_on below relies on this.
+      test: ["CMD-SHELL", "test -s /credentials/s3.env"]
+      interval: 3s
+      timeout: 2s
+      retries: 60
+      start_period: 5s
 
   backend:
     depends_on:
-      # Wait for garage-init to finish assigning the layout and writing the S3
-      # credentials before starting the backend with valid credentials.
-      garage-init:
-        condition: service_completed_successfully
+      garage:
+        condition: service_healthy
     env_file:
       # Layered on top of the base file's ".env" — overrides S3_ACCESS_KEY/
       # S3_SECRET_KEY if those variables are still set there for another provider.
