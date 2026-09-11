@@ -51,6 +51,9 @@ services:
       - ./garage/garage.toml:/etc/garage.toml:ro
       - ./garage/bootstrap.sh:/bootstrap.sh:ro
       - ./garage/credentials:/credentials
+      # Lecture seule — nécessaire pour lire node_key.pub (voir bootstrap.sh) :
+      # --rpc-host exige "<node-id>@host:port", impossible à obtenir sans ce fichier.
+      - ./garage/meta:/var/lib/garage/meta:ro
 
   backend:
     depends_on:
