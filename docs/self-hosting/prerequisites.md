@@ -36,4 +36,4 @@ Ces prérequis sont communs aux deux options de stockage — S3 externe ou 100 %
 
 ## Prochaine étape
 
-Une fois ces étapes terminées, rendez-vous sur la page [Stockage](./storage) pour choisir et configurer votre backend.
+Une fois ces étapes terminées, rendez-vous sur la page [Réseau](./network) pour une vue d'ensemble des ports/DNS/pare-feu nécessaires, puis sur [Stockage](./storage) pour choisir et configurer votre backend.

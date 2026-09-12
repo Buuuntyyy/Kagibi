@@ -7,7 +7,7 @@ Kagibi doesn't terminate TLS itself: you need a **reverse proxy** in front of it
 | Service | Internal port (docker-compose) | Path | Needed for |
 |---|---|---|---|
 | Frontend | `${FRONTEND_PORT:-80}` | `/` | The app itself |
-| Backend API | `${BACKEND_PORT:-8080}` | `/api/v1/*` | The app itself, **including** `/api/v1/ws` (real-time WebSocket — notifications, presence, P2P signaling) |
+| Backend API | `${BACKEND_PORT:-8080}` | `/api/v1/*` | The app itself, **including** `/api/v1/ws` (real-time WebSocket — notifications, presence, P2P signaling — see also the [TURN server](./turn) page if P2P transfers fail behind strict NAT) |
 | Garage S3 (Option B only) | `${GARAGE_S3_PORT:-3900}` | the whole path, on a **separate subdomain** (e.g. `s3.your-domain.example`) | Direct browser ↔ storage uploads/downloads — this is the value of `GARAGE_PUBLIC_ENDPOINT` |
 
 ## Required points, whichever proxy you pick
@@ -140,3 +140,7 @@ kagibi.your-domain.example {
 Both options work identically via **Portainer in Standalone mode** (a plain Docker Compose stack) — Portainer calls the same Compose engine internally. For option B, add both Compose files (`docker-compose.yaml` and `docker-compose.garage.yml`) to the stack, and perform steps 1-3 inside the stack's working directory on the host before the first start.
 
 **Does not work under Docker Swarm mode** (`docker stack deploy`): Swarm ignores `depends_on` conditions (notably `condition: service_healthy`), so `backend` would start without waiting for `garage` to finish its bootstrap.
+
+## Next step
+
+Your instance is now exposed and working. If P2P transfers fail between users behind strict NAT (corporate network, CGNAT...), see the [TURN server](./turn) page — otherwise, nothing more is needed for a basic deployment.
