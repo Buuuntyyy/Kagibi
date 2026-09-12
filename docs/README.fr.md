@@ -634,12 +634,12 @@ Si le code de récupération est également perdu, les données sont **définiti
 
 **Développement local, et déploiement production (stockage S3 externe ou 100% local avec Garage) : commencez par [`self-hosting/prerequisites.md`](./self-hosting/prerequisites.md)**, qui enchaîne sur la configuration du stockage (`storage.md`) puis le reverse proxy (`nginx.md`).
 
-Pour la référence API/architecture du backend, voir [`backend/README.md`](../backend/README.md).
+Pour la référence API/architecture du backend, voir [`backend/README.md`](https://github.com/Buuuntyyy/Kagibi/blob/main/backend/README.md).
 
 ---
 
 ## Licence
 
-AGPLv3 — voir [`LICENSE`](../LICENSE).
+AGPLv3 — voir [`LICENSE`](https://github.com/Buuuntyyy/Kagibi/blob/main/LICENSE).
 
 Toute modification du code, y compris dans un contexte SaaS, doit être publiée sous la même licence.

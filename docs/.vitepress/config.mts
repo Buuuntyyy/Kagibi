@@ -31,15 +31,24 @@ export default defineConfig({
     },
   },
 
+  // organizations.md, org-e2e-encryption.md, README.fr.md and README.en.md used to
+  // be excluded here — now published (see the "Fonctionnalités"/"Features" nav
+  // dropdown below). The three below stay excluded:
+  //   evenements-logs.md          — internal ops/logging reference, not user-facing
+  //   politique-confidentialite.md — legal template with unfilled placeholders
+  //   registre-traitements-rgpd.md — same, RGPD Article 30 register template
+  // Publishing the last two as-is would look like a real, finished legal document.
   srcExclude: [
-    'organizations.md',
-    'org-e2e-encryption.md',
-    'README.fr.md',
-    'README.en.md',
     'evenements-logs.md',
     'politique-confidentialite.md',
     'registre-traitements-rgpd.md',
   ],
+
+  // README.fr.md/README.en.md reference a desktop-app/DOCUMENTATION(_EN).md that
+  // doesn't exist anywhere in the repo — pre-existing, not something this publish
+  // introduced. Scoped narrowly (not a blanket disable) so a real dead link
+  // elsewhere still fails the build.
+  ignoreDeadLinks: [/\/desktop-app\/DOCUMENTATION/],
 
   head: [
     ['link', { rel: 'icon', type: 'image/png', href: '/Logo.png' }],
@@ -57,6 +66,11 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: 'Accueil', link: '/' },
+          { text: 'Fonctionnalités', items: [
+            { text: 'Aperçu du produit', link: '/README.fr' },
+            { text: 'Organisations', link: '/organizations' },
+            { text: 'Chiffrement E2E des organisations', link: '/org-e2e-encryption' },
+          ]},
           { text: 'Développement local', link: '/dev-local/' },
           { text: 'Auto-hébergement', link: '/self-hosting/prerequisites' },
         ],
@@ -104,6 +118,11 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: 'Home', link: '/en/' },
+          { text: 'Features', items: [
+            { text: 'Product overview', link: '/en/README.en' },
+            { text: 'Organisations', link: '/en/organizations' },
+            { text: 'Organisation E2E encryption', link: '/en/org-e2e-encryption' },
+          ]},
           { text: 'Local development', link: '/en/dev-local/' },
           { text: 'Self-hosting', link: '/en/self-hosting/prerequisites' },
         ],

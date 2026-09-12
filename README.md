@@ -7,7 +7,7 @@
 
 Read the documentation in your language:
 
-- [English](./docs/README.en.md)
+- [English](./docs/en/README.en.md)
 - [Français](./docs/README.fr.md)
 
 ---
