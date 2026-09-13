@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.32.1 — 2026-09-13
+
+### Corrections
+
+- **Healthcheck du frontend en échec sous IPv6** : le `HEALTHCHECK` utilisait `http://localhost/`, qui pouvait se résoudre en IPv6 (`::1`) non écouté par nginx dans certains environnements réseau dual-stack (ex. TrueNAS SCALE) — remplacé par `http://127.0.0.1/`, sans ambiguïté.
+
 ## v2.32.0 — 2026-09-10
 
 ### Auto-hébergement : Stack complète et mise à jour simplifiée
