@@ -7,7 +7,7 @@ Kagibi ne gère pas le TLS lui-même : il faut un **reverse proxy** devant l'app
 | Service | Port interne (docker-compose) | Chemin | Nécessaire pour |
 |---|---|---|---|
 | Frontend | `${FRONTEND_PORT:-80}` | `/` | L'application elle-même |
-| Backend API | `${BACKEND_PORT:-8080}` | `/api/v1/*` | L'application elle-même, **y compris** `/api/v1/ws` (WebSocket temps réel — notifications, présence, signalisation P2P) |
+| Backend API | `${BACKEND_PORT:-8080}` | `/api/v1/*` | L'application elle-même, **y compris** `/api/v1/ws` (WebSocket temps réel — notifications, présence, signalisation P2P — voir aussi la page [Serveur TURN](./turn) si des transferts P2P échouent derrière un NAT strict) |
 | Garage S3 (Option B uniquement) | `${GARAGE_S3_PORT:-3900}` | tout le chemin, sur un **sous-domaine séparé** (ex. `s3.votre-domaine.example`) | Les uploads/téléchargements directs entre le navigateur et le stockage — c'est la valeur de `GARAGE_PUBLIC_ENDPOINT` |
 
 ## Points obligatoires, quel que soit le proxy choisi
@@ -140,3 +140,7 @@ kagibi.votre-domaine.example {
 Les deux options fonctionnent à l'identique via **Portainer en mode Standalone** (stack Docker Compose classique) — Portainer appelle le même moteur Compose en interne. Pour l'option B, ajouter les deux fichiers Compose (`docker-compose.yaml` et `docker-compose.garage.yml`) au stack, et réaliser les étapes 1-3 dans le répertoire de travail du stack sur l'hôte avant le premier démarrage.
 
 **Ne fonctionne pas en mode Docker Swarm** (`docker stack deploy`) : Swarm ignore les conditions `depends_on` (notamment `condition: service_healthy`), donc `backend` démarrerait sans attendre que `garage` ait fini son bootstrap.
+
+## Prochaine étape
+
+Votre instance est maintenant exposée et fonctionnelle. Si des transferts P2P échouent entre utilisateurs derrière un NAT strict (réseau d'entreprise, CGNAT...), consultez la page [Serveur TURN](./turn) — sinon, rien de plus n'est nécessaire pour un déploiement de base.

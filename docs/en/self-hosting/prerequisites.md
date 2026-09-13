@@ -36,4 +36,4 @@ These prerequisites are common to both storage options — external S3 or fully 
 
 ## Next step
 
-Once these steps are done, head to the [Storage](./storage) page to choose and configure your backend.
+Once these steps are done, head to the [Network](./network) page for an overview of the ports/DNS/firewall you'll need, then to [Storage](./storage) to choose and configure your backend.

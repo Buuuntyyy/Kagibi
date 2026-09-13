@@ -159,7 +159,7 @@ Organizations can connect to a corporate **LDAP or Active Directory** server to 
 - **Safeguards** — the sync is aborted if LDAP returns an empty result or if more than 20% of existing members disappear in one cycle, protecting against filter errors and network failures.
 - **Bind password encryption** — the service account password is stored AES-256-GCM encrypted.
 
-Configuration is done in the **Administration → LDAP / AD** tab of the organization (restricted to admins and owners). See the [full LDAP documentation](../desktop-app/DOCUMENTATION_EN.md#10-ldap--active-directory-integration) for complete configuration and operational details.
+Configuration is done in the **Administration → LDAP / AD** tab of the organization (restricted to admins and owners). See the [full LDAP documentation](../../desktop-app/DOCUMENTATION_EN.md#10-ldap--active-directory-integration) for complete configuration and operational details.
 
 ### Onboarding Wizard
 
@@ -632,14 +632,14 @@ If the recovery code is also lost, the data is **permanently inaccessible**. Thi
 
 ## Installation & self-hosting
 
-**Local development, and production deployment (external S3 storage or fully local storage with Garage): start with [`en/self-hosting/prerequisites.md`](./en/self-hosting/prerequisites.md)**, which continues into storage setup (`storage.md`) and the reverse-proxy guide (`nginx.md`).
+**Local development, and production deployment (external S3 storage or fully local storage with Garage): start with [`self-hosting/prerequisites.md`](./self-hosting/prerequisites.md)**, which continues into storage setup (`storage.md`) and the reverse-proxy guide (`nginx.md`).
 
-For the backend's API/architecture reference, see [`backend/README.md`](../backend/README.md).
+For the backend's API/architecture reference, see [`backend/README.md`](https://github.com/Buuuntyyy/Kagibi/blob/main/backend/README.md).
 
 ---
 
 ## License
 
-AGPLv3 — see [`LICENSE`](../LICENSE).
+AGPLv3 — see [`LICENSE`](https://github.com/Buuuntyyy/Kagibi/blob/main/LICENSE).
 
 Any modification of the code, including in a SaaS context, must be published under the same license.

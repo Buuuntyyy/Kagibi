@@ -1,0 +1,82 @@
+# =================================
+# Optional TURN relay (coturn) for P2P transfers behind strict/symmetric NAT.
+#
+# When you actually need this: WebRTC P2P already works directly, or via STUN
+# alone, for most users. A TURN relay is only required when BOTH peers are
+# behind NAT that STUN can't traverse (common on corporate networks, some
+# mobile carriers, double-NAT routers/CGNAT). Skip this file unless you have
+# actual reports of P2P transfers failing to connect.
+#
+# Usage: add this file on top of the base docker-compose.yaml —
+#   docker compose -f docker-compose.yaml -f docker-compose.turn.yml up -d
+#
+# Linux only: this uses network_mode: host, coturn's own documented approach
+# for Docker — a TURN relay allocates a UDP port per active connection from a
+# wide range, which Docker's per-port NAT mapping doesn't scale to. Host
+# networking isn't reliably supported by Docker Desktop on Mac/Windows; this
+# is meant for an actual Linux server/VPS, which is the realistic target for
+# a service that needs to relay real traffic anyway.
+#
+# Required in .env before starting:
+#   TURN_EXTERNAL_IP — this server's PUBLIC IP address (not a LAN IP). Clients
+#                       on the internet need this to actually reach the relay.
+#   TURN_USERNAME / TURN_CREDENTIAL — a single shared long-term credential
+#                       pair, generate with: openssl rand -hex 24 (for each)
+# Optional: TURN_REALM, TURN_MIN_PORT, TURN_MAX_PORT — see .env.example.
+#
+# Firewall: open UDP+TCP 3478 (control) and the whole UDP relay range
+# (TURN_MIN_PORT-TURN_MAX_PORT, default 49160-49200) on this server.
+# =================================
+
+services:
+  turn:
+    image: coturn/coturn:4.6
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - -n
+      - --log-file=stdout
+      - --listening-port=3478
+      - --min-port=${TURN_MIN_PORT:-49160}
+      - --max-port=${TURN_MAX_PORT:-49200}
+      - --realm=${TURN_REALM:-kagibi}
+      - --external-ip=${TURN_EXTERNAL_IP:?TURN_EXTERNAL_IP missing in .env - this server's public IP address}
+      - --lt-cred-mech
+      - --user=${TURN_USERNAME:?TURN_USERNAME missing in .env}:${TURN_CREDENTIAL:?TURN_CREDENTIAL missing in .env}
+      - --no-cli
+      - --fingerprint
+      - --no-multicast-peers
+      # Hide the version banner in STUN/TURN responses (no --prod alias on
+      # older builds, this is the current flag name).
+      - --no-software-attribute
+      # SSRF hardening: without this, anyone holding the shared TURN
+      # credential (visible client-side — see turn.md) could use the relay to
+      # reach services on your OWN network or this host's loopback, including
+      # cloud metadata endpoints (169.254.169.254) — a well-known way to steal
+      # IAM credentials from a cloud VM. Loopback is denied by coturn already
+      # by default (no --allow-loopback-peers here); the rest is not, hence
+      # this explicit list of private/special-use IPv4 ranges.
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=100.64.0.0-100.127.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.0.0.0-192.0.0.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+      - --denied-peer-ip=198.18.0.0-198.19.255.255
+      # Caps concurrent relayed sessions. Meaningful even with a single shared
+      # credential (see turn.md): with --lt-cred-mech and one user, this is
+      # effectively a global cap on this relay's concurrent P2P transfers —
+      # bounds the damage if the shared credential leaks or gets abused.
+      - --user-quota=${TURN_USER_QUOTA:-50}
+      - --total-quota=${TURN_TOTAL_QUOTA:-50}
+
+  backend:
+    environment:
+      # Same values used to configure coturn above — kept in one place (.env),
+      # not duplicated. See backend/main.go's p2pIceConfigHandler for how these
+      # reach the frontend's WebRTC ICE configuration.
+      TURN_SERVER_URL: turn:${TURN_EXTERNAL_IP}:3478
+      TURN_USERNAME: ${TURN_USERNAME}
+      TURN_CREDENTIAL: ${TURN_CREDENTIAL}
