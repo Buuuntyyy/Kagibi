@@ -113,8 +113,17 @@ jobs:
           # $2 est vérifié seul (pas l'URL déjà concaténée) : quand une étape est sautée
           # par son `if:`, son output "digest" est une chaîne vide, mais "image@" +
           # vide resterait une chaîne non-vide et tromperait un simple `[ -n ]` sur l'URL.
+          #
+          # if/fi (pas `&&`) : les steps `run:` de GitHub Actions ont `set -e` actif par
+          # défaut. Avec `[ -n "$2" ] && cosign ...`, un digest vide (normal : l'étape
+          # correspondante a été sautée par son `if:`) fait renvoyer 1 à la fonction,
+          # ce qui avorte tout le script sous `set -e` — même si c'est un cas attendu,
+          # pas une vraie erreur. `if/fi` sans `else` renvoie 0 quand la condition est
+          # fausse (POSIX), donc pas d'avortement prématuré du script.
           sign_if_present() {
-            [ -n "$2" ] && cosign sign --yes "$1@$2"
+            if [ -n "$2" ]; then
+              cosign sign --yes "$1@$2"
+            fi
           }
           sign_if_present "ghcr.io/${{ steps.owner.outputs.lc }}/kagibi-backend" "${{ steps.build_backend_release.outputs.digest }}"
           sign_if_present "ghcr.io/${{ steps.owner.outputs.lc }}/kagibi-frontend" "${{ steps.build_frontend_release.outputs.digest }}"
