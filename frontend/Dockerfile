@@ -55,8 +55,13 @@ RUN echo '#!/bin/sh' > /entrypoint.sh && \
 EXPOSE 80
 
 # Health check
+# 127.0.0.1 explicite, pas "localhost" : dans certains environnements réseau
+# (dual-stack IPv4/IPv6, ex. rencontré sous TrueNAS SCALE), "localhost" se
+# résout en IPv6 (::1) en priorité, que nginx n'écoute pas ("listen 80;" dans
+# default.conf est IPv4 uniquement) — le healthcheck échouait alors que l'app
+# fonctionnait normalement en IPv4.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost/ || exit 1
+  CMD wget --quiet --tries=1 --spider http://127.0.0.1/ || exit 1
 
 # Run with entrypoint
 ENTRYPOINT ["/entrypoint.sh"]
